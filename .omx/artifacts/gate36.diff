@@ -1,0 +1,1979 @@
+diff --git a/scripts/e2e_command_smoke.py b/scripts/e2e_command_smoke.py
+index e486ff2..4a428f3 100644
+--- a/scripts/e2e_command_smoke.py
++++ b/scripts/e2e_command_smoke.py
+@@ -417,6 +417,59 @@ def main() -> int:
+         proc.returncode == 0 and ("Discovery queue" in proc.stdout or "暂无候选" in proc.stdout),
+         "",
+     )
++
++    # ---------------- gate36 (修订 H): promote → shadow verifier, degraded ----------------
++    # The val-base image ships no sentence-transformers/torch, so both
++    # embedding lines are unavailable: the verdict must record
++    # ``embedding: unavailable``, the badge must be WARN (degraded — a
++    # degraded run never emits PASS, 修订 J), and the promote command
++    # must still exit 0 (shadow-only, never blocks activation).
++    cluster_id: str | None = None
++    try:
++        candidates_file = smoke_dir / ".vibe" / "observability" / "cluster_candidates.jsonl"
++        for line in candidates_file.read_text(encoding="utf-8").splitlines():
++            if not line.strip():
++                continue
++            row = json.loads(line)
++            if row.get("status") == "pending" and not row.get("is_unstable"):
++                cluster_id = str(row["cluster_id"])
++                break
++    except (OSError, json.JSONDecodeError, KeyError):
++        cluster_id = None
++    record("smoke candidate id resolved", cluster_id is not None, f"cluster_id={cluster_id}")
++    if cluster_id is not None:
++        smoke.run(
++            "skill promote → shadow verifier (degraded, non-blocking)",
++            ["skill", "promote", cluster_id],
++            expect=["Verifier", "WARN", "degraded"],
++            timeout=150,
++            # Belt-and-braces: even if a torch stack appears in the image,
++            # forbid network so the model load fails fast instead of
++            # hanging the smoke run on a download.
++            env={"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"},
++        )
++        verdict: dict | None = None
++        try:
++            verdicts_file = smoke_dir / ".vibe" / "observability" / "promote_verdicts.jsonl"
++            for line in verdicts_file.read_text(encoding="utf-8").splitlines():
++                if line.strip():
++                    verdict = json.loads(line)
++        except (OSError, json.JSONDecodeError):
++            verdict = None
++        embedding = (verdict or {}).get("embedding") or {}
++        record(
++            "promote verdict: embedding unavailable + WARN(degraded)",
++            bool(
++                verdict
++                and verdict.get("badge") == "WARN"
++                and verdict.get("degraded") is True
++                and (embedding.get("recall") or {}).get("status") == "unavailable"
++                and (embedding.get("index") or {}).get("status") == "unavailable"
++            ),
++            f"badge={verdict and verdict.get('badge')} "
++            f"degraded={verdict and verdict.get('degraded')}",
++        )
++
+     smoke.run("sequence status", ["sequence", "status"])
+     smoke.run("instinct status", ["instinct", "status"])
+     smoke.run("route-stats", ["route-stats"])
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index ad6cc51..ee9b525 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -1833,6 +1833,128 @@ def _resolve_candidate_for_mutation(
+     return None
+ 
+ 
++# ---------------------------------------------------------------------------
++# gate36 阶段二 — promote shadow verifier wiring (D1, 修订 A/B/D)
++# ---------------------------------------------------------------------------
++
++
++def _get_verdict_store() -> Any:
++    """Verdict store of the INITIATING project (修订 D).
++
++    Even ``--scope global`` promotes record here: the store belongs to the
++    project whose operator ran the command, and global-scope drafts get
++    counts + query hashes only inside the verdict (privacy boundary).
++    Tests patch this helper to redirect (same pattern as
++    ``_get_candidate_store``).
++    """
++    from vibesop.core.observability.promote_verifier import PromoteVerdictStore
++
++    return PromoteVerdictStore(Path.cwd() / ".vibe" / "observability")
++
++
++def _load_verify_context() -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
++    """Installed catalog + skill index for hijack / margin gates. Fail-open.
++
++    Both inputs are read-only enrichments of the shadow verdict; any load
++    failure degrades that analysis to "skipped", never an error.
++    """
++    installed: list[dict[str, Any]] | None = None
++    try:
++        from vibesop.core.routing.candidate_manager import CandidateManager
++
++        installed = CandidateManager(Path.cwd()).get_candidates()
++    except Exception as e:
++        logger.debug("shadow verifier: installed catalog unavailable: %s", e)
++    index_profiles: dict[str, Any] | None = None
++    try:
++        from vibesop.core.skills.indexer import SkillIndexer
++
++        index_profiles = SkillIndexer(project_root=Path.cwd()).load_index()
++    except Exception as e:
++        logger.debug("shadow verifier: skill index unavailable: %s", e)
++    return installed, index_profiles
++
++
++def _print_verdict(verdict: Any, *, reused: bool = False) -> None:
++    """Render the badge + descriptive detail. CLI/dashboard wording lockstep.
++
++    The scope line is mandatory (裁决 2 / Lane C): the badge measures
++    触发召回 (trigger recall), NOT 内容质量 (content quality).
++    """
++    badge_style = "green" if verdict.badge == "PASS" else "yellow"
++    badge_mark = "✓" if verdict.badge == "PASS" else "⚠"
++    suffix = " (degraded: embedding 线不可用, 不发 PASS)" if verdict.degraded else ""
++    reused_note = " [dim](复用 promote 时结果 — draft 未变)[/dim]" if reused else ""
++    console.print(
++        f"[{badge_style}]{badge_mark} Verifier: {verdict.badge}[/{badge_style}]{suffix}{reused_note}"
++    )
++    console.print(
++        "  [dim]口径: 测的是触发召回 (trigger recall), 不是内容质量 (content "
++        "quality); shadow-only, 永不阻断.[/dim]"
++    )
++    shadow = verdict.shadow or {}
++    denominator = shadow.get("denominator", 0)
++    echo_excluded = shadow.get("echo_excluded", 0)
++    missed = shadow.get("missed", [])
++    console.print(
++        f"  [dim]shadow: 捕获 {denominator - len(missed)}/{denominator} "
++        f"(回声行 {echo_excluded} 条不进分母)[/dim]"
++    )
++    if missed:
++        console.print("  [yellow]未捕获 query（最近邻 trigger）:[/yellow]")
++        for entry in missed[:5]:
++            if "query" in entry:
++                label = entry["query"]
++            else:
++                label = f"query_hash:{entry.get('query_hash', '?')}"
++            nearest = entry.get("nearest_trigger") or "(无共享 token 的近邻)"
++            console.print(f"    • {label}  → 最近邻: {nearest}")
++        if len(missed) > 5:
++            console.print(f"    [dim]… 另 {len(missed) - 5} 条见 verdict store[/dim]")
++    hijack_entries = (verdict.hijack or {}).get("entries", [])
++    if hijack_entries:
++        console.print(
++            f"  [yellow]hijack 风险: {len(hijack_entries)} 条 query 与现存技能 "
++            "trigger 冲突[/yellow]"
++        )
++        for entry in hijack_entries[:3]:
++            console.print(
++                f"    • 与 {entry.get('competing_skill_id')} 的 "
++                f"trigger 「{entry.get('competing_trigger')}」 竞争"
++            )
++    for warning in verdict.warnings:
++        console.print(f"  [yellow]lint: {warning}[/yellow]")
++
++
++def _run_shadow_verify(
++    candidate: ClusterCandidate,
++    skill_path: Path,
++    scope: _CandidateStoreScope,
++    *,
++    phase: str,
++) -> Any | None:
++    """Run verify_draft + record + print. NEVER blocks (修订 A: 不需要 --force)."""
++    try:
++        from vibesop.core.observability.promote_verifier import verify_draft
++
++        installed, index_profiles = _load_verify_context()
++        verdict = verify_draft(
++            candidate,
++            skill_path,
++            scope=scope,
++            phase=phase,
++            installed_candidates=installed,
++            index_profiles=index_profiles,
++            store=_get_verdict_store(),
++        )
++        _print_verdict(verdict)
++        return verdict
++    except Exception as e:  # the lamp must never become a gate
++        console.print(f"[yellow]⚠ shadow verifier unavailable (已跳过, 不阻断): {e}[/yellow]")
++        logger.debug("shadow verifier failed", exc_info=True)
++        return None
++
++
+ @app.command(name="promote")
+ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+     cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
+@@ -1982,6 +2104,8 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+ 
+     console.print(f"[green]✓[/green] Promoted '{cluster_id}' → skill_id={skill_id}")
+     console.print(f"  [dim]draft:[/dim] {skill_path}")
++    # gate36 阶段二: shadow verifier — 徽章 + 明细, 永不阻断 (修订 A/B/D/J).
++    _run_shadow_verify(candidate, skill_path, scope, phase="promote")
+     if scope == "global":
+         console.print(
+             f"  [dim]activate:[/dim] copy to ~/.vibe/skills/{skill_id}/ and run "
+@@ -2111,6 +2235,26 @@ def _activate_promoted_draft(
+     else:
+         console.print("[green]✓[/green] Draft edited since generation (content hash differs)")
+ 
++    # gate36 修订 A: activation-time shadow verdict — M5 forces a human
++    # edit before activation, so the promote-time verdict describes a
++    # draft that no longer exists. Draft unchanged (byte hash match) →
++    # reuse the promote-time result; changed → rerun. A degraded rerun
++    # appends a NEW line and never shadows the complete promote-time
++    # verdict (``prefer_complete`` picks the full version for display).
++    # Never blocks; no --force involved.
++    try:
++        verdict_store = _get_verdict_store()
++        existing_verdict = verdict_store.latest_for_cluster(
++            candidate.cluster_id, draft_sha256=current_sha256, prefer_complete=True
++        )
++        if existing_verdict is not None:
++            _print_verdict(existing_verdict, reused=True)
++        else:
++            _run_shadow_verify(candidate, skill_path, scope, phase="activate-rerun")
++    except Exception as e:  # the lamp must never become a gate
++        console.print(f"[yellow]⚠ shadow verifier unavailable (已跳过, 不阻断): {e}[/yellow]")
++        logger.debug("shadow verifier failed at activation", exc_info=True)
++
+     if scope == "global":
+         if not candidate.is_cross_project and not force:
+             console.print(
+diff --git a/src/vibesop/core/observability/promote_verifier.py b/src/vibesop/core/observability/promote_verifier.py
+new file mode 100644
+index 0000000..1d44d91
+--- /dev/null
++++ b/src/vibesop/core/observability/promote_verifier.py
+@@ -0,0 +1,683 @@
++"""gate36 阶段二 — promote shadow verifier (D1, 修订 A/B/D/J/K).
++
++A non-blocking "灯, 不是闸" for ``vibe skill promote``: after a draft is
++materialized, replay the cluster's queries against the draft's declared
++triggers and report a DESCRIPTIVE verdict — which queries the draft would
++catch, which it would miss (with the nearest trigger for each miss), and
++which installed skills' triggers it would contend with. The badge has two
++levels only — PASS / WARN, NO fail level, NEVER blocks activation, and the
++activate path never needs ``--force`` for the verifier (修订 A/J).
++
++What it measures — and what it does NOT: the badge answers "触发召回"
++(would the draft's triggers recall the very pattern that produced it?),
++NOT "内容质量" (is the SKILL.md body any good?). Lane C's objection
++(verifier issuing a false pass to an empty shell) is absorbed by making
++that scope explicit in every badge rendering (CLI + dashboard).
++
++Trigger-side semantics (修订 B): the containment rule is the PRODUCTION
++one, extracted as ``triage_service.query_matches_triggers`` from
++``has_explicit_guard_signal`` (lowercase + apostrophe-stripped, NO
++whitespace folding, NO length floor, first-hit-wins). The guarded-only
++``explicit_guarded_skill_match`` is deliberately NOT used — the guarded
++set only recognizes table-listed ids (riper/session-end), so a draft id
++would never match and the trigger side would silently no-op.
++
++Embedding side: two INDEPENDENT lines, each fail-open (修订 B 细化):
++
++- recall line: ``EmbeddingRecall._candidate_text`` semantics over the
++  draft (id + description + intent + triggers), floor 0.25
++  (``DEFAULT_MIN_SIMILARITY``);
++- index line: ``SkillIndexer._compute_profile_text`` semantics
++  (triggers are the only deterministic pre-LLM profile field, gate32 A2)
++  with the SEMANTIC_INDEX fallback gates — 0.45 absolute floor
++  (``index_embedding_threshold`` default) + top1-vs-top2 margin
++  (``index_embedding_min_margin`` default) against the loaded skill
++  index catalog when available.
++
++The model handle is a MODULE-LEVEL SINGLETON (the real
++paraphrase-multilingual-MiniLM-L12-v2 load costs 10-12s; per-call
++construction is banned). Any line whose model/encode fails is marked
++``unavailable``; an unavailable line does not participate in the verdict
++and the overall badge is at most WARN(degraded) — degraded runs NEVER
++emit PASS (修订 J 细化).
++
++Capture denominator (修订 J): cluster queries hitting the gate35 prefix
++predicate ``_has_agent_prompt_prefix`` (agent-echo rows) are legitimate
++pool members (gate32 A1 — bd1bc217 was promoted from such a cluster) but
++are EXCLUDED from the shadow denominator; the lint "≥1 representative
++query" check uses the same denominator (lint 与 shadow 同口径).
++
++Verdict schema (修订 A 细化): embeds the sha256 of the CURRENT draft file
++bytes (never ``ClusterCandidate.draft_sha256``, which is a frozen
++generation-time baseline that survives edits) + a trigger-set hash +
++``RULESET_VERSION`` + the pipeline inventory that actually ran +
++per-line results + detail.
++
++Privacy (修订 D): verdicts land in the INITIATING project's
++``.vibe/observability/promote_verdicts.jsonl``; verdicts for
++``scope="global"`` drafts store counts + truncated query hashes only,
++never raw query text (M12 M5 boundary); project-scope text fields pass
++through ``sanitize_body_text``. Capacity: keep the most recent
++``MAX_VERDICTS`` rows or ``VERDICT_TTL_DAYS`` days (仓内轮转惯例).
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import logging
++import threading
++from dataclasses import asdict, dataclass, field
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++from typing import Any, Literal
++
++from vibesop.core.observability.skill_promote import (
++    ClusterCandidate,
++    _has_agent_prompt_prefix,
++    _is_agent_prompt_shape,
++    sanitize_body_text,
++)
++from vibesop.core.routing.triage_recall import (
++    DEFAULT_MIN_SIMILARITY,
++    MODEL_NAME,
++    EmbeddingRecall,
++    _cosine_similarity,
++)
++from vibesop.core.routing.triage_service import query_matches_triggers
++
++logger = logging.getLogger(__name__)
++
++__all__ = [
++    "RULESET_VERSION",
++    "PromoteVerdict",
++    "PromoteVerdictStore",
++    "verify_draft",
++]
++
++# Bumped whenever the verdict semantics change, so a future ≥30-verdict
++# threshold discussion never mixes rulesets (修订 B: 攒 ≥30 条后的阈值
++# 讨论才不吃非生产数字).
++RULESET_VERSION = "gate36-r1"
++
++# Index-line gates mirror the RoutingConfig defaults used by the
++# SEMANTIC_INDEX embedding fallback (_layers.py): absolute floor
++# ``index_embedding_threshold`` (0.45) + top1/top2 margin
++# ``index_embedding_min_margin`` (0.05). Pinned by tests against the
++# config defaults so a config re-calibration surfaces here.
++_INDEX_GATE = 0.45
++_INDEX_MIN_MARGIN = 0.05
++
++MAX_VERDICTS = 200
++VERDICT_TTL_DAYS = 90
++
++_QUERY_HASH_LEN = 16
++_MAX_HIJACK_ENTRIES = 20
++
++Scope = Literal["project", "global"]
++
++# ---------------------------------------------------------------------------
++# Embedding model — module-level singleton (修订 A 细化: 真模型 10–12s/次,
++# 不得每次新建). Sticky failure mirrors ``EmbeddingRecall._get_model``.
++# ---------------------------------------------------------------------------
++_MODEL_STATE: dict[str, Any] = {"model": None, "failed": False}
++_MODEL_LOCK = threading.Lock()
++
++
++def _get_embedding_model() -> Any | None:
++    """Lazy module-level singleton; None when unavailable (fail-open)."""
++    with _MODEL_LOCK:
++        if _MODEL_STATE["model"] is not None or _MODEL_STATE["failed"]:
++            return _MODEL_STATE["model"]
++        try:
++            from sentence_transformers import (
++                SentenceTransformer,  # pyright: ignore[reportMissingImports]
++            )
++
++            _MODEL_STATE["model"] = SentenceTransformer(MODEL_NAME)
++        except Exception as e:  # missing dep / no network / OOM — all fail-open
++            logger.debug("promote verifier: embedding model unavailable: %s", e)
++            _MODEL_STATE["failed"] = True
++            return None
++        return _MODEL_STATE["model"]
++
++
++def _encode(model: Any, texts: list[str]) -> list[list[float]]:
++    raw = model.encode(texts, show_progress_bar=False)
++    return [v.tolist() if hasattr(v, "tolist") else list(v) for v in raw]
++
++
++def _query_hash(text: str) -> str:
++    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()[:_QUERY_HASH_LEN]
++
++
++def _token_jaccard(a: str, b: str) -> float:
++    """Whitespace-token Jaccard over lowercased text (nearest-trigger detail).
++
++    Deterministic and model-free — the nearest-neighbor detail must be
++    computable in degraded environments too (embedding unavailable).
++    """
++    sa, sb = set(str(a).lower().split()), set(str(b).lower().split())
++    union = sa | sb
++    if not union:
++        return 0.0
++    return len(sa & sb) / len(union)
++
++
++def _nearest_trigger(query: str, triggers: list[str]) -> tuple[str | None, float]:
++    """Closest declared trigger to a missed query, by token Jaccard.
++
++    Returns (None, 0.0) when no trigger shares a single token — an honest
++    "no neighbor" beats a misleading argmax over zeros.
++    """
++    best: str | None = None
++    best_score = 0.0
++    for trigger in triggers:
++        score = _token_jaccard(query, trigger)
++        if score > best_score:
++            best, best_score = str(trigger), score
++    return best, best_score
++
++
++@dataclass
++class PromoteVerdict:
++    """One shadow-verifier verdict (one JSONL line in the verdict store).
++
++    ``embedding`` / ``shadow`` / ``hijack`` / ``lint`` are plain dicts —
++    the schema is descriptive, not contractual, and ``from_dict`` must
++    tolerate missing keys (bad-line policy like the other observability
++    stores). For ``scope="global"`` the query text fields inside
++    ``shadow``/``embedding``/``hijack`` carry ``query_hash`` entries
++    instead of raw text (修订 D) — the redaction happens at CONSTRUCTION
++    time in ``verify_draft``, so the stored object never holds raw
++    cross-project queries.
++    """
++
++    cluster_id: str
++    skill_id: str
++    scope: str
++    phase: str  # "promote" | "activate-rerun"
++    badge: str  # "PASS" | "WARN" — two levels only, never FAIL
++    degraded: bool  # True when any embedding line was unavailable
++    draft_sha256: str  # sha256 of the CURRENT draft file bytes
++    trigger_set_sha256: str
++    ruleset_version: str
++    created_at: datetime | None = None
++    pipelines: list[str] = field(default_factory=list)
++    lint: dict[str, Any] = field(default_factory=dict)
++    shadow: dict[str, Any] = field(default_factory=dict)
++    embedding: dict[str, Any] = field(default_factory=dict)
++    hijack: dict[str, Any] = field(default_factory=dict)
++    warnings: list[str] = field(default_factory=list)
++
++    def to_dict(self) -> dict[str, Any]:
++        d = asdict(self)
++        d["created_at"] = self.created_at.isoformat() if self.created_at else None
++        return d
++
++    @classmethod
++    def from_dict(cls, d: dict[str, Any]) -> PromoteVerdict:
++        """Tolerant deserialization — missing keys fall back to defaults."""
++        payload = dict(d)
++        raw = payload.get("created_at")
++        if isinstance(raw, str):
++            try:
++                parsed = datetime.fromisoformat(raw)
++                payload["created_at"] = parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
++            except ValueError:
++                payload["created_at"] = None
++        elif raw is None:
++            payload["created_at"] = None
++        known = set(cls.__dataclass_fields__)
++        return cls(**{k: v for k, v in payload.items() if k in known})
++
++
++class PromoteVerdictStore:
++    """JSONL store for promote verdicts (``promote_verdicts.jsonl``).
++
++    Same conventions as ``DiscoverySignalStore`` / ``ClusterCandidateStore``:
++    ``threading.Lock`` + cross-process ``fcntl`` (``cross_process_lock``
++    fallback), malformed lines skipped on read, atomic temp+rename
++    rewrites. Capacity policy: on append, drop rows older than
++    ``VERDICT_TTL_DAYS`` and keep at most the most recent ``MAX_VERDICTS``
++    rows (append-only between compactions).
++    """
++
++    FILENAME = "promote_verdicts.jsonl"
++
++    def __init__(self, storage_dir: Path | str) -> None:
++        self._dir = Path(storage_dir)
++        self._dir.mkdir(parents=True, exist_ok=True)
++        self._path = self._dir / self.FILENAME
++        self._lock = threading.Lock()
++
++    def append(self, verdict: PromoteVerdict, *, now: datetime | None = None) -> PromoteVerdict:
++        """Append one verdict, then enforce TTL + count capacity."""
++        now = now or datetime.now(UTC)
++        with self._lock:
++            try:
++                import fcntl
++            except ImportError:
++                from vibesop.utils.file_lock import cross_process_lock
++
++                with cross_process_lock(self._path):
++                    self._do_append(verdict, now)
++                return verdict
++            with self._path.open("a", encoding="utf-8") as f:
++                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
++                try:
++                    self._do_append(verdict, now)
++                finally:
++                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
++        return verdict
++
++    def _do_append(self, verdict: PromoteVerdict, now: datetime) -> None:
++        """Caller MUST hold threading.Lock + cross-process lock."""
++        rows = self._read_all_locked()
++        rows.append(verdict)
++        cutoff = now - timedelta(days=VERDICT_TTL_DAYS)
++        rows = [r for r in rows if r.created_at is None or r.created_at >= cutoff]
++        if len(rows) > MAX_VERDICTS:
++            rows = rows[-MAX_VERDICTS:]
++        from vibesop.utils.atomic_writer import AtomicWriter
++
++        writer = AtomicWriter()
++        with writer.atomic_open(self._path, "w") as f:
++            for r in rows:
++                f.write(json.dumps(r.to_dict(), ensure_ascii=False) + "\n")
++
++    def list_all(self) -> list[PromoteVerdict]:
++        """Every row in insertion order; malformed lines skipped."""
++        if not self._path.exists():
++            return []
++        return self._parse_lines(self._path)
++
++    def _read_all_locked(self) -> list[PromoteVerdict]:
++        if not self._path.exists():
++            return []
++        return self._parse_lines(self._path)
++
++    @staticmethod
++    def _parse_lines(path: Path) -> list[PromoteVerdict]:
++        out: list[PromoteVerdict] = []
++        with path.open("r", encoding="utf-8") as f:
++            for lineno, raw in enumerate(f, start=1):
++                line = raw.strip()
++                if not line:
++                    continue
++                try:
++                    d = json.loads(line)
++                    out.append(PromoteVerdict.from_dict(d))
++                except (json.JSONDecodeError, ValueError, TypeError):
++                    logger.debug("skipping malformed verdict line %d in %s", lineno, path)
++                    continue
++        return out
++
++    def for_cluster(self, cluster_id: str) -> list[PromoteVerdict]:
++        """All verdicts for one cluster, oldest first."""
++        return [v for v in self.list_all() if v.cluster_id == cluster_id]
++
++    def latest_for_cluster(
++        self,
++        cluster_id: str,
++        *,
++        draft_sha256: str | None = None,
++        prefer_complete: bool = False,
++    ) -> PromoteVerdict | None:
++        """Most recent verdict for a cluster, optionally pinned to a draft hash.
++
++        ``prefer_complete`` (修订 A 细化): a degraded activate-rerun appends
++        a new row but must NOT shadow the complete promote-time verdict —
++        display prefers a non-degraded match when one exists.
++        """
++        rows = self.for_cluster(cluster_id)
++        if draft_sha256 is not None:
++            rows = [v for v in rows if v.draft_sha256 == draft_sha256]
++        if not rows:
++            return None
++        if prefer_complete:
++            complete = [v for v in rows if not v.degraded]
++            if complete:
++                rows = complete
++        return max(rows, key=lambda v: v.created_at or datetime.min.replace(tzinfo=UTC))
++
++
++def _extract_draft_frontmatter(draft_bytes: bytes) -> dict[str, Any]:
++    """Parse the draft's YAML frontmatter via the production parser."""
++    try:
++        from vibesop.core.skills.parser import extract_frontmatter
++
++        frontmatter, _ = extract_frontmatter(draft_bytes.decode("utf-8"))
++        return frontmatter if isinstance(frontmatter, dict) else {}
++    except Exception as e:  # unparseable draft → lint warns, never raises
++        logger.debug("promote verifier: frontmatter parse failed: %s", e)
++        return {}
++
++
++def _redact_query(text: str, scope: Scope) -> dict[str, str]:
++    """Query reference for verdict detail: hash-only for global (修订 D)."""
++    if scope == "global":
++        return {"query_hash": _query_hash(text)}
++    return {"query": sanitize_body_text(text)}
++
++
++def verify_draft(
++    candidate: ClusterCandidate,
++    draft_path: Path | str,
++    *,
++    scope: Scope = "project",
++    phase: str = "promote",
++    installed_candidates: list[dict[str, Any]] | None = None,
++    index_profiles: dict[str, Any] | None = None,
++    embedding_model: Any | None = None,
++    store: PromoteVerdictStore | None = None,
++) -> PromoteVerdict:
++    """Shadow-verify a promoted draft against its own cluster. Never raises.
++
++    Parameters
++    ----------
++    candidate:
++        The promoted ``ClusterCandidate`` (cluster queries are the replay
++        corpus; status is not checked — the caller owns the lifecycle).
++    draft_path:
++        Path to the CURRENT SKILL.md draft; its bytes are hashed into the
++        verdict (修订 A 细化: never ``ClusterCandidate.draft_sha256``).
++    scope:
++        ``"global"`` redacts raw queries to hashes in the stored verdict.
++    phase:
++        ``"promote"`` (initial diagnosis) or ``"activate-rerun"`` (修订 A).
++    installed_candidates:
++        Live routing catalog (``CandidateManager.get_candidates()`` shape)
++        for the hijack analysis; None skips it (recorded, fail-open).
++    index_profiles:
++        ``SkillIndexer.load_index()`` output for the index-line margin
++        gate; None/empty skips the margin (recorded as
++        ``skipped-no-catalog``).
++    embedding_model:
++        DI seam for tests; None resolves the module-level singleton
++        (which is None under the conftest stub → both lines unavailable).
++    store:
++        When given, the verdict is appended (double-locked, capacity
++        enforced).
++    """
++    draft_path = Path(draft_path)
++    warnings: list[str] = []
++    pipelines: list[str] = []
++
++    try:
++        draft_bytes = draft_path.read_bytes()
++    except OSError:
++        draft_bytes = b""
++        warnings.append(f"draft file unreadable: {draft_path}")
++    draft_sha256 = hashlib.sha256(draft_bytes).hexdigest()
++
++    frontmatter = _extract_draft_frontmatter(draft_bytes) if draft_bytes else {}
++    raw_triggers = frontmatter.get("triggers") or []
++    triggers = (
++        [str(t) for t in raw_triggers if str(t).strip()] if isinstance(raw_triggers, list) else []
++    )
++    trigger_set_sha256 = hashlib.sha256(
++        json.dumps(sorted(triggers), ensure_ascii=False).encode("utf-8")
++    ).hexdigest()
++
++    # 标集口径 (修订 J): agent-echo rows (gate35 prefix predicate) are
++    # legitimate pool members but stay OUT of the capture denominator.
++    all_queries = [str(q) for q in candidate.queries]
++    denominator = [q for q in all_queries if not _has_agent_prompt_prefix(q)]
++    echo_excluded = len(all_queries) - len(denominator)
++
++    # --- 1) trigger lint (static) -------------------------------------
++    pipelines.append("trigger_lint")
++    lint_checks = {
++        "triggers_nonempty": bool(triggers),
++        "triggers_not_all_hygiene": bool(triggers)
++        and not all(_is_agent_prompt_shape(t) for t in triggers),
++        "representative_query_caught": any(
++            query_matches_triggers(q, triggers) is not None for q in denominator
++        ),
++    }
++    lint_warnings: list[str] = []
++    if not lint_checks["triggers_nonempty"]:
++        lint_warnings.append("draft declares no triggers (TODO placeholder?)")
++    elif not lint_checks["triggers_not_all_hygiene"]:
++        lint_warnings.append("every trigger is a hygiene/agent-prompt shape")
++    if denominator and not lint_checks["representative_query_caught"]:
++        lint_warnings.append("no representative cluster query matches any trigger")
++    if not denominator:
++        lint_warnings.append("capture denominator is empty (all cluster queries are agent-echo)")
++    warnings.extend(lint_warnings)
++
++    # --- 2) shadow replay (dynamic, trigger containment) ---------------
++    pipelines.append("shadow_replay")
++    caught: list[dict[str, Any]] = []
++    missed: list[dict[str, Any]] = []
++    for q in denominator:
++        hit = query_matches_triggers(q, triggers)
++        if hit is not None:
++            caught.append({**_redact_query(q, scope), "trigger": sanitize_body_text(hit)})
++        else:
++            nearest, score = _nearest_trigger(q, triggers)
++            missed.append(
++                {
++                    **_redact_query(q, scope),
++                    "nearest_trigger": sanitize_body_text(nearest) if nearest else None,
++                    "nearest_score": round(score, 4),
++                }
++            )
++    shadow = {
++        "denominator": len(denominator),
++        "echo_excluded": echo_excluded,
++        "caught": caught,
++        "missed": missed,
++        "all_caught": bool(denominator) and not missed,
++    }
++
++    # --- 3) hijack analysis (production containment vs installed catalog)
++    # Same idea as replay_routing_baseline.build_hit_hijack_risks (a
++    # would-fire target different from the observed winner), but with
++    # PRODUCTION containment semantics and against trigger collisions:
++    # any installed skill whose trigger also matches a query the draft
++    # catches is a contention risk once the draft is activated.
++    if installed_candidates is None:
++        hijack = {"status": "skipped", "entries": []}
++    else:
++        pipelines.append("hijack")
++        own_id = str(candidate.source_skill_id or "")
++        others = [
++            (str(c.get("id", "")), [str(t) for t in (c.get("triggers") or [])])
++            for c in installed_candidates
++            if str(c.get("id", "")) and str(c.get("id", "")) != own_id
++        ]
++        entries: list[dict[str, Any]] = []
++        for q in denominator:
++            if query_matches_triggers(q, triggers) is None:
++                continue  # draft would not fire here — nothing to hijack
++            for other_id, other_triggers in others:
++                hit = query_matches_triggers(q, other_triggers)
++                if hit is not None:
++                    entries.append(
++                        {
++                            **_redact_query(q, scope),
++                            "competing_skill_id": other_id,
++                            "competing_trigger": sanitize_body_text(hit),
++                        }
++                    )
++                    break  # first competitor per query is enough detail
++            if len(entries) >= _MAX_HIJACK_ENTRIES:
++                break
++        hijack = {"status": "ok", "entries": entries}
++
++    # --- 4) embedding lines (each fail-open; singleton model) ----------
++    model = embedding_model if embedding_model is not None else _get_embedding_model()
++    embedding = {
++        "recall": _embedding_recall_line(
++            model, frontmatter, triggers, denominator, scope, pipelines
++        ),
++        "index": _embedding_index_line(
++            model, triggers, denominator, index_profiles, scope, pipelines
++        ),
++    }
++
++    # --- 5) badge (修订 J 细化: PASS 需 lint 全过 + shadow 全捕获 + 两
++    # embedding 线均可用且过门; 其余一切 WARN; 无 FAIL, 降级永不 PASS) ---
++    lint_ok = not lint_warnings
++    recall_ok = embedding["recall"]["status"] == "ok" and embedding["recall"]["all_caught"]
++    index_ok = embedding["index"]["status"] == "ok" and embedding["index"]["all_accepted"]
++    degraded = embedding["recall"]["status"] != "ok" or embedding["index"]["status"] != "ok"
++    badge = "PASS" if (lint_ok and shadow["all_caught"] and recall_ok and index_ok) else "WARN"
++
++    verdict = PromoteVerdict(
++        cluster_id=candidate.cluster_id,
++        skill_id=str(candidate.source_skill_id or frontmatter.get("id") or ""),
++        scope=scope,
++        phase=phase,
++        badge=badge,
++        degraded=degraded,
++        draft_sha256=draft_sha256,
++        trigger_set_sha256=trigger_set_sha256,
++        ruleset_version=RULESET_VERSION,
++        created_at=datetime.now(UTC),
++        pipelines=pipelines,
++        lint={"checks": lint_checks, "warnings": lint_warnings},
++        shadow=shadow,
++        embedding=embedding,
++        hijack=hijack,
++        warnings=warnings,
++    )
++    if store is not None:
++        store.append(verdict)
++    return verdict
++
++
++def _embedding_recall_line(
++    model: Any | None,
++    frontmatter: dict[str, Any],
++    triggers: list[str],
++    denominator: list[str],
++    scope: Scope,
++    pipelines: list[str],
++) -> dict[str, Any]:
++    """Recall line: ``EmbeddingRecall._candidate_text`` semantics, floor 0.25."""
++    if model is None:
++        return {"status": "unavailable", "floor": DEFAULT_MIN_SIMILARITY, "all_caught": None}
++    candidate_dict = {
++        "id": str(frontmatter.get("id", "")),
++        "description": str(frontmatter.get("description", "")),
++        "intent": str(frontmatter.get("intent", "")),
++        "triggers": triggers,
++        "keywords": frontmatter.get("tags") or [],
++        "scenarios": [],
++    }
++    try:
++        profile_text = EmbeddingRecall._candidate_text(candidate_dict)
++        vectors = _encode(model, [profile_text, *denominator])
++        profile_vec, query_vecs = vectors[0], vectors[1:]
++    except Exception as e:  # encode failure is fail-open, same as load failure
++        logger.debug("promote verifier: recall line encode failed: %s", e)
++        return {"status": "unavailable", "floor": DEFAULT_MIN_SIMILARITY, "all_caught": None}
++    pipelines.append("embedding_recall")
++    results = []
++    for q, vec in zip(denominator, query_vecs, strict=True):
++        sim = _cosine_similarity(vec, profile_vec)
++        results.append(
++            {
++                **_redact_query(q, scope),
++                "similarity": round(sim, 4),
++                "caught": sim >= DEFAULT_MIN_SIMILARITY,
++            }
++        )
++    return {
++        "status": "ok",
++        "floor": DEFAULT_MIN_SIMILARITY,
++        "results": results,
++        "all_caught": all(r["caught"] for r in results),
++    }
++
++
++def _embedding_index_line(
++    model: Any | None,
++    triggers: list[str],
++    denominator: list[str],
++    index_profiles: dict[str, Any] | None,
++    scope: Scope,
++    pipelines: list[str],
++) -> dict[str, Any]:
++    """Index line: ``_compute_profile_text`` + 0.45 gate + top1/top2 margin.
++
++    The draft's profile text is its declared triggers — the only profile
++    field populated deterministically pre-LLM (gate32 A2). The margin
++    gate mirrors the SEMANTIC_INDEX embedding fallback: the draft must
++    win the argmax over the (catalog + draft) set AND clear top1-top2 >=
++    ``_INDEX_MIN_MARGIN``; without a loaded catalog the margin is
++    skipped (``skipped-no-catalog``) and the 0.45 gate alone applies.
++    """
++    if model is None:
++        return {"status": "unavailable", "gate": _INDEX_GATE, "all_accepted": None}
++
++    from vibesop.core.skills.indexer import SkillIndexer, SkillProfile
++
++    profile_text = SkillIndexer._compute_profile_text(
++        SkillProfile(skill_id="__draft__", triggers=list(triggers))
++    )
++    if not profile_text.strip():
++        # No triggers → nothing to embed; NOT a model-availability issue,
++        # but still not "可用且过门" — the line cannot PASS the draft.
++        return {
++            "status": "skipped",
++            "reason": "empty profile text (no declared triggers)",
++            "gate": _INDEX_GATE,
++            "all_accepted": None,
++        }
++
++    catalog: dict[str, list[float]] = {}
++    for sid, profile in (index_profiles or {}).items():
++        emb = getattr(profile, "embedding", None)
++        if isinstance(emb, list) and emb:
++            catalog[str(sid)] = emb
++    margin_mode = "catalog" if catalog else "skipped-no-catalog"
++
++    try:
++        vectors = _encode(model, [profile_text, *denominator])
++        profile_vec, query_vecs = vectors[0], vectors[1:]
++    except Exception as e:
++        logger.debug("promote verifier: index line encode failed: %s", e)
++        return {"status": "unavailable", "gate": _INDEX_GATE, "all_accepted": None}
++    pipelines.append("embedding_index")
++
++    results = []
++    for q, vec in zip(denominator, query_vecs, strict=True):
++        sim = _cosine_similarity(vec, profile_vec)
++        best_existing_sim = 0.0
++        best_existing_id: str | None = None
++        for sid, emb in catalog.items():
++            try:
++                existing_sim = _cosine_similarity(vec, emb)
++            except (TypeError, ValueError):
++                continue  # dimension-mismatched legacy vector — skip
++            if existing_sim > best_existing_sim:
++                best_existing_sim, best_existing_id = existing_sim, sid
++        accepted = sim >= _INDEX_GATE
++        margin: float | None = None
++        if catalog:
++            # top1/top2 over (catalog + draft): the draft must WIN the
++            # argmax and clear the margin — an existing profile outscoring
++            # the draft means the draft would not win this query at all.
++            margin = sim - best_existing_sim
++            accepted = accepted and margin >= _INDEX_MIN_MARGIN
++        results.append(
++            {
++                **_redact_query(q, scope),
++                "similarity": round(sim, 4),
++                "best_existing_skill_id": best_existing_id,
++                "margin": round(margin, 4) if margin is not None else None,
++                "accepted": accepted,
++            }
++        )
++    return {
++        "status": "ok",
++        "gate": _INDEX_GATE,
++        "min_margin": _INDEX_MIN_MARGIN,
++        "margin_mode": margin_mode,
++        "results": results,
++        "all_accepted": all(r["accepted"] for r in results),
++    }
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index 84e5b39..362e45c 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -2051,9 +2051,17 @@ def _render_skill_md(
+             )
+ 
+     if candidate.core_steps:
++        # gate36 修订 K: the only remaining prefill increment is a
++        # generation-provenance annotation (auto-extracted from trace).
++        # Empty core_steps clusters keep the TODO below — never
++        # fabricate a HOW the trace did not record.
+         steps_block = "\n".join(
+             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
+         )
++        steps_block += (
++            "\n\n> provenance: auto-extracted from trace (step names present in "
++            "≥70% of cluster spans) — a record of WHAT recurred, not a verified HOW"
++        )
+     else:
+         # gate31: the empty case gets a guided TODO instead of a bare
+         # parenthetical — the trace lacked ≥70%-frequency step names, so
+diff --git a/src/vibesop/core/routing/triage_service.py b/src/vibesop/core/routing/triage_service.py
+index 364234c..46dc9a2 100644
+--- a/src/vibesop/core/routing/triage_service.py
++++ b/src/vibesop/core/routing/triage_service.py
+@@ -18,7 +18,7 @@ from vibesop.core.routing.triage_cache import TriageCache
+ from vibesop.core.routing.triage_recall import DEFAULT_MIN_SIMILARITY, EmbeddingRecall
+ 
+ if TYPE_CHECKING:
+-    from collections.abc import Callable
++    from collections.abc import Callable, Iterable
+ 
+     from vibesop.core.config import RoutingConfig
+     from vibesop.core.optimization import CandidatePrefilter
+@@ -43,6 +43,34 @@ def _resolve_vibe_dir(cache_dir: str | Path) -> Path:
+     return path.parent if path.name == "cache" else path
+ 
+ 
++def query_matches_triggers(query: str, triggers: Iterable[Any]) -> str | None:
++    """Production trigger-containment semantics (gate36 修订 B extraction).
++
++    The exact matching rule ``TriageService.has_explicit_guard_signal``
++    applies to a guarded skill's declared triggers, generalized to ANY
++    trigger list (e.g. a promoted draft's own triggers — the guarded-only
++    ``explicit_guarded_skill_match`` can never fire on a draft id, so the
++    shadow verifier wraps THIS rule instead):
++
++    - ``query.lower()`` with apostrophes (``'`` / ``’``) stripped;
++    - NO whitespace folding (``"foo  bar"`` does NOT contain ``"foo bar"``);
++    - NO minimum trigger length (a 1-char trigger can match);
++    - first-hit-wins in trigger list order.
++
++    Returns the first matching trigger (original form), or ``None``.
++    Deliberately NOT the ``p0_shadow`` rule from
++    ``scripts/replay_routing_baseline.py`` (that one folds whitespace,
++    keeps apostrophes, and imposes a ≥6-char containment floor — a
++    signal-existence probe, not production semantics).
++    """
++    normalized_query = query.lower().replace("'", "").replace("’", "")
++    for trigger in triggers:
++        trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
++        if trigger_norm and trigger_norm in normalized_query:
++            return str(trigger)
++    return None
++
++
+ class TriageService:
+     """AI Triage layer for skill routing."""
+ 
+@@ -530,12 +558,13 @@ class TriageService:
+         if not triggers:
+             triggers = list(self._GUARDED_SKILL_FALLBACK_TRIGGERS.get(short, []))
+ 
+-        normalized_query = query.lower().replace("'", "").replace("’", "")
+-        for trigger in triggers:
+-            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
+-            if trigger_norm and trigger_norm in normalized_query:
+-                return True
++        # gate36 修订 B: the containment loop is extracted into
++        # ``query_matches_triggers`` (same semantics, same order) so the
++        # promote shadow verifier can reuse the production rule.
++        if query_matches_triggers(query, triggers) is not None:
++            return True
+ 
++        normalized_query = query.lower().replace("'", "").replace("’", "")
+         return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
+ 
+     def explicit_guarded_skill_match(
+diff --git a/src/vibesop/dashboard/_discoveries.py b/src/vibesop/dashboard/_discoveries.py
+index 8521c6f..b20474d 100644
+--- a/src/vibesop/dashboard/_discoveries.py
++++ b/src/vibesop/dashboard/_discoveries.py
+@@ -35,6 +35,7 @@ stores yield empty lists, never 500 and never new directories.
+ 
+ from __future__ import annotations
+ 
++import hashlib
+ from datetime import UTC, datetime
+ from pathlib import Path
+ from typing import Any, Literal
+@@ -47,6 +48,7 @@ from vibesop.core.observability.discovery import (
+     source_outcome_stats,
+     why_here,
+ )
++from vibesop.core.observability.promote_verifier import PromoteVerdict, PromoteVerdictStore
+ from vibesop.core.observability.skill_promote import (
+     ClusterCandidate,
+     ClusterCandidateStore,
+@@ -222,6 +224,76 @@ def _row_to_card(scope: Scope, row: DiscoveryRow) -> dict[str, Any]:
+     }
+ 
+ 
++def _verdict_draft_path(project_root: Path, verdict: PromoteVerdict) -> Path:
++    """Locate the SKILL.md a verdict was computed against (for staleness)."""
++    if verdict.scope == "global":
++        return (
++            Path.home() / ".vibe" / "observability" / "skill_drafts" / verdict.skill_id / "SKILL.md"
++        )
++    return project_root / ".vibe" / "observability" / "skill_drafts" / verdict.skill_id / "SKILL.md"
++
++
++def _load_verdicts(project_root: Path) -> dict[str, list[dict[str, Any]]]:
++    """Promote-verdict section of the payload, keyed by cluster_id (gate36 修订 D).
++
++    Promoted rows are terminal and never appear in ``list_pending``, so
++    the verdict store is read INDEPENDENTLY of the queue cards. Detail is
++    scope-filtered: global-scope verdicts expose counts + badge only (raw
++    queries were hash-redacted at write time — the privacy boundary lives
++    in the store, this is the display-side second pass); project-scope
++    verdicts carry the sanitized missed-query detail. ``stale`` compares
++    the verdict's embedded draft hash against the CURRENT draft bytes —
++    a draft edited after the verdict makes it stale (修订 A); a missing
++    draft also counts as stale. Verdicts live in the INITIATING project's
++    store only, so only the project scope dir is read.
++
++    Read-only contract preserved: the store is constructed ONLY when its
++    file already exists (its constructor mkdirs the storage dir).
++    """
++    obs_dir = project_root / ".vibe" / "observability"
++    if not (obs_dir / PromoteVerdictStore.FILENAME).exists():
++        return {}
++    verdicts: dict[str, list[dict[str, Any]]] = {}
++    for v in PromoteVerdictStore(obs_dir).list_all():
++        try:
++            current_sha = hashlib.sha256(
++                _verdict_draft_path(project_root, v).read_bytes()
++            ).hexdigest()
++        except OSError:
++            current_sha = None
++        shadow = v.shadow or {}
++        entry: dict[str, Any] = {
++            "cluster_id": v.cluster_id,
++            "cluster_id_short": v.cluster_id[:8],
++            "skill_id": v.skill_id,
++            "scope": v.scope,
++            "phase": v.phase,
++            "badge": v.badge,
++            "degraded": v.degraded,
++            "created_at": v.created_at.isoformat() if v.created_at else None,
++            "ruleset_version": v.ruleset_version,
++            "draft_sha256": v.draft_sha256,
++            "stale": current_sha != v.draft_sha256,
++            "shadow": {
++                "denominator": shadow.get("denominator", 0),
++                "echo_excluded": shadow.get("echo_excluded", 0),
++                "caught": len(shadow.get("caught", [])),
++                "missed": len(shadow.get("missed", [])),
++            },
++            "hijack_count": len((v.hijack or {}).get("entries", [])),
++        }
++        if v.scope == "project":
++            entry["detail"] = {
++                "missed": shadow.get("missed", []),
++                "warnings": v.warnings,
++                "hijack": (v.hijack or {}).get("entries", []),
++            }
++        verdicts.setdefault(v.cluster_id, []).append(entry)
++    for entries in verdicts.values():
++        entries.sort(key=lambda e: e.get("created_at") or "", reverse=True)
++    return verdicts
++
++
+ def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
+     """Assemble the ``GET /api/discoveries`` response body.
+ 
+@@ -293,4 +365,8 @@ def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
+             ),
+         },
+         "discoveries": cards,
++        # gate36 阶段二: shadow verifier verdicts (修订 D) — 独立于队列
++        # 卡片 (promoted 行不在 list_pending), 按 cluster_id 平铺, global
++        # scope 只有计数/徽章没有 query 明细。
++        "verdicts": _load_verdicts(project_root),
+     }
+diff --git a/src/vibesop/dashboard/templates/index.html b/src/vibesop/dashboard/templates/index.html
+index 897cacf..2cc7913 100644
+--- a/src/vibesop/dashboard/templates/index.html
++++ b/src/vibesop/dashboard/templates/index.html
+@@ -701,8 +701,9 @@ async function loadDiscoveries() {
+ 
+   const list = document.getElementById('disc-list');
+   const cards = data.discoveries || [];
++  const verdictsHtml = renderVerdicts(data.verdicts || {});
+   if (!cards.length) {
+-    list.innerHTML = '<div class="empty">Discovery 队列暂无候选。正常使用 vibe 并定期运行 <code>vibe skill scan-candidates</code> 后，复现模式会汇聚到这里。</div>';
++    list.innerHTML = '<div class="empty">Discovery 队列暂无候选。正常使用 vibe 并定期运行 <code>vibe skill scan-candidates</code> 后，复现模式会汇聚到这里。</div>' + verdictsHtml;
+     return;
+   }
+ 
+@@ -740,7 +741,56 @@ async function loadDiscoveries() {
+       (projects ? '<div class="meta-line2">项目: ' + projects + '</div>' : '') +
+       '<div class="cli-hint">' + escapeHtml(c.cli_hint) + '</div>' +
+     '</div>';
+-  }).join('') + '</div>';
++  }).join('') + '</div>' + verdictsHtml;
++}
++
++// gate36 阶段二 — promote shadow verdicts (修订 D; 与 CLI `_print_verdict`
++// 口径 lockstep: 徽章两级 PASS/WARN · 无 FAIL · 永不阻断 · 文案写明测的是
++// 触发召回不是内容质量; 卡片只在与当前 draft 字节哈希匹配时不标 stale)。
++function renderVerdicts(verdicts) {
++  const clusterIds = Object.keys(verdicts);
++  if (!clusterIds.length) return '';
++  const cards = clusterIds.sort().map(cid => {
++    // Display the newest entry; prefer a non-degraded (complete) one —
++    // same rule as the CLI's latest_for_cluster(prefer_complete=True).
++    const entries = verdicts[cid] || [];
++    const v = entries.find(e => !e.degraded) || entries[0];
++    if (!v) return '';
++    const badge = '<span class="badge ' + (v.badge === 'PASS' ? 'single' : 'miss') + '">Verifier: ' + escapeHtml(v.badge) + '</span>';
++    const degradedBadge = v.degraded ? '<span class="badge muted">degraded: embedding 线不可用</span>' : '';
++    const staleBadge = v.stale ? '<span class="badge dismissed" title="verdict 的 draft 字节哈希与当前文件不一致（draft 在 verdict 之后被编辑或缺失）— activate 时会自动重跑">stale</span>' : '';
++    const scopeBadge = '<span class="badge ' + (v.scope === 'global' ? 'orchestrated' : 'single') + '">' + escapeHtml(v.scope) + '</span>';
++    const sh = v.shadow || {};
++    const summary = 'shadow: 捕获 ' + (sh.caught ?? 0) + '/' + (sh.denominator ?? 0) +
++      ' · 回声行 ' + (sh.echo_excluded ?? 0) + ' 条不进分母' +
++      (v.hijack_count ? ' · hijack 风险 ' + v.hijack_count + ' 条' : '');
++    // 修订 D: global verdict 只给计数/徽章, 不给 query 明细。
++    let detail = '';
++    if (v.detail) {
++      const missed = (v.detail.missed || []).map(m =>
++        '<div>• ' + escapeHtml(m.query || ('query_hash:' + (m.query_hash || '?'))) +
++        ' → 最近邻: ' + escapeHtml(m.nearest_trigger || '(无共享 token 的近邻)') + '</div>').join('');
++      const warns = (v.detail.warnings || []).map(w => '<div>lint: ' + escapeHtml(w) + '</div>').join('');
++      const hijacks = (v.detail.hijack || []).map(h =>
++        '<div>• 与 ' + escapeHtml(h.competing_skill_id || '') + ' 的 trigger 「' +
++        escapeHtml(h.competing_trigger || '') + '」 竞争</div>').join('');
++      const body = (missed ? '<div class="meta-line2">未捕获 query（最近邻 trigger）:</div>' + missed : '') +
++        (hijacks ? '<div class="meta-line2">hijack 风险:</div>' + hijacks : '') + warns;
++      detail = body ? '<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">明细</summary>' + body + '</details>' : '';
++    }
++    return '<div class="card disc-card">' +
++      '<div class="head">' + badge + degradedBadge + staleBadge + scopeBadge +
++        '<span class="mono" title="' + escapeHtml(cid) + '">' + escapeHtml(v.cluster_id_short || cid.substring(0, 8)) + '</span>' +
++        '<span style="margin-left:auto;font-size:12px;color:var(--dim)">' + escapeHtml(v.phase || '') + ' · ' + escapeHtml((v.created_at || '').substring(0, 10)) + '</span>' +
++      '</div>' +
++      '<div class="meta-line2">' + escapeHtml(v.skill_id || '') + '</div>' +
++      '<div class="meta-line2">' + escapeHtml(summary) + '</div>' +
++      '<div class="meta-line2" style="color:var(--dim)">口径: 测的是触发召回 (trigger recall), 不是内容质量; shadow-only, 永不阻断</div>' +
++      detail +
++    '</div>';
++  }).join('');
++  return '<h3 style="margin-top:18px">Promote Verdicts <span style="font-size:12px;color:var(--dim)">(shadow · 不阻断 · 测触发召回非内容质量)</span></h3>' +
++    '<div class="disc-grid">' + cards + '</div>';
+ }
+ 
+ // ── Init ───────────────────────────────────────────────────────
+diff --git a/tests/cli/test_skill_promote_cli.py b/tests/cli/test_skill_promote_cli.py
+index 5d429df..43ce1ea 100644
+--- a/tests/cli/test_skill_promote_cli.py
++++ b/tests/cli/test_skill_promote_cli.py
+@@ -1414,3 +1414,195 @@ class TestPrefixResolutionDualStore:
+         # No side effects in EITHER store.
+         assert project_store.get(id_a).status == "pending"  # type: ignore[union-attr]
+         assert global_store.get(id_b).status == "pending"  # type: ignore[union-attr]
++
++
++class TestPromoteVerifier:
++    """gate36 阶段二 — shadow verifier CLI wiring (修订 A/B/D/J).
++
++    The conftest embedding stub makes both embedding lines ``unavailable``,
++    so every CLI-level verdict here is WARN(degraded) — that IS the pinned
++    behavior under the stub. PASS coverage lives in
++    tests/core/observability/test_promote_verifier.py via the
++    ``embedding_model`` DI seam.
++    """
++
++    def _candidate(self, cluster_id: str = "abc123def456", **overrides) -> ClusterCandidate:
++        payload = {
++            "cluster_id": cluster_id,
++            "task_ids": [f"{cluster_id}-t1"],
++            "queries": ["topic-A one"],
++            "span_count": 5,
++            "gold_rate": 0.8,
++            "gold_task_ids": ["t1"],
++        }
++        payload.update(overrides)
++        return ClusterCandidate(**payload)
++
++    def _activation_stubs(self):
++        import contextlib
++
++        @contextlib.contextmanager
++        def _stack():
++            with (
++                patch.object(skill_commands, "_audit_skill_or_exit"),
++                patch.object(
++                    skill_commands, "_install_skill_or_exit", return_value="/fake/installed"
++                ),
++                patch.object(skill_commands, "_auto_configure_skill_with_llm"),
++                patch.object(skill_commands, "_verify_and_sync", return_value=False),
++            ):
++                yield
++
++        return _stack()
++
++    def _verdict_store(self, tmp_path: Path):
++        from vibesop.core.observability.promote_verifier import PromoteVerdictStore
++
++        return PromoteVerdictStore(tmp_path / ".vibe" / "observability")
++
++    def _draft_path(self, tmp_path: Path) -> Path:
++        matches = list((tmp_path / ".vibe" / "observability" / "skill_drafts").rglob("SKILL.md"))
++        assert len(matches) == 1, f"expected 1 draft, got {matches}"
++        return matches[0]
++
++    def test_promote_prints_badge_and_records_verdict(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        """promote 后自动跑 verify: 输出徽章 + 口径文案, verdict 落发起项目."""
++        monkeypatch.chdir(tmp_path)
++        tmp_store.upsert(self._candidate())
++        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        assert "Verifier: WARN" in r.output  # degraded under the conftest stub
++        assert "degraded" in r.output
++        assert "触发召回" in r.output  # 徽章文案写明测触发召回不是内容质量
++        assert "不是内容质量" in r.output
++        rows = self._verdict_store(tmp_path).list_all()
++        assert len(rows) == 1
++        assert rows[0].phase == "promote"
++        assert rows[0].degraded is True
++        assert rows[0].badge == "WARN"
++        # trigger 侧不受 embedding 降级影响: prefilled trigger 捕获分母.
++        assert rows[0].shadow["all_caught"] is True
++
++    def test_verify_failure_never_blocks_promote(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        """永不阻断: verdict store 构造抛错也只打印警告, promote 照常成功."""
++        monkeypatch.chdir(tmp_path)
++        tmp_store.upsert(self._candidate())
++
++        def _boom() -> None:
++            raise RuntimeError("verdict store exploded")
++
++        monkeypatch.setattr(skill_commands, "_get_verdict_store", _boom)
++        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        assert "Promoted" in r.output
++        assert "不阻断" in r.output
++
++    def test_activate_reuses_verdict_when_draft_unchanged(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        """修订 A: activate 时 draft 未变 (字节哈希匹配) → 复用 promote
++        时结果, 不追加 activate-rerun 行."""
++        monkeypatch.chdir(tmp_path)
++        tmp_store.upsert(self._candidate())
++        r1 = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
++        assert r1.exit_code == 0, f"failed: {r1.output}"
++
++        # --force bypasses the edit guard so activation proceeds on the
++        # UNCHANGED draft — the reuse path is the assertion target.
++        with self._activation_stubs():
++            r2 = cli_runner.invoke(
++                app, ["skill", "promote", "abc123def456", "--activate", "--force"]
++            )
++        assert r2.exit_code == 0, f"failed: {r2.output}"
++        assert "复用 promote 时结果" in r2.output
++        rows = self._verdict_store(tmp_path).list_all()
++        # r1 promote + r2 promote-phase re-verify; the activate step must
++        # NOT have appended an activate-rerun row.
++        assert len(rows) == 2
++        assert all(row.phase == "promote" for row in rows)
++
++    def test_activate_reruns_when_no_matching_verdict(
++        self, tmp_path: Path, monkeypatch, capsys
++    ) -> None:
++        """修订 A: 当前 draft 字节哈希无匹配 verdict → activate 重跑,
++        追加 phase=activate-rerun 行 (不阻断, 无需 --force 参与 verifier)."""
++        import typer as _typer  # noqa: F401  (parity with sibling tests)
++
++        monkeypatch.chdir(tmp_path)
++        drafts_root = tmp_path / ".vibe" / "observability" / "skill_drafts"
++        draft_dir = drafts_root / "custom" / "x"
++        draft_dir.mkdir(parents=True)
++        draft_path = draft_dir / "SKILL.md"
++        draft_path.write_text(
++            "---\nid: custom/x\nname: x\ndescription: d\n"
++            'triggers: ["topic-A one"]\nintent: workflow\n---\nbody\n',
++            encoding="utf-8",
++        )
++        # Edit guard passes: recorded baseline differs from current bytes.
++        candidate = self._candidate(draft_sha256="0" * 64)
++        with self._activation_stubs():
++            skill_commands._activate_promoted_draft(
++                candidate, "custom/x", draft_path, "project", force=False
++            )
++        out = capsys.readouterr().out
++        assert "复用" not in out
++        assert "Verifier" in out
++        rows = self._verdict_store(tmp_path).list_all()
++        assert len(rows) == 1
++        assert rows[0].phase == "activate-rerun"
++        assert rows[0].draft_sha256 == hashlib.sha256(draft_path.read_bytes()).hexdigest()
++
++    def test_activate_prefers_complete_verdict_over_degraded_rerun(
++        self, tmp_path: Path, monkeypatch, capsys
++    ) -> None:
++        """修订 A 细化: 已有完整 (非降级) verdict 匹配当前 draft 时, activate
++        复用它 —— 即使当下 embedding 不可用 (重跑必然降级), 也不覆盖/遮蔽."""
++        from datetime import UTC, datetime
++
++        from vibesop.core.observability.promote_verifier import (
++            RULESET_VERSION,
++            PromoteVerdict,
++        )
++
++        monkeypatch.chdir(tmp_path)
++        drafts_root = tmp_path / ".vibe" / "observability" / "skill_drafts"
++        draft_dir = drafts_root / "custom" / "x"
++        draft_dir.mkdir(parents=True)
++        draft_path = draft_dir / "SKILL.md"
++        draft_path.write_text(
++            "---\nid: custom/x\nname: x\ndescription: d\n"
++            'triggers: ["topic-A one"]\nintent: workflow\n---\nbody\n',
++            encoding="utf-8",
++        )
++        current_sha = hashlib.sha256(draft_path.read_bytes()).hexdigest()
++        store = self._verdict_store(tmp_path)
++        store.append(
++            PromoteVerdict(
++                cluster_id="abc123def456",
++                skill_id="custom/x",
++                scope="project",
++                phase="promote",
++                badge="PASS",
++                degraded=False,
++                draft_sha256=current_sha,
++                trigger_set_sha256="t" * 64,
++                ruleset_version=RULESET_VERSION,
++                created_at=datetime.now(UTC),
++            )
++        )
++        candidate = self._candidate(draft_sha256="0" * 64)
++        with self._activation_stubs():
++            skill_commands._activate_promoted_draft(
++                candidate, "custom/x", draft_path, "project", force=False
++            )
++        out = capsys.readouterr().out
++        assert "Verifier: PASS" in out  # the COMPLETE verdict is displayed
++        assert "复用 promote 时结果" in out
++        # No degraded activate-rerun row was appended.
++        rows = store.list_all()
++        assert len(rows) == 1
++        assert rows[0].phase == "promote"
+diff --git a/tests/core/observability/test_promote_verifier.py b/tests/core/observability/test_promote_verifier.py
+new file mode 100644
+index 0000000..3ae9790
+--- /dev/null
++++ b/tests/core/observability/test_promote_verifier.py
+@@ -0,0 +1,480 @@
++"""gate36 阶段二 — promote shadow verifier tests (D1, 修订 A/B/D/J).
++
++Coverage map (定稿验收口径):
++- 已知良好簇 → PASS（捕获分母排除 agent-echo, 两 embedding 线过门）;
++- 回声簇 → WARN 且明细列出未捕获 query + 最近邻;
++- 降级 (embedding unavailable) → WARN(degraded), 永不发 PASS;
++- global scope verdict 不含原始 query (只计数 + query 哈希);
++- verdict store 容量裁剪 (200 条 / 90 天) + 坏行跳过 + from_dict 容忍缺键;
++- activate 复用/重算选择逻辑 (latest_for_cluster prefer_complete);
++- trigger 语义抽取钉住生产口径 (修订 B: lowercase+剥撇号、无空白折叠、
++  无长度下限、first-hit-wins) 且 has_explicit_guard_signal 委托后行为不变.
++
++The conftest embedding stub (``sys.modules["sentence_transformers"] = None``)
++makes the module-level model singleton fail-open → the degraded path is
++testable without any DI; the PASS/margin paths inject ``_FakeModel`` via the
++``embedding_model`` seam (never the real 10-12s model load).
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++
++from vibesop.core.observability.promote_verifier import (
++    MAX_VERDICTS,
++    RULESET_VERSION,
++    _INDEX_GATE,
++    _INDEX_MIN_MARGIN,
++    PromoteVerdict,
++    PromoteVerdictStore,
++    verify_draft,
++)
++from vibesop.core.observability.skill_promote import ClusterCandidate
++from vibesop.core.routing.triage_service import TriageService, query_matches_triggers
++
++
++def _mk_candidate(
++    cluster_id: str = "c" * 40,
++    queries: list[str] | None = None,
++    **overrides,
++) -> ClusterCandidate:
++    payload = {
++        "cluster_id": cluster_id,
++        "task_ids": [f"{cluster_id[:8]}-t1"],
++        "queries": queries if queries is not None else ["fix the login redirect loop"],
++        "span_count": 4,
++        "gold_rate": 0.8,
++        "gold_task_ids": [f"{cluster_id[:8]}-t1"],
++        "source_skill_id": "custom/login-fix-" + cluster_id[:8],
++    }
++    payload.update(overrides)
++    return ClusterCandidate(**payload)
++
++
++def _write_draft(
++    tmp_path: Path,
++    triggers: list[str],
++    *,
++    description: str = "login redirect fix workflow",
++    skill_id: str = "custom/login-fix-cccccccc",
++) -> Path:
++    trig = ", ".join(f'"{t}"' for t in triggers)
++    path = tmp_path / "SKILL.md"
++    path.write_text(
++        "---\n"
++        f"id: {skill_id}\n"
++        "name: login-fix\n"
++        f'description: "{description}"\n'
++        f"triggers: [{trig}]\n"
++        "intent: workflow\n"
++        "---\n\n## Overview\n\nbody\n",
++        encoding="utf-8",
++    )
++    return path
++
++
++class _FakeModel:
++    """Deterministic bag-of-words embedding: token → dim via sha1.
++
++    Cosine similarity between texts ≈ token overlap, so a query sharing
++    the trigger's tokens scores high and an unrelated text scores ~0.
++    ``hashlib`` only — the builtin ``hash()`` is process-randomized and
++    banned in this repo's tests.
++    """
++
++    dim = 64
++
++    def encode(self, texts: list[str], show_progress_bar: bool = False) -> list[list[float]]:
++        out = []
++        for text in texts:
++            vec = [0.0] * self.dim
++            for tok in str(text).lower().split():
++                vec[int(hashlib.sha1(tok.encode()).hexdigest(), 16) % self.dim] += 1.0
++            out.append(vec)
++        return out
++
++
++def _fake_catalog(model: _FakeModel, text: str, skill_id: str = "builtin/other-skill"):
++    """One-entry skill index with a real embedding for the margin gate."""
++    from vibesop.core.skills.indexer import SkillProfile
++
++    return {
++        skill_id: SkillProfile(skill_id=skill_id, embedding=model.encode([text])[0]),
++    }
++
++
++class TestQueryMatchesTriggers:
++    """修订 B: pin the extracted PRODUCTION containment semantics (and the
++    deliberate divergence from p0_shadow's whitespace-folding/≥6-char rule)."""
++
++    def test_lowercase_and_apostrophe_stripped(self) -> None:
++        assert query_matches_triggers("Let's GO now", ["lets go"]) == "lets go"
++        assert query_matches_triggers("lets go", ["let’s go"]) == "let’s go"
++
++    def test_no_whitespace_folding(self) -> None:
++        """Production does NOT fold whitespace — "foo  bar" (two spaces)
++        must NOT match trigger "foo bar" (p0_shadow would match)."""
++        assert query_matches_triggers("foo  bar", ["foo bar"]) is None
++        assert query_matches_triggers("foo bar", ["foo bar"]) == "foo bar"
++
++    def test_no_length_floor(self) -> None:
++        """A 2-char trigger matches (p0_shadow's ≥6 floor would reject it)."""
++        assert query_matches_triggers("ok do it", ["ok"]) == "ok"
++
++    def test_first_hit_wins_in_trigger_order(self) -> None:
++        assert query_matches_triggers("a b c", ["b", "a"]) == "b"
++
++    def test_empty_trigger_never_matches(self) -> None:
++        assert query_matches_triggers("anything", ["", "  "]) is None
++        assert query_matches_triggers("anything", []) is None
++
++    def test_guard_signal_delegation_behavior_unchanged(self) -> None:
++        """has_explicit_guard_signal keeps its exact behavior after the
++        extraction (trigger containment + always-explicit extra tokens)."""
++        service = TriageService.__new__(TriageService)  # guard path is attr-free
++        candidates = [{"id": "builtin/riper-workflow", "triggers": ["use riper"]}]
++        assert (
++            service.has_explicit_guard_signal(
++                "please use riper now", candidates, "builtin/riper-workflow"
++            )
++            is True
++        )
++        # Extra always-explicit token path still works with no trigger hit.
++        assert (
++            service.has_explicit_guard_signal(
++                "用 RIPER 流程来做", candidates, "builtin/riper-workflow"
++            )
++            is True
++        )
++        assert (
++            service.has_explicit_guard_signal(
++                "generic workflow please", candidates, "builtin/riper-workflow"
++            )
++            is False
++        )
++        # Non-guarded skill: no guard to satisfy.
++        assert service.has_explicit_guard_signal("anything", candidates, "custom/x") is True
++
++
++class TestVerifyDraftBadges:
++    def test_known_good_cluster_passes(self, tmp_path: Path) -> None:
++        """已知良好簇 → PASS: lint 全过 + shadow 全捕获 + 两 embedding 线过门."""
++        candidate = _mk_candidate(
++            queries=[
++                "fix the login redirect loop",
++                "fix the login redirect loop again please",
++            ]
++        )
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        model = _FakeModel()
++        verdict = verify_draft(
++            candidate,
++            draft,
++            installed_candidates=[{"id": "builtin/x", "triggers": ["deploy staging"]}],
++            index_profiles=_fake_catalog(model, "deploy the staging environment"),
++            embedding_model=model,
++        )
++        assert verdict.badge == "PASS"
++        assert verdict.degraded is False
++        assert verdict.shadow["all_caught"] is True
++        assert verdict.embedding["recall"]["status"] == "ok"
++        assert verdict.embedding["recall"]["all_caught"] is True
++        assert verdict.embedding["index"]["status"] == "ok"
++        assert verdict.embedding["index"]["all_accepted"] is True
++        assert verdict.embedding["index"]["margin_mode"] == "catalog"
++        assert set(verdict.pipelines) == {
++            "trigger_lint",
++            "shadow_replay",
++            "hijack",
++            "embedding_recall",
++            "embedding_index",
++        }
++
++    def test_echo_cluster_warns_with_uncaught_detail(self, tmp_path: Path) -> None:
++        """回声簇 → WARN: 回声行不进分母, 明细列出未捕获 query + 最近邻."""
++        candidate = _mk_candidate(
++            queries=[
++                "You are an adversarial SKEPTIC reviewing this plan",
++                "<system-reminder> injected wrapper",
++                "重构会话中间件逻辑",
++            ]
++        )
++        draft = _write_draft(tmp_path, ["upgrade the database schema"])
++        verdict = verify_draft(
++            candidate, draft, installed_candidates=[], embedding_model=_FakeModel()
++        )
++        assert verdict.badge == "WARN"
++        # 标集口径: 2 条前缀谓词回声行排除, 分母只剩真实 query.
++        assert verdict.shadow["denominator"] == 1
++        assert verdict.shadow["echo_excluded"] == 2
++        missed = verdict.shadow["missed"]
++        assert len(missed) == 1
++        assert missed[0]["query"] == "重构会话中间件逻辑"
++        # 最近邻: 唯一 trigger 与 query 无共享 token → 诚实的 "无近邻".
++        assert missed[0]["nearest_trigger"] is None
++        assert "no representative cluster query matches any trigger" in verdict.warnings
++
++    def test_nearest_trigger_picks_token_overlap(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate(queries=["refactor the session middleware stack"])
++        draft = _write_draft(tmp_path, ["refactor the auth middleware", "deploy now"])
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        missed = verdict.shadow["missed"]
++        assert len(missed) == 1
++        assert missed[0]["nearest_trigger"] == "refactor the auth middleware"
++        assert missed[0]["nearest_score"] > 0
++
++    def test_all_echo_cluster_warns(self, tmp_path: Path) -> None:
++        """分母为空的纯回声簇: WARN (bd1bc217 类混回声良好簇不被 PASS 卡死,
++        但也拿不到 PASS —— 分母为空即 lint 警告)."""
++        candidate = _mk_candidate(queries=["You are a reviewer", "[{json echo"])
++        draft = _write_draft(tmp_path, ["some trigger"])
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        assert verdict.badge == "WARN"
++        assert verdict.shadow["denominator"] == 0
++        assert "capture denominator is empty" in " ".join(verdict.warnings)
++
++    def test_degraded_never_emits_pass(self, tmp_path: Path) -> None:
++        """降级 (conftest stub → 模型不可用): 两线 unavailable, WARN(degraded),
++        即使 trigger 侧完美也不发 PASS."""
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        verdict = verify_draft(candidate, draft, installed_candidates=[])
++        assert verdict.badge == "WARN"
++        assert verdict.degraded is True
++        assert verdict.embedding["recall"]["status"] == "unavailable"
++        assert verdict.embedding["index"]["status"] == "unavailable"
++        assert verdict.embedding["recall"]["all_caught"] is None
++        assert "embedding_recall" not in verdict.pipelines
++        # trigger 侧照常出结果 (廉价且必跑).
++        assert verdict.shadow["all_caught"] is True
++
++    def test_encode_failure_is_fail_open(self, tmp_path: Path) -> None:
++        class _BoomModel:
++            def encode(self, texts, show_progress_bar=False):
++                raise RuntimeError("boom")
++
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        verdict = verify_draft(candidate, draft, embedding_model=_BoomModel())
++        assert verdict.badge == "WARN"
++        assert verdict.degraded is True
++        assert verdict.embedding["recall"]["status"] == "unavailable"
++        assert verdict.embedding["index"]["status"] == "unavailable"
++
++    def test_index_line_skipped_without_triggers(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, [])  # TODO placeholder draft
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        assert verdict.badge == "WARN"
++        assert verdict.embedding["index"]["status"] == "skipped"
++        assert verdict.degraded is True  # skipped ≠ 可用且过门 → 无 PASS
++        assert any("draft declares no triggers" in w for w in verdict.warnings)
++
++    def test_margin_gate_rejects_catalog_noise(self, tmp_path: Path) -> None:
++        """index 线 margin 门: 目录里一个几乎一样强的 profile → margin≈0 →
++        不接受 → WARN (即使 0.45 绝对门已过)."""
++        model = _FakeModel()
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        verdict = verify_draft(
++            candidate,
++            draft,
++            index_profiles=_fake_catalog(model, "fix the login redirect loop"),
++            embedding_model=model,
++        )
++        index = verdict.embedding["index"]
++        assert index["status"] == "ok"
++        assert index["results"][0]["similarity"] >= _INDEX_GATE  # 绝对门过了
++        assert index["results"][0]["accepted"] is False  # margin 门拦下
++        assert index["all_accepted"] is False
++        assert verdict.badge == "WARN"
++        assert verdict.degraded is False
++
++    def test_margin_skipped_without_catalog(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        assert verdict.embedding["index"]["margin_mode"] == "skipped-no-catalog"
++        assert verdict.embedding["index"]["results"][0]["margin"] is None
++
++    def test_hijack_detects_competing_trigger(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate(queries=["fix the login redirect loop"])
++        draft = _write_draft(tmp_path, ["login redirect"])
++        verdict = verify_draft(
++            candidate,
++            draft,
++            installed_candidates=[
++                {"id": "builtin/session-end", "triggers": ["login redirect"]},
++                {"id": "custom/unrelated", "triggers": ["deploy"]},
++            ],
++            embedding_model=_FakeModel(),
++        )
++        entries = verdict.hijack["entries"]
++        assert len(entries) == 1
++        assert entries[0]["competing_skill_id"] == "builtin/session-end"
++        # hijack 分析用语义抽取后的生产 containment 口径.
++        assert entries[0]["competing_trigger"] == "login redirect"
++
++    def test_hijack_skipped_without_catalog_input(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate()
++        draft = _write_draft(tmp_path, ["fix the login"])
++        verdict = verify_draft(candidate, draft, installed_candidates=None)
++        assert verdict.hijack["status"] == "skipped"
++        assert "hijack" not in verdict.pipelines
++
++
++class TestVerdictSchemaAndPrivacy:
++    def test_schema_hashes_and_ruleset(self, tmp_path: Path) -> None:
++        """修订 A 细化: draft_sha256 = 当前文件字节哈希 (≠ 生成时基线),
++        另含 trigger 集哈希 + ruleset_version."""
++        candidate = _mk_candidate()
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        assert verdict.draft_sha256 == hashlib.sha256(draft.read_bytes()).hexdigest()
++        # 显式不是 ClusterCandidate.draft_sha256 (None 生成基线).
++        assert verdict.draft_sha256 != candidate.draft_sha256
++        assert verdict.ruleset_version == RULESET_VERSION
++        expected_trigger_hash = hashlib.sha256(
++            json.dumps(["fix the login redirect loop"], ensure_ascii=False).encode()
++        ).hexdigest()
++        assert verdict.trigger_set_sha256 == expected_trigger_hash
++
++    def test_edit_changes_draft_hash(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate()
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        v1 = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        draft.write_text(draft.read_text(encoding="utf-8") + "\nhuman edit\n", encoding="utf-8")
++        v2 = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        assert v1.draft_sha256 != v2.draft_sha256
++
++    def test_global_scope_stores_hashes_not_raw_queries(self, tmp_path: Path) -> None:
++        """修订 D / M5 边界: global verdict 只存计数 + query 哈希."""
++        secret_query = "refactor the session middleware stack"
++        candidate = _mk_candidate(queries=[secret_query, "You are an echo wrapper"])
++        draft = _write_draft(tmp_path, ["unrelated trigger phrase"])
++        verdict = verify_draft(candidate, draft, scope="global", embedding_model=_FakeModel())
++        blob = json.dumps(verdict.to_dict(), ensure_ascii=False)
++        assert secret_query not in blob
++        assert "echo wrapper" not in blob
++        assert verdict.shadow["denominator"] == 1
++        missed = verdict.shadow["missed"][0]
++        assert "query" not in missed
++        assert missed["query_hash"] == hashlib.sha256(secret_query.encode()).hexdigest()[:16]
++
++    def test_project_scope_sanitizes_text(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate(queries=["multi\n\nline   query about refactoring modules"])
++        draft = _write_draft(tmp_path, ["other trigger"])
++        verdict = verify_draft(candidate, draft, embedding_model=_FakeModel())
++        missed_query = verdict.shadow["missed"][0]["query"]
++        assert "\n" not in missed_query
++        assert "   " not in missed_query
++
++
++class TestPromoteVerdictStore:
++    def _verdict(self, cluster_id: str = "c" * 40, **overrides) -> PromoteVerdict:
++        payload = {
++            "cluster_id": cluster_id,
++            "skill_id": "custom/x",
++            "scope": "project",
++            "phase": "promote",
++            "badge": "WARN",
++            "degraded": False,
++            "draft_sha256": "d" * 64,
++            "trigger_set_sha256": "t" * 64,
++            "ruleset_version": RULESET_VERSION,
++            "created_at": datetime.now(UTC),
++        }
++        payload.update(overrides)
++        return PromoteVerdict(**payload)
++
++    def test_roundtrip_and_bad_line_skip(self, tmp_path: Path) -> None:
++        store = PromoteVerdictStore(tmp_path)
++        store.append(self._verdict())
++        with store._path.open("a", encoding="utf-8") as f:
++            f.write("{not json\n")
++            f.write('{"cluster_id": "only-id"}\n')  # schema-invalid (missing required)
++        rows = store.list_all()
++        assert len(rows) == 1
++        assert rows[0].cluster_id == "c" * 40
++
++    def test_from_dict_tolerates_missing_optional_keys(self) -> None:
++        v = PromoteVerdict.from_dict(
++            {
++                "cluster_id": "x",
++                "skill_id": "s",
++                "scope": "project",
++                "phase": "promote",
++                "badge": "WARN",
++                "degraded": True,
++                "draft_sha256": "d",
++                "trigger_set_sha256": "t",
++                "ruleset_version": "gate36-r1",
++                # created_at / lint / shadow / embedding / hijack / pipelines missing
++                "unknown_future_key": 1,  # dropped, not raised
++            }
++        )
++        assert v.created_at is None
++        assert v.shadow == {}
++
++    def test_capacity_keeps_latest_200(self, tmp_path: Path) -> None:
++        store = PromoteVerdictStore(tmp_path)
++        for i in range(MAX_VERDICTS + 5):
++            store.append(self._verdict(cluster_id=f"cluster-{i:04d}"))
++        rows = store.list_all()
++        assert len(rows) == MAX_VERDICTS
++        ids = {r.cluster_id for r in rows}
++        assert "cluster-0000" not in ids  # oldest dropped
++        assert f"cluster-{MAX_VERDICTS + 4:04d}" in ids
++
++    def test_ttl_drops_rows_older_than_90_days(self, tmp_path: Path) -> None:
++        """TTL 裁剪发生在 append 时 —— 直接落盘一条 100 天前的旧行
++        (绕过 append 的即裁), 再 append 一条新行, 旧行应被裁掉."""
++        store = PromoteVerdictStore(tmp_path)
++        old = self._verdict(cluster_id="old", created_at=datetime.now(UTC) - timedelta(days=100))
++        with store._path.open("a", encoding="utf-8") as f:
++            f.write(json.dumps(old.to_dict(), ensure_ascii=False) + "\n")
++        store.append(self._verdict(cluster_id="fresh"))
++        assert [r.cluster_id for r in store.list_all()] == ["fresh"]
++        # 边界: 恰好 90 天内的行保留.
++        recent = self._verdict(
++            cluster_id="recent", created_at=datetime.now(UTC) - timedelta(days=89)
++        )
++        store.append(recent)
++        assert [r.cluster_id for r in store.list_all()] == ["fresh", "recent"]
++
++    def test_latest_for_cluster_prefers_complete_over_degraded(self, tmp_path: Path) -> None:
++        """修订 A 细化: 降级重跑追加新行, 但展示优先完整版."""
++        store = PromoteVerdictStore(tmp_path)
++        now = datetime.now(UTC)
++        store.append(
++            self._verdict(phase="promote", degraded=False, created_at=now - timedelta(hours=1))
++        )
++        store.append(self._verdict(phase="activate-rerun", degraded=True, created_at=now))
++        latest = store.latest_for_cluster("c" * 40, draft_sha256="d" * 64)
++        assert latest is not None and latest.phase == "activate-rerun"
++        complete = store.latest_for_cluster("c" * 40, draft_sha256="d" * 64, prefer_complete=True)
++        assert complete is not None and complete.phase == "promote"
++        # Hash mismatch → no reuse.
++        assert store.latest_for_cluster("c" * 40, draft_sha256="e" * 64) is None
++
++    def test_verify_appends_to_store(self, tmp_path: Path) -> None:
++        candidate = _mk_candidate()
++        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
++        store = PromoteVerdictStore(tmp_path / "verdicts")
++        verify_draft(candidate, draft, store=store)
++        rows = store.for_cluster(candidate.cluster_id)
++        assert len(rows) == 1
++        assert rows[0].phase == "promote"
++
++
++class TestConfigPin:
++    def test_index_gates_match_routing_config_defaults(self) -> None:
++        """index 线门值钉住 RoutingConfig 默认 —— 配置再标定时此处必须同改."""
++        from vibesop.core.config import RoutingConfig
++
++        config = RoutingConfig()
++        assert config.index_embedding_threshold == _INDEX_GATE
++        assert config.index_embedding_min_margin == _INDEX_MIN_MARGIN
+diff --git a/tests/dashboard/test_server_endpoints.py b/tests/dashboard/test_server_endpoints.py
+index 368916c..ff86114 100644
+--- a/tests/dashboard/test_server_endpoints.py
++++ b/tests/dashboard/test_server_endpoints.py
+@@ -771,3 +771,98 @@ class TestDiscoveriesGate35:
+ 
+         stats = client.get("/api/discoveries").json()["stats"]["by_source_outcome"]
+         assert stats == {"gold": {"success": 0, "dismiss": 1, "shape_batch": 1}}
++
++
++class TestDiscoveriesVerdicts:
++    """gate36 阶段二 (修订 D): payload ``verdicts`` 段 —— 独立于队列卡片
++    (promoted 行不在 list_pending), 按 cluster_id 平铺, 按 scope 过滤明细,
++    与当前 draft 字节哈希不匹配标 stale."""
++
++    def _write_verdict(self, project: Path, **overrides: Any) -> None:
++        from datetime import UTC, datetime
++
++        from vibesop.core.observability.promote_verifier import (
++            RULESET_VERSION,
++            PromoteVerdict,
++            PromoteVerdictStore,
++        )
++
++        payload: dict[str, Any] = {
++            "cluster_id": "v" * 40,
++            "skill_id": "custom/x",
++            "scope": "project",
++            "phase": "promote",
++            "badge": "WARN",
++            "degraded": True,
++            "draft_sha256": "d" * 64,
++            "trigger_set_sha256": "t" * 64,
++            "ruleset_version": RULESET_VERSION,
++            "created_at": datetime.now(UTC),
++            "shadow": {
++                "denominator": 2,
++                "echo_excluded": 1,
++                "caught": [{"query": "caught q", "trigger": "t"}],
++                "missed": [{"query": "missed q", "nearest_trigger": None, "nearest_score": 0.0}],
++            },
++            "warnings": ["some lint warning"],
++        }
++        payload.update(overrides)
++        PromoteVerdictStore(project / ".vibe" / "observability").append(PromoteVerdict(**payload))
++
++    def test_empty_when_no_verdict_store(self, client: TestClient) -> None:
++        body = client.get("/api/discoveries").json()
++        assert body["verdicts"] == {}
++
++    def test_project_verdict_carries_detail_and_stale_flag(
++        self, client: TestClient, tmp_project: Path
++    ) -> None:
++        self._write_verdict(tmp_project)
++        body = client.get("/api/discoveries").json()
++        entries = body["verdicts"]["v" * 40]
++        assert len(entries) == 1
++        entry = entries[0]
++        assert entry["badge"] == "WARN"
++        assert entry["degraded"] is True
++        assert entry["shadow"] == {"denominator": 2, "echo_excluded": 1, "caught": 1, "missed": 1}
++        # project scope: 明细 (sanitized 在写入侧已完成) 展开给看板.
++        assert entry["detail"]["missed"][0]["query"] == "missed q"
++        assert entry["detail"]["warnings"] == ["some lint warning"]
++        # draft 文件不存在 → 与 verdict 嵌入的字节哈希不匹配 → stale.
++        assert entry["stale"] is True
++
++    def test_matching_draft_hash_not_stale(self, client: TestClient, tmp_project: Path) -> None:
++        import hashlib as _hashlib
++
++        draft = (
++            tmp_project / ".vibe" / "observability" / "skill_drafts" / "custom" / "x" / "SKILL.md"
++        )
++        draft.parent.mkdir(parents=True)
++        draft.write_text("---\nid: custom/x\n---\nbody\n", encoding="utf-8")
++        self._write_verdict(
++            tmp_project, draft_sha256=_hashlib.sha256(draft.read_bytes()).hexdigest()
++        )
++        entry = client.get("/api/discoveries").json()["verdicts"]["v" * 40][0]
++        assert entry["stale"] is False
++
++    def test_global_verdict_counts_only_no_query_detail(
++        self, client: TestClient, tmp_project: Path
++    ) -> None:
++        """修订 D: global verdict 只给计数/徽章, 不给 query 明细 (写入侧已
++        哈希化, 看板侧连 detail 键都不给)."""
++        self._write_verdict(
++            tmp_project,
++            scope="global",
++            shadow={
++                "denominator": 3,
++                "echo_excluded": 2,
++                "caught": [{"query_hash": "h1"}],
++                "missed": [{"query_hash": "h2", "nearest_trigger": None, "nearest_score": 0.0}],
++            },
++        )
++        body = client.get("/api/discoveries").json()
++        entry = body["verdicts"]["v" * 40][0]
++        assert entry["scope"] == "global"
++        assert "detail" not in entry
++        assert entry["shadow"]["missed"] == 1
++        # 双保险: 整个 verdicts 段无原始 query 文本.
++        assert "missed q" not in json.dumps(body["verdicts"], ensure_ascii=False)

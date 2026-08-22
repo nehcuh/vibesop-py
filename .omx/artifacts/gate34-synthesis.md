@@ -153,3 +153,12 @@ success = promoted→activated→`count_skill_route_hits` ≥ HISTORY_HIT_THRESH
 字段名 `first_seen` → `first_seen_at`（skill_promote.py:441）。回声卡片口径测量钉死用前缀谓词（与展示一致），池子口径可双报。
 
 **三路 round2 确认：修订 A–K 吸收质量全部核查通过，无设计级冲突，剩余均为本节前修的一句话级字面收口（已并入）。**
+
+---
+
+## 6.2 gate36 实施留痕（双路复审 PASS_WITH_NITS 后的规格回写）
+
+1. **徽章口径收紧**（实现 > 修订 J 字面）：PASS 除"lint 全过 + shadow 分母全捕获"外，**额外要求 recall/index 两条 embedding 线均可用且过门**；任一线 unavailable/skipped 整体至多 WARN。方向保守、有意采纳（claude-r1 NIT-1 确认验收场景仍成立），≥30 条 verdict 后的阈值讨论以此口径为准。`RULESET_VERSION="gate36-r1"` 记录该口径。
+2. **模块落位**:`verify_draft()` 落在新模块 `core/observability/promote_verifier.py`（非 §3 字面的 skill_promote.py)，跨模块 import 私有名与 replay 脚本 import 冻结谓词的既有先例一致。
+3. **skipped ≠ degraded**:`status=="skipped"`（无 triggers 可嵌）不计入 degraded、有独立文案；`degraded` 仅由 `unavailable` 触发。
+4. **global scope verdict** 存全量 sha256（对齐 M5 边界强度），展示层截断 16 位渲染。

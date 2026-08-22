@@ -701,8 +701,9 @@ async function loadDiscoveries() {
 
   const list = document.getElementById('disc-list');
   const cards = data.discoveries || [];
+  const verdictsHtml = renderVerdicts(data.verdicts || {});
   if (!cards.length) {
-    list.innerHTML = '<div class="empty">Discovery 队列暂无候选。正常使用 vibe 并定期运行 <code>vibe skill scan-candidates</code> 后，复现模式会汇聚到这里。</div>';
+    list.innerHTML = '<div class="empty">Discovery 队列暂无候选。正常使用 vibe 并定期运行 <code>vibe skill scan-candidates</code> 后，复现模式会汇聚到这里。</div>' + verdictsHtml;
     return;
   }
 
@@ -740,7 +741,64 @@ async function loadDiscoveries() {
       (projects ? '<div class="meta-line2">项目: ' + projects + '</div>' : '') +
       '<div class="cli-hint">' + escapeHtml(c.cli_hint) + '</div>' +
     '</div>';
-  }).join('') + '</div>';
+  }).join('') + '</div>' + verdictsHtml;
+}
+
+// gate36 阶段二 — promote shadow verdicts (修订 D; 与 CLI `_print_verdict`
+// 口径 lockstep: 徽章两级 PASS/WARN · 无 FAIL · 永不阻断 · 文案写明测的是
+// 触发召回不是内容质量; 卡片只在与当前 draft 字节哈希匹配时不标 stale)。
+function renderVerdicts(verdicts) {
+  const clusterIds = Object.keys(verdicts);
+  if (!clusterIds.length) return '';
+  const cards = clusterIds.sort().map(cid => {
+    // Display the newest entry; prefer a non-degraded (complete) one —
+    // same rule as the CLI's latest_for_cluster(prefer_complete=True).
+    const entries = verdicts[cid] || [];
+    const v = entries.find(e => !e.degraded) || entries[0];
+    if (!v) return '';
+    const badge = '<span class="badge ' + (v.badge === 'PASS' ? 'single' : 'miss') + '">Verifier: ' + escapeHtml(v.badge) + '</span>';
+    const degradedBadge = v.degraded ? '<span class="badge muted">degraded: embedding 线不可用</span>' : '';
+    // pi-4/claude-3 收敛: skipped (无 triggers 可嵌) 单独措辞, 不打降级文案
+    // —— 与 CLI `_print_verdict` 的 "线跳过 (skipped ≠ 降级)" lockstep。
+    const es = v.embedding_status || {};
+    const skippedBadge = (es.recall === 'skipped' || es.index === 'skipped')
+      ? '<span class="badge muted" title="' + (es.index === 'skipped' ? 'index' : 'recall') + ' 线: 无 declared triggers 可嵌">线跳过 (skipped ≠ 降级)</span>'
+      : '';
+    const staleBadge = v.stale ? '<span class="badge dismissed" title="verdict 的 draft 字节哈希与当前文件不一致（draft 在 verdict 之后被编辑或缺失）— activate 时会自动重跑">stale</span>' : '';
+    const scopeBadge = '<span class="badge ' + (v.scope === 'global' ? 'orchestrated' : 'single') + '">' + escapeHtml(v.scope) + '</span>';
+    const sh = v.shadow || {};
+    const summary = 'shadow: 捕获 ' + (sh.caught ?? 0) + '/' + (sh.denominator ?? 0) +
+      ' · 回声行 ' + (sh.echo_excluded ?? 0) + ' 条不进分母' +
+      (v.hijack_count ? ' · hijack 风险 ' + v.hijack_count + ' 条' : '');
+    // 修订 D: global verdict 只给计数/徽章, 不给 query 明细。
+    // (明细文本已在服务端过 redact_sensitive —— 读侧脱敏, claude-5 收敛。)
+    let detail = '';
+    if (v.detail) {
+      // pi-3 收敛: store 存全量 sha256, 展示层短显截断 (与 CLI 同取 16 位)。
+      const missed = (v.detail.missed || []).map(m =>
+        '<div>• ' + escapeHtml(m.query || ('query_hash:' + String(m.query_hash || '?').substring(0, 16))) +
+        ' → 最近邻: ' + escapeHtml(m.nearest_trigger || '(无共享 token 的近邻)') + '</div>').join('');
+      const warns = (v.detail.warnings || []).map(w => '<div>lint: ' + escapeHtml(w) + '</div>').join('');
+      const hijacks = (v.detail.hijack || []).map(h =>
+        '<div>• 与 ' + escapeHtml(h.competing_skill_id || '') + ' 的 trigger 「' +
+        escapeHtml(h.competing_trigger || '') + '」 竞争</div>').join('');
+      const body = (missed ? '<div class="meta-line2">未捕获 query（最近邻 trigger）:</div>' + missed : '') +
+        (hijacks ? '<div class="meta-line2">hijack 风险:</div>' + hijacks : '') + warns;
+      detail = body ? '<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">明细</summary>' + body + '</details>' : '';
+    }
+    return '<div class="card disc-card">' +
+      '<div class="head">' + badge + degradedBadge + skippedBadge + staleBadge + scopeBadge +
+        '<span class="mono" title="' + escapeHtml(cid) + '">' + escapeHtml(v.cluster_id_short || cid.substring(0, 8)) + '</span>' +
+        '<span style="margin-left:auto;font-size:12px;color:var(--dim)">' + escapeHtml(v.phase || '') + ' · ' + escapeHtml((v.created_at || '').substring(0, 10)) + '</span>' +
+      '</div>' +
+      '<div class="meta-line2">' + escapeHtml(v.skill_id || '') + '</div>' +
+      '<div class="meta-line2">' + escapeHtml(summary) + '</div>' +
+      '<div class="meta-line2" style="color:var(--dim)">口径: 测的是触发召回 (trigger recall), 不是内容质量; shadow-only, 永不阻断</div>' +
+      detail +
+    '</div>';
+  }).join('');
+  return '<h3 style="margin-top:18px">Promote Verdicts <span style="font-size:12px;color:var(--dim)">(shadow · 不阻断 · 测触发召回非内容质量)</span></h3>' +
+    '<div class="disc-grid">' + cards + '</div>';
 }
 
 // ── Init ───────────────────────────────────────────────────────

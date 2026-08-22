@@ -35,6 +35,7 @@ stores yield empty lists, never 500 and never new directories.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -47,6 +48,7 @@ from vibesop.core.observability.discovery import (
     source_outcome_stats,
     why_here,
 )
+from vibesop.core.observability.promote_verifier import PromoteVerdict, PromoteVerdictStore
 from vibesop.core.observability.skill_promote import (
     ClusterCandidate,
     ClusterCandidateStore,
@@ -222,6 +224,99 @@ def _row_to_card(scope: Scope, row: DiscoveryRow) -> dict[str, Any]:
     }
 
 
+def _verdict_draft_path(project_root: Path, verdict: PromoteVerdict) -> Path:
+    """Locate the SKILL.md a verdict was computed against (for staleness)."""
+    if verdict.scope == "global":
+        return (
+            Path.home() / ".vibe" / "observability" / "skill_drafts" / verdict.skill_id / "SKILL.md"
+        )
+    return project_root / ".vibe" / "observability" / "skill_drafts" / verdict.skill_id / "SKILL.md"
+
+
+def _redact_verdict_detail(value: Any) -> Any:
+    """Recursive read-side ``redact_sensitive`` over verdict detail (claude-5
+    收敛: 与 Discovery 卡片 ``_display_text`` 的读侧第二道脱敏 lockstep —
+    写侧 sanitize 之后, 手改过的 verdict 文件也不能把 secret 送进浏览器).
+    Non-string scalars pass through unchanged."""
+    if isinstance(value, str):
+        return redact_sensitive(value)
+    if isinstance(value, list):
+        return [_redact_verdict_detail(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _redact_verdict_detail(v) for k, v in value.items()}
+    return value
+
+
+def _load_verdicts(project_root: Path) -> dict[str, list[dict[str, Any]]]:
+    """Promote-verdict section of the payload, keyed by cluster_id (gate36 修订 D).
+
+    Promoted rows are terminal and never appear in ``list_pending``, so
+    the verdict store is read INDEPENDENTLY of the queue cards. Detail is
+    scope-filtered: global-scope verdicts expose counts + badge only (raw
+    queries were hash-redacted at write time — the privacy boundary lives
+    in the store, this is the display-side second pass); project-scope
+    verdicts carry the sanitized missed-query detail. ``stale`` compares
+    the verdict's embedded draft hash against the CURRENT draft bytes —
+    a draft edited after the verdict makes it stale (修订 A); a missing
+    draft also counts as stale. Verdicts live in the INITIATING project's
+    store only, so only the project scope dir is read.
+
+    Read-only contract preserved: the store is constructed ONLY when its
+    file already exists (its constructor mkdirs the storage dir).
+    """
+    obs_dir = project_root / ".vibe" / "observability"
+    if not (obs_dir / PromoteVerdictStore.FILENAME).exists():
+        return {}
+    verdicts: dict[str, list[dict[str, Any]]] = {}
+    for v in PromoteVerdictStore(obs_dir).list_all():
+        try:
+            current_sha = hashlib.sha256(
+                _verdict_draft_path(project_root, v).read_bytes()
+            ).hexdigest()
+        except OSError:
+            current_sha = None
+        shadow = v.shadow or {}
+        entry: dict[str, Any] = {
+            "cluster_id": v.cluster_id,
+            "cluster_id_short": v.cluster_id[:8],
+            "skill_id": v.skill_id,
+            "scope": v.scope,
+            "phase": v.phase,
+            "badge": v.badge,
+            "degraded": v.degraded,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+            "ruleset_version": v.ruleset_version,
+            "draft_sha256": v.draft_sha256,
+            "stale": current_sha != v.draft_sha256,
+            "shadow": {
+                "denominator": shadow.get("denominator", 0),
+                "echo_excluded": shadow.get("echo_excluded", 0),
+                "caught": len(shadow.get("caught", [])),
+                "missed": len(shadow.get("missed", [])),
+            },
+            "hijack_count": len((v.hijack or {}).get("entries", [])),
+            # pi-4/claude-3 收敛: 展示层据 embedding_status 区分
+            # "unavailable" (degraded 徽标) 与 "skipped" (无 triggers 可嵌,
+            # 单独措辞, 不打降级文案).
+            "embedding_status": {
+                line: (v.embedding or {}).get(line, {}).get("status")
+                for line in ("recall", "index")
+            },
+        }
+        if v.scope == "project":
+            entry["detail"] = _redact_verdict_detail(
+                {
+                    "missed": shadow.get("missed", []),
+                    "warnings": v.warnings,
+                    "hijack": (v.hijack or {}).get("entries", []),
+                }
+            )
+        verdicts.setdefault(v.cluster_id, []).append(entry)
+    for entries in verdicts.values():
+        entries.sort(key=lambda e: e.get("created_at") or "", reverse=True)
+    return verdicts
+
+
 def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
     """Assemble the ``GET /api/discoveries`` response body.
 
@@ -293,4 +388,8 @@ def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
             ),
         },
         "discoveries": cards,
+        # gate36 阶段二: shadow verifier verdicts (修订 D) — 独立于队列
+        # 卡片 (promoted 行不在 list_pending), 按 cluster_id 平铺, global
+        # scope 只有计数/徽章没有 query 明细。
+        "verdicts": _load_verdicts(project_root),
     }

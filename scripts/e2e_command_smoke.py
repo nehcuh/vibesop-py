@@ -417,6 +417,59 @@ def main() -> int:
         proc.returncode == 0 and ("Discovery queue" in proc.stdout or "暂无候选" in proc.stdout),
         "",
     )
+
+    # ---------------- gate36 (修订 H): promote → shadow verifier, degraded ----------------
+    # The val-base image ships no sentence-transformers/torch, so both
+    # embedding lines are unavailable: the verdict must record
+    # ``embedding: unavailable``, the badge must be WARN (degraded — a
+    # degraded run never emits PASS, 修订 J), and the promote command
+    # must still exit 0 (shadow-only, never blocks activation).
+    cluster_id: str | None = None
+    try:
+        candidates_file = smoke_dir / ".vibe" / "observability" / "cluster_candidates.jsonl"
+        for line in candidates_file.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("status") == "pending" and not row.get("is_unstable"):
+                cluster_id = str(row["cluster_id"])
+                break
+    except (OSError, json.JSONDecodeError, KeyError):
+        cluster_id = None
+    record("smoke candidate id resolved", cluster_id is not None, f"cluster_id={cluster_id}")
+    if cluster_id is not None:
+        smoke.run(
+            "skill promote → shadow verifier (degraded, non-blocking)",
+            ["skill", "promote", cluster_id],
+            expect=["Verifier", "WARN", "degraded"],
+            timeout=150,
+            # Belt-and-braces: even if a torch stack appears in the image,
+            # forbid network so the model load fails fast instead of
+            # hanging the smoke run on a download.
+            env={"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"},
+        )
+        verdict: dict | None = None
+        try:
+            verdicts_file = smoke_dir / ".vibe" / "observability" / "promote_verdicts.jsonl"
+            for line in verdicts_file.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    verdict = json.loads(line)
+        except (OSError, json.JSONDecodeError):
+            verdict = None
+        embedding = (verdict or {}).get("embedding") or {}
+        record(
+            "promote verdict: embedding unavailable + WARN(degraded)",
+            bool(
+                verdict
+                and verdict.get("badge") == "WARN"
+                and verdict.get("degraded") is True
+                and (embedding.get("recall") or {}).get("status") == "unavailable"
+                and (embedding.get("index") or {}).get("status") == "unavailable"
+            ),
+            f"badge={verdict and verdict.get('badge')} "
+            f"degraded={verdict and verdict.get('degraded')}",
+        )
+
     smoke.run("sequence status", ["sequence", "status"])
     smoke.run("instinct status", ["instinct", "status"])
     smoke.run("route-stats", ["route-stats"])

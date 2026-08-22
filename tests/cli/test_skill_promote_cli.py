@@ -1414,3 +1414,278 @@ class TestPrefixResolutionDualStore:
         # No side effects in EITHER store.
         assert project_store.get(id_a).status == "pending"  # type: ignore[union-attr]
         assert global_store.get(id_b).status == "pending"  # type: ignore[union-attr]
+
+
+class TestPromoteVerifier:
+    """gate36 阶段二 — shadow verifier CLI wiring (修订 A/B/D/J).
+
+    The conftest embedding stub makes both embedding lines ``unavailable``,
+    so every CLI-level verdict here is WARN(degraded) — that IS the pinned
+    behavior under the stub. PASS coverage lives in
+    tests/core/observability/test_promote_verifier.py via the
+    ``embedding_model`` DI seam.
+    """
+
+    def _candidate(self, cluster_id: str = "abc123def456", **overrides) -> ClusterCandidate:
+        payload = {
+            "cluster_id": cluster_id,
+            "task_ids": [f"{cluster_id}-t1"],
+            "queries": ["topic-A one"],
+            "span_count": 5,
+            "gold_rate": 0.8,
+            "gold_task_ids": ["t1"],
+        }
+        payload.update(overrides)
+        return ClusterCandidate(**payload)
+
+    def _activation_stubs(self):
+        import contextlib
+
+        @contextlib.contextmanager
+        def _stack():
+            with (
+                patch.object(skill_commands, "_audit_skill_or_exit"),
+                patch.object(
+                    skill_commands, "_install_skill_or_exit", return_value="/fake/installed"
+                ),
+                patch.object(skill_commands, "_auto_configure_skill_with_llm"),
+                patch.object(skill_commands, "_verify_and_sync", return_value=False),
+            ):
+                yield
+
+        return _stack()
+
+    def _verdict_store(self, tmp_path: Path):
+        from vibesop.core.observability.promote_verifier import PromoteVerdictStore
+
+        return PromoteVerdictStore(tmp_path / ".vibe" / "observability")
+
+    def _draft_path(self, tmp_path: Path) -> Path:
+        matches = list((tmp_path / ".vibe" / "observability" / "skill_drafts").rglob("SKILL.md"))
+        assert len(matches) == 1, f"expected 1 draft, got {matches}"
+        return matches[0]
+
+    def test_promote_prints_badge_and_records_verdict(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """promote 后自动跑 verify: 输出徽章 + 口径文案, verdict 落发起项目."""
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "Verifier: WARN" in r.output  # degraded under the conftest stub
+        assert "degraded" in r.output
+        assert "触发召回" in r.output  # 徽章文案写明测触发召回不是内容质量
+        assert "不是内容质量" in r.output
+        rows = self._verdict_store(tmp_path).list_all()
+        assert len(rows) == 1
+        assert rows[0].phase == "promote"
+        assert rows[0].degraded is True
+        assert rows[0].badge == "WARN"
+        # trigger 侧不受 embedding 降级影响: prefilled trigger 捕获分母.
+        assert rows[0].shadow["all_caught"] is True
+
+    def test_verify_failure_never_blocks_promote(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """永不阻断: verdict store 构造抛错也只打印警告, promote 照常成功."""
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+
+        def _boom() -> None:
+            raise RuntimeError("verdict store exploded")
+
+        monkeypatch.setattr(skill_commands, "_get_verdict_store", _boom)
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "Promoted" in r.output
+        assert "不阻断" in r.output
+
+    def test_activate_reuses_verdict_when_draft_unchanged(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """修订 A: activate 时 draft 未变 (字节哈希匹配) → 复用 promote
+        时结果, 不追加 activate-rerun 行."""
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        r1 = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r1.exit_code == 0, f"failed: {r1.output}"
+
+        # --force bypasses the edit guard so activation proceeds on the
+        # UNCHANGED draft — the reuse path is the assertion target.
+        with self._activation_stubs():
+            r2 = cli_runner.invoke(
+                app, ["skill", "promote", "abc123def456", "--activate", "--force"]
+            )
+        assert r2.exit_code == 0, f"failed: {r2.output}"
+        assert "复用 promote 时结果" in r2.output
+        rows = self._verdict_store(tmp_path).list_all()
+        # r1 promote + r2 promote-phase re-verify; the activate step must
+        # NOT have appended an activate-rerun row.
+        assert len(rows) == 2
+        assert all(row.phase == "promote" for row in rows)
+
+    def test_activate_reruns_when_no_matching_verdict(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """修订 A: 当前 draft 字节哈希无匹配 verdict → activate 重跑,
+        追加 phase=activate-rerun 行 (不阻断, 无需 --force 参与 verifier)."""
+        import typer as _typer  # noqa: F401  (parity with sibling tests)
+
+        monkeypatch.chdir(tmp_path)
+        drafts_root = tmp_path / ".vibe" / "observability" / "skill_drafts"
+        draft_dir = drafts_root / "custom" / "x"
+        draft_dir.mkdir(parents=True)
+        draft_path = draft_dir / "SKILL.md"
+        draft_path.write_text(
+            "---\nid: custom/x\nname: x\ndescription: d\n"
+            'triggers: ["topic-A one"]\nintent: workflow\n---\nbody\n',
+            encoding="utf-8",
+        )
+        # Edit guard passes: recorded baseline differs from current bytes.
+        candidate = self._candidate(draft_sha256="0" * 64)
+        with self._activation_stubs():
+            skill_commands._activate_promoted_draft(
+                candidate, "custom/x", draft_path, "project", force=False
+            )
+        out = capsys.readouterr().out
+        assert "复用" not in out
+        assert "Verifier" in out
+        rows = self._verdict_store(tmp_path).list_all()
+        assert len(rows) == 1
+        assert rows[0].phase == "activate-rerun"
+        assert rows[0].draft_sha256 == hashlib.sha256(draft_path.read_bytes()).hexdigest()
+
+    def test_activate_prefers_complete_verdict_over_degraded_rerun(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """修订 A 细化: 已有完整 (非降级) verdict 匹配当前 draft 时, activate
+        复用它 —— 即使当下 embedding 不可用 (重跑必然降级), 也不覆盖/遮蔽."""
+        from datetime import UTC, datetime
+
+        from vibesop.core.observability.promote_verifier import (
+            RULESET_VERSION,
+            PromoteVerdict,
+        )
+
+        monkeypatch.chdir(tmp_path)
+        drafts_root = tmp_path / ".vibe" / "observability" / "skill_drafts"
+        draft_dir = drafts_root / "custom" / "x"
+        draft_dir.mkdir(parents=True)
+        draft_path = draft_dir / "SKILL.md"
+        draft_path.write_text(
+            "---\nid: custom/x\nname: x\ndescription: d\n"
+            'triggers: ["topic-A one"]\nintent: workflow\n---\nbody\n',
+            encoding="utf-8",
+        )
+        current_sha = hashlib.sha256(draft_path.read_bytes()).hexdigest()
+        store = self._verdict_store(tmp_path)
+        store.append(
+            PromoteVerdict(
+                cluster_id="abc123def456",
+                skill_id="custom/x",
+                scope="project",
+                phase="promote",
+                badge="PASS",
+                degraded=False,
+                draft_sha256=current_sha,
+                trigger_set_sha256="t" * 64,
+                ruleset_version=RULESET_VERSION,
+                created_at=datetime.now(UTC),
+            )
+        )
+        candidate = self._candidate(draft_sha256="0" * 64)
+        with self._activation_stubs():
+            skill_commands._activate_promoted_draft(
+                candidate, "custom/x", draft_path, "project", force=False
+            )
+        out = capsys.readouterr().out
+        assert "Verifier: PASS" in out  # the COMPLETE verdict is displayed
+        assert "复用 promote 时结果" in out
+        # No degraded activate-rerun row was appended.
+        rows = store.list_all()
+        assert len(rows) == 1
+        assert rows[0].phase == "promote"
+
+    def _mk_verdict(self, **overrides):
+        from datetime import UTC, datetime
+
+        from vibesop.core.observability.promote_verifier import (
+            RULESET_VERSION,
+            PromoteVerdict,
+        )
+
+        payload = {
+            "cluster_id": "abc123def456",
+            "skill_id": "custom/x",
+            "scope": "project",
+            "phase": "promote",
+            "badge": "WARN",
+            "degraded": False,
+            "draft_sha256": "d" * 64,
+            "trigger_set_sha256": "t" * 64,
+            "ruleset_version": RULESET_VERSION,
+            "created_at": datetime.now(UTC),
+        }
+        payload.update(overrides)
+        return PromoteVerdict(**payload)
+
+    def test_print_verdict_skipped_line_has_own_wording(self, capsys) -> None:
+        """pi-4/claude-3 收敛: index 线 skipped (无 triggers 可嵌) 打单独
+        措辞, 不打 "degraded: embedding 线不可用" 文案."""
+        verdict = self._mk_verdict(
+            degraded=False,
+            embedding={
+                "recall": {"status": "ok", "all_caught": True},
+                "index": {
+                    "status": "skipped",
+                    "reason": "empty profile text (no declared triggers)",
+                },
+            },
+        )
+        skill_commands._print_verdict(verdict)
+        out = capsys.readouterr().out
+        assert "Verifier: WARN" in out
+        assert "index 线跳过" in out
+        # Console 80 列折行可能把 "(skipped ≠ 降级)" 拆行 —— 分片段断言.
+        assert "skipped ≠" in out and "降级" in out
+        assert "degraded" not in out
+
+    def test_print_verdict_redacts_secrets_in_detail(self, capsys) -> None:
+        """claude-5 收敛: 读侧脱敏 —— 手改进 verdict store 的 secret 也不得
+        原样进终端 (与 Discovery 卡片 _display_text 惯例一致)."""
+        secret = "sk-abcdefghij0123456789"
+        verdict = self._mk_verdict(
+            shadow={
+                "denominator": 1,
+                "echo_excluded": 0,
+                "caught": [],
+                "missed": [
+                    {
+                        "query": f"use key {secret} to deploy",
+                        "nearest_trigger": f"deploy with {secret}",
+                        "nearest_score": 0.5,
+                    }
+                ],
+            },
+        )
+        skill_commands._print_verdict(verdict)
+        out = capsys.readouterr().out
+        assert secret not in out
+        assert "[REDACTED_KEY]" in out
+
+    def test_print_verdict_truncates_global_query_hash(self, capsys) -> None:
+        """pi-3 收敛: store 存全量 sha256, 展示层短显 16 位."""
+        verdict = self._mk_verdict(
+            scope="global",
+            shadow={
+                "denominator": 1,
+                "echo_excluded": 0,
+                "caught": [],
+                "missed": [{"query_hash": "f" * 64, "nearest_trigger": None, "nearest_score": 0.0}],
+            },
+        )
+        skill_commands._print_verdict(verdict)
+        out = capsys.readouterr().out
+        assert "query_hash:" + "f" * 16 in out
+        assert "f" * 64 not in out

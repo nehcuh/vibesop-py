@@ -2051,8 +2051,16 @@ def _render_skill_md(
             )
 
     if candidate.core_steps:
+        # gate36 修订 K: the only remaining prefill increment is a
+        # generation-provenance annotation (auto-extracted from trace).
+        # Empty core_steps clusters keep the TODO below — never
+        # fabricate a HOW the trace did not record.
         steps_block = "\n".join(
             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
+        )
+        steps_block += (
+            "\n\n> provenance: auto-extracted from trace (step names present in "
+            "≥70% of cluster spans) — a record of WHAT recurred, not a verified HOW"
         )
     else:
         # gate31: the empty case gets a guided TODO instead of a bare

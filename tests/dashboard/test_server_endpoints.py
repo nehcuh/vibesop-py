@@ -771,3 +771,139 @@ class TestDiscoveriesGate35:
 
         stats = client.get("/api/discoveries").json()["stats"]["by_source_outcome"]
         assert stats == {"gold": {"success": 0, "dismiss": 1, "shape_batch": 1}}
+
+
+class TestDiscoveriesVerdicts:
+    """gate36 阶段二 (修订 D): payload ``verdicts`` 段 —— 独立于队列卡片
+    (promoted 行不在 list_pending), 按 cluster_id 平铺, 按 scope 过滤明细,
+    与当前 draft 字节哈希不匹配标 stale."""
+
+    def _write_verdict(self, project: Path, **overrides: Any) -> None:
+        from datetime import UTC, datetime
+
+        from vibesop.core.observability.promote_verifier import (
+            RULESET_VERSION,
+            PromoteVerdict,
+            PromoteVerdictStore,
+        )
+
+        payload: dict[str, Any] = {
+            "cluster_id": "v" * 40,
+            "skill_id": "custom/x",
+            "scope": "project",
+            "phase": "promote",
+            "badge": "WARN",
+            "degraded": True,
+            "draft_sha256": "d" * 64,
+            "trigger_set_sha256": "t" * 64,
+            "ruleset_version": RULESET_VERSION,
+            "created_at": datetime.now(UTC),
+            "shadow": {
+                "denominator": 2,
+                "echo_excluded": 1,
+                "caught": [{"query": "caught q", "trigger": "t"}],
+                "missed": [{"query": "missed q", "nearest_trigger": None, "nearest_score": 0.0}],
+            },
+            "warnings": ["some lint warning"],
+        }
+        payload.update(overrides)
+        PromoteVerdictStore(project / ".vibe" / "observability").append(PromoteVerdict(**payload))
+
+    def test_empty_when_no_verdict_store(self, client: TestClient) -> None:
+        body = client.get("/api/discoveries").json()
+        assert body["verdicts"] == {}
+
+    def test_project_verdict_carries_detail_and_stale_flag(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        self._write_verdict(tmp_project)
+        body = client.get("/api/discoveries").json()
+        entries = body["verdicts"]["v" * 40]
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["badge"] == "WARN"
+        assert entry["degraded"] is True
+        assert entry["shadow"] == {"denominator": 2, "echo_excluded": 1, "caught": 1, "missed": 1}
+        # project scope: 明细 (sanitized 在写入侧已完成) 展开给看板.
+        assert entry["detail"]["missed"][0]["query"] == "missed q"
+        assert entry["detail"]["warnings"] == ["some lint warning"]
+        # draft 文件不存在 → 与 verdict 嵌入的字节哈希不匹配 → stale.
+        assert entry["stale"] is True
+
+    def test_matching_draft_hash_not_stale(self, client: TestClient, tmp_project: Path) -> None:
+        import hashlib as _hashlib
+
+        draft = (
+            tmp_project / ".vibe" / "observability" / "skill_drafts" / "custom" / "x" / "SKILL.md"
+        )
+        draft.parent.mkdir(parents=True)
+        draft.write_text("---\nid: custom/x\n---\nbody\n", encoding="utf-8")
+        self._write_verdict(
+            tmp_project, draft_sha256=_hashlib.sha256(draft.read_bytes()).hexdigest()
+        )
+        entry = client.get("/api/discoveries").json()["verdicts"]["v" * 40][0]
+        assert entry["stale"] is False
+
+    def test_global_verdict_counts_only_no_query_detail(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """修订 D: global verdict 只给计数/徽章, 不给 query 明细 (写入侧已
+        哈希化, 看板侧连 detail 键都不给)."""
+        self._write_verdict(
+            tmp_project,
+            scope="global",
+            shadow={
+                "denominator": 3,
+                "echo_excluded": 2,
+                "caught": [{"query_hash": "h1"}],
+                "missed": [{"query_hash": "h2", "nearest_trigger": None, "nearest_score": 0.0}],
+            },
+        )
+        body = client.get("/api/discoveries").json()
+        entry = body["verdicts"]["v" * 40][0]
+        assert entry["scope"] == "global"
+        assert "detail" not in entry
+        assert entry["shadow"]["missed"] == 1
+        # 双保险: 整个 verdicts 段无原始 query 文本.
+        assert "missed q" not in json.dumps(body["verdicts"], ensure_ascii=False)
+
+    def test_detail_redacted_read_side(self, client: TestClient, tmp_project: Path) -> None:
+        """claude-5 收敛: 看板读侧过 redact_sensitive —— 即使 verdict 文件
+        被手改进 secret, payload 明细也不得原样携带."""
+        secret = "sk-abcdefghij0123456789"
+        self._write_verdict(
+            tmp_project,
+            shadow={
+                "denominator": 1,
+                "echo_excluded": 0,
+                "caught": [],
+                "missed": [
+                    {
+                        "query": f"use key {secret} now",
+                        "nearest_trigger": f"deploy {secret}",
+                        "nearest_score": 0.5,
+                    }
+                ],
+            },
+        )
+        entry = client.get("/api/discoveries").json()["verdicts"]["v" * 40][0]
+        blob = json.dumps(entry["detail"], ensure_ascii=False)
+        assert secret not in blob
+        assert "[REDACTED_KEY]" in blob
+
+    def test_embedding_status_exposed_and_skipped_not_degraded(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """pi-4/claude-3 收敛: payload 暴露分线 status; skipped 的 verdict
+        degraded=False, 前端据此打"线跳过"而非降级文案."""
+        self._write_verdict(
+            tmp_project,
+            degraded=False,
+            embedding={
+                "recall": {"status": "ok", "all_caught": True},
+                "index": {"status": "skipped", "reason": "empty profile text"},
+            },
+        )
+        entry = client.get("/api/discoveries").json()["verdicts"]["v" * 40][0]
+        assert entry["embedding_status"] == {"recall": "ok", "index": "skipped"}
+        assert entry["degraded"] is False

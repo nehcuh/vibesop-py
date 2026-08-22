@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Promote shadow verifier（gate36 阶段二, 2026-08-22）
+
+按 gate34 定稿路线实施，双路复审（claude+pi）一轮 PASS_WITH_NITS、0 MAJOR。
+promote 不再是开盲盒：`vibe skill promote` 后自动跑 verify_draft，输出
+PASS/WARN 徽章 + 明细（接住哪几条、没接住哪几条、最近邻、会抢哪几条现存
+命中）；activate 时对当前 draft 复用/重跑 verdict。**永不阻断激活、无 FAIL
+级**（gate34 裁决：n=3 簇上捕获率无统计区分度，徽章只做建议）。
+
+- **trigger 侧**：新增 `triage_service.query_matches_triggers()`（生产
+  containment 语义：lowercase+剥撇号、无空白折叠、无长度下限、
+  first-hit-wins）,`has_explicit_guard_signal` 原处委托行为不变；不调用
+  guarded-only 的 `explicit_guarded_skill_match`。
+- **双 embedding 线分测**（recall 0.25 / index 0.45+margin），模块级单例
+  + 各自 fail-open：任一线 unavailable → 至多 WARN(degraded)，永不发
+  PASS;skipped（无 triggers）≠ degraded，单独文案。
+- **verdict store** `promote_verdicts.jsonl`：双锁+坏行跳过+200 条/90 天
+  容量；嵌当前文件字节哈希（区分 ClusterCandidate.draft_sha256 生成基线）
+  + ruleset_version=gate36-r1 + 分线结果；global scope 只存计数+全量
+  query 哈希（对齐 M5 隐私边界）；读侧渲染过 redact_sensitive。
+- **PASS 分母排除 agent-echo 行**（gate35 前缀谓词）——bd1bc217 类混回声
+  的良好簇不被稀释（有组合测试）。
+- 修订 K:core_steps 预填加 provenance 标注；空簇保持 TODO 不编造。
+- e2e 新增 promote→verify 降级 smoke（无模型环境 WARN(degraded) 不阻断）。
+- 规格回写留痕：`.omx/artifacts/gate34-synthesis.md` §6.2。
+
 ### 发现队列可读性 + 展示层去噪（gate35 阶段一, 2026-08-22）
 
 按 gate34 定稿路线（`.omx/artifacts/gate34-synthesis.md`）实施，双路复审

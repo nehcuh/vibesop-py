@@ -1833,6 +1833,144 @@ def _resolve_candidate_for_mutation(
     return None
 
 
+# ---------------------------------------------------------------------------
+# gate36 阶段二 — promote shadow verifier wiring (D1, 修订 A/B/D)
+# ---------------------------------------------------------------------------
+
+
+def _get_verdict_store() -> Any:
+    """Verdict store of the INITIATING project (修订 D).
+
+    Even ``--scope global`` promotes record here: the store belongs to the
+    project whose operator ran the command, and global-scope drafts get
+    counts + query hashes only inside the verdict (privacy boundary).
+    Tests patch this helper to redirect (same pattern as
+    ``_get_candidate_store``).
+    """
+    from vibesop.core.observability.promote_verifier import PromoteVerdictStore
+
+    return PromoteVerdictStore(Path.cwd() / ".vibe" / "observability")
+
+
+def _load_verify_context() -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
+    """Installed catalog + skill index for hijack / margin gates. Fail-open.
+
+    Both inputs are read-only enrichments of the shadow verdict; any load
+    failure degrades that analysis to "skipped", never an error.
+    """
+    installed: list[dict[str, Any]] | None = None
+    try:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        installed = CandidateManager(Path.cwd()).get_candidates()
+    except Exception as e:
+        logger.debug("shadow verifier: installed catalog unavailable: %s", e)
+    index_profiles: dict[str, Any] | None = None
+    try:
+        from vibesop.core.skills.indexer import SkillIndexer
+
+        index_profiles = SkillIndexer(project_root=Path.cwd()).load_index()
+    except Exception as e:
+        logger.debug("shadow verifier: skill index unavailable: %s", e)
+    return installed, index_profiles
+
+
+def _print_verdict(verdict: Any, *, reused: bool = False) -> None:
+    """Render the badge + descriptive detail. CLI/dashboard wording lockstep.
+
+    The scope line is mandatory (裁决 2 / Lane C): the badge measures
+    触发召回 (trigger recall), NOT 内容质量 (content quality).
+
+    claude-5 收敛: 明细文本渲染前过 ``redact_sensitive`` (读侧脱敏, 与
+    Discovery 卡片 ``_display_text`` 惯例一致; 写侧 sanitize 之外的第二道).
+    """
+    from vibesop.utils.redaction import redact_sensitive
+
+    badge_style = "green" if verdict.badge == "PASS" else "yellow"
+    badge_mark = "✓" if verdict.badge == "PASS" else "⚠"
+    suffix = " (degraded: embedding 线不可用, 不发 PASS)" if verdict.degraded else ""
+    reused_note = " [dim](复用 promote 时结果 — draft 未变)[/dim]" if reused else ""
+    console.print(
+        f"[{badge_style}]{badge_mark} Verifier: {verdict.badge}[/{badge_style}]{suffix}{reused_note}"
+    )
+    console.print(
+        "  [dim]口径: 测的是触发召回 (trigger recall), 不是内容质量 (content "
+        "quality); shadow-only, 永不阻断.[/dim]"
+    )
+    # pi-4/claude-3 收敛: skipped (无 triggers 可嵌) 不是降级态, 单独措辞.
+    embedding = verdict.embedding or {}
+    for line_name in ("recall", "index"):
+        line = embedding.get(line_name) or {}
+        if line.get("status") == "skipped":
+            console.print(
+                f"  [dim]embedding {line_name} 线跳过: "
+                f"{line.get('reason', '无可嵌内容')} (skipped ≠ 降级)[/dim]"
+            )
+    shadow = verdict.shadow or {}
+    denominator = shadow.get("denominator", 0)
+    echo_excluded = shadow.get("echo_excluded", 0)
+    missed = shadow.get("missed", [])
+    console.print(
+        f"  [dim]shadow: 捕获 {denominator - len(missed)}/{denominator} "
+        f"(回声行 {echo_excluded} 条不进分母)[/dim]"
+    )
+    if missed:
+        console.print("  [yellow]未捕获 query（最近邻 trigger）:[/yellow]")
+        for entry in missed[:5]:
+            if "query" in entry:
+                label = redact_sensitive(str(entry["query"]))
+            else:
+                # pi-3 收敛: store 存全量 sha256, 展示层短显截断.
+                label = f"query_hash:{str(entry.get('query_hash', '?'))[:16]}"
+            nearest = entry.get("nearest_trigger") or "(无共享 token 的近邻)"
+            nearest = redact_sensitive(str(nearest))
+            console.print(f"    • {label}  → 最近邻: {nearest}")
+        if len(missed) > 5:
+            console.print(f"    [dim]… 另 {len(missed) - 5} 条见 verdict store[/dim]")
+    hijack_entries = (verdict.hijack or {}).get("entries", [])
+    if hijack_entries:
+        console.print(
+            f"  [yellow]hijack 风险: {len(hijack_entries)} 条 query 与现存技能 "
+            "trigger 冲突[/yellow]"
+        )
+        for entry in hijack_entries[:3]:
+            console.print(
+                f"    • 与 {redact_sensitive(str(entry.get('competing_skill_id')))} 的 "
+                f"trigger 「{redact_sensitive(str(entry.get('competing_trigger')))}」 竞争"
+            )
+    for warning in verdict.warnings:
+        console.print(f"  [yellow]lint: {redact_sensitive(str(warning))}[/yellow]")
+
+
+def _run_shadow_verify(
+    candidate: ClusterCandidate,
+    skill_path: Path,
+    scope: _CandidateStoreScope,
+    *,
+    phase: str,
+) -> Any | None:
+    """Run verify_draft + record + print. NEVER blocks (修订 A: 不需要 --force)."""
+    try:
+        from vibesop.core.observability.promote_verifier import verify_draft
+
+        installed, index_profiles = _load_verify_context()
+        verdict = verify_draft(
+            candidate,
+            skill_path,
+            scope=scope,
+            phase=phase,
+            installed_candidates=installed,
+            index_profiles=index_profiles,
+            store=_get_verdict_store(),
+        )
+        _print_verdict(verdict)
+        return verdict
+    except Exception as e:  # the lamp must never become a gate
+        console.print(f"[yellow]⚠ shadow verifier unavailable (已跳过, 不阻断): {e}[/yellow]")
+        logger.debug("shadow verifier failed", exc_info=True)
+        return None
+
+
 @app.command(name="promote")
 def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
@@ -1982,6 +2120,8 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
 
     console.print(f"[green]✓[/green] Promoted '{cluster_id}' → skill_id={skill_id}")
     console.print(f"  [dim]draft:[/dim] {skill_path}")
+    # gate36 阶段二: shadow verifier — 徽章 + 明细, 永不阻断 (修订 A/B/D/J).
+    _run_shadow_verify(candidate, skill_path, scope, phase="promote")
     if scope == "global":
         console.print(
             f"  [dim]activate:[/dim] copy to ~/.vibe/skills/{skill_id}/ and run "
@@ -2110,6 +2250,26 @@ def _activate_promoted_draft(
         )
     else:
         console.print("[green]✓[/green] Draft edited since generation (content hash differs)")
+
+    # gate36 修订 A: activation-time shadow verdict — M5 forces a human
+    # edit before activation, so the promote-time verdict describes a
+    # draft that no longer exists. Draft unchanged (byte hash match) →
+    # reuse the promote-time result; changed → rerun. A degraded rerun
+    # appends a NEW line and never shadows the complete promote-time
+    # verdict (``prefer_complete`` picks the full version for display).
+    # Never blocks; no --force involved.
+    try:
+        verdict_store = _get_verdict_store()
+        existing_verdict = verdict_store.latest_for_cluster(
+            candidate.cluster_id, draft_sha256=current_sha256, prefer_complete=True
+        )
+        if existing_verdict is not None:
+            _print_verdict(existing_verdict, reused=True)
+        else:
+            _run_shadow_verify(candidate, skill_path, scope, phase="activate-rerun")
+    except Exception as e:  # the lamp must never become a gate
+        console.print(f"[yellow]⚠ shadow verifier unavailable (已跳过, 不阻断): {e}[/yellow]")
+        logger.debug("shadow verifier failed at activation", exc_info=True)
 
     if scope == "global":
         if not candidate.is_cross_project and not force:

@@ -18,7 +18,7 @@ from vibesop.core.routing.triage_cache import TriageCache
 from vibesop.core.routing.triage_recall import DEFAULT_MIN_SIMILARITY, EmbeddingRecall
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from vibesop.core.config import RoutingConfig
     from vibesop.core.optimization import CandidatePrefilter
@@ -41,6 +41,34 @@ def _resolve_vibe_dir(cache_dir: str | Path) -> Path:
     """
     path = Path(cache_dir)
     return path.parent if path.name == "cache" else path
+
+
+def query_matches_triggers(query: str, triggers: Iterable[Any]) -> str | None:
+    """Production trigger-containment semantics (gate36 修订 B extraction).
+
+    The exact matching rule ``TriageService.has_explicit_guard_signal``
+    applies to a guarded skill's declared triggers, generalized to ANY
+    trigger list (e.g. a promoted draft's own triggers — the guarded-only
+    ``explicit_guarded_skill_match`` can never fire on a draft id, so the
+    shadow verifier wraps THIS rule instead):
+
+    - ``query.lower()`` with apostrophes (``'`` / ``’``) stripped;
+    - NO whitespace folding (``"foo  bar"`` does NOT contain ``"foo bar"``);
+    - NO minimum trigger length (a 1-char trigger can match);
+    - first-hit-wins in trigger list order.
+
+    Returns the first matching trigger (original form), or ``None``.
+    Deliberately NOT the ``p0_shadow`` rule from
+    ``scripts/replay_routing_baseline.py`` (that one folds whitespace,
+    keeps apostrophes, and imposes a ≥6-char containment floor — a
+    signal-existence probe, not production semantics).
+    """
+    normalized_query = query.lower().replace("'", "").replace("’", "")
+    for trigger in triggers:
+        trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
+        if trigger_norm and trigger_norm in normalized_query:
+            return str(trigger)
+    return None
 
 
 class TriageService:
@@ -530,12 +558,13 @@ class TriageService:
         if not triggers:
             triggers = list(self._GUARDED_SKILL_FALLBACK_TRIGGERS.get(short, []))
 
-        normalized_query = query.lower().replace("'", "").replace("’", "")
-        for trigger in triggers:
-            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
-            if trigger_norm and trigger_norm in normalized_query:
-                return True
+        # gate36 修订 B: the containment loop is extracted into
+        # ``query_matches_triggers`` (same semantics, same order) so the
+        # promote shadow verifier can reuse the production rule.
+        if query_matches_triggers(query, triggers) is not None:
+            return True
 
+        normalized_query = query.lower().replace("'", "").replace("’", "")
         return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
 
     def explicit_guarded_skill_match(
