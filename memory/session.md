@@ -1,5 +1,24 @@
 
-### S39 (2026-07-31) [vibesop-py + cmspark] 定位对抗 → Sprint1 → cmspark dogfood
+### S40 (2026-08-22) [vibesop-py + cmspark] 候选池 id 漂移去重（gate30 三轮双路复审）→ push f76dd61
+
+- [x] **真 bug 发现**：cmspark 候选池 27 条 pending 里 8 对重复——`cluster_id` = 成员复合键 sha1，簇吸收新 task 后 id 漂移，exact-match upsert 每轮重扫追加重复行
+- [x] **修复**：upsert 统一匹配集（exact + 同类 Jaccard 严格 >0.5）absorb-merge；阈值真实池标定（真重复 0.88–0.99 vs 假重复 ≤0.41）；守卫全集化（`find_all_overlapping_pending`）；`miss_guard_skipped_count` 入 ScanSummary + CLI
+- [x] **三轮双路复审（claude+pi）**：r1 pi BLOCK（best-match 守卫 vs absorb-all 写）→ r2 双路收敛同洞（exact-id 跨类销毁 unstable 行）→ r3 pi PASS + claude PASS_WITH_NITS 清零；修在守卫侧而非 upsert 侧（避免同 id 双行/get() 歧义）
+- [x] **验证**：全量 5964 passed / 14 skipped（净增 17 测试）；orbstack e2e smoke 65/65 + routing 7/7；push `f76dd61`
+- [x] **cmspark 池自愈**：重扫后 26 行（5 stable + 20 unstable + 1 promoted），同类 J>0.5 重复对归零；`5bd44eee`→`64d301b8`、`6a6d554f` 并入 `af55cfff`（first_seen 保留）
+
+**Key Discoveries**:
+1. 身份 = 成员集合哈希必然随增长漂移——upsert 要 overlap-merge；标定阈值要看真实池分布双侧留距
+2. 守卫阻断集必须 ⊇ 写路径破坏集（pi M1 不变量）；例外规则两侧同步论证
+3. 身份语义变更后，共享常量 identity 字段的测试 fixture 会静默互吸——fixture id 从唯一键派生
+4. pi 评审的 shell 报错噪音（vibe route 注入失败）在文件头，正文在后面——别误判为空跑
+
+**Next Steps**:
+- 用户：cmspark 5 条 stable 候选 promote/dismiss（发现精度首个真实数据点）；bd1bc217 草稿编辑后 `--activate`
+- 环境：新开 kimi 会话激活 hooks（M3 行为证据前提）；3 个 dead loop 可 `vibe loop reset` 复活
+- 数据触发：候选簇 ≥2 条带工具序列 trace 后跑 `calibrate_behavior_threshold.py`；留存池 2026-09-19 到期前复挖再 purge
+
+**Recorded**: yes — id 漂移/overlap-merge + 守卫宽度不变量 → project-knowledge.md Technical Pitfalls
 
 - [x] 对照 LLM Space 定位 + 4 路对抗终裁 → `docs/decisions/2026-07-31-product-evolution-adversarial.md`（Binding）
 - [x] Pi 复审 **CONDITIONAL** → must-fix 吸收后 GO Sprint 1

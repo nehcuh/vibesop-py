@@ -1,23 +1,29 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-31 (S39 — product evolution + Sprint1 dogfood)
+**Last Updated**: 2026-08-22 (S40 — gate30 候选池去重 push；M12 全收官)
 
 ---
 
 ## Goals
 
-### Current Week (July 26-August 1, 2026)
+### Current Week (August 17-22, 2026)
 
-1. **Dashboard v3 Phase A — data instrumentation** ✅ (Completed - July 28)
-2. **Dashboard v3 Phase B — HTTP API layer** ✅ (Completed - July 28)
-3. **Product evolution + Sprint 1 golden aha** ✅ (July 31)
-   - Adversarial final Binding；Pi CONDITIONAL → GO
-   - RoutingPending + accept/dismiss/stats + replay inject；weak-layer enqueue fix
-   - cmspark dogfood CLI reinstall + platform build；14 天 kill 观察开始
-4. **Dashboard v3 Phase C — UI frontend**（defer after Sprint 2 Task 真相）
-   - Orchestration Map + Reflection Inbox；树先于 Cytoscape
-5. **test-windows CI 观察期**（至 ~2026-08-02）
-   - `continue-on-error: true` 稳定两周后转强约束
+1. **M12 语义洞察→技能发现里程碑** ✅ (Completed - Aug 21-22)
+   - M2 出口验证（cmspark 真实数据 5/5 候选人工可认）；M3 行为一致性门（bigram-Jaccard 三态）
+   - LoopStore 项目归属（spec `project_root`）；CLI_REFERENCE 补全；文档存量债清零（双 checker 0+0）
+2. **gate30 候选池 id 漂移去重** ✅ (Completed - Aug 22, push `f76dd61`)
+   - upsert Jaccard>0.5 absorb-merge + 守卫全集化；三轮 claude+pi 复审收敛
+   - cmspark 池自愈：8 对重复归零
+3. **发现精度首个真实数据点**（等用户）：cmspark 5 条 stable 候选 promote/dismiss + bd1bc217 激活
+4. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
+5. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
+
+### Previous Weeks (July 26 - August 16, 2026) — Completed
+
+1. **Dashboard v3 Phase A/B** ✅ (July 28)；**产品演化对抗 + Sprint 1 黄金 aha** ✅ (July 31)
+2. **M12 主体施工**（语义洞察、发现队列、行为门、归属迁移）——8 月上旬多 session 完成，详见 session.md 与 CHANGELOG [Unreleased]
+
+> Deferred（持续有效）：Dashboard v3 Phase C（UI 前端）——树先于 Cytoscape；AtomicWriter sibling lock file 修 rename+inode race（Phase B+1）。
 
 ### Previous Week (July 19-25, 2026) — Completed
 

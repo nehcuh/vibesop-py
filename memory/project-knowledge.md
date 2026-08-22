@@ -2,6 +2,26 @@
 
 ## Technical Pitfalls
 
+### Content-Derived Identity Hash Drifts with Membership Growth — Upsert Needs Overlap-Merge (2026-08-22)
+
+**Issue**: 候选池（`ClusterCandidateStore`）出现同一模式的重复行——cmspark 真实池 27 条 pending 里 8 对重复（61 任务行 vs 63 任务行同内容）。
+
+**Root Cause**: `cluster_id` = 排序后 (project_id, task_id) 复合键集合的 sha1。簇吸收新 task（miss 持续累积是常态）→ sha1 变化 → upsert 的 exact-match 判为新候选 → 追加重复行。**任何"身份 = 成员集合哈希"的设计都有这个病**：成员变，身份漂。discovery.py 早年为 dismiss 粘性列表发明 fingerprint 时已记录同款漂移，但 store 层 upsert 没跟上。
+
+**Solution**: upsert 匹配集 = exact-id 行 ∪ 同类（is_unstable）Jaccard 严格 > 0.5 的 pending 行，整集 absorb-merge；保留最早 created_at/ttl/first_seen_at；project_distribution 求和并集。阈值用真实池标定（真重复对 0.88–0.99 vs 假重复 ≤0.41，双侧留距）；严格 `>` 使两个 3 任务簇共享 2 泛化 task（恰 0.5）不误并。
+
+**Test fixture 连锁坑**：改了身份语义后，测试 fixture 里共享常量 `task_ids=["t1"]` 的 helper 会让所有 fixture 候选互吸成一行——改为从 cluster_id 派生。3 个测试文件中招。
+
+**Files**: `src/vibesop/core/observability/skill_promote.py`（`_do_locked_upsert`、`MERGE_JACCARD_THRESHOLD`）
+
+### Guard Width Must Match Mutation Width — Best-Match Guard vs Absorb-All Write (2026-08-22)
+
+**Issue**: gate30 双路复审两轮抓到的同型洞：守卫只查"最佳重叠行"（或排除某类行），而写路径吸收"全部匹配行"——miss 证据经合并路径绕路销毁 gold 行（pi M1）；守卫排除 unstable 行后，exact-id 路径仍能整行替换 unstable 诊断行（pi BLOCK-1 / claude MAJOR-1，两路独立复现收敛到同洞）。
+
+**Root Cause**: 守卫和写路径是分开演化的，没人维护"守卫的阻断集 ⊇ 写路径的破坏集"这个不变量。
+
+**Solution**: 写路径的吸收集怎么定，守卫就查同一个全集（`find_all_overlapping_pending`）；例外规则（如"unstable 不算更强证据"）要写路径和守卫同步论证——exact-id 同簇 ⟹ 同成员 ⟹ J=1.0 这种恒等式可以把例外收窄到唯一可达分支。修在守卫侧还是写侧要看副作用：写侧加类条件会引入同 id 双行并存/`get()` 歧义，守卫侧干净。
+
 ### YAML Skill Loader Picks Up Non-Skill Files — `rglob` Is Too Greedy (2026-07-21)
 
 **Issue**: `vibe` 命令运行时崩溃：`Unexpected error loading YAML skill /Users/huchen/.config/skills/omx/.github/dependabot.yml: version should be a valid string (got int 2)`。
