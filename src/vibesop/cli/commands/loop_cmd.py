@@ -1,13 +1,15 @@
 """``vibe loop`` CLI — autonomous scheduled task lifecycle + execution.
 
 Usage:
-    vibe loop create <name> --skill <id> --schedule "*/30 * * * *"
-    vibe loop list [--status active|paused|failing|dead]
+    vibe loop create <name> --skill <id> --schedule "*/30 * * * *" [--global]
+    vibe loop list [--status active|paused|failing|dead] [--all]
     vibe loop show <name>
     vibe loop delete <name> [--force]
     vibe loop pause <name>
     vibe loop resume <name>
-    vibe loop tick [--name <name>]    # single polling cycle
+    vibe loop adopt <name>              # pin ownership to cwd
+    vibe loop migrate-ownership [--dry-run] [--yes]
+    vibe loop tick [--name <name>] [--all]    # single polling cycle
 
 Architecture:
     External cron / systemd timer / launchd invokes ``vibe loop tick``
@@ -73,6 +75,31 @@ _STATUS_ICONS: dict[LoopStatus, str] = {
     LoopStatus.DEAD: "⚫",
     LoopStatus.RETIRED: "⚪",
 }
+
+
+def _owns(spec: LoopSpec, cwd: Path) -> bool:
+    """Return True iff ``spec`` is owned by (visible/runnable from) ``cwd``.
+
+    Ownership rule (gate26): an unscoped spec (``project_root is None`` —
+    legacy or deliberate ``--global``) is owned everywhere; a pinned spec is
+    owned when ``cwd`` is inside its ``project_root``. Both sides are
+    ``resolve()``-ed, which normalises symlinks (e.g. macOS ``/tmp`` →
+    ``/private/tmp``). We deliberately do NOT casefold: on a case-insensitive
+    APFS volume, ``/Repo`` and ``/repo`` spellings of the same directory are
+    treated as different roots — an accepted edge (gate26 design §6).
+
+    The check is deliberately ONE-DIRECTIONAL: cwd ⊆ project_root counts,
+    project_root ⊂ cwd does NOT — running from a parent directory must not
+    claim every project beneath it.
+    """
+    if spec.project_root is None:
+        return True
+    try:
+        return cwd.resolve().is_relative_to(Path(spec.project_root).resolve())
+    except OSError:
+        # Unresolvable path (dangling symlink etc.) — treat as not owned
+        # rather than executing against an unverifiable root.
+        return False
 
 
 def _target_str(spec: LoopSpec, truncate: int = 0) -> str:
@@ -218,9 +245,7 @@ def _resolve_preset(preset: str) -> _LoopPreset:
         available = ", ".join(sorted(_LOOP_PRESETS))
         if "instinct-" in preset or preset.endswith(("-assemble", "-promote", "-feedback")):
             # Looks like a typo of a known preset name.
-            console.print(
-                f"[red]❌ 未知 preset '{preset}'。可选：{available}[/red]"
-            )
+            console.print(f"[red]❌ 未知 preset '{preset}'。可选：{available}[/red]")
         else:
             # Doesn't look like any preset — user probably meant --command.
             console.print(
@@ -255,11 +280,20 @@ def create(
     schedule: str = typer.Option("0 0 * * *", "--schedule", help="cron 表达式（5 段）"),
     description: str = typer.Option("", "--desc", "-d", help="描述"),
     max_failures: int = typer.Option(3, "--max-failures", help="连续失败次数上限"),
+    global_: bool = typer.Option(
+        False,
+        "--global",
+        help="不钉项目归属（全局 loop：任意 cwd 下 list/tick 可见可执行）。默认钉到当前目录。",
+    ),
 ) -> None:
     """创建新的定时循环任务。
 
     必须指定 ``--skill`` / ``--query`` / ``--workflow`` / ``--command`` 之一作为执行目标，
     或用 ``--preset`` 加载预定义模板（会同时设定 --command 和 --schedule）。
+
+    项目归属（gate26）：默认把当前目录钉为 ``project_root``——裸 ``tick`` 只执行
+    归属本项目的 loop，executor 也在归属根下执行。``--global`` 显式放弃归属
+    （与旧版无字段 spec 同义：任意 cwd 可见可执行）。
     """
     # --preset 是一个 shortcut：根据 name 填充 --command + --schedule。
     # 设计为"先填充、再走主路径"——所有后续校验（4-way xor、cron parse）
@@ -292,10 +326,23 @@ def create(
         raise typer.Exit(1) from e
 
     if not any([skill_id, query, workflow, command_args]):
-        console.print(
-            "[red]❌ 至少需要指定 --skill、--query、--workflow 或 --command 之一[/red]"
-        )
+        console.print("[red]❌ 至少需要指定 --skill、--query、--workflow 或 --command 之一[/red]")
         raise typer.Exit(1)
+
+    # Ownership pinning (gate26): default pins Path.cwd(). Note Path.cwd()
+    # returns the physical getcwd() path (symlinks already resolved by the
+    # OS), so what gets pinned is the real directory the user is standing in.
+    # Untrusted cwd (no .git/ or pyproject.toml) warns but does NOT refuse —
+    # create only writes JSON, and --global is the documented escape hatch.
+    project_root: str | None = None
+    if not global_:
+        cwd = Path.cwd()
+        if not _is_project_root_trusted(cwd):
+            console.print(
+                f"[yellow]⚠️  cwd {cwd} 既非 git repo (无 .git/) 也无 pyproject.toml。"
+                f" loop 仍将钉到这个目录；若想创建全局 loop 请加 --global。[/yellow]"
+            )
+        project_root = str(cwd)
 
     try:
         spec = LoopSpec(
@@ -307,6 +354,7 @@ def create(
             workflow_id=workflow,
             command_args=command_args,
             max_failures=max_failures,
+            project_root=project_root,
         )
     except ValidationError as e:
         console.print("[red]❌ 参数校验失败:[/red]")
@@ -324,9 +372,14 @@ def create(
         raise typer.Exit(1) from e
 
     store = LoopStore()
-    if store.load_spec(name) is not None:
+    existing = store.load_spec(name)
+    if existing is not None:
+        # Name the conflicting loop's project so cross-project collisions
+        # (HOME-level store, globally-unique names) are debuggable (gate26).
         console.print(
-            f"[red]❌ Loop '{name}' 已存在。先删除 (vibe loop delete {name}) 或换名。[/red]"
+            f"[red]❌ Loop '{name}' 已存在（归属项目: "
+            f"{existing.project_root or '(global)'}）。"
+            f"先删除 (vibe loop delete {name}) 或换名。[/red]"
         )
         raise typer.Exit(1)
 
@@ -336,6 +389,7 @@ def create(
         Panel(
             f"[bold green]✅ Loop Created[/bold green]\n"
             f"  [bold]Name:[/bold]        {spec.name}\n"
+            f"  [bold]Project:[/bold]     {spec.project_root or '(global)'}\n"
             f"  [bold]Schedule:[/bold]    {spec.schedule}\n"
             f"  [bold]Target:[/bold]      {_target_str(spec)}\n"
             f"  [bold]Status:[/bold]      🟢 Active\n"
@@ -359,8 +413,13 @@ def list_loops(
         "-s",
         help="按状态筛选 (active/paused/failing/dead/retired)",
     ),
+    all_: bool = typer.Option(
+        False,
+        "--all",
+        help="列出全部 loop（含归属其他项目的），并显示 Project 列。默认只列归属当前项目的。",
+    ),
 ) -> None:
-    """列出所有 loop 任务。"""
+    """列出 loop 任务（默认只列归属当前项目的；``--all`` 列全部）。"""
     store = LoopStore()
     specs = store.list_specs()
 
@@ -368,15 +427,33 @@ def list_loops(
         console.print("[yellow]没有已创建的 loop。使用 `vibe loop create` 创建第一个。[/yellow]")
         return
 
+    cwd = Path.cwd()
+    hidden = 0
     pairs: list[tuple[LoopSpec, LoopState]] = []
     for spec in specs:
+        if not all_ and not _owns(spec, cwd):
+            hidden += 1
+            continue
         state = store.load_state(spec.name) or LoopState(spec=spec)
         if status and state.status.value != status.lower():
             continue
         pairs.append((spec, state))
 
     if not pairs:
-        console.print(f"[yellow]没有匹配状态 '{status}' 的 loop。[/yellow]")
+        # gate27 claude#7: when ownership filtering hid every non-matching
+        # loop, name that as the real cause — "没有匹配状态" alone would send
+        # the user chasing a status filter that isn't why their loop is
+        # invisible.
+        if status:
+            msg = f"没有匹配状态 '{status}' 的 loop"
+            if hidden:
+                msg += (
+                    f"（另有 {hidden} 个归属其他项目的 loop 未参与本轮筛选"
+                    f"——`vibe loop list --all` 查看全部）"
+                )
+            console.print(f"[yellow]{msg}。[/yellow]")
+        else:
+            console.print("[yellow]当前项目没有归属的 loop（--all 查看全部）。[/yellow]")
         return
 
     now = datetime.now(UTC)
@@ -385,6 +462,8 @@ def list_loops(
     table.add_column("Schedule")
     table.add_column("Status")
     table.add_column("Target")
+    if all_:
+        table.add_column("Project")
     table.add_column("Next Run")
 
     for spec, state in pairs:
@@ -398,15 +477,22 @@ def list_loops(
             except (ValueError, RuntimeError):
                 next_run_str = "?"
 
-        table.add_row(
+        row = [
             spec.name,
             spec.schedule,
             f"{icon} {state.status.value}",
             _target_str(spec, truncate=35),
-            next_run_str,
-        )
+        ]
+        if all_:
+            row.append(spec.project_root or "(global)")
+        row.append(next_run_str)
+        table.add_row(*row)
 
     console.print(table)
+    if hidden:
+        console.print(
+            f"[dim]{hidden} 个归属其他项目的 loop 已隐藏 —— `vibe loop list --all` 查看全部。[/dim]"
+        )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -430,6 +516,7 @@ def show(name: str = typer.Argument(..., help="loop 名称")) -> None:
     info = (
         f"[bold]Name:[/bold]           {spec.name}\n"
         f"[bold]Description:[/bold]    {spec.description}\n"
+        f"[bold]Project:[/bold]        {spec.project_root or '(global)'}\n"
         f"[bold]Schedule:[/bold]       {spec.schedule}\n"
         f"[bold]Target:[/bold]         {_target_str(spec, truncate=60)}\n"
         f"[bold]Max Failures:[/bold]   {spec.max_failures}\n"
@@ -507,8 +594,7 @@ def delete(
     store.delete_spec(name)
     if plist_cleanup_failed:
         console.print(
-            f"[green]✅ Loop '{name}' 已删除[/green] "
-            f"[yellow](但 launchd 清理未完成，见上)[/yellow]"
+            f"[green]✅ Loop '{name}' 已删除[/green] [yellow](但 launchd 清理未完成，见上)[/yellow]"
         )
     else:
         console.print(f"[green]✅ Loop '{name}' 已删除[/green]")
@@ -622,6 +708,137 @@ def reset(name: str = typer.Argument(..., help="loop 名称")) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────
+# adopt / migrate-ownership (gate26: explicit ownership pinning)
+# ──────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def adopt(name: str = typer.Argument(..., help="loop 名称")) -> None:
+    """把 loop 的项目归属钉到当前目录（cwd）。
+
+    归属只由显式动作钉住（gate26）：``create`` 默认钉 cwd、``adopt`` 钉 cwd、
+    ``migrate-ownership`` 从 launchd plist 回填。裸 ``tick`` 永不做首次写入
+    式归属推断（谁先跑归谁是更坏的误归属）。
+    """
+    store = LoopStore()
+    spec = store.load_spec(name)
+    if spec is None:
+        console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
+        raise typer.Exit(1)
+
+    cwd = Path.cwd()
+    # Reuse the install-launchd trust signal: warn on untrusted cwd but allow
+    # (adopt only writes JSON; the user may legitimately pin a non-git dir).
+    if not _is_project_root_trusted(cwd):
+        console.print(
+            f"[yellow]⚠️  cwd {cwd} 既非 git repo (无 .git/) 也无 pyproject.toml。"
+            f" 仍将把 '{name}' 钉到这个目录——确认这是你想要的项目根。[/yellow]"
+        )
+
+    spec.project_root = str(cwd)
+    # Hold the per-loop lock across spec+state writes so a concurrent tick
+    # can't persist a stale state.json that embeds the OLD spec copy.
+    tick_lock = _acquire_tick_lock(store, name, blocking=True)
+    try:
+        store.save_spec(spec)
+        state = store.load_state(name)
+        if state is not None:
+            state.spec = spec
+            store.save_state(state)
+    finally:
+        _release_tick_lock(tick_lock)
+    console.print(f"[green]📌 Loop '{name}' 已钉到项目: {cwd}[/green]")
+
+
+@app.command("migrate-ownership")
+def migrate_ownership(
+    dry_run: bool = typer.Option(False, "--dry-run", help="只报告将回填的归属，不写盘"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过逐条确认（默认每条回填前询问）"),
+) -> None:
+    """从 launchd plist 的 WorkingDirectory 回填存量 loop 的项目归属（仅 macOS）。
+
+    读取 ``~/Library/LaunchAgents/com.vibesop.loop.*.plist`` 的
+    ``WorkingDirectory`` 并写回对应 spec 的 ``project_root``（同时同步
+    state.json 内嵌的 spec 副本）。注意：这也会把 ``--global`` 创建的 loop
+    钉到 plist 记录的目录——全局 loop 请先卸载 plist 或用 ``--dry-run`` 检查。
+    没有 plist 的 loop 会被列出并提示用 ``vibe loop adopt <name>`` 手工钉住。
+    """
+    store = LoopStore()
+    specs = store.list_specs()
+
+    if not specs:
+        console.print("[yellow]没有 loop。[/yellow]")
+        return
+
+    from vibesop.core.loop.launchd import default_plist_path
+
+    backfilled: list[str] = []
+    no_plist: list[str] = []
+    skipped_set: list[str] = []
+
+    for spec in specs:
+        if spec.project_root is not None:
+            skipped_set.append(spec.name)
+            continue
+        plist_path = default_plist_path(spec.name)
+        working_dir: str | None = None
+        if _is_macos() and plist_path.exists():
+            import plistlib
+
+            try:
+                with plist_path.open("rb") as f:
+                    data = plistlib.load(f)
+                wd = data.get("WorkingDirectory")
+                if isinstance(wd, str) and wd:
+                    working_dir = wd
+            except (OSError, ValueError) as e:
+                console.print(f"[yellow]⚠️  {spec.name}: plist 解析失败 ({e})，跳过[/yellow]")
+                continue
+
+        if working_dir is None:
+            no_plist.append(spec.name)
+            continue
+
+        if dry_run:
+            console.print(f"[cyan]DRY RUN[/cyan] {spec.name}: 将钉到 {working_dir}")
+            backfilled.append(spec.name)
+            continue
+
+        if not yes and not typer.confirm(
+            f"把 loop '{spec.name}' 钉到 {working_dir}（来自 plist）？", default=True
+        ):
+            console.print(f"[dim]跳过 {spec.name}[/dim]")
+            continue
+
+        spec.project_root = working_dir
+        tick_lock = _acquire_tick_lock(store, spec.name, blocking=True)
+        try:
+            store.save_spec(spec)
+            state = store.load_state(spec.name)
+            if state is not None:
+                state.spec = spec
+                store.save_state(state)
+        finally:
+            _release_tick_lock(tick_lock)
+        backfilled.append(spec.name)
+        console.print(f"[green]📌 {spec.name} → {working_dir}[/green]")
+
+    if no_plist:
+        console.print(
+            f"[yellow]{len(no_plist)} 个 loop 没有 launchd plist，无法自动回填"
+            f"（{'非 macOS 或' if not _is_macos() else ''}从未 install-launchd）。[/yellow]"
+        )
+        for n in no_plist:
+            console.print(f"  • {n} —— 到项目根目录运行 `vibe loop adopt {n}`")
+
+    verb = "将回填" if dry_run else "已回填"
+    console.print(
+        f"[bold]migrate-ownership 完成[/bold]: {verb} {len(backfilled)}，"
+        f"无 plist {len(no_plist)}，已有归属跳过 {len(skipped_set)}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────
 # tick — single polling cycle (the missing execution bridge)
 # ──────────────────────────────────────────────────────────────────
 
@@ -632,17 +849,28 @@ def tick(
         "",
         "--name",
         "-n",
-        help="只检查指定 loop（默认检查全部）",
+        help="只检查指定 loop（默认检查归属当前项目的全部 loop）",
     ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
         help="只显示哪些会被触发，不实际执行",
     ),
+    all_: bool = typer.Option(
+        False,
+        "--all",
+        help=(
+            "兼容口：跳过归属过滤，枚举全部 loop（含归属其他项目的）。"
+            "供从 HOME 运行裸 tick 的系统 cron 用户保留旧行为。"
+        ),
+    ),
 ) -> None:
-    """执行一次轮询：检查所有 ACTIVE/FAILING loops 的 cron，匹配则执行。
+    """执行一次轮询：检查归属当前项目的 ACTIVE/FAILING loops 的 cron，匹配则执行。
 
     典型用法：外部 cron 每分钟调用 ``vibe loop tick`` 一次。
+
+    归属语义（gate26）：裸 tick 只枚举归属当前项目的 loop（``--all`` 跳过过滤）；
+    ``--name`` 是 launchd 调用形状，绕过归属过滤不变。
     """
     store = LoopStore()
     specs = store.list_specs()
@@ -651,12 +879,36 @@ def tick(
         console.print("[dim]没有 loop。使用 `vibe loop create` 创建。[/dim]")
         return
 
-    # Filter by --name and by status (skip PAUSED/DEAD/RETIRED).
+    # Ownership filter (gate26): a bare tick only enumerates loops owned by
+    # the current project. --name bypasses it (that is the launchd call
+    # shape); --all is the compat hatch. The skip line is printed BEFORE any
+    # early return below so the zero-trigger / zero-eligible branches are
+    # just as loud (review nit: silent skipping was the original bug's
+    # twin — invisible mis-execution).
+    cwd = Path.cwd()
+    ownership_skipped: list[str] = []
+    candidates: list[LoopSpec] = []
+    for spec in specs:
+        if name:
+            if spec.name != name:
+                continue
+        elif not all_ and not _owns(spec, cwd):
+            ownership_skipped.append(spec.name)
+            continue
+        candidates.append(spec)
+
+    if ownership_skipped:
+        shown = ", ".join(ownership_skipped[:5])
+        suffix = f" 等共 {len(ownership_skipped)} 个" if len(ownership_skipped) > 5 else ""
+        console.print(
+            f"[yellow]⏭️  {len(ownership_skipped)} 个 loop 归属其他项目，已跳过"
+            f"（{shown}{suffix}）—— 需执行请用 `vibe loop tick --all`。[/yellow]"
+        )
+
+    # Filter by status (skip PAUSED/DEAD/RETIRED).
     eligible: list[LoopSpec] = []
     skipped: list[tuple[str, LoopStatus]] = []
-    for spec in specs:
-        if name and spec.name != name:
-            continue
+    for spec in candidates:
         state = store.load_state(spec.name) or LoopState(spec=spec)
         if state.status in _SKIP_STATUSES:
             skipped.append((spec.name, state.status))
@@ -674,9 +926,20 @@ def tick(
     triggered = daemon.run_once(eligible)
 
     if not triggered:
-        console.print(
-            f"[dim]本轮无可触发 loop（{len(eligible)} eligible, {len(skipped)} skipped）。[/dim]"
-        )
+        # gate27 pi#5: distinguish "no owned loops at all" from "owned loops
+        # exist but none are due this minute" — the old "(0 eligible,
+        # 0 skipped)" read identically for both and masked the ownership
+        # filter as the cause.
+        if not eligible and ownership_skipped:
+            console.print(
+                f"[dim]本轮无归属当前项目的 loop 可执行"
+                f"（{len(ownership_skipped)} 个归属其他项目，见上方跳过行）"
+                f"—— `vibe loop tick --all` 可包含它们。[/dim]"
+            )
+        else:
+            console.print(
+                f"[dim]本轮无到期 loop（{len(eligible)} eligible, {len(skipped)} skipped）。[/dim]"
+            )
         return
 
     # Master kill-switch (C2): when loop.enabled is false, report what WOULD
@@ -706,18 +969,40 @@ def tick(
     # no longer imports the agent layer (Core->Agent inversion fix).
     from vibesop.agent.runtime.agent_runtime import AgentRuntime
 
-    runtime = AgentRuntime()
     success_count = 0
     failure_count = 0
-    for spec in triggered:
-        tick_lock = _acquire_tick_lock(store, spec.name)
+    for enumerated in triggered:
+        tick_lock = _acquire_tick_lock(store, enumerated.name)
         if tick_lock is None:
             console.print(
-                f"[yellow]⏭️  {spec.name}: 另一个 tick 正在进行 —— 跳过以避免并发写冲突[/yellow]"
+                f"[yellow]⏭️  {enumerated.name}: 另一个 tick 正在进行 —— 跳过以避免并发写冲突[/yellow]"
             )
             continue
         try:
+            # gate27 (pi#1/claude#2): re-read the spec INSIDE the per-loop lock.
+            # adopt/migrate-ownership take the same blocking lock, so once we
+            # hold it the re-read is race-free; the enumerated snapshot could
+            # otherwise be stale (adopt re-pinned between enumeration and lock
+            # acquisition) and we'd execute with the OLD project_root. Residual
+            # window by design: a loop NOT owned at enumeration time is not
+            # re-considered even if adopt pins it to cwd meanwhile — the next
+            # tick picks it up (reads always go through load_spec, so nothing
+            # stale is persisted).
+            spec = store.load_spec(enumerated.name)
+            if spec is None:
+                console.print(f"[yellow]⏭️  {enumerated.name}: spec 在枚举后被删除 —— 跳过[/yellow]")
+                continue
             console.print(f"[cyan]▶[/cyan] Ticking [bold]{spec.name}[/bold]...")
+            # Per-spec runtime pinned to the loop's ownership root (gate26
+            # review: os.chdir was rejected — AgentRuntime freezes project_root
+            # at construction, and components are lazy so per-spec cost is
+            # negligible). Unscoped loops (project_root=None) keep the legacy
+            # ambient-cwd runtime.
+            runtime = (
+                AgentRuntime(project_root=str(Path(spec.project_root).resolve()))
+                if spec.project_root
+                else AgentRuntime()
+            )
             record = execute_loop_tick(spec, runtime=runtime, store=store)
             if record.success:
                 success_count += 1
@@ -760,9 +1045,7 @@ def _run_launchctl(cmd: list[str], *, console: Console) -> subprocess.CompletedP
     try:
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
     except FileNotFoundError:
-        console.print(
-            f"[red]❌ 找不到 launchctl——PATH 中缺失。命令: {' '.join(cmd)}[/red]"
-        )
+        console.print(f"[red]❌ 找不到 launchctl——PATH 中缺失。命令: {' '.join(cmd)}[/red]")
         return None
 
 
@@ -973,6 +1256,21 @@ def install_launchd(
     else:
         prefix = vibe_prefix
     project_root = Path.cwd()
+    # gate26: install-launchd does NOT backfill spec.project_root (ownership is
+    # pinned only by create/adopt/migrate-ownership). But if the spec IS pinned
+    # to a different directory, the plist's WorkingDirectory (cwd) and the
+    # executor's exec_root (spec.project_root) would disagree — warn loudly.
+    if spec.project_root is not None:
+        try:
+            mismatch = Path(spec.project_root).resolve() != project_root.resolve()
+        except OSError:
+            mismatch = True
+        if mismatch:
+            console.print(
+                f"[yellow]⚠️  Loop '{name}' 已钉到 {spec.project_root}，与当前 cwd "
+                f"{project_root} 不一致。plist 的 WorkingDirectory 仍写 cwd，但 tick 执行"
+                f"会在钉住的项目根下进行；如需改钉，请运行 `vibe loop adopt {name}`。[/yellow]"
+            )
     # P1-4: refuse unvetted cwds so an attacker can't lure the user into a
     # hostile directory and persist it via launchd's WorkingDirectory.
     if not _is_project_root_trusted(project_root) and not trust_cwd:
@@ -1031,9 +1329,7 @@ def install_launchd(
 @app.command("uninstall-launchd")
 def uninstall_launchd(
     name: str = typer.Argument(..., help="loop 名称"),
-    keep_plist: bool = typer.Option(
-        False, "--keep-plist", help="保留 plist 文件（仅 bootout）"
-    ),
+    keep_plist: bool = typer.Option(False, "--keep-plist", help="保留 plist 文件（仅 bootout）"),
 ) -> None:
     """从 launchd 注销 loop（``launchctl bootout``）并删除 plist。
 

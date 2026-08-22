@@ -995,7 +995,12 @@ def test_install_launchd_missing_launchctl_friendly_error(
     a friendly message instead of dumping a traceback."""
     isolated_store.save_spec(
         LoopSpec.model_validate(
-            {"name": "no-launchctl", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+            {
+                "name": "no-launchctl",
+                "description": "d",
+                "schedule": "*/15 * * * *",
+                "skill_id": "x",
+            }
         )
     )
 
@@ -1128,9 +1133,7 @@ def test_install_launchd_trust_uv_path_bypasses_p1_5(
     )
     monkeypatch.setattr("shutil.which", lambda cmd: "/tmp/suspicious/uv")
 
-    result = runner.invoke(
-        app, ["install-launchd", "p1-5-trust", "--trust-uv-path", "--dry-run"]
-    )
+    result = runner.invoke(app, ["install-launchd", "p1-5-trust", "--trust-uv-path", "--dry-run"])
     assert result.exit_code == 0, result.stdout
     # Dry-run prints the plist XML; verify the trusted uv path appears as the
     # first ProgramArguments element (rather than being rejected).
@@ -1138,4 +1141,486 @@ def test_install_launchd_trust_uv_path_bypasses_p1_5(
 
 
 # Late import so the fixture above can be defined without mandatory import-time cost.
+# ──────────────────────────────────────────────────────────────────
+# gate26: project ownership (project_root)
+# ──────────────────────────────────────────────────────────────────
+from datetime import datetime  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
+
+from vibesop.core.loop.models import LoopState  # noqa: E402
+
+
+def _save_spec(store: LoopStore, name: str, project_root: str | None, **overrides) -> LoopSpec:
+    """Persist a minimal spec pinned to ``project_root`` (None = global/legacy)."""
+    payload: dict = {
+        "name": name,
+        "description": f"loop {name}",
+        "schedule": overrides.pop("schedule", "* * * * *"),
+        "skill_id": "x",
+        "project_root": project_root,
+    }
+    payload.update(overrides)
+    spec = LoopSpec.model_validate(payload)
+    store.save_spec(spec)
+    return spec
+
+
+class TestCreateOwnership:
+    def test_create_pins_cwd_by_default(self, isolated_store, monkeypatch, tmp_path):
+        """Default: project_root is pinned to the literal cwd."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        (proj / "pyproject.toml").write_text("[project]\nname='p'\n")
+        monkeypatch.chdir(proj)
+
+        result = runner.invoke(app, ["create", "pinned", "--skill", "x"])
+        assert result.exit_code == 0, result.stdout
+        spec = isolated_store.load_spec("pinned")
+        assert spec is not None
+        assert spec.project_root == str(proj)
+        assert "Project:" in result.stdout
+
+    def test_create_global_opts_out(self, isolated_store, monkeypatch, tmp_path):
+        """--global leaves project_root=None (deliberately same value as a
+        legacy spec — the double-meaning is by design)."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["create", "glob", "--skill", "x", "--global"])
+        assert result.exit_code == 0, result.stdout
+        spec = isolated_store.load_spec("glob")
+        assert spec.project_root is None
+        assert "(global)" in result.stdout
+
+    def test_create_untrusted_cwd_warns_but_creates(self, isolated_store, monkeypatch, tmp_path):
+        """Untrusted cwd (no .git/pyproject.toml): warn + proceed, pointing at
+        the --global escape hatch. create only writes JSON — refusal is for
+        install-launchd, not here."""
+        monkeypatch.chdir(tmp_path)  # no .git, no pyproject.toml
+        result = runner.invoke(app, ["create", "stray", "--skill", "x"])
+        assert result.exit_code == 0, result.stdout
+        assert "--global" in result.stdout  # warning names the escape hatch
+        spec = isolated_store.load_spec("stray")
+        assert spec.project_root == str(tmp_path)
+
+    def test_create_conflict_error_names_existing_project_root(
+        self, isolated_store, monkeypatch, tmp_path
+    ):
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        (proj / "pyproject.toml").write_text("[project]\nname='p'\n")
+        monkeypatch.chdir(proj)
+        runner.invoke(app, ["create", "dup-own", "--skill", "x"])
+
+        result = runner.invoke(app, ["create", "dup-own", "--skill", "x"])
+        assert result.exit_code == 1
+        assert "已存在" in result.stdout
+        # Rich wraps long lines at console width — flatten before matching
+        # the full path (paths contain no spaces, so rejoining is exact).
+        assert str(proj) in result.stdout.replace("\n", "")
+
+
+class TestListOwnership:
+    def test_list_default_hides_other_project_loops(self, isolated_store):
+        cwd = str(Path.cwd())
+        _save_spec(isolated_store, "mine", cwd)
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "legacy", None)
+
+        result = runner.invoke(app, ["list"])
+        assert result.exit_code == 0
+        assert "mine" in result.stdout
+        assert "legacy" in result.stdout  # None = owned everywhere
+        assert "theirs" not in result.stdout
+        assert "--all" in result.stdout  # hidden hint
+
+    def test_list_all_shows_project_column(self, isolated_store):
+        cwd = str(Path.cwd())
+        _save_spec(isolated_store, "mine", cwd)
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "legacy", None)
+
+        result = runner.invoke(app, ["list", "--all"])
+        assert result.exit_code == 0
+        assert "mine" in result.stdout
+        assert "theirs" in result.stdout
+        assert "(global)" in result.stdout  # None rendered as (global)
+        assert "1 shown / 3 total" not in result.stdout  # --all shows everything
+        assert "3 shown / 3 total" in result.stdout
+
+    def test_list_subdirectory_of_owned_root_is_owned(self, isolated_store, tmp_path, monkeypatch):
+        """_owns is cwd-within-project_root (one-directional): running list
+        from a SUBDIRECTORY of the pinned root still sees the loop."""
+        proj = tmp_path / "proj"
+        sub = proj / "pkg" / "sub"
+        sub.mkdir(parents=True)
+        _save_spec(isolated_store, "mine", str(proj))
+        monkeypatch.chdir(sub)
+
+        result = runner.invoke(app, ["list"])
+        assert "mine" in result.stdout
+
+    def test_owns_is_one_directional(self, isolated_store, tmp_path, monkeypatch):
+        """The reverse does NOT hold: running from a PARENT of the pinned
+        root must not claim the loop."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        _save_spec(isolated_store, "child-pinned", str(proj))
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["list"])
+        assert "child-pinned" not in result.stdout
+
+    def test_list_status_filter_with_hidden_loops_names_ownership_cause(self, isolated_store):
+        """gate27 claude#7: when every loop is hidden by ownership (or the
+        remaining ones don't match --status), the empty message must name
+        the ownership filter as a possible cause — the bare '没有匹配状态'
+        sent users chasing the wrong reason."""
+        _save_spec(isolated_store, "mine", str(Path.cwd()))  # active, not paused
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        result = runner.invoke(app, ["list", "--status", "paused"])
+        assert result.exit_code == 0
+        assert "没有匹配状态" in result.stdout
+        assert "归属其他项目" in result.stdout  # ownership cause visible
+        assert "--all" in result.stdout
+
+
+class TestTickOwnership:
+    @pytest.fixture(autouse=True)
+    def _enable_loop_execution(self):
+        with patch("vibesop.core.config.manager.ConfigManager.get_loop_config") as m:
+            cfg = MagicMock()
+            cfg.enabled = True
+            m.return_value = cfg
+            yield
+
+    def test_bare_tick_skips_other_project_loops_loudly(self, isolated_store):
+        """The skip line names the skipped loops and points at --all."""
+        _save_spec(isolated_store, "mine", str(Path.cwd()))
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        with patch("vibesop.cli.commands.loop_cmd.execute_loop_tick") as mock_exec:
+            result = runner.invoke(app, ["tick", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "已跳过" in result.stdout
+        assert "theirs" in result.stdout  # skip line names the loop
+        assert "--all" in result.stdout
+        # Only the owned loop is in the triggered list.
+        assert "mine" in result.stdout
+        mock_exec.assert_not_called()  # dry-run never executes
+
+    def test_skip_line_printed_even_when_nothing_eligible(self, isolated_store):
+        """pi nit: the zero-eligible early-return branch must still print the
+        ownership skip line — silence was the original bug's twin."""
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        result = runner.invoke(app, ["tick"])
+        assert result.exit_code == 0
+        assert "已跳过" in result.stdout
+        assert "theirs" in result.stdout
+
+    def test_skip_line_printed_on_zero_trigger_branch(self, isolated_store):
+        """Owned loop whose cron does NOT match now + an other-project loop:
+        the '本轮无到期' branch still shows the ownership skip line."""
+        # Far-future-ish cron that cannot match the current minute: Feb 30
+        # never exists, and CronExpr validation only checks field ranges.
+        _save_spec(isolated_store, "mine", str(Path.cwd()), schedule="0 0 30 2 *")
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        result = runner.invoke(app, ["tick"])
+        assert result.exit_code == 0
+        # gate27 pi#5: wording distinguishes "no owned loops" from "no due loops"
+        assert "本轮无到期" in result.stdout
+        assert "已跳过" in result.stdout
+        assert "theirs" in result.stdout
+
+    def test_zero_trigger_message_distinguishes_no_owned_loops(self, isolated_store):
+        """gate27 pi#5: when EVERY loop was ownership-skipped, say so — the
+        old '(0 eligible, 0 skipped)' read as 'nothing due' and masked the
+        ownership filter as the real cause."""
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        result = runner.invoke(app, ["tick"])
+        assert result.exit_code == 0
+        assert "已跳过" in result.stdout  # skip line (printed first)
+        assert "无归属当前项目的 loop" in result.stdout
+        assert "--all" in result.stdout
+
+    def test_skip_line_caps_names_at_five(self, isolated_store):
+        """gate27 pi#4a: with 6+ other-project loops, the skip line lists at
+        most 5 names plus a total count."""
+        for i in range(6):
+            _save_spec(isolated_store, f"other-{i}", f"/nonexistent/other-{i}")
+
+        result = runner.invoke(app, ["tick"])
+        assert result.exit_code == 0
+        for i in range(5):
+            assert f"other-{i}" in result.stdout
+        assert "other-5" not in result.stdout  # 6th name truncated
+        assert "等共 6 个" in result.stdout
+
+    def test_tick_rereads_spec_inside_lock(self, isolated_store, monkeypatch, tmp_path):
+        """gate27 pi#1/claude#2: if adopt completes between enumeration and
+        lock acquisition, the tick must execute with the FRESH spec (re-read
+        inside the per-loop lock), not the stale enumerated snapshot."""
+        from vibesop.cli.commands import loop_cmd
+
+        _save_spec(isolated_store, "race", str(Path.cwd()))
+        repinned = tmp_path / "repinned"
+        repinned.mkdir()
+
+        real_acquire = loop_cmd._acquire_tick_lock
+
+        def acquire_then_repin(store, name, **kw):
+            # Simulate adopt completing just before this tick takes the lock.
+            spec = store.load_spec(name)
+            spec.project_root = str(repinned)
+            store.save_spec(spec)
+            return real_acquire(store, name, **kw)
+
+        monkeypatch.setattr(loop_cmd, "_acquire_tick_lock", acquire_then_repin)
+
+        fake_record = LoopRunRecord(
+            loop_name="race",
+            started_at=datetime.now(UTC),
+            success=True,
+            matched_skill="x",
+            duration_s=0.01,
+        )
+        with patch(
+            "vibesop.cli.commands.loop_cmd.execute_loop_tick", return_value=fake_record
+        ) as mock_exec:
+            result = runner.invoke(app, ["tick"])
+
+        assert result.exit_code == 0, result.stdout
+        executed_spec: LoopSpec = mock_exec.call_args.args[0]
+        assert executed_spec.project_root == str(repinned)
+
+    def test_name_bypasses_ownership_filter(self, isolated_store):
+        """--name is the launchd call shape — ownership filtering is off and
+        no skip line is printed."""
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        result = runner.invoke(app, ["tick", "--name", "theirs", "--dry-run"])
+        assert result.exit_code == 0
+        assert "theirs" in result.stdout
+        assert "已跳过" not in result.stdout
+        assert "会被触发" in result.stdout
+
+    def test_all_compat_hatch(self, isolated_store):
+        """--all enumerates every loop regardless of ownership (compat for
+        system-cron-from-HOME users); no skip line."""
+        _save_spec(isolated_store, "mine", str(Path.cwd()))
+        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+
+        with patch("vibesop.cli.commands.loop_cmd.execute_loop_tick") as mock_exec:
+            result = runner.invoke(app, ["tick", "--all", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "theirs" in result.stdout
+        assert "mine" in result.stdout
+        assert "已跳过" not in result.stdout
+        mock_exec.assert_not_called()  # dry-run never executes
+
+    def test_tick_constructs_runtime_per_spec_with_pinned_root(self, isolated_store):
+        """gate26 review (chdir rejected): the tick loop builds a per-spec
+        AgentRuntime(project_root=exec_root) for pinned loops, and keeps the
+        legacy ambient-cwd runtime for unscoped ones."""
+        pinned_root = Path.cwd()
+        _save_spec(isolated_store, "pinned", str(pinned_root))
+        _save_spec(isolated_store, "global-one", None)
+
+        fake_record = LoopRunRecord(
+            loop_name="x",
+            started_at=datetime.now(UTC),
+            success=True,
+            matched_skill="x",
+            duration_s=0.01,
+        )
+
+        with (
+            patch("vibesop.cli.commands.loop_cmd.execute_loop_tick", return_value=fake_record),
+            patch("vibesop.agent.runtime.agent_runtime.AgentRuntime") as mock_rt,
+        ):
+            mock_rt.return_value = MagicMock()
+            result = runner.invoke(app, ["tick"])
+
+        assert result.exit_code == 0, result.stdout
+        by_spec: dict[str, dict] = {}
+        # execute_loop_tick was called once per triggered spec; pair each call
+        # with the AgentRuntime construction that preceded it by ordering.
+        rt_calls = mock_rt.call_args_list
+        assert len(rt_calls) == 2
+        for rt_call in rt_calls:
+            kwargs = rt_call.kwargs
+            by_spec["pinned" if kwargs else "global-one"] = kwargs
+        assert by_spec["pinned"] == {"project_root": str(pinned_root.resolve())}
+        assert by_spec["global-one"] == {}
+
+
+class TestShowOwnership:
+    def test_show_displays_project_line(self, isolated_store):
+        # Short path: Rich panels crop long lines in the 80-col test console.
+        _save_spec(isolated_store, "owned", "/tmp/x-owned")
+        result = runner.invoke(app, ["show", "owned"])
+        assert result.exit_code == 0
+        assert "Project:" in result.stdout
+        assert "/tmp/x-owned" in result.stdout
+
+    def test_show_global_loop_displays_global_marker(self, isolated_store):
+        _save_spec(isolated_store, "g", None)
+        result = runner.invoke(app, ["show", "g"])
+        assert result.exit_code == 0
+        assert "(global)" in result.stdout
+
+
+class TestAdopt:
+    def test_adopt_pins_cwd_and_syncs_state(self, isolated_store, monkeypatch, tmp_path):
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        (proj / ".git").mkdir()
+        _save_spec(isolated_store, "adoptee", None)
+        # Pre-existing state embeds the OLD (None) spec copy.
+        isolated_store.save_state(LoopState(spec=isolated_store.load_spec("adoptee")))
+        monkeypatch.chdir(proj)
+
+        result = runner.invoke(app, ["adopt", "adoptee"])
+        assert result.exit_code == 0, result.stdout
+        # Rich wraps long lines — flatten before matching the path.
+        assert str(proj) in result.stdout.replace("\n", "")
+
+        spec = isolated_store.load_spec("adoptee")
+        assert spec.project_root == str(proj)
+        state = isolated_store.load_state("adoptee")
+        assert state.spec.project_root == str(proj)  # state.spec copy synced
+
+    def test_adopt_untrusted_cwd_warns_but_pins(self, isolated_store, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)  # no .git / pyproject.toml
+        _save_spec(isolated_store, "stray", None)
+
+        result = runner.invoke(app, ["adopt", "stray"])
+        assert result.exit_code == 0, result.stdout
+        assert "⚠️" in result.stdout or "git repo" in result.stdout
+        assert isolated_store.load_spec("stray").project_root == str(tmp_path)
+
+    def test_adopt_missing_loop_errors(self, isolated_store):
+        result = runner.invoke(app, ["adopt", "no-such"])
+        assert result.exit_code == 1
+        assert "不存在" in result.stdout
+
+
+class TestMigrateOwnership:
+    def _write_plist(self, home: Path, name: str, working_dir: str) -> None:
+        import plistlib
+
+        plist_path = home / "Library" / "LaunchAgents" / f"com.vibesop.loop.{name}.plist"
+        plist_path.parent.mkdir(parents=True, exist_ok=True)
+        plist_path.write_bytes(plistlib.dumps({"Label": name, "WorkingDirectory": working_dir}))
+
+    def test_dry_run_reports_without_writing(self, isolated_store, launchd_home, monkeypatch):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        _save_spec(isolated_store, "mig", None)
+        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+
+        result = runner.invoke(app, ["migrate-ownership", "--dry-run"])
+        assert result.exit_code == 0, result.stdout
+        assert "DRY RUN" in result.stdout
+        assert "/tmp/mig-project" in result.stdout
+        # No side effects.
+        assert isolated_store.load_spec("mig").project_root is None
+
+    def test_backfills_from_plist_with_confirmation_and_syncs_state(
+        self, isolated_store, launchd_home, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        proj = tmp_path / "mig-project"
+        proj.mkdir()
+        _save_spec(isolated_store, "mig", None)
+        isolated_store.save_state(LoopState(spec=isolated_store.load_spec("mig")))
+        self._write_plist(launchd_home, "mig", str(proj))
+
+        result = runner.invoke(app, ["migrate-ownership"], input="y\n")
+        assert result.exit_code == 0, result.stdout
+        assert isolated_store.load_spec("mig").project_root == str(proj)
+        state = isolated_store.load_state("mig")
+        assert state.spec.project_root == str(proj)
+
+    def test_confirmation_no_skips_write(self, isolated_store, launchd_home, monkeypatch):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        _save_spec(isolated_store, "mig", None)
+        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+
+        result = runner.invoke(app, ["migrate-ownership"], input="n\n")
+        assert result.exit_code == 0
+        assert isolated_store.load_spec("mig").project_root is None
+
+    def test_yes_skips_confirmation(self, isolated_store, launchd_home, monkeypatch):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        _save_spec(isolated_store, "mig", None)
+        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+
+        result = runner.invoke(app, ["migrate-ownership", "--yes"])
+        assert result.exit_code == 0, result.stdout
+        assert isolated_store.load_spec("mig").project_root == "/tmp/mig-project"
+
+    def test_no_plist_lists_and_suggests_adopt(self, isolated_store, launchd_home, monkeypatch):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        _save_spec(isolated_store, "orphan", None)
+
+        result = runner.invoke(app, ["migrate-ownership", "--yes"])
+        assert result.exit_code == 0
+        assert "orphan" in result.stdout
+        assert "adopt" in result.stdout
+        assert isolated_store.load_spec("orphan").project_root is None
+
+    def test_already_pinned_loops_are_skipped(self, isolated_store, launchd_home, monkeypatch):
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+        _save_spec(isolated_store, "kept", "/already/pinned")
+        self._write_plist(launchd_home, "kept", "/tmp/elsewhere")
+
+        result = runner.invoke(app, ["migrate-ownership", "--yes"])
+        assert result.exit_code == 0
+        assert isolated_store.load_spec("kept").project_root == "/already/pinned"
+
+    def test_non_macos_lists_adopt_suggestion_without_side_effects(
+        self, isolated_store, launchd_home, monkeypatch
+    ):
+        """gate27 claude#6: on non-macOS (the CI default path) plists are
+        never read — even a present plist must be ignored; loops are listed
+        with the adopt hint and nothing is written."""
+        monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: False)
+        _save_spec(isolated_store, "orphan", None)
+        # A plist exists on disk but must NOT be consulted off-macOS.
+        self._write_plist(launchd_home, "orphan", "/tmp/would-be-ignored")
+
+        result = runner.invoke(app, ["migrate-ownership", "--yes"])
+        assert result.exit_code == 0, result.stdout
+        assert "orphan" in result.stdout
+        assert "adopt" in result.stdout
+        assert "非 macOS" in result.stdout
+        assert isolated_store.load_spec("orphan").project_root is None  # no side effects
+
+
+class TestInstallLaunchdOwnershipWarning:
+    def test_warns_when_spec_pinned_to_other_dir(
+        self, isolated_store, launchd_home, monkeypatch, tmp_path
+    ):
+        """install-launchd never backfills; when the spec IS pinned elsewhere
+        it warns about the WorkingDirectory/exec_root mismatch."""
+        _save_spec(isolated_store, "elsewhere", str(tmp_path / "other"))
+        monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
+
+        result = runner.invoke(app, ["install-launchd", "elsewhere", "--dry-run"])
+        assert result.exit_code == 0, result.stdout
+        assert "不一致" in result.stdout
+        assert "adopt" in result.stdout
+        # And no backfill happened.
+        assert isolated_store.load_spec("elsewhere").project_root == str(tmp_path / "other")
+
+    def test_no_warning_when_pinned_to_cwd(self, isolated_store, launchd_home, monkeypatch):
+        _save_spec(isolated_store, "here", str(Path.cwd()))
+        monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
+
+        result = runner.invoke(app, ["install-launchd", "here", "--dry-run"])
+        assert result.exit_code == 0, result.stdout
+        assert "不一致" not in result.stdout

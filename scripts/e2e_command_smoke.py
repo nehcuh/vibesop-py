@@ -79,7 +79,7 @@ def _write_smoke_config(smoke_dir: Path) -> None:
 
 
 def _seed_spans(smoke_dir: Path) -> None:
-    """Write 4 synthetic route spans (2 tasks across 2 days) so the
+    """Write 4 synthetic route spans (2 tasks across 3 calendar days) so the
     observability commands have real data to chew on.
 
     Same-task_id recurrence gives scan-candidates a hard-grouped cluster
@@ -89,7 +89,15 @@ def _seed_spans(smoke_dir: Path) -> None:
     from vibesop.core.observability.span_writer import SpanWriter
 
     writer = SpanWriter(smoke_dir / ".vibe" / "observability" / "spans.jsonl")
-    now = datetime.now(UTC)
+    # Anchor to TODAY AT NOON UTC, then step whole days back. The previous
+    # `now - timedelta(days=..., hours=i)` layout was wall-clock fragile: miss
+    # admission counts distinct (task_key, 自然日) pairs, and near midnight UTC
+    # two task-1 spans collapsed onto one calendar day (2 pairs < 3) → miss
+    # path refused → gold path admitted the task group as an unstable row →
+    # `candidates` (stable-only) showed nothing. Noon anchoring keeps every
+    # offset on its own calendar day at any run time (third wall-clock bomb
+    # this week — cf. replay fixture 7ef8706, tool_call_bridge 231252a).
+    today_noon = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
     for i in range(4):
         task_id = "smoke-task-1" if i < 3 else "smoke-task-2"
         query = f"smoke 行为冒烟查询 变体{i}"
@@ -100,7 +108,7 @@ def _seed_spans(smoke_dir: Path) -> None:
             span_kind="task",
             task_id=task_id,
             project_id="smoke",
-            started_at=now - timedelta(days=2 - (i % 3), hours=i),
+            started_at=today_noon - timedelta(days=2 - (i % 3), hours=i),
             input_data={"query": query},
             metadata={"query": query, "has_match": False, "mode": "single"},
         )
@@ -138,15 +146,19 @@ class Smoke:
         expect: list[str] | None = None,
         expect_absent: list[str] | None = None,
         timeout: int = 90,
+        env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Run ``uv run --frozen vibe <args>`` in the smoke project and
         assert exit code + key output substrings. A hung command records a
         FAIL instead of raising (gate25 MAJOR-2b: one LLM stall must not
-        kill the run — the summary must always print)."""
+        kill the run — the summary must always print). ``env`` entries are
+        merged over os.environ (gate26: ownership tests need
+        VIBESOP_RUN_PREFIX overrides)."""
         try:
             proc = subprocess.run(
                 ["uv", "run", "--frozen", "vibe", *args],
                 cwd=self.smoke_dir,
+                env={**os.environ, **env} if env else None,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -236,6 +248,68 @@ def main() -> int:
         runs_after_tick == 1,
         f"total_runs={runs_after_tick}",
     )
+
+    # ---------------- gate26: project ownership ----------------
+    # create pins cwd: the persisted spec must record smoke_dir as
+    # project_root. LoopStore is HOME-level, so read it via Path.home().
+    spec_path = Path.home() / ".vibe" / "loops" / "smoke-loop" / "spec.json"
+    try:
+        pinned_root = json.loads(spec_path.read_text(encoding="utf-8")).get("project_root")
+    except (OSError, json.JSONDecodeError):
+        pinned_root = None
+    record(
+        "loop create pins project_root=cwd",
+        pinned_root == str(smoke_dir),
+        f"project_root={pinned_root!r} expected={smoke_dir}",
+    )
+
+    # A second, independent project dir: bare tick there must SKIP the
+    # smoke loops (loud skip line), while `tick --name` still executes —
+    # and a command target must execute in the PINNED root (smoke_dir),
+    # not the ambient cwd. VIBESOP_RUN_PREFIX=touch turns the command
+    # target into `touch own-marker.txt`, so the artifact's location IS
+    # the assertion.
+    other_dir = root / ".smoke-project-other"
+    other_dir.mkdir(parents=True, exist_ok=True)
+    _write_smoke_config(other_dir)
+    smoke_other = Smoke(other_dir)
+    smoke.run(
+        "loop pre-clean smoke-own (best-effort)",
+        ["loop", "delete", "smoke-own", "--force"],
+        expect_rc=(0, 1),
+    )
+    with contextlib.suppress(OSError):
+        (smoke_dir / "own-marker.txt").unlink()
+    smoke.run(
+        "loop create command target (pinned)",
+        ["loop", "create", "smoke-own", "--command", "own-marker.txt", "--schedule", "* * * * *"],
+        expect=["Loop Created"],
+    )
+    smoke_other.run(
+        "bare tick in other project skips smoke loops (loud)",
+        ["loop", "tick", "--dry-run"],
+        expect=["已跳过", "smoke-loop", "--all"],
+    )
+    smoke_other.run(
+        "tick --name bypasses ownership and runs in pinned root",
+        ["loop", "tick", "--name", "smoke-own"],
+        expect=["Tick 完成"],
+        env={"VIBESOP_RUN_PREFIX": "touch"},
+    )
+    record(
+        "command target artifact landed in pinned root",
+        (smoke_dir / "own-marker.txt").exists() and not (other_dir / "own-marker.txt").exists(),
+        f"smoke_dir artifact={(smoke_dir / 'own-marker.txt').exists()} "
+        f"other_dir artifact={(other_dir / 'own-marker.txt').exists()}",
+    )
+    with contextlib.suppress(OSError):
+        (smoke_dir / "own-marker.txt").unlink()
+    smoke.run(
+        "loop cleanup smoke-own",
+        ["loop", "delete", "smoke-own", "--force"],
+        expect=["已删除"],
+    )
+
     smoke.run("loop pause", ["loop", "pause", "smoke-loop"], expect=["已暂停"])
     # --name scopes the tick to our loop: with it paused there is nothing
     # eligible. LoopStore is HOME-level (~/.vibe/loops), so a plain

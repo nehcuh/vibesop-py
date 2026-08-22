@@ -43,6 +43,7 @@ import shlex
 import subprocess
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
 
 from vibesop.core.loop.models import (
@@ -218,6 +219,29 @@ def _build_query(spec: LoopSpec, history: RunHistory | None = None) -> str:
     return "\n".join(parts)
 
 
+def _missing_exec_root_failure(spec: LoopSpec, exec_root: Path) -> FailureInfo:
+    """PERMANENT failure for a spec whose pinned ``project_root`` no longer exists.
+
+    Deliberately PERMANENT (consumes DEAD budget): a missing ownership root is a
+    loud, observable signal that the loop needs re-pinning — silently running in
+    the ambient cwd would execute the loop against the WRONG project. The
+    suggestion is fixed by design (gate26): adopt re-pins the root, reset clears
+    the failure budget burned by the loud signal.
+    """
+    return FailureInfo(
+        category=FailureCategory.PERMANENT,
+        reason=(
+            f"loop {spec.name!r} is pinned to project_root {exec_root} "
+            f"which does not exist (deleted/moved project?)"
+        ),
+        suggestion=(
+            f"Re-pin ownership with `vibe loop adopt {spec.name}` (from the new "
+            f"project root), then clear the failure budget with "
+            f"`vibe loop reset {spec.name}`."
+        ),
+    )
+
+
 def _run_command_target(
     spec: LoopSpec,
     record: LoopRunRecord,
@@ -233,8 +257,10 @@ def _run_command_target(
     Args:
         spec: Loop definition with ``command_args`` set.
         record: Pre-constructed ``LoopRunRecord`` (loop_name + started_at) to fill.
-        project_root: Working directory. ``None`` uses cwd. Override is used by
-            tests to point at a tmp_path; production callers pass ``None``.
+        project_root: Working directory (subprocess ``cwd``). ``None`` inherits
+            the ambient cwd (unscoped legacy/--global loops). Production callers
+            pass the spec's resolved pinned ``project_root``; tests may point at
+            a tmp_path.
     """
     # shlex.split handles quoted paths with spaces (e.g.
     # VIBESOP_RUN_PREFIX='"/path/with space/uv" run vibe'). Plain .split()
@@ -264,10 +290,7 @@ def _run_command_target(
         # Use shlex.join so multi-line argv / unicode args survive in logs
         # readable and round-trippable (deep-diagnosis-2026-07-24 P1-9 —
         # plain ' '.join corrupts on whitespace/newlines inside an arg).
-        record.error = (
-            f"command timeout after {spec.timeout_s}s: "
-            f"{shlex.join(spec.command_args)}"
-        )
+        record.error = f"command timeout after {spec.timeout_s}s: {shlex.join(spec.command_args)}"
         record.failure_info = FailureInfo(
             category=FailureCategory.TRANSIENT,
             reason=record.error,
@@ -275,14 +298,33 @@ def _run_command_target(
         )
         return
     except OSError as e:
-        # FileNotFoundError when the prefix binary itself is missing (uv not installed).
+        # Two distinct spawn-failure shapes used to share one misleading message:
+        #   1. missing cwd — project_root was deleted between the executor's
+        #      pre-flight check and this spawn (or pre-flight was bypassed);
+        #      the fix is re-pinning ownership, not checking uv.
+        #   2. missing prefix binary — uv not on PATH (the original meaning).
+        # Known mis-classification (gate27 pi#2/claude#3): EACCES (permission
+        # denied on the cwd or the binary) also lands here and may get the
+        # "wrong" suggestion text depending on which branch fires. Accepted:
+        # both branches are PERMANENT, so the failure budget is unaffected —
+        # only the suggestion wording can mislead, never the state machine.
         record.success = False
         record.error = f"command spawn failed: {e}"
-        record.failure_info = FailureInfo(
-            category=FailureCategory.PERMANENT,
-            reason=record.error,
-            suggestion="Check VIBESOP_RUN_PREFIX / uv installation.",
-        )
+        if project_root is not None and not Path(project_root).is_dir():
+            record.failure_info = FailureInfo(
+                category=FailureCategory.PERMANENT,
+                reason=record.error,
+                suggestion=(
+                    f"working directory {project_root} is missing — re-pin with "
+                    f"`vibe loop adopt {spec.name}`, then `vibe loop reset {spec.name}`."
+                ),
+            )
+        else:
+            record.failure_info = FailureInfo(
+                category=FailureCategory.PERMANENT,
+                reason=record.error,
+                suggestion="Check VIBESOP_RUN_PREFIX / uv installation.",
+            )
         return
 
     stdout_tail = (result.stdout or "")[-2000:]
@@ -330,6 +372,35 @@ def execute_loop_tick(
 
     # Load state up-front so cross-run history can be injected into the query.
     state = store.load_state(spec.name) or LoopState(spec=spec)
+    # state.json embeds a spec copy that may be stale (e.g. adopt re-pinned
+    # project_root after the last run). Re-bind the live spec so record_run's
+    # status machine (max_failures) and the re-saved state both see current
+    # values (gate26 review: stale-copy fix).
+    state.spec = spec
+
+    # Ownership execution root: a pinned spec executes against ITS project,
+    # never the ambient cwd. None = unscoped (legacy/--global) — unchanged
+    # behaviour (subprocess inherits cwd; routing runtime is caller-built).
+    exec_root: Path | None = Path(spec.project_root).resolve() if spec.project_root else None
+
+    if exec_root is not None and not exec_root.is_dir():
+        # Pre-flight: refuse to run in the wrong cwd. PERMANENT by design —
+        # burns DEAD budget as a loud re-pin signal (gate26 review pi#5).
+        record.success = False
+        record.failure_info = _missing_exec_root_failure(spec, exec_root)
+        record.error = record.failure_info.reason
+        record.duration_s = round(time.monotonic() - start_wall, 2)
+        record.finished_at = datetime.now(UTC)
+        state.record_run(record)
+        try:
+            store.save_state(state)
+        except Exception:
+            logger.exception(
+                "Failed to persist loop state for [%s] — failure counter may not advance",
+                spec.name,
+            )
+        return record
+
     history = RunHistory(
         recent_runs=list(state.recent_runs),
         progress_notes=list(state.progress_notes),
@@ -345,7 +416,12 @@ def execute_loop_tick(
                 # Command-target path: no routing query, no AgentRuntime —
                 # direct subprocess invocation. Reuses the same record/state
                 # machine as routing so DEAD/FAILING transitions still fire.
-                _run_command_target(spec, record)
+                # exec_root (the spec's pinned project_root, resolved) is the
+                # subprocess cwd — pre-fix this call never passed project_root,
+                # so pinned loops silently ran in the ambient cwd (gate26).
+                _run_command_target(
+                    spec, record, project_root=str(exec_root) if exec_root else None
+                )
                 if record.success:
                     break
                 err = record.error or "command failed"

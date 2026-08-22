@@ -9,6 +9,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Loop 项目归属（gate26）— `vibe loop` 跨项目隔离 (2026-08-22)
+
+**⚠️ 不可降级警告：升级前先备份 `~/.vibe/loops/`。**
+`LoopSpec` 新增 `project_root` 字段且模型是 `extra="forbid"` —— 旧版
+vibe 读取带该字段的 spec.json 时 `_load_model` 会判定 schema drift 并
+**隔离**该文件（spec.json 改名 `spec.json.corrupt`）：loop 从
+`loop list` 消失、已注册的 launchd job 继续每分钟 spam 失败日志、且
+`loop delete` 会连同 `.corrupt` 备份一起 rmtree 删除（数据彻底丢失）。
+**state.json 同样内嵌一份 LoopSpec 副本**，旧版读取时会触发同样的隔离
+（state.json → state.json.corrupt，运行历史丢失）。降级前务必备份整个
+`~/.vibe/loops/` 目录。
+
+- **真 bug 修复**：`LoopSpec` 过去不记录项目归属，executor 用环境 cwd
+  兜底——在项目 B 裸跑 `vibe loop tick` 会用 B 的上下文执行项目 A 的
+  DUE loop，失败还记在 A 头上（烧 DEAD 预算）。LoopStore 保持 HOME 级
+  不变（用户级 daemon 设计自洽）。
+- **`LoopSpec.project_root: str | None = None`**：`None` 刻意双义——
+  既覆盖存量旧 spec（行为不变），也是 `create --global` 的显式全局。
+  归属只由显式动作钉住：`create`（默认钉字面 cwd）、`vibe loop adopt
+  <name>`、`vibe loop migrate-ownership [--dry-run] [--yes]`（从
+  launchd plist 的 WorkingDirectory 回填，逐条确认；会钉住 --global
+  loop）。裸 tick 永不做首次写入式归属推断。
+- **CLI 语义**：`list` 默认只列归属当前项目的 loop（`_owns`：None 或
+  cwd 在 project_root 内，两侧 resolve，单向），`--all` 列全部并加
+  Project 列（None 显示 `(global)`）；裸 `tick` 只枚举归属 loop 并打印
+  响亮跳过行（列名字，上限 5，含零触发分支），`tick --name` 绕过归属
+  过滤（launchd 形状不变），`tick --all` 是系统 cron 用户的兼容口；
+  `show` 加 Project 行；pause/resume/reset/delete 按名寻址不加过滤；
+  `create` 冲突报错附现有 spec 的 project_root，untrusted cwd 警告放行。
+- **executor 按归属执行**：CLI tick 循环内按 spec 构造
+  `AgentRuntime(project_root=exec_root)`（不用 chdir）；command 路径把
+  exec_root 作为 subprocess cwd（修复 executor.py 从不传参的缺口）；
+  exec_root 非 None 但目录不存在 → pre-flight PERMANENT 失败，suggestion
+  指向 `vibe loop adopt <name>` + `vibe loop reset <name>`；OSError 分支
+  区分 missing-cwd 与 missing-uv；`execute_loop_tick` 在 record_run 前
+  重绑 `state.spec = spec` 消除 state.json 内嵌陈旧副本。
+- `install-launchd` 不回填归属；spec.project_root 已设且 ≠ cwd 时警告。
+- e2e：`e2e_command_smoke.py` 归属段——create 钉住断言、第二项目目录
+  裸 tick 跳过断言、`tick --name` 命令目标产物落在归属根断言。
+- 顺带拆除本周第三颗墙钟炸弹：`e2e_command_smoke.py` 的 `_seed_spans`
+  改用"今日 UTC 正午锚定 + 整日后退"——原布局在 UTC 00:00-02:00 窗口
+  会把两个 task-1 span 塌进同一自然日（miss 准入门 (task_key, 自然日)
+  对数 3→2 拒入，gold 路径兜底成 unstable 行，candidates 默认视图
+  查无此簇），任何运行时刻下日历日布局现已确定。
+- Gate 26 设计双路复审（claude PASS_WITH_NITS / pi BLOCK——双路独立
+  抓到 chdir 对构造期冻结 project_root 无效，改为按 spec 构造
+  runtime）；Gate 27 代码双路复审（双 PASS_WITH_NITS，0 BLOCK；
+  锁内重读、绝对路径校验、降级警告补 state.json 等交集项全收敛）。
+  容器 e2e 65/65，单元 983 绿（tests/core/loop + tests/cli）。
+
 ### E2E command-surface smoke — scripts/e2e_command_smoke.py (2026-08-22)
 
 The LLM-routing e2e covered routing depth, but the ~45 top-level

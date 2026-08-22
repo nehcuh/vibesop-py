@@ -398,7 +398,9 @@ class TestRunCommandTarget:
         record = self._fresh_record()
 
         mock_run = MagicMock(
-            return_value=_completed_process(2, stdout="", stderr="Error: No such command 'nonexistent'")
+            return_value=_completed_process(
+                2, stdout="", stderr="Error: No such command 'nonexistent'"
+            )
         )
         monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
 
@@ -671,9 +673,7 @@ class TestExecuteLoopTickCommandPath:
         long_stdout = "x" * 5000
         spec = _cmd_spec(name="long-stdout")
 
-        mock_run = MagicMock(
-            return_value=_completed_process(0, stdout=long_stdout, stderr="")
-        )
+        mock_run = MagicMock(return_value=_completed_process(0, stdout=long_stdout, stderr=""))
         monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -709,5 +709,160 @@ class TestExecuteLoopTickCommandPath:
             record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
 
         # Argv tail (after the 3-element prefix) must equal the unicode args exactly.
-        assert captured_argv[-len(unicode_args):] == unicode_args
+        assert captured_argv[-len(unicode_args) :] == unicode_args
         assert record.success is True
+
+
+# ──────────────────────────────────────────────────────────────────
+# gate26: project_root ownership consumption
+# ──────────────────────────────────────────────────────────────────
+
+from datetime import UTC, datetime  # noqa: E402
+
+from vibesop.core.loop.models import (  # noqa: E402
+    FailureCategory,
+    LoopRunRecord,
+    LoopState,
+)
+
+
+class TestOwnershipExecution:
+    """The executor consumes ``spec.project_root``: command targets run with
+    the pinned root as subprocess cwd; a missing pinned root is a PERMANENT
+    pre-flight failure (never silently runs in the ambient cwd)."""
+
+    def test_command_path_passes_pinned_root_as_subprocess_cwd(self, monkeypatch, tmp_path):
+        """gate26 core fix: execute_loop_tick previously never passed
+        project_root to _run_command_target, so pinned loops ran in the
+        ambient cwd."""
+        owner = tmp_path / "owner-project"
+        owner.mkdir()
+        spec = _cmd_spec(name="owned-cmd", project_root=str(owner))
+
+        captured: dict = {}
+        mock_run = MagicMock(
+            side_effect=lambda argv, **kwargs: (
+                captured.update(kwargs),
+                _completed_process(0, stdout="ok", stderr=""),
+            )[1]
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        store = LoopStore(base_dir=tmp_path / "loops")
+        store.save_spec(spec)
+        record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        assert record.success is True
+        assert captured["cwd"] == str(owner.resolve())
+
+    def test_unpinned_command_path_inherits_ambient_cwd(self, monkeypatch, tmp_path):
+        """project_root=None (legacy/--global): cwd stays None → subprocess
+        inherits the ambient cwd — pre-gate26 behaviour unchanged."""
+        spec = _cmd_spec(name="global-cmd")  # project_root defaults to None
+
+        captured: dict = {}
+        mock_run = MagicMock(
+            side_effect=lambda argv, **kwargs: (
+                captured.update(kwargs),
+                _completed_process(0, stdout="ok", stderr=""),
+            )[1]
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        store = LoopStore(base_dir=tmp_path / "loops")
+        store.save_spec(spec)
+        record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        assert record.success is True
+        assert captured["cwd"] is None
+
+    def test_missing_exec_root_is_permanent_preflight(self, monkeypatch, tmp_path):
+        """Pinned root deleted → PERMANENT failure WITHOUT executing anything
+        (no subprocess spawn, no runtime call), and the suggestion points at
+        adopt + reset (fixed wording per gate26 review)."""
+        gone = tmp_path / "deleted-project"  # never created
+        spec = _cmd_spec(name="gone-root", project_root=str(gone))
+
+        mock_run = MagicMock()
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+        runtime = _mock_runtime()
+
+        store = LoopStore(base_dir=tmp_path / "loops")
+        store.save_spec(spec)
+        record = execute_loop_tick(spec, runtime=runtime, store=store)
+
+        assert record.success is False
+        assert record.failure_info is not None
+        assert record.failure_info.category == FailureCategory.PERMANENT
+        assert f"vibe loop adopt {spec.name}" in (record.failure_info.suggestion or "")
+        assert f"vibe loop reset {spec.name}" in (record.failure_info.suggestion or "")
+        # Nothing executed.
+        mock_run.assert_not_called()
+        runtime.handle_query.assert_not_called()
+        # Failure was still persisted (DEAD budget burn is the loud signal).
+        state = store.load_state(spec.name)
+        assert state is not None
+        assert state.consecutive_failures == 1
+
+    def test_missing_exec_root_on_routing_path_also_preflights(self, tmp_path):
+        """The pre-flight guards the routing path too — a skill-target loop
+        pinned to a deleted root must not route against the ambient cwd."""
+        gone = tmp_path / "deleted-project"
+        spec = _spec(name="gone-routing", project_root=str(gone))
+        runtime = _mock_runtime()
+
+        store = LoopStore(base_dir=tmp_path / "loops")
+        store.save_spec(spec)
+        record = execute_loop_tick(spec, runtime=runtime, store=store)
+
+        assert record.success is False
+        assert record.failure_info is not None
+        assert record.failure_info.category == FailureCategory.PERMANENT
+        runtime.handle_query.assert_not_called()
+
+    def test_oserror_distinguishes_missing_cwd_from_missing_uv(self, monkeypatch, tmp_path):
+        """gate26 review pi#5: the OSError branch must not blame uv when the
+        cwd vanished between pre-flight and spawn."""
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec(name="race", project_root=str(tmp_path))
+        record = LoopRunRecord(loop_name=spec.name, started_at=datetime.now(UTC))
+
+        def raise_fnf(*args, **kwargs):
+            raise FileNotFoundError("[Errno 2] No such file or directory")
+
+        monkeypatch.setattr(
+            "vibesop.core.loop.executor.subprocess.run", MagicMock(side_effect=raise_fnf)
+        )
+
+        missing_cwd = str(tmp_path / "vanished")  # does not exist
+        _run_command_target(spec, record, project_root=missing_cwd)
+        assert record.failure_info is not None
+        assert "adopt" in (record.failure_info.suggestion or "")
+        assert "uv installation" not in (record.failure_info.suggestion or "")
+
+        # Same OSError with an EXISTING cwd → the prefix binary (uv) is at fault.
+        record2 = LoopRunRecord(loop_name=spec.name, started_at=datetime.now(UTC))
+        _run_command_target(spec, record2, project_root=str(tmp_path))
+        assert record2.failure_info is not None
+        assert "uv installation" in (record2.failure_info.suggestion or "")
+        assert "adopt" not in (record2.failure_info.suggestion or "")
+
+    def test_state_spec_rebound_to_live_spec_before_record(self, monkeypatch, tmp_path):
+        """gate26 review: state.json embeds a spec copy that may be stale
+        (e.g. adopt re-pinned project_root after the last run). The executor
+        must re-bind state.spec = spec so the re-saved state carries the
+        CURRENT spec."""
+        stale = _spec(name="rebind", project_root=None)
+        store = LoopStore(base_dir=tmp_path / "loops")
+        store.save_spec(stale)
+        store.save_state(LoopState(spec=stale))
+
+        pinned = _spec(name="rebind", project_root=str(tmp_path))
+        runtime = _mock_runtime()
+        record = execute_loop_tick(pinned, runtime=runtime, store=store)
+        assert record.success is True
+
+        state = store.load_state("rebind")
+        assert state is not None
+        assert state.spec.project_root == str(tmp_path)

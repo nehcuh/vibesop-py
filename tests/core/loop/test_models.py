@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -251,6 +252,46 @@ def test_spec_round_trips_through_json():
     json_text = original.model_dump_json()
     restored = LoopSpec.model_validate_json(json_text)
     assert restored == original
+
+
+def test_legacy_spec_without_project_root_loads_as_none():
+    """gate26: spec.json files written before ``project_root`` existed have no
+    such key. They must load with ``project_root is None`` (unscoped — legacy
+    behaviour unchanged) and round-trip without gaining a value."""
+    legacy_json = json.dumps(
+        {
+            "name": "legacy",
+            "description": "written by an older vibe",
+            "schedule": "* * * * *",
+            "skill_id": "session-end",
+            # no "project_root" key — the pre-gate26 shape
+        }
+    )
+    spec = LoopSpec.model_validate_json(legacy_json)
+    assert spec.project_root is None
+    restored = LoopSpec.model_validate_json(spec.model_dump_json())
+    assert restored.project_root is None
+
+
+def test_project_root_round_trips_through_json():
+    kwargs = _valid_spec_kwargs()
+    kwargs["project_root"] = "/Users/x/projects/foo"
+    spec = LoopSpec(**kwargs)
+    restored = LoopSpec.model_validate_json(spec.model_dump_json())
+    assert restored.project_root == "/Users/x/projects/foo"
+
+
+def test_project_root_must_be_absolute():
+    """gate27 claude#1: a relative project_root would re-interpret itself
+    against the reader's ambient cwd — the exact bug the field exists to
+    fix. Rejected loud at validation time."""
+    kwargs = _valid_spec_kwargs()
+    kwargs["project_root"] = "relative/path"
+    with pytest.raises(ValidationError, match="absolute"):
+        LoopSpec(**kwargs)
+    # Control: absolute path accepted.
+    kwargs["project_root"] = "/abs/path"
+    assert LoopSpec(**kwargs).project_root == "/abs/path"
 
 
 # ──────────────────────────────────────────────────────────────────

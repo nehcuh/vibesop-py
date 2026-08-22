@@ -15,8 +15,11 @@ Design notes:
       skill_id / query / workflow_id" constraint.
     - ``LoopState`` tracks runtime status (consecutive failures, recent
       runs) and is system-managed. ``LoopSpec`` is the user-editable
-      definition. They are intentionally separate so users can git-track
-      specs and gitignore state.
+      definition. Both live under ``~/.vibe/loops/`` (HOME-level store,
+      NOT project-local) — the earlier "users can git-track specs" note
+      here was a false promise: specs were never written into the project
+      tree. Project affiliation is recorded on the spec itself via
+      ``LoopSpec.project_root`` instead.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -131,8 +135,10 @@ class MetricCondition(BaseModel):
 class LoopSpec(BaseModel):
     """User-editable loop definition.
 
-    Persisted to ``~/.vibe/loops/{name}/spec.json``. Tracked-into-git safe
-    (no runtime state stored here).
+    Persisted to ``~/.vibe/loops/{name}/spec.json`` (HOME-level store —
+    the spec is not written into any project tree and is therefore not
+    git-tracked; ``project_root`` records which project it belongs to).
+    Contains no runtime state (that lives in ``LoopState``/state.json).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -141,6 +147,20 @@ class LoopSpec(BaseModel):
         ...,
         description="Globally unique identifier (kebab-case).",
         pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+    )
+    project_root: str | None = Field(
+        default=None,
+        description=(
+            "Owning project root (absolute path). None is deliberately "
+            "ambiguous: it covers BOTH legacy specs written before this "
+            "field existed (behaviour unchanged) AND an explicit "
+            "`vibe loop create --global` — in both cases the loop is "
+            "visible and runnable from any cwd. Ownership is pinned only "
+            "by explicit user action: create (default pins cwd), "
+            "`vibe loop adopt`, or `vibe loop migrate-ownership`. Never "
+            "auto-backfilled on tick (first-writer-wins mis-attribution "
+            "persisted is worse than none)."
+        ),
     )
     description: str = Field(
         default="",
@@ -238,6 +258,21 @@ class LoopSpec(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="UTC creation timestamp.",
     )
+
+    @field_validator("project_root")
+    @classmethod
+    def _validate_project_root(cls, v: str | None) -> str | None:
+        """``project_root`` must be absolute when set (gate27 claude#1).
+
+        A relative root would silently re-interpret itself against whatever
+        cwd the reader happens to run from — exactly the ambient-cwd bug this
+        field exists to fix. All pinning verbs (create / adopt /
+        migrate-ownership) write absolute paths; hand-edited relative values
+        are rejected loud instead of mis-resolving.
+        """
+        if v is not None and not Path(v).is_absolute():
+            raise ValueError(f"project_root must be an absolute path, got {v!r}")
+        return v
 
     @field_validator("schedule")
     @classmethod

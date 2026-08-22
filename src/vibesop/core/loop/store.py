@@ -1,8 +1,10 @@
 """Loop store — JSON-file persistence for loop definitions and runtime states.
 
 存储路径:
-    ~/.vibe/loops/{name}/spec.json    — 用户可编辑定义（git 可追踪）
-    ~/.vibe/loops/{name}/state.json   — 运行时状态（系统维护，建议 gitignore）
+    ~/.vibe/loops/{name}/spec.json    — 用户可编辑定义（HOME 级存储，不在项目树内，
+                                        因此不会被 git 追踪；项目归属记录在
+                                        LoopSpec.project_root 字段上）
+    ~/.vibe/loops/{name}/state.json   — 运行时状态（系统维护）
 
 设计要点:
     - 序列化通过 pydantic BaseModel 内建 ``model_dump_json`` /
@@ -148,9 +150,7 @@ class LoopStore:
         if not cls._is_safe_name(name):
             from vibesop.core.exceptions import LoopNameError
 
-            raise LoopNameError(
-                name, f"must match {_SAFE_NAME_PATTERN.pattern}"
-            )
+            raise LoopNameError(name, f"must match {_SAFE_NAME_PATTERN.pattern}")
 
     # ── 文件 IO ───────────────────────────────────────────────────────
 

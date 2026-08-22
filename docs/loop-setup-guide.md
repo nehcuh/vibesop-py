@@ -51,6 +51,7 @@ vibe loop create health-check \
 ╭──────────────────────── VibeSOP Loop ─────────────────────────╮
 │ ✅ Loop Created                                                  │
 │   Name:        health-check                                      │
+│   Project:     /path/to/vibesop-py                               │
 │   Schedule:    */30 * * * *                                      │
 │   Target:      systematic-debugging                              │
 │   Status:      🟢 Active                                         │
@@ -59,6 +60,39 @@ vibe loop create health-check \
 
 外部 cron 调用 `vibe loop tick` 即可触发执行。
 ```
+
+---
+
+## 2.5 项目归属（gate26）
+
+LoopStore 是 HOME 级（`~/.vibe/loops/`，loop 名全局唯一），但每个 loop 有
+**项目归属**（`spec.project_root`）：
+
+- **钉住只由显式动作发生**：`vibe loop create` 默认把字面 cwd 钉为归属
+  （`--global` 显式放弃 → 全局 loop，任意 cwd 可见可执行）；`vibe loop
+  adopt <name>` 把存量 loop 钉到当前目录；`vibe loop migrate-ownership
+  [--dry-run] [--yes]` 从 launchd plist 的 WorkingDirectory 批量回填
+  （默认逐条确认；**会把 `--global` loop 也钉到 plist 记录的目录**）。
+  裸 `tick` 永不自动回填（谁先跑归谁是更坏的误归属）。
+- **`list`**：默认只列归属当前项目的 loop（cwd 在 project_root 之内，
+  单向）；`--all` 列全部并显示 Project 列（无归属显示 `(global)`）。
+- **裸 `tick`**：只枚举归属当前项目的 loop，被跳过的其他项目 loop 会打印
+  响亮跳过行（列名字 + 提示 `--all`）。`tick --all` 是系统 cron（从 HOME
+  跑裸 tick）用户的兼容口；`tick --name <name>` 绕过归属过滤（launchd
+  调用形状，不变）。
+- **executor 按归属执行**：归属 loop 的 command/routing 目标都在其
+  project_root 下执行，与 tick 进程的 cwd 无关。归属根目录不存在 →
+  PERMANENT 失败（烧 DEAD 预算作为响亮信号），按提示 `vibe loop adopt
+  <name>` 重新钉住后 `vibe loop reset <name>` 清预算。
+- **存量 loop（无 project_root 字段）**：等价于 `--global`，行为完全不变；
+  用 `adopt` 或 `migrate-ownership` 钉住后才受归属过滤约束。
+- `show`/`pause`/`resume`/`reset`/`delete` 按全局唯一名寻址，**不做**
+  归属过滤（跨项目运维是合法的）；`show` 输出含 Project 行。
+
+> **⚠️ 降级警告**：`project_root` 字段与旧版 vibe 不兼容——旧版会把新
+> spec.json 隔离为 `.corrupt`（loop 消失 + launchd spam + delete 连带删
+> 备份）；state.json 同样内嵌 LoopSpec 副本，会被同样隔离（运行历史丢失）。
+> 降级前先备份 `~/.vibe/loops/`。详见 CHANGELOG [Unreleased]。
 
 ---
 
@@ -189,6 +223,11 @@ Phase C 起内置 plist 生成器。**无需手写 XML**，`vibe loop install-la
 4. 把 `StandardOutPath` / `StandardErrorPath` 指向 `~/.vibe/loops/<name>/{out,err}.log`（LoopStore 自带的目录，必然存在）；
 5. 设置 `RunAtLoad=false`（不在登录时立刻触发）；
 6. 调用 `launchctl bootstrap gui/$(id -u) <plist>` 装载。
+
+> **归属一致性（gate26）**：`install-launchd` **不回填** spec 的项目归属
+> （归属只能由 create / adopt / migrate-ownership 显式钉住）。若 spec 已钉到
+> 其他目录，install 会警告 plist 的 WorkingDirectory（cwd）与 executor 执行根
+> （spec.project_root）不一致——执行时以 spec.project_root 为准。
 
 ```bash
 # 创建一个 loop（必须先 create 才能 install-launchd）
