@@ -25,10 +25,10 @@ def _days_ago(days: int) -> str:
 def _candidate_evaluations() -> dict[str, SkillEvaluation]:
     """One real candidate per lifecycle action: deprecate, archive, boost."""
     return {
-        # F-grade, 30+ days unused, < 3 uses → deprecate
+        # F-grade, 30+ days unused, >= 3 uses, accuracy < 0.5 → deprecate
         "test/bad": SkillEvaluation(
             skill_id="test/bad",
-            total_routes=1,
+            total_routes=3,
             routing_accuracy=0.3,
             user_satisfaction=0.3,
             execution_success=0.3,

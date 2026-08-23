@@ -40,16 +40,39 @@ class TestFeedbackLoop:
             last_used=last_used,
         )
 
+    @staticmethod
+    def _days_ago(days: int) -> str:
+        return (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+
+    @staticmethod
+    def _lane_a_evaluation(skill_id: str, total_routes: int, last_used: str) -> SkillEvaluation:
+        """Lane A counterexample: perfect routing accuracy with low usage
+        still grades F (quality 0.325). The routing_accuracy < 50% conjunct
+        exists precisely so this shape is never deprecated."""
+        evaluation = SkillEvaluation(
+            skill_id=skill_id,
+            total_routes=total_routes,
+            routing_accuracy=1.0,
+            user_satisfaction=0.0,
+            execution_success=0.0,
+            usage_frequency=0.5,
+            health_score=0.0,
+            last_used=last_used,
+        )
+        assert evaluation.grade == "F"
+        return evaluation
+
     def test_f_grade_deprecates(self) -> None:
-        """F-grade + 30+ days unused + < 3 uses → deprecate."""
+        """F-grade + 30+ days unused + ≥3 uses with routing accuracy < 50%
+        → deprecate."""
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/skill": self._make_evaluation(
                 "test/skill",
                 "F",
-                total_routes=1,
+                total_routes=3,
                 quality=0.3,
-                last_used="2026-04-01T00:00:00",
+                last_used=self._days_ago(45),
             ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
@@ -57,6 +80,112 @@ class TestFeedbackLoop:
         assert len(suggestions) == 1
         assert suggestions[0].action == "deprecate"
         assert suggestions[0].grade == "F"
+
+    def test_thin_sample_f_grade_never_disposed(self) -> None:
+        """gate40 pin: total_routes=1/2 in every accuracy/staleness
+        combination — zero disposition (no deprecate, no warn, no
+        archive). Thin-sample F intentionally sits in a no-action zone
+        until more feedback data arrives."""
+        for total_routes in (1, 2):
+            for days in (45, 100):
+                for evaluation in (
+                    # Low routing accuracy (would have deprecated pre-gate40)
+                    self._make_evaluation(
+                        "test/thin",
+                        "F",
+                        total_routes=total_routes,
+                        quality=0.3,
+                        last_used=self._days_ago(days),
+                    ),
+                    # Lane A: accuracy 1.0 + usage 0.5 → still F
+                    self._lane_a_evaluation("test/thin", total_routes, self._days_ago(days)),
+                ):
+                    evaluator = MagicMock()
+                    evaluator.evaluate_all_skills.return_value = {"test/thin": evaluation}
+                    loop = FeedbackLoop(evaluator=evaluator)
+                    suggestions = loop.analyze_all(auto_deprecate=False)
+                    assert suggestions == [], (
+                        f"total_routes={total_routes}, days={days}, "
+                        f"accuracy={evaluation.routing_accuracy}"
+                    )
+
+    def test_f_grade_high_accuracy_not_deprecated(self) -> None:
+        """Quality-floor counterexample: ≥3 uses + F + 30d stale but
+        routing accuracy 1.0 → NOT deprecated. Deprecate means proven-poor
+        routing, not low usage."""
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {
+            "test/lane-a": self._lane_a_evaluation("test/lane-a", 5, self._days_ago(45)),
+        }
+        loop = FeedbackLoop(evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
+        assert suggestions == []
+
+    def test_f_grade_accuracy_at_threshold_not_deprecated(self) -> None:
+        """Boundary: routing accuracy exactly 0.5 is not below the
+        threshold → no deprecate."""
+        evaluation = SkillEvaluation(
+            skill_id="test/boundary",
+            total_routes=5,
+            routing_accuracy=0.5,
+            user_satisfaction=0.3,
+            execution_success=0.3,
+            usage_frequency=0.3,
+            health_score=0.3,
+            last_used=self._days_ago(45),
+        )
+        assert evaluation.grade == "F"
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {"test/boundary": evaluation}
+        loop = FeedbackLoop(evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
+        assert suggestions == []
+
+    def test_f_grade_archive_after_90d_with_sufficient_routes(self) -> None:
+        """≥3 uses + F + 90d stale → archive positive (Lane A accuracy
+        blocks deprecate, but the archive gate passes)."""
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {
+            "test/stale-f": self._lane_a_evaluation("test/stale-f", 5, self._days_ago(100)),
+        }
+        loop = FeedbackLoop(evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
+        assert len(suggestions) == 1
+        assert suggestions[0].action == "archive"
+
+    def test_thin_sample_stale_c_grade_not_archived(self) -> None:
+        """gate40 pin: thin-sample C (< 3 uses) + 90d unused → no archive."""
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {
+            "test/thin-c": self._make_evaluation(
+                "test/thin-c",
+                "C",
+                total_routes=2,
+                quality=0.65,
+                last_used=self._days_ago(100),
+            ),
+        }
+        loop = FeedbackLoop(evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
+        assert suggestions == []
+
+    def test_thin_sample_stale_d_grade_warns_not_archived(self) -> None:
+        """gate40 pin: thin-sample D (< 3 uses) + 90d unused → warn
+        (unchanged), never archive."""
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {
+            "test/thin-d": self._make_evaluation(
+                "test/thin-d",
+                "D",
+                total_routes=2,
+                quality=0.45,
+                last_used=self._days_ago(100),
+            ),
+        }
+        loop = FeedbackLoop(evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
+        assert len(suggestions) == 1
+        assert suggestions[0].action == "warn"
 
     def test_d_grade_warns(self) -> None:
         """D-grade + 60+ days unused → warn."""
@@ -88,6 +217,7 @@ class TestFeedbackLoop:
         assert suggestions[0].grade == "A"
 
     def test_stale_skill_archives(self) -> None:
+        """C-grade + ≥3 uses + 90+ days unused → archive."""
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/stale": self._make_evaluation(
@@ -148,7 +278,7 @@ class TestFeedbackLoop:
             "test/bad": self._make_evaluation(
                 "test/bad",
                 "F",
-                total_routes=1,
+                total_routes=3,
                 quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
@@ -165,7 +295,7 @@ class TestFeedbackLoop:
             "test/bad": self._make_evaluation(
                 "test/bad",
                 "F",
-                total_routes=1,
+                total_routes=3,
                 quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
@@ -183,7 +313,7 @@ class TestFeedbackLoop:
             "test/f": self._make_evaluation(
                 "test/f",
                 "F",
-                total_routes=1,
+                total_routes=3,
                 quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
@@ -203,11 +333,12 @@ class TestFeedbackLoopOptIn:
 
     @staticmethod
     def _f_grade_eval(skill_id: str = "test/bad") -> SkillEvaluation:
-        """Real F-grade evaluation: 30+ days unused, < 3 uses."""
+        """Real F-grade evaluation: 30+ days unused, ≥ 3 uses, routing
+        accuracy < 50% (gate40 double conjunct)."""
         last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
         return SkillEvaluation(
             skill_id=skill_id,
-            total_routes=1,
+            total_routes=3,
             routing_accuracy=0.3,
             user_satisfaction=0.3,
             execution_success=0.3,

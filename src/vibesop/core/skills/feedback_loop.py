@@ -1,7 +1,8 @@
 """Feedback loop — closes the gap between evaluation and action.
 
 Connects SkillEvaluator quality scores to lifecycle management:
-- F-grade skills with sufficient data → deprecate suggestion
+- F-grade skills with proven poor routing (≥3 routed uses, accuracy < 50%)
+  → deprecate suggestion
 - A-grade skills → routing priority boost suggestion
 - Generates retention suggestions for user review
 
@@ -44,8 +45,10 @@ class FeedbackLoop:
     Analyzes skill evaluations and produces retention suggestions.
     Lifecycle writes only happen when ``analyze_all`` is called with
     ``auto_deprecate=True``:
-    - Deprecates F-grade skills with sufficient data
-    - Archives 90+ day unused C/D/F-grade skills
+    - Deprecates F-grade skills with sufficient evidence of poor routing
+      (≥3 routed uses, routing accuracy < 50%)
+    - Archives 90+ day unused C/D/F-grade skills with sufficient usage
+      data (≥3 routed uses)
     - Restores deprecated A-grade skills back to active (boost)
     - Generates retention suggestions for user review
 
@@ -58,6 +61,7 @@ class FeedbackLoop:
 
     F_QUALITY_THRESHOLD = 0.30
     F_MIN_ROUTES = 3
+    F_ACCURACY_THRESHOLD = 0.50  # Deprecate only when routing accuracy is below this
     F_STALE_DAYS = 30  # Must be unused 30+ days before F-grade triggers deprecation
     D_STALE_DAYS = 60  # Must be unused 60+ days before D-grade triggers warning
     ARCHIVE_DAYS = 90  # Unused 90+ days with C/D/F grade → auto-archive
@@ -120,9 +124,10 @@ class FeedbackLoop:
         """Analyze a single skill evaluation and produce a suggestion.
 
         Rules (aligned with GOALS.md):
-        - Grade F, 30+ days unused, < 3 uses → deprecate
+        - Grade F, 30+ days unused, ≥ 3 uses with routing accuracy < 50%
+          → deprecate
         - Grade D, 60+ days unused → warn
-        - Grade C/D/F, 90+ days unused → archive
+        - Grade C/D/F, 90+ days unused, ≥ 3 uses → archive
         - Grade A, sufficient data → boost
         """
         grade = evaluation.grade
@@ -139,18 +144,22 @@ class FeedbackLoop:
             except (ValueError, TypeError):
                 days_since = None
 
-        # Rule: Grade F, 30+ days unused, < 3 uses → deprecate
+        # Rule: Grade F, 30+ days unused, ≥ 3 uses with routing accuracy
+        # < 50% → deprecate. Thin-sample F (< F_MIN_ROUTES) intentionally
+        # gets no disposition — wait for more feedback data.
         if (
             grade == "F"
             and days_since is not None
             and days_since >= self.F_STALE_DAYS
-            and evaluation.total_routes < self.F_MIN_ROUTES
+            and evaluation.total_routes >= self.F_MIN_ROUTES
+            and evaluation.routing_accuracy < self.F_ACCURACY_THRESHOLD
         ):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="deprecate",
                 reason=(
-                    f"Grade F, only {evaluation.total_routes} use(s), "
+                    f"Grade F, routing accuracy {evaluation.routing_accuracy:.0%} "
+                    f"over {evaluation.total_routes} use(s), "
                     f"unused for {days_since}d — quality {quality:.0%}"
                 ),
                 grade=grade,
@@ -174,8 +183,13 @@ class FeedbackLoop:
                 quality_score=quality,
             )
 
-        # Rule: 90+ days unused with grade C/D/F → archive
-        if days_since is not None and days_since >= self.ARCHIVE_DAYS and grade in ("C", "D", "F"):
+        # Rule: 90+ days unused with grade C/D/F and ≥ 3 uses → archive
+        if (
+            days_since is not None
+            and days_since >= self.ARCHIVE_DAYS
+            and grade in ("C", "D", "F")
+            and evaluation.total_routes >= self.F_MIN_ROUTES
+        ):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="archive",

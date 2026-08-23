@@ -18,12 +18,13 @@ _EVALUATOR = "vibesop.core.skills.feedback_loop.RoutingEvaluator"
 
 
 def _f_grade_evaluations() -> dict[str, SkillEvaluation]:
-    """A real F-grade candidate that WOULD be deprecated if auto were on."""
+    """A real F-grade candidate that WOULD be deprecated if auto were on
+    (>=3 routes, accuracy<0.5, 45d unused — gate40 double conjunct)."""
     last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
     return {
         "test/bad": SkillEvaluation(
             skill_id="test/bad",
-            total_routes=1,
+            total_routes=3,
             routing_accuracy=0.3,
             user_satisfaction=0.3,
             execution_success=0.3,
