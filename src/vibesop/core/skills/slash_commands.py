@@ -366,11 +366,16 @@ class SlashCommandHandler:
             if skill_id:
                 evaluation = evaluator.evaluate_skill(skill_id)
                 if evaluation:
+                    # "?" = no routing feedback: no data is not a bad score,
+                    # show "—" instead of a misleading 0%.
+                    quality_str = (
+                        f"{evaluation.quality_score:.0%}" if evaluation.total_routes > 0 else "—"
+                    )
                     return (
                         True,
                         f"Skill: {skill_id}\n"
                         f"Grade: {evaluation.grade}\n"
-                        f"Quality: {evaluation.quality_score:.0%}\n"
+                        f"Quality: {quality_str}\n"
                         f"Total uses: {evaluation.total_routes}",
                     )
                 return False, f"No evaluation data for {skill_id}"
@@ -381,7 +386,8 @@ class SlashCommandHandler:
 
             msg = "Skill Evaluation Summary:\n"
             for sid, ev in all_evals.items():
-                msg += f"  {sid}: {ev.grade} ({ev.quality_score:.0%})\n"
+                quality_str = f"{ev.quality_score:.0%}" if ev.total_routes > 0 else "—"
+                msg += f"  {sid}: {ev.grade} ({quality_str})\n"
             return True, msg
         except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Evaluate command failed: {e}")

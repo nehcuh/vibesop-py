@@ -699,6 +699,30 @@ class AgentRuntime:
                 if isinstance(_route_layer, str) and _route_layer:
                     _task_span.metadata["layer"] = _route_layer
 
+                # gate38 L2a: ordered routing snapshot ("top_skills", ≤3,
+                # primary first) for future L2b analysis. Written ONLY on
+                # a real router hit — gated on ``result.router_matched``,
+                # the SAME expression as metadata["has_match"] above, NOT
+                # the mode-derived ``has_match`` property (which stays
+                # True on intercepted misses, :671-675). On miss the key
+                # is omitted entirely. Duplication with
+                # metadata["skill_id"] is deliberate: this is the full
+                # at-write-time ranking snapshot — router state drifts
+                # and cannot be replayed later. Data source:
+                # ``result.alternatives`` (list[dict], populated from
+                # routing_result.alternatives at :619-626).
+                if result.router_matched:
+                    _alt_ids = [
+                        alt.get("skill_id", "")
+                        for alt in result.alternatives
+                        if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance] MagicMock guard
+                            alt, dict
+                        )
+                    ]
+                    _top = [s for s in [result.skill_id, *_alt_ids] if isinstance(s, str) and s]
+                    if _top:
+                        _task_span.metadata["top_skills"] = _top[:3]
+
                 # --- Instinct feedback bridge (neutral signal) ---
                 if result.has_match and result.skill_id:
                     try:

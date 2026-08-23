@@ -16,6 +16,18 @@ Entry semantics:
                                RoutingResult.has_match is False (primary is
                                None or its layer is fallback_llm; the
                                "fallback-llm" skill id counts as no match).
+- requires_packs: [ns...]    — environment annotation (gate38): the entry's
+                               expect labels live in an external skill pack.
+                               An annotated entry with non-empty expect whose
+                               expect ids are ALL unresolvable in this
+                               environment is scored as skipped_env: excluded
+                               from total/denominator and from errors, and
+                               recorded with ok1: null in per_query. If the
+                               presence check itself fails, ids count as
+                               resolvable (conservative: a false error is
+                               reported rather than a regression hidden).
+                               requires_packs with expect: [] never skips —
+                               reject/no-match assertions stay scored.
 
 Usage:
     uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
@@ -36,6 +48,49 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+
+
+def _builtin_skill_ids() -> set[str]:
+    """Resolvable builtin-side skill ids, parsed from core/registry.yaml in
+    canonical `namespace/name` form (already-namespaced ids kept as-is)."""
+    registry = yaml.safe_load((ROOT / "core" / "registry.yaml").read_text(encoding="utf-8"))
+    ids: set[str] = set()
+    for skill in (registry or {}).get("skills", []):
+        sid = skill.get("id")
+        if not sid:
+            continue
+        ids.add(sid if "/" in sid else f"{skill.get('namespace', 'builtin')}/{sid}")
+    return ids
+
+
+def _external_skill_ids() -> set[str]:
+    """Resolvable external-side skill ids from ExternalSkillLoader discovery
+    (keys are already in `pack/name` form)."""
+    from vibesop.core.skills.external_loader import ExternalSkillLoader
+
+    return set(ExternalSkillLoader(project_root=ROOT).discover_all())
+
+
+def _load_resolvable_ids() -> tuple[set[str] | None, set[str] | None]:
+    """(builtin_ids, external_ids); a source is None when its presence check
+    itself raised — that source then counts every id as resolvable
+    (conservative: better a false error than a regression hidden as
+    skipped_env)."""
+    try:
+        builtin = _builtin_skill_ids()
+    except Exception:
+        builtin = None
+    try:
+        external = _external_skill_ids()
+    except Exception:
+        external = None
+    return builtin, external
+
+
+def _is_resolvable(
+    skill_id: str, builtin_ids: set[str] | None, external_ids: set[str] | None
+) -> bool:
+    return any(ids is None or skill_id in ids for ids in (builtin_ids, external_ids))
 
 
 def main() -> int:
@@ -64,8 +119,9 @@ def main() -> int:
     eval_file = args.file if args.file.is_absolute() else ROOT / args.file
     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
     router = UnifiedRouter(project_root=ROOT)
+    builtin_ids, external_ids = _load_resolvable_ids()
 
-    total = len(entries)
+    skipped_env_count = 0
     hits1 = hits3 = 0
     errors: list[dict] = []
     per_query: list[dict] = []
@@ -73,6 +129,33 @@ def main() -> int:
         query = e["query"]
         expect: list[str] = e.get("expect", [])
         reject: list[str] = e.get("reject", [])
+
+        # skipped_env (gate38): annotated with requires_packs AND a scored
+        # positive (expect non-empty — all([]) is True, so the emptiness
+        # check must come first) AND every expect id unresolvable here.
+        skipped_env = bool(
+            e.get("requires_packs")
+            and expect
+            and not any(_is_resolvable(s, builtin_ids, external_ids) for s in expect)
+        )
+        if skipped_env:
+            skipped_env_count += 1
+            per_query.append(
+                {
+                    "query": query[:80],
+                    "expect": expect,
+                    "reject": reject,
+                    "primary": None,
+                    "top3": [],
+                    "layer": None,
+                    "confidence": None,
+                    "ok1": None,
+                    "ok3": None,
+                    "skipped_env": True,
+                }
+            )
+            continue
+
         result = router.route(query, record_telemetry=False)
         primary = result.primary.skill_id if result.primary else None
         layer = result.primary.layer.value if result.primary else None
@@ -101,6 +184,7 @@ def main() -> int:
                 "confidence": round(confidence, 3),
                 "ok1": bool(ok1),
                 "ok3": bool(ok3),
+                "skipped_env": False,
             }
         )
         if not ok1:
@@ -123,10 +207,14 @@ def main() -> int:
         key = f"{(err['expect'] or ['<no-match>'])[0]} -> {err['actual']}"
         confusion[key] = confusion.get(key, 0) + 1
 
+    # skipped_env entries count in neither total (denominator) nor errors;
+    # guard against an all-skipped dataset dividing by zero.
+    total = len(entries) - skipped_env_count
     metrics = {
         "total": total,
-        "top1_accuracy": round(hits1 / total, 4),
-        "recall_at_3": round(hits3 / total, 4),
+        "skipped_env": skipped_env_count,
+        "top1_accuracy": round(hits1 / total, 4) if total else 0.0,
+        "recall_at_3": round(hits3 / total, 4) if total else 0.0,
         "errors": errors,
         "confusion_pairs": confusion,
     }
@@ -156,8 +244,10 @@ def main() -> int:
         print(json.dumps(metrics, ensure_ascii=False, indent=2))
     else:
         print(f"\n=== Routing Eval ({eval_file.name}) ===")
+        pct1 = hits1 / total if total else 0.0
+        pct3 = hits3 / total if total else 0.0
         print(
-            f"queries: {total} | top-1: {hits1}/{total} ({hits1 / total:.1%}) | recall@3: {hits3}/{total} ({hits3 / total:.1%})"
+            f"queries: {total} (skipped_env: {skipped_env_count}) | top-1: {hits1}/{total} ({pct1:.1%}) | recall@3: {hits3}/{total} ({pct3:.1%})"
         )
         if errors:
             print(f"\nMisroutes ({len(errors)}):")

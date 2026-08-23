@@ -28,14 +28,24 @@ def _grade_color(grade: str) -> str:
 
 @app.callback(invoke_without_command=True)
 def optimize(
-    apply: bool = typer.Option(False, "--apply", help="Apply safe optimizations automatically"),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help=(
+            "Apply lifecycle actions: deprecate F-grade skills, archive 90+ day "
+            "unused C/D/F-grade skills, restore deprecated A-grade skills to active"
+        ),
+    ),
     days: int = typer.Option(30, "--days", help="Lookback window in days"),
 ) -> None:
     """Analyze routing data and suggest optimizations.
 
-    Without --apply, shows what would be optimized.
-    With --apply, applies safe optimizations (auto-deprecate F-grade skills,
-    boost A-grade skills, flag high-latency skills for review).
+    Without --apply (default), this command is fully read-only and only
+    shows what would be optimized.
+    With --apply, applies lifecycle actions (auto-deprecate F-grade skills,
+    auto-archive 90+ day unused C/D/F-grade skills, restore deprecated
+    A-grade skills to active). The other explicit auto-disposition entry
+    points are ``vibe skill stale --auto`` and ``vibe skill cleanup --auto``.
     """
     project_root = Path.cwd()
     analyzer = RoutingHealthAnalyzer(project_root)
@@ -96,14 +106,14 @@ def optimize(
 
 
 def _load_quality_actions(project_root: Path) -> list[dict]:
-    """Load skill quality actions from FeedbackLoop."""
+    """Load skill quality actions from FeedbackLoop (read-only preview)."""
     try:
         from vibesop.core.skills.evaluator import RoutingEvaluator
         from vibesop.core.skills.feedback_loop import FeedbackLoop
 
         evaluator = RoutingEvaluator(project_root=project_root)
-        loop = FeedbackLoop(evaluator)
-        suggestions = loop.analyze_all()
+        loop = FeedbackLoop(project_root=project_root, evaluator=evaluator)
+        suggestions = loop.analyze_all(auto_deprecate=False)
 
         actions = []
         for s in suggestions:
@@ -112,6 +122,14 @@ def _load_quality_actions(project_root: Path) -> list[dict]:
                     {
                         "skill_id": s.skill_id,
                         "reason": f"Deprecate: {s.reason} (grade {s.grade}, {s.total_routes} routes)",
+                        "applied": False,
+                    }
+                )
+            elif s.action == "archive":
+                actions.append(
+                    {
+                        "skill_id": s.skill_id,
+                        "reason": f"Archive: {s.reason} (grade {s.grade}, {s.total_routes} routes)",
                         "applied": False,
                     }
                 )
@@ -138,15 +156,19 @@ def _load_quality_actions(project_root: Path) -> list[dict]:
 
 
 def _apply_optimizations(project_root: Path, days: int) -> list[str]:
-    """Apply safe auto-optimizations and return list of affected skill IDs."""
+    """Apply lifecycle actions and return skill IDs actually written."""
     applied: list[str] = []
     try:
         from vibesop.core.skills.evaluator import RoutingEvaluator
         from vibesop.core.skills.feedback_loop import FeedbackLoop
 
         evaluator = RoutingEvaluator(project_root=project_root)
-        loop = FeedbackLoop(evaluator)
-        applied = loop.apply_auto_actions()
+        loop = FeedbackLoop(project_root=project_root, evaluator=evaluator)
+        loop.analyze_all(auto_deprecate=True)
+        # Only skills whose lifecycle write actually happened count as
+        # applied — failed writes (swallowed inside _apply_*) and no-op
+        # boosts on already-active skills are excluded.
+        applied = loop.last_applied_skill_ids
 
         # Log to structured optimization log
         if applied:

@@ -318,7 +318,11 @@ class TestOutcomeSignals:
         _route_span(tmp_path, has_match=True, started=T0, query="a matched question")
         stats = bridge_entries([], tmp_path)
         assert stats.outcomes_recorded == 0
-        assert _read_outcomes(tmp_path) == []
+        # gate38 L2a: the has_match=True span is now a HIT and (T0 having
+        # aged past SESSION_COMPLETE_HOURS) yields a hit-side row — that
+        # is the new intended behavior. The miss-pool freeze this test
+        # guards is unchanged: no miss-side row (side absent = miss).
+        assert [o for o in _read_outcomes(tmp_path) if o.get("side") != "hit"] == []
 
     def test_recent_miss_without_evidence_stays_undecided(self, tmp_path: Path) -> None:
         _route_span(tmp_path, started=datetime.now(UTC) - timedelta(minutes=5))
@@ -506,3 +510,203 @@ class TestHookPathMissPredicate:
         assert stats.outcomes_recorded == 1
         outcomes = _read_outcomes(tmp_path)
         assert outcomes[0]["span_id"] == "hook-miss-1"
+
+
+class TestHitOutcomes:
+    """gate38 L2a — outcome signals for HIT route spans (mirror of the
+    miss side). Hit rows add ``side="hit"`` + ``population="hook"``;
+    miss rows are never rewritten (missing ``side`` defaults to miss).
+    """
+
+    def _hit(self, root: Path, **kwargs) -> Span:
+        kwargs.setdefault("has_match", True)
+        return _route_span(root, **kwargs)
+
+    def test_hit_reask_same_task_is_weak_negative(self, tmp_path: Path) -> None:
+        now = datetime.now(UTC)
+        hit = self._hit(
+            tmp_path,
+            query="deploy the service",
+            started=now - timedelta(minutes=10),
+            span_id="hit-1",
+            session="sess-h",
+        )
+        # The re-ask span itself stays fresh → undecided: exactly ONE row.
+        self._hit(
+            tmp_path,
+            query="deploy the service",
+            started=now - timedelta(minutes=5),
+            span_id="hit-2",
+            session="sess-h",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert len(outcomes) == 1
+        assert outcomes[0]["span_id"] == hit.id
+        assert outcomes[0]["outcome"] == "weak_negative"
+        assert outcomes[0]["reason"] == "hit_reask_same_task_id"
+        assert outcomes[0]["side"] == "hit"
+        assert outcomes[0]["population"] == "hook"
+
+    def test_hit_session_moved_on_is_weak_positive(self, tmp_path: Path) -> None:
+        now = datetime.now(UTC)
+        hit = self._hit(
+            tmp_path,
+            query="first question",
+            started=now - timedelta(minutes=10),
+            span_id="hit-1",
+            session="sess-h",
+        )
+        # Later different-task span in the same session; itself fresh.
+        self._hit(
+            tmp_path,
+            query="a different question",
+            started=now - timedelta(minutes=5),
+            span_id="hit-2",
+            session="sess-h",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert len(outcomes) == 1
+        assert outcomes[0]["span_id"] == hit.id
+        assert outcomes[0]["outcome"] == "weak_positive"
+        assert outcomes[0]["reason"] == "hit_session_moved_on"
+        assert outcomes[0]["side"] == "hit"
+
+    def test_hit_session_expired_is_weakest_weak_positive(self, tmp_path: Path) -> None:
+        hit = self._hit(
+            tmp_path,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="hit-1",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert outcomes[0]["span_id"] == hit.id
+        assert outcomes[0]["outcome"] == "weak_positive"
+        assert outcomes[0]["reason"] == "hit_session_expired"
+
+    def test_fresh_hit_stays_undecided_and_rerun_is_idempotent(self, tmp_path: Path) -> None:
+        self._hit(tmp_path, started=datetime.now(UTC) - timedelta(minutes=5), span_id="hit-1")
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 0
+        assert _read_outcomes(tmp_path) == []
+        # Second run: still nothing, and nothing duplicated.
+        stats2 = bridge_entries([], tmp_path)
+        assert stats2.hit_outcomes_recorded == 0
+        assert _read_outcomes(tmp_path) == []
+
+    def test_hit_outcomes_not_duplicated_on_rerun(self, tmp_path: Path) -> None:
+        self._hit(
+            tmp_path,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="hit-1",
+        )
+        assert bridge_entries([], tmp_path).hit_outcomes_recorded == 1
+        assert bridge_entries([], tmp_path).hit_outcomes_recorded == 0
+        assert len(_read_outcomes(tmp_path)) == 1
+
+    def test_cli_hit_never_gets_outcome(self, tmp_path: Path) -> None:
+        """must-NOT: CLI hits (per-invocation session) are excluded —
+        they could only decay into hollow expiry weak positives."""
+        self._hit(
+            tmp_path,
+            platform="vibe-cli",
+            source="cli",
+            session="minted-per-invocation",
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="cli-hit",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 0
+        assert _read_outcomes(tmp_path) == []
+
+    def test_hit_miss_unknown_pools_do_not_cross(self, tmp_path: Path) -> None:
+        """has_match True/False/None are three disjoint pools; miss rows
+        keep the old schema (no side/population keys — never rewritten)."""
+        old = datetime.now(UTC) - timedelta(hours=48)
+        self._hit(tmp_path, started=old, span_id="pool-hit", query="a hit query")
+        _route_span(
+            tmp_path, has_match=False, started=old, span_id="pool-miss", query="a miss query"
+        )
+        _route_span(tmp_path, has_match=None, started=old, span_id="pool-unknown")
+
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 1  # miss side only
+        assert stats.hit_outcomes_recorded == 1  # hit side only
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert set(outcomes) == {"pool-hit", "pool-miss"}
+        miss_row = outcomes["pool-miss"]
+        assert "side" not in miss_row  # miss rows are NOT rewritten
+        assert "population" not in miss_row
+        assert miss_row["reason"] == "session_expired_without_reask"
+        hit_row = outcomes["pool-hit"]
+        assert hit_row["side"] == "hit"
+        assert hit_row["population"] == "hook"
+
+    def test_hit_skips_accepted_queries_channel(self, tmp_path: Path) -> None:
+        """accepted_queries is a miss-only signal: a hit whose query was
+        accepted still classifies by span evidence, never strong_positive."""
+        hit = self._hit(
+            tmp_path,
+            query="run tests",
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="hit-1",
+        )
+        pending = tmp_path / ".vibe" / "instincts" / "routing_pending.jsonl"
+        pending.parent.mkdir(parents=True, exist_ok=True)
+        pending.write_text(
+            json.dumps(
+                {"id": "rp-1", "query": "run tests", "kind": "no_match", "status": "accepted"}
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        bridge_entries([], tmp_path)
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert outcomes[hit.id]["outcome"] == "weak_positive"
+        assert outcomes[hit.id]["reason"] == "hit_session_expired"
+
+    def test_corrupt_spans_and_bad_metadata_json_skipped_not_raised(self, tmp_path: Path) -> None:
+        """A broken spans line and a span whose metadata string is invalid
+        JSON are skipped; the valid expired hit still gets its outcome."""
+        spans_dir = tmp_path / ".vibe" / "observability"
+        spans_dir.mkdir(parents=True, exist_ok=True)
+        (spans_dir / "spans.jsonl").write_text("{broken json\n", encoding="utf-8")
+        (spans_dir / "spans.jsonl").write_text(
+            "{broken json\n"
+            + json.dumps(
+                {
+                    "span_kind": "task",
+                    "name": "route:badmeta",
+                    "id": "bad-meta",
+                    "trace_id": "t",
+                    "metadata": "{not valid json",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self._hit(
+            tmp_path,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="hit-ok",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert [o["span_id"] for o in outcomes] == ["hit-ok"]
+
+    def test_corrupt_outcome_lines_skipped_for_hit_side(self, tmp_path: Path) -> None:
+        self._hit(
+            tmp_path,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="hit-1",
+        )
+        path = _outcomes_path(tmp_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{broken json\n", encoding="utf-8")
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 1

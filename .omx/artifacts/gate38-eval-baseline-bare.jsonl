@@ -1,0 +1,328 @@
+@@@MAIN@@@
+{
+  "total": 34,
+  "top1_accuracy": 0.6176,
+  "recall_at_3": 0.7059,
+  "errors": [
+    {
+      "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "diagnosis",
+      "note": ""
+    },
+    {
+      "query": "run a deep diagnosis of the codebase and suggest optimizations",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fuck-my-shit-mountain",
+      "top3": [
+        "fuck-my-shit-mountain",
+        "builtin/deep-diagnosis-optimization",
+        "kimi-gated-fix"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.65,
+      "category": "diagnosis",
+      "note": ""
+    },
+    {
+      "query": "全面审查这个仓库的代码质量",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "diagnosis",
+      "note": ""
+    },
+    {
+      "query": "start an autonomous experiment loop with prediction evaluation",
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "reject": [],
+      "actual": "custom/topic-a-one",
+      "top3": [
+        "custom/topic-a-one",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.65,
+      "category": "experiment",
+      "note": ""
+    },
+    {
+      "query": "accumulate what we learned from practice into project knowledge",
+      "expect": [
+        "builtin/experience-evolution"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "learning",
+      "note": ""
+    },
+    {
+      "query": "查看一下我的 instinct 学习状态",
+      "expect": [
+        "builtin/instinct",
+        "builtin/instinct-learning"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "learning",
+      "note": ""
+    },
+    {
+      "query": "从我的工作流里学习一个新的本能模式",
+      "expect": [
+        "builtin/instinct-learning",
+        "builtin/instinct"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "learning",
+      "note": ""
+    },
+    {
+      "query": "craft a new skill from this session's patterns",
+      "expect": [
+        "builtin/skill-craft"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "skill_mgmt",
+      "note": ""
+    },
+    {
+      "query": "评估一下这些技能的使用质量和效果",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "skill_mgmt",
+      "note": ""
+    },
+    {
+      "query": "which skills are performing well and which need attention",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "skill_mgmt",
+      "note": ""
+    },
+    {
+      "query": "来一次全维度代码库审计",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fuck-my-shit-mountain",
+      "top3": [
+        "fuck-my-shit-mountain",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "scenario",
+      "confidence": 0.9,
+      "category": "cross_cutting",
+      "note": ""
+    },
+    {
+      "query": "验证这个 prompt chain 各阶段是否符合规范",
+      "expect": [
+        "prompt-chain-validator"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "cross_cutting",
+      "note": ""
+    },
+    {
+      "query": "审计一下第三方依赖的供应链安全",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fuck-my-shit-mountain",
+      "top3": [
+        "fuck-my-shit-mountain",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "scenario",
+      "confidence": 0.9,
+      "category": "adversarial",
+      "note": ""
+    }
+  ],
+  "confusion_pairs": {
+    "builtin/deep-diagnosis-optimization -> fallback-llm": 2,
+    "builtin/deep-diagnosis-optimization -> fuck-my-shit-mountain": 3,
+    "builtin/autonomous-experiment -> custom/topic-a-one": 1,
+    "builtin/experience-evolution -> fallback-llm": 1,
+    "builtin/instinct -> fallback-llm": 1,
+    "builtin/instinct-learning -> fallback-llm": 1,
+    "builtin/skill-craft -> fallback-llm": 1,
+    "builtin/slash-evaluate -> fallback-llm": 2,
+    "prompt-chain-validator -> fallback-llm": 1
+  }
+}
+@@@EXTENDED@@@
+{
+  "total": 107,
+  "top1_accuracy": 0.9439,
+  "recall_at_3": 0.9439,
+  "errors": [
+    {
+      "query": "commit 三批改动",
+      "expect": [
+        "omx/git-master"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    },
+    {
+      "query": "删掉 mission-pack-p0 worktree 并清理远程分",
+      "expect": [
+        "superpowers/using-git-worktrees"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    },
+    {
+      "query": "首先我需要你使用 fanout 对项目做多维度，深度的体检和审查",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    },
+    {
+      "query": "清 worktree/stash",
+      "expect": [
+        "superpowers/using-git-worktrees"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    },
+    {
+      "query": "走一遍 dual-review 对 diff 再",
+      "expect": [
+        "superpowers/requesting-code-review"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    },
+    {
+      "query": "根据评审意见，使用 workflow 进行完整优化，记住在 worktree 中进行相应的优化工作，每个重要节点务必进行双路复审，必须要完成所有阶段的优化工作，中间不能停止，必须要 pi 和 claude 都确认完全优化完成才可以停止",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "production_log",
+      "note": ""
+    }
+  ],
+  "confusion_pairs": {
+    "omx/git-master -> fallback-llm": 1,
+    "superpowers/using-git-worktrees -> fallback-llm": 2,
+    "builtin/deep-diagnosis-optimization -> fallback-llm": 2,
+    "superpowers/requesting-code-review -> fallback-llm": 1
+  }
+}

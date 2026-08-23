@@ -42,7 +42,7 @@
 - [x] Feedback loop (usage analytics + satisfaction tracking) (v4.4.0)
 - [x] Scope-aware routing isolation — project skills invisible outside project (v5.1-dev)
 - [x] Retention system CLI visibility — `vibe skill stale` with archive detection (v5.1-dev)
-- [x] Auto-archive for 90+ day unused skills + archived skills excluded from routing (v5.1-dev)
+- [x] Archive for 90+ day unused skills via explicit flag (`vibe skill cleanup --auto`) + archived skills excluded from routing (v5.1-dev; fully explicit-only since gate38)
 - [x] Post-route retention nudge every N routes (v5.1-dev)
 - [x] InstinctLearner sequence pattern detection for workflow-to-skill learning (v5.1-dev)
 - [x] SkillSuggestionCollector — bridge from pattern detection to one-click skill creation (v5.1-dev)
@@ -351,7 +351,7 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 - [x] **Retention System (CLI-visible)**
   - `vibe skill stale` — detect stale/underperforming skills with archive actions
-  - 90-day auto-archive for unused C/D/F-grade skills
+  - 90-day archive for unused C/D/F-grade skills (explicit `--auto` only since gate38; no fully automatic path)
   - Archived skills excluded from routing (`is_routable(ARCHIVED) = False`)
   - Post-route retention nudge every 20 routes
   - `vibe skill end-check` — session-end review command

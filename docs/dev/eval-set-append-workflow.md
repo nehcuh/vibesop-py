@@ -11,6 +11,20 @@ append-only sample flow.
   hand-edit this file.** Appends go through the script only.
 - `tests/benchmark/routing_eval_extended.yaml` — the review queue. Human
   editing happens HERE (it is an in-flow action, not a violation).
+
+### `requires_packs` field (gate38)
+
+Extended entries whose expected skills come from an external pack MUST
+declare it, e.g. `requires_packs: [omx]`. When none of the entry's
+`expect` ids resolve in the current environment, the harness scores it as
+`skipped_env` — excluded from the denominator and from `errors`, with
+`ok1: null` in per-query output. Presence-check failures fall back to
+"treat as resolvable" (conservative: rather report noise than hide a
+regression). Entries with `expect: []` are never skipped. The field is
+the single source of truth; the file header documents the two residual
+noise classes (reject-only entries vacuously pass without their packs;
+a handful of env-sensitive fallback entries remain unlabelled), so
+extended numbers are not a clean baseline.
 - `tests/benchmark/routing_eval_retention.yaml` — insight-mining pool for
   dismissed samples. Not scored by the eval harness.
 - `scripts/build_eval_from_logs.py` — the only write path.

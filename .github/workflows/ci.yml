@@ -200,3 +200,58 @@ jobs:
 
       - name: Run routing benchmarks
         run: uv run pytest -m benchmark -v
+
+  routing-eval:
+    name: Routing Eval (report-only)
+    runs-on: ubuntu-latest
+    # PERMANENTLY report-only (gate38): continue-on-error stays forever —
+    # there is NO observation period after which this job becomes a hard
+    # gate (contrast the test-windows observation-period note above). The
+    # harness itself always exits 0 and its absolute numbers are
+    # environment-sensitive (local skill index, installed packs), so this
+    # job exists to surface the JSON metrics for humans, never to block
+    # merges. Do not "graduate" it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run main routing eval
+        run: uv run python scripts/eval_routing.py --json --json-out eval-main.json
+
+      - name: Run extended routing eval
+        run: uv run python scripts/eval_routing.py --file tests/benchmark/routing_eval_extended.yaml --json --json-out eval-extended.json
+
+      - name: Write step summary
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import json
+
+          print("### Routing Eval (report-only)\n")
+          print("| dataset | scored | top-1 | recall@3 | skipped_env | errors |")
+          print("|---|---|---|---|---|---|")
+          for name, path in [("main", "eval-main.json"), ("extended", "eval-extended.json")]:
+              m = json.load(open(path))
+              print(
+                  f"| {name} | {m['total']} | {m['top1_accuracy']:.1%} "
+                  f"| {m['recall_at_3']:.1%} | {m['skipped_env']} | {len(m['errors'])} |"
+              )
+          EOF
+
+      - name: Upload eval JSON
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: routing-eval
+          path: |
+            eval-main.json
+            eval-extended.json

@@ -16,7 +16,7 @@ def report(
         None,
         "--grade",
         "-g",
-        help="Filter by grade (A, B, C, D, F)",
+        help="Filter by grade (A, B, C, D, F, ?)",
     ),
     suggest_removal: bool = typer.Option(
         False,
@@ -96,10 +96,13 @@ def report(
         impact = impact_map.get(evaluation.grade, "—")
         if evaluation.total_routes < 3:
             impact = "[dim]insufficient data[/dim]"
+        # "?" = no routing feedback: no data is not a bad score, so show
+        # "—" instead of a misleading 0%.
+        score_str = f"{evaluation.quality_score:.0%}" if evaluation.total_routes > 0 else "—"
         table.add_row(
             evaluation.skill_id,
             f"[{color}]{evaluation.grade}[/{color}] {icon}",
-            f"{evaluation.quality_score:.0%}",
+            score_str,
             str(evaluation.total_routes),
             f"{evaluation.success_rate:.0%}" if evaluation.total_routes > 0 else "—",
             f"{evaluation.user_score:.2f}",

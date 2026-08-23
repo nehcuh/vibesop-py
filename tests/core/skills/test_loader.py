@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from vibesop.core.models import SkillLifecycle
 from vibesop.core.skills.base import PromptSkill, WorkflowSkill
+from vibesop.core.skills.config_manager import SkillConfig, SkillConfigManager
 from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
 from vibesop.core.skills.loader import LoadedSkill, SkillLoader
 from vibesop.spec.models import SkillSpec, SkillType
@@ -242,6 +245,65 @@ description: A real skill
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
         assert skills == {}
+
+    def test_deprecated_skill_stays_visible_without_lifecycle_write(self, tmp_path: Path):
+        """gate38: discovery must not silently auto-archive.
+
+        A DEPRECATED skill unused for 90+ days must remain in the
+        discover_all() return value AND discovery must not call
+        set_lifecycle. Both locks are required: visibility without the
+        no-write check would allow the old hidden write back; the no-write
+        check alone would allow hiding-by-continue as a new side channel.
+        """
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        (skills_dir / "old-skill.md").write_text(
+            """---
+id: old-skill
+name: Old Skill
+description: A deprecated skill
+---
+# Content
+""",
+            encoding="utf-8",
+        )
+        last_used = (datetime.now(UTC) - timedelta(days=120)).isoformat()
+        deprecated_config = SkillConfig(
+            skill_id="old-skill",
+            lifecycle=SkillLifecycle.DEPRECATED,
+            usage_stats={"last_used": last_used},
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        with (
+            patch.object(SkillConfigManager, "get_skill_config", return_value=deprecated_config),
+            patch.object(SkillConfigManager, "set_lifecycle") as mock_set,
+        ):
+            skills = loader.discover_all()
+            assert "old-skill" in skills
+            mock_set.assert_not_called()
+
+    def test_archived_skill_still_filtered(self, tmp_path: Path):
+        """ARCHIVED skills remain excluded from discovery."""
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        (skills_dir / "dead-skill.md").write_text(
+            """---
+id: dead-skill
+name: Dead Skill
+description: An archived skill
+---
+# Content
+""",
+            encoding="utf-8",
+        )
+        archived_config = SkillConfig(
+            skill_id="dead-skill",
+            lifecycle=SkillLifecycle.ARCHIVED,
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        with patch.object(SkillConfigManager, "get_skill_config", return_value=archived_config):
+            skills = loader.discover_all()
+            assert "dead-skill" not in skills
 
 
 class TestGetSkill:

@@ -158,11 +158,18 @@ def health(
                         if evaluation.grade in ("A", "B")
                         else "⚠️"
                         if evaluation.grade in ("C", "D")
+                        else "❔"
+                        if evaluation.grade == "?"
                         else "🗑️"
+                    )
+                    # "?" = no routing feedback: no data is not a bad score,
+                    # so show "—" instead of a misleading 0%.
+                    score_str = (
+                        "—" if evaluation.grade == "?" else f"{evaluation.quality_score:.0%}"
                     )
                     console.print(
                         f"  {icon} [cyan]{skill_id}[/cyan] "
-                        f"[{grade_color}]{evaluation.grade} ({evaluation.quality_score:.0%})[/{grade_color}] "
+                        f"[{grade_color}]{evaluation.grade} ({score_str})[/{grade_color}] "
                         f"[dim]{evaluation.total_routes} uses[/dim]"
                     )
         except (OSError, ValueError):

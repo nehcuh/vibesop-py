@@ -278,7 +278,7 @@ Fires every Monday 8am, outputs "PR #234 (high severity, RCE) > PR #235 (medium)
 
 **Pain**: Six months ago you installed a bunch of skills. Now you don't know **which are still used and which can be deleted**.
 
-**VibeSOP approach**: Auto-tracks usage frequency, grades A-F, auto-archives expired ones.
+**VibeSOP approach**: Auto-tracks usage frequency, grades A-F; archive suggestions are read-only until you explicitly apply them.
 
 **Commands**:
 ```bash
@@ -288,7 +288,7 @@ vibe skill stale
 # Interactive cleanup
 vibe skill cleanup
 
-# Fully automatic (90 days unused + D/F grade → archive)
+# Explicitly apply archive suggestions (90 days idle + C/D/F grade; read-only by default)
 vibe skill cleanup --auto
 ```
 
@@ -297,7 +297,7 @@ vibe skill cleanup --auto
 📋 Skill Health Report:
   ✅ superpowers/systematic-debugging  Grade A  47 uses/month
   ⚠️  gstack/old-helper                  Grade D  1 use/month   (suggest archive)
-  ❌ mattpocock/experimental             Grade F  90 days idle  (archived)
+  ❌ mattpocock/experimental             Grade F  90 days idle  (archived via cleanup --auto)
 ```
 
 ---

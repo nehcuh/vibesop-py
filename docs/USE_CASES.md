@@ -278,7 +278,7 @@ vibe loop create deps-scan \
 
 **痛点**：半年前装了一堆技能，现在不知道**哪些还在用、哪些可以删**。
 
-**VibeSOP 方案**：自动追踪使用频率，按 A-F 分级，过期自动归档。
+**VibeSOP 方案**：自动追踪使用频率，按 A-F 分级，归档建议默认只读，经你显式确认才执行。
 
 **命令**：
 ```bash
@@ -288,7 +288,7 @@ vibe skill stale
 # 交互式清理
 vibe skill cleanup
 
-# 全自动（90 天没用 + D/F 级 → 归档）
+# 显式应用归档建议（90 天没用 + C/D/F 级 → 归档；默认只读）
 vibe skill cleanup --auto
 ```
 
@@ -297,7 +297,7 @@ vibe skill cleanup --auto
 📋 Skill Health Report:
   ✅ superpowers/systematic-debugging  A级  使用 47次/月
   ⚠️  gstack/old-helper                  D级  使用 1次/月  (建议归档)
-  ❌ mattpocock/experimental             F级  90天未用    (已归档)
+  ❌ mattpocock/experimental             F级  90天未用    (经 cleanup --auto 归档)
 ```
 
 ---

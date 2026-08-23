@@ -38,16 +38,45 @@ class TestSkillEvaluation:
         assert eval.quality_score == pytest.approx(1.0)
 
     def test_quality_score_no_routes(self):
-        """quality_score should fall back to neutral when no routes exist."""
+        """Zero-sample skills score 0.0 — no data is not a neutral 0.5."""
         eval = SkillEvaluation(skill_id="s", total_routes=0)
-        # 0.5 + (0.0 * 0.05) + (0.0 * 0.05)
-        assert eval.quality_score == pytest.approx(0.5)
+        assert eval.quality_score == 0.0
+        # Atomic pair: a bare 0.0 must not flow through to a letter grade.
+        assert eval.grade == "?"
 
     def test_quality_score_no_routes_with_confidence_and_user_score(self):
-        """quality_score should blend confidence and user_score when no routes exist."""
+        """Zero-sample score stays 0.0 regardless of confidence/user_score."""
         eval = SkillEvaluation(skill_id="s", total_routes=0, avg_confidence=1.0, user_score=1.0)
-        # 0.5 + (1.0 * 0.05) + (1.0 * 0.05) = 0.6
-        assert eval.quality_score == pytest.approx(0.6)
+        assert eval.quality_score == 0.0
+        assert eval.grade == "?"
+
+    def test_zero_sample_grade_is_not_a_letter(self):
+        """must-NOT: zero-sample grade must never be D or F.
+
+        A 0.0-quality skill graded F would trip the auto-deprecate rule in
+        feedback_loop (F + 30d stale + < 3 routes) — the reason the
+        quality_score=0.0 / grade="?" pair must land atomically.
+        """
+        eval = SkillEvaluation(skill_id="s", total_routes=0)
+        assert eval.grade not in ("A", "B", "C", "D", "F")
+
+    def test_grade_vocabulary_includes_question_mark(self):
+        """The grade vocabulary is A/B/C/D/F plus "?" (no routing feedback)."""
+        grades = {
+            SkillEvaluation(skill_id="s", total_routes=0).grade,
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=1.0,
+                user_satisfaction=1.0,
+                execution_success=1.0,
+                usage_frequency=1.0,
+                health_score=1.0,
+            ).grade,
+            SkillEvaluation(skill_id="s", total_routes=1).grade,
+        }
+        assert "?" in grades
+        assert grades == {"?", "A", "F"}
 
     def test_grade_boundaries(self):
         """grade should map correctly to letter boundaries."""
@@ -149,13 +178,14 @@ class TestRoutingEvaluator:
         assert evaluator._preferences is mock_prefs
 
     def test_evaluate_skill_no_data(self, tmp_path):
-        """Evaluating a skill with no data returns a neutral result."""
+        """Evaluating a skill with no data returns a zero-sample result."""
         evaluator = RoutingEvaluator(project_root=tmp_path)
         result = evaluator.evaluate_skill("unknown-skill")
         assert result is not None
         assert result.skill_id == "unknown-skill"
         assert result.total_routes == 0
-        assert result.quality_score == pytest.approx(0.5)
+        assert result.quality_score == 0.0
+        assert result.grade == "?"
 
     def test_evaluate_skill_with_feedback(self, tmp_path):
         """Evaluating a skill with feedback records computes metrics."""

@@ -29,9 +29,11 @@ Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
      time-window fallback would risk mis-attaching agent tool calls to an
      unrelated ``vibe route`` that happened to run nearby.
 
-2. **Outcome signals for miss route spans** (M1 slice), appended to
+2. **Outcome signals for route spans**, appended to
    ``.vibe/observability/route_outcomes.jsonl`` (one JSON per line;
-   corrupt lines skipped on read, per project JSONL convention):
+   corrupt lines skipped on read, per project JSONL convention).
+
+   Miss side (M1 slice):
    - explicit accept (``vibe instinct accept`` → routing_pending item with
      ``status="accepted"`` whose query matches the span) ≈ strong positive
    - re-ask (the span's ``task_id`` — full-text derived, truncation-safe —
@@ -45,6 +47,37 @@ Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
    attempts and are excluded too. CLI route spans (per-invocation session)
    are excluded as well — they could only ever decay into hollow
    expiry-based weak positives.
+
+   Hit side (gate38 L2a): non-CLI spans with ``has_match is True`` get
+   the mirror-image classification — the span's ``task_id`` reappearing
+   on a LATER route span ≈ weak negative (``hit_reask_same_task_id``);
+   a later different-task span in the same session ≈ weak positive
+   (``hit_session_moved_on``); older than ``SESSION_COMPLETE_HOURS`` ≈
+   weak positive (``hit_session_expired``). There is no explicit-accept
+   channel for hits (accepted_queries is a miss-only signal). Hit rows
+   add ``"side": "hit"`` and ``"population": "hook"`` so each row is
+   self-describing; miss rows are NOT rewritten — readers default a
+   missing ``side`` to ``"miss"`` and a missing ``population`` to
+   ``"hook"`` (the miss pool is hook-path only too).
+
+   Population disclosure (read before consuming EITHER side): both
+   outcome populations are hook-path only — CLI spans are excluded on
+   both sides — while the gate37 ``fire`` column (skill_health) counts
+   CLI hits as well. The populations differ in coverage: NEVER combine
+   outcomes with fires into a fire→success-rate ratio. Hit weak
+   positives are even softer than miss ones — "the user never came
+   back" after a hit may mean abandonment, not satisfaction. The first
+   bridge run backfills ALL historical hits at once (write-once +
+   span_id dedup keeps re-runs idempotent); ``hit_session_expired``
+   dominates that backfill and is the weakest signal — filter by the
+   ``hit_`` reason prefix when consuming.
+
+   Cost: hit classification scans all route spans per hit, the same
+   O(hits × spans) asymptotic as the miss side. The first run pays the
+   full backfill at once, and per-run cost grows quadratically while
+   spans.jsonl grows unbounded (rotation-coupling dependency recorded
+   in gate38 §5). This is an offline assembly path — the 100µs hook
+   hot-path budget is not involved.
 
    Outcome derivation lives HERE (assembly stage), not in the M2 scan
    stage: the bridge already pays a full spans.jsonl scan on every
@@ -118,6 +151,7 @@ class BridgeStats:
     unmatched: int = 0
     ambiguous: int = 0
     outcomes_recorded: int = 0
+    hit_outcomes_recorded: int = 0
     notes: list[str] = field(default_factory=list)
 
 
@@ -219,6 +253,7 @@ def _run(entries: list[ToolEvent], root: Path, stats: BridgeStats) -> None:
     # they tolerate re-runs; span emission does not.
     _save_state(root / ".vibe" / "observability" / STATE_FILENAME, state)
     _derive_outcomes(route_spans, root, stats)
+    _derive_hit_outcomes(route_spans, root, stats)
 
 
 def _bridge_events(
@@ -467,6 +502,66 @@ def _derive_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeSta
     stats.outcomes_recorded += len(new_lines)
 
 
+def _derive_hit_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeStats) -> None:
+    """Append newly-determinable hit outcomes to route_outcomes.jsonl.
+
+    Mirrors ``_derive_outcomes`` (miss side) exactly: same outcomes file,
+    same WRITE-ONCE semantics, same span_id dedup against the outcomes
+    file itself (never the state file), plain append, no new lock. Hit
+    rows add ``"side": "hit"`` and ``"population": "hook"`` (gate38:
+    row-level self-describing population); miss rows are NOT rewritten —
+    readers default a missing ``side`` to ``"miss"`` and a missing
+    ``population`` to ``"hook"`` (the miss pool is hook-path only too).
+
+    These are weak PRIOR signals, not labels — the hit weak positives are
+    softer than the miss ones (not returning ≠ satisfaction; see the
+    module docstring's population disclosure).
+    """
+    outcomes_path = root / ".vibe" / "observability" / OUTCOMES_FILENAME
+    recorded = _load_recorded_span_ids(outcomes_path)
+
+    hits = [rs for rs in route_spans if _is_hit(rs)]
+    if not hits:
+        return
+    now = datetime.now(UTC)
+    session_complete_after = timedelta(hours=SESSION_COMPLETE_HOURS)
+
+    new_lines: list[str] = []
+    for hit in hits:
+        if not hit.id or hit.id in recorded:
+            continue
+        outcome = _classify_hit(hit, route_spans, now, session_complete_after)
+        if outcome is None:
+            continue  # not yet determinable — retried on the next run
+        kind, reason = outcome
+        new_lines.append(
+            json.dumps(
+                {
+                    "span_id": hit.id,
+                    "trace_id": hit.trace_id,
+                    "task_id": hit.task_id,
+                    "session_id": hit.session_id,
+                    "span_ts": hit.started_at.isoformat() if hit.started_at else None,
+                    "outcome": kind,
+                    "reason": reason,
+                    "side": "hit",
+                    "population": "hook",
+                    "recorded_at": now.isoformat(),
+                },
+                ensure_ascii=False,
+            )
+        )
+        recorded.add(hit.id)
+
+    if not new_lines:
+        return
+    outcomes_path.parent.mkdir(parents=True, exist_ok=True)
+    with outcomes_path.open("a", encoding="utf-8") as f:
+        for line in new_lines:
+            f.write(line + "\n")
+    stats.hit_outcomes_recorded += len(new_lines)
+
+
 def _is_miss(rs: _RouteSpan) -> bool:
     """Conservative miss rule: explicit has_match=False on a routed attempt.
 
@@ -488,6 +583,25 @@ def _is_miss(rs: _RouteSpan) -> bool:
     if rs.is_cli:
         return False
     if rs.has_match is not False:  # True → hit; None → unknown, never a miss
+        return False
+    return rs.mode not in ("not_intercepted", "slash_command")
+
+
+def _is_hit(rs: _RouteSpan) -> bool:
+    """Conservative hit rule: explicit has_match=True on a routed attempt.
+
+    Mirror of ``_is_miss`` (gate17 cross-reference convention: change one,
+    re-read the other). CLI route spans are excluded for the same reason
+    as on the miss side: each CLI invocation mints its own session, so its
+    hits could never show "session moved on" evidence and would decay
+    into hollow ``hit_session_expired`` weak positives after 24h. Spans
+    with ``has_match`` missing are "unknown" and never enter the hit pool
+    (conservative direction); ``mode="not_intercepted"``/``"slash_command"``
+    spans are not routing attempts and are excluded too.
+    """
+    if rs.is_cli:
+        return False
+    if rs.has_match is not True:  # False → miss; None → unknown, never a hit
         return False
     return rs.mode not in ("not_intercepted", "slash_command")
 
@@ -536,6 +650,52 @@ def _classify(
         return "weak_positive", "session_continued_without_reask"
     if miss.started_at is not None and now - miss.started_at > session_complete_after:
         return "weak_positive", "session_expired_without_reask"
+    return None
+
+
+def _classify_hit(
+    hit: _RouteSpan,
+    route_spans: list[_RouteSpan],
+    now: datetime,
+    session_complete_after: timedelta,
+) -> tuple[str, str] | None:
+    """Return (outcome, reason) or None when not yet determinable.
+
+    Mirror of ``_classify`` minus the explicit-accept channel (accepted
+    routing_pending queries are a miss-only signal — there is no accept
+    path for hits). Reasons carry a ``hit_`` prefix so consumers can
+    filter the two pools apart. Precedence: re-ask (weak neg) >
+    completion (weak pos). A fresh hit with no completion evidence stays
+    undecided and is re-evaluated on the next run.
+    """
+    later_same_task = [
+        rs
+        for rs in route_spans
+        if rs.task_id
+        and hit.task_id
+        and rs.task_id == hit.task_id
+        and rs.id != hit.id
+        and rs.started_at is not None
+        and hit.started_at is not None
+        and rs.started_at > hit.started_at
+    ]
+    if later_same_task:
+        return "weak_negative", "hit_reask_same_task_id"
+
+    session_moved_on = any(
+        rs.session_id
+        and hit.session_id
+        and rs.session_id == hit.session_id
+        and rs.task_id != hit.task_id
+        and rs.started_at is not None
+        and hit.started_at is not None
+        and rs.started_at > hit.started_at
+        for rs in route_spans
+    )
+    if session_moved_on:
+        return "weak_positive", "hit_session_moved_on"
+    if hit.started_at is not None and now - hit.started_at > session_complete_after:
+        return "weak_positive", "hit_session_expired"
     return None
 
 

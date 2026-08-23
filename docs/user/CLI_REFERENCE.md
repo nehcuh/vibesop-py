@@ -580,7 +580,7 @@ vibe skills report [options]
 ```
 
 **Options:**
-- `--grade, -g` - Filter by grade (A, B, C, D, F)
+- `--grade, -g` - Filter by grade (A, B, C, D, F, ?)
 - `--suggest-removal` - Show only skills recommended for removal (grade F)
 
 **Examples:**
@@ -612,6 +612,10 @@ Grades affect routing confidence:
 - **C** (no change): Neutral
 - **D** (-0.02 demote): Slight deprioritization
 - **F** (-0.05 demote): Low-quality skills are avoided
+- **?** (no routing data): Shown when a skill has zero routing feedback.
+  Score displays as "—" (not 0%) — no data is NOT a bad score. Grade "?"
+  never triggers deprecation/archive suggestions. Note: routing-confidence
+  adjustments only apply with >=3 explicit feedback records.
 
 > **Note:** Impact only applies when a skill has `>= 3` total routes (insufficient data otherwise).
 
@@ -716,7 +720,10 @@ vibe skill list --project
 - `Fire 30d²` — route hits in **this project's** spans over the last 30
   days, CLI path included. Raw counts only — **n<30 proves nothing**.
   Renaming or reinstalling a skill resets its history; `/` vs `-` id
-  normalisation also breaks the chain.
+  normalisation also breaks the chain. Route outcomes
+  (`route_outcomes.jsonl`, gate38) cover the **hook path only** — do NOT
+  combine them with this column into a "fire → success rate"; the two
+  populations are disjoint by design.
 - `Feedback³` — raw yes/no counts from project-level explicit feedback.
   "partial" is recorded as "no". `no records` means no feedback exists —
   it is NOT a neutral signal. `vibe skills feedback` writes to the global
@@ -833,14 +840,19 @@ vibe skill stale [options]
 ```
 
 **Options:**
-- `--auto, -a` - Automatically deprecate F-grade skills
-- `--json, -j` - Output as machine-readable JSON
+- `--auto, -a` - Apply suggested deprecations/archives (explicit opt-in)
+- `--json, -j` - Output as machine-readable JSON (still read-only)
+
+Since gate38 the default path — including `--json` — performs **no
+lifecycle writes**. The only explicit auto-disposition entry points are
+`vibe skill stale --auto`, `vibe optimize --apply`, and
+`vibe skill cleanup --auto`.
 
 **Examples:**
 ```bash
-vibe skill stale               # Report only
-vibe skill stale --auto        # Auto-deprecate F-grade skills
-vibe skill stale --json        # Machine-readable output
+vibe skill stale               # Report only (read-only)
+vibe skill stale --auto        # Apply suggested deprecations/archives
+vibe skill stale --json        # Machine-readable output (read-only)
 ```
 
 **Output:**
@@ -859,9 +871,15 @@ Summary: 1 to deprecate, 1 to warn, 1 performing well
 
 **How it works:**
 - Reads `usage_stats` from `SkillConfig` (updated by each route via `record_usage()`)
-- Reads quality scores from `RoutingEvaluator` (A-F grades)
+- Reads quality scores from `RoutingEvaluator` (A-F grades; "?" = no routing
+  feedback — such skills are never flagged)
 - Skills unused >30 days or with F-grade are flagged for deprecation
-- `--auto` transitions flagged skills to DEPRECATED lifecycle state
+- `--auto` transitions flagged skills to DEPRECATED/ARCHIVED lifecycle state
+- Discovery no longer silently archives DEPRECATED skills idle ≥90 days
+  (gate38): they stay DEPRECATED and visible in `discover_all` until you
+  archive them via an explicit entry point. Note: DEPRECATED skills with
+  grade "?" have no rule-based archive path — archive them manually if
+  needed.
 
 ---
 
@@ -874,7 +892,7 @@ vibe skill cleanup [options]
 ```
 
 **Options:**
-- `--auto, -a` — Apply all suggested deprecations and archives automatically
+- `--auto, -a` — Apply all suggested deprecations and archives (one of the three explicit auto-disposition entry points; everything is read-only without it)
 - `--dry-run, -n` — Preview what would be cleaned without making changes
 
 **Examples:**

@@ -22,14 +22,29 @@
 #
 # Environment dependence: routing runs against the LOCAL skill index
 # (~/.vibe/skill-index.json) and learned instincts (.vibe/instincts.jsonl),
-# so absolute scores vary by machine. Of the 51 residual misroutes measured
-# at audit time, ~40 land on locally-installed pack ids (mattpocock 21,
-# omx 14, superpowers 5) rather than on repo-builtin skills. 4 of the 7
-# positives (omx/git-master, superpowers/using-git-worktrees x2,
-# superpowers/requesting-code-review) require the omx + superpowers packs
-# installed in the eval env; a bare-env run shows these (~5 with
-# env-sensitive fallback paths) as systematic misses that are NOT router
-# regressions.
+# so absolute scores vary by machine.
+#
+# requires_packs field (gate38; this field is the single source of truth for
+# pack-environment dependence — the prose that used to live here is gone):
+# entries whose expect labels live in an external skill pack carry
+# `requires_packs: [<namespace>]`. scripts/eval_routing.py scores such an
+# entry as skipped_env when it is annotated AND expect is non-empty AND
+# every expect id is unresolvable in the current environment (builtin ids
+# resolve from core/registry.yaml; external ids from ExternalSkillLoader
+# discovery). skipped_env entries are excluded from total/denominator and
+# from the errors list, and record ok1: null in per_query. If the presence
+# check itself raises, ids count as resolvable (conservative: the entry is
+# scored — possibly as a false error — never silently skipped). Annotated
+# entries with expect: [] are NEVER skipped (a bare all([]) would
+# vacuously skip every annotation).
+#
+# Residual noise disclosure — extended numbers are NOT a clean baseline:
+# (a) reject-only entries (expect: [] with reject containing pack ids) pass
+#     vacuously in a bare environment where the pack is absent, inflating
+#     the measured pass rate;
+# (b) the ~5 env-sensitive fallback-path entries noted in the pre-gate38
+#     header are still unannotated and still count as errors on bare
+#     machines — they are environment misses, not router regressions.
 #
 # Known labeling tension: `commit 三批改动` is labeled omx/git-master (a
 # positive) while sibling git-ish queries (按批次拆 commit / 保存并提交远程 /
@@ -100,6 +115,7 @@
 - query: commit 三批改动
   expect:
   - omx/git-master
+  requires_packs: [omx]
   category: production_log
   needs_review: false
 - query: 拉取最新变更并进行评审
@@ -118,6 +134,7 @@
 - query: 删掉 mission-pack-p0 worktree 并清理远程分
   expect:
   - superpowers/using-git-worktrees
+  requires_packs: [superpowers]
   category: production_log
   needs_review: false
 - query: 这块也可以作为后续优化的一个方向
@@ -190,6 +207,7 @@
 - query: 清 worktree/stash
   expect:
   - superpowers/using-git-worktrees
+  requires_packs: [superpowers]
   category: production_log
   needs_review: false
 - query: 1. 输入 "/code" 后弹窗，选择工作区直接没有反映 2. 既然是 ACP 进入编程助手了， 我理解界面旁边就应该有独立的 Agent，可以看到编程助手内部的操作和流转才对
@@ -302,6 +320,7 @@
 - query: 走一遍 dual-review 对 diff 再
   expect:
   - superpowers/requesting-code-review
+  requires_packs: [superpowers]
   category: production_log
   needs_review: false
 - query: 先让 pi 和 claude 进行双路复审

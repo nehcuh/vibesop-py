@@ -912,6 +912,22 @@ def route(
         if _mode is not None:
             _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
         _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
+        # gate38 L2a: ordered routing snapshot ("top_skills", ≤3, primary
+        # first). Gated on the SAME expression as metadata["has_match"]
+        # above and read from the routing RESULT object (not the
+        # just-written metadata — the primary/skill_id writes above
+        # precede the has_match write). On miss the CLI alternatives are
+        # fallback nearest-neighbours (result_mixin), not a router
+        # ranking, so the key is omitted entirely. isinstance(str) guard:
+        # a mocked router's attributes (MagicMock) must not leak into
+        # span metadata — same convention as the layer guard below.
+        if bool(getattr(result, "has_match", False)):
+            _alts = getattr(result, "alternatives", None) or []
+            _alt_ids = [getattr(a, "skill_id", "") for a in _alts]
+            _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
+            _top = [s for s in [_primary_id, *_alt_ids] if isinstance(s, str) and s]
+            if _top:
+                _cli_task_span.metadata["top_skills"] = _top[:3]
         # gate18 pi NIT-4: record the routing layer so ScanSummary
         # .miss_share_by_layer has real buckets. Semantics (mirror
         # agent_runtime.handle_query): match → the winning layer
@@ -1704,7 +1720,7 @@ def _check_stale_skills_post_route() -> None:
         from vibesop.core.skills.feedback_loop import FeedbackLoop
 
         loop = FeedbackLoop()
-        suggestions = loop.analyze_all()
+        suggestions = loop.analyze_all(auto_deprecate=False)
         critical = [s for s in suggestions if s.action in ("deprecate", "archive")]
 
         if critical:

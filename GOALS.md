@@ -52,7 +52,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 #### 6. 清理不使用/过时技能
 - `vibe skill cleanup` 交互式/自动清理
 - `vibe skill stale` 健康分析报告
-- 90 天自动归档（D/F 级技能）
+- 过期技能归档（默认只读；显式入口 `vibe skill cleanup --auto` / `vibe skill stale --auto` / `vibe optimize --apply`，gate38 起无全自动路径）
 - `vibe skill end-check` 会话结束检查
 - `vibe trace clean` 清理旧路由追踪
 
@@ -101,7 +101,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 #### 11. 失败处理与偏航记录
 - `deviation.py`：记录 Agent 跳过路由推荐的偏航，6 种标准原因码
 - `analyze_deviations()`：偏航模式分析
-- `FeedbackLoop.analyze_all()`：低质量技能自动降级/归档
+- `FeedbackLoop.analyze_all()`：低质量技能分析（默认只读；显式 flag 才执行降级/归档，gate38 起）
 - `RetentionPolicy`：F 级 30 天 + 使用 < 3 次 → 建议移除；D 级 60 天 → 警告
 
 #### 12. `/instinct` 对话洞察

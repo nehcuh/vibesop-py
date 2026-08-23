@@ -543,3 +543,161 @@ class TestRouterMatchedSpanVerdict:
         bridge_span = _as_route_span(span)
         assert bridge_span.has_match is None
         assert _is_miss(bridge_span) is False
+
+
+class TestTopSkillsSpanMetadata:
+    """gate38 L2a — hook-path hit spans carry ``metadata.top_skills``
+    (≤3, primary first). Written ONLY on a real router hit
+    (``result.router_matched``, the same expression as
+    ``metadata["has_match"]``) — NOT on the mode-derived ``has_match``
+    property, which stays True on intercepted misses.
+    """
+
+    @pytest.fixture
+    def fresh_tracer(self, tmp_path, monkeypatch):
+        """Point the tracer singleton (and the agent_runtime cache) at tmp_path."""
+        import vibesop.core.observability.tracer as tracer_mod
+        from vibesop.agent.runtime import agent_runtime as ar_module
+        from vibesop.core.observability.tracer import ObservabilityTracer
+
+        span_file = tmp_path / "spans.jsonl"
+        fresh = ObservabilityTracer(storage_path=span_file, enabled=True)
+        monkeypatch.setattr(tracer_mod, "_tracer", fresh)
+        monkeypatch.setattr(ar_module, "_obs_tracer", None, raising=False)
+        return span_file
+
+    def _route_span(self, span_file) -> dict:
+        import json
+
+        spans = []
+        with span_file.open() as f:
+            for raw in f:
+                if raw.strip():
+                    spans.append(json.loads(raw))
+        route_spans = [s for s in spans if str(s.get("name", "")).startswith("route:")]
+        assert len(route_spans) == 1, f"expected 1 route span, got {len(route_spans)}"
+        return route_spans[0]
+
+    @staticmethod
+    def _metadata(span: dict) -> dict:
+        import json
+
+        meta = span.get("metadata") or {}
+        return json.loads(meta) if isinstance(meta, str) else meta
+
+    def _runtime_with_router(self, tmp_path, routing_result):
+        from unittest.mock import MagicMock
+
+        router = MagicMock()
+        router.route.return_value = routing_result
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = router
+        return runtime
+
+    @staticmethod
+    def _hit_result(alternatives):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = True
+        routing_result.primary = SimpleNamespace(
+            skill_id="some-skill", skill_name="Some Skill", confidence=0.9, layer=None
+        )
+        routing_result.alternatives = alternatives
+        routing_result.plan = None
+        return routing_result
+
+    def test_hit_writes_top_skills_primary_first(self, fresh_tracer, tmp_path) -> None:
+        from types import SimpleNamespace
+
+        routing_result = self._hit_result(
+            [
+                SimpleNamespace(skill_id="alt-1", confidence=0.7),
+                SimpleNamespace(skill_id="alt-2", confidence=0.6),
+            ]
+        )
+        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+        assert metadata["top_skills"] == ["some-skill", "alt-1", "alt-2"]
+
+    def test_top_skills_capped_at_three(self, fresh_tracer, tmp_path) -> None:
+        from types import SimpleNamespace
+
+        routing_result = self._hit_result(
+            [SimpleNamespace(skill_id=f"alt-{i}", confidence=0.5) for i in range(4)]
+        )
+        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata["top_skills"] == ["some-skill", "alt-0", "alt-1"]
+
+    def test_intercepted_miss_omits_top_skills(self, fresh_tracer, tmp_path) -> None:
+        """Latent pin for the grok-NIT gate choice (``router_matched`` over
+        the mode-derived ``has_match`` property, which stays True on
+        intercepted misses). Today miss paths also leave ``skill_id`` /
+        ``alternatives`` empty, so swapping the gate to the property stays
+        green — this test only goes red once miss paths start filling
+        alternatives. The live fallback-garbage defense is the CLI-side
+        ``test_miss_with_fallback_alternatives_omits_top_skills``."""
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = False
+        routing_result.primary = None
+        routing_result.layer_details = []
+        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is False
+        assert "top_skills" not in metadata
+
+    def test_magicmock_alternative_does_not_leak(self, fresh_tracer, tmp_path) -> None:
+        """A MagicMock alternative's auto-created skill_id (a MagicMock,
+        not a str) must never reach span metadata — same guard convention
+        as the layer write."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        routing_result = self._hit_result(
+            [MagicMock(), SimpleNamespace(skill_id="alt-1", confidence=0.7)]
+        )
+        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata["top_skills"] == ["some-skill", "alt-1"]
+        # The metadata round-tripped through SpanWriter JSON — a leaked
+        # MagicMock would have failed serialization already.
+
+    def test_skill_health_reader_unaffected_by_top_skills_key(self, tmp_path) -> None:
+        """skill_health fire counts are identical for old spans (no
+        top_skills key) and new spans (with it) — additive metadata must
+        not move the gate37 reader."""
+        import json as _json
+        from datetime import UTC, datetime, timedelta
+
+        from vibesop.core.skills.skill_health import count_skill_fires
+
+        now = datetime.now(UTC)
+
+        def _span_meta(extra: dict) -> dict:
+            meta = {"skill_id": "demo/skill", "has_match": True, **extra}
+            return {
+                "span_kind": "task",
+                "name": "route:demo",
+                "metadata": _json.dumps(meta),
+                "started_at": (now - timedelta(days=1)).isoformat(),
+            }
+
+        path = tmp_path / ".vibe" / "observability" / "spans.dev.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            _json.dumps(_span_meta({}))
+            + "\n"
+            + _json.dumps(_span_meta({"top_skills": ["demo/skill", "alt-1"]}))
+            + "\n",
+            encoding="utf-8",
+        )
+        assert count_skill_fires(tmp_path, now=now) == {"demo/skill": 2}

@@ -60,10 +60,16 @@ class SkillEvaluation:
         - execution_success: 25%
         - usage_frequency: 15%
         - health_score: 10%
+
+        Skills with zero routing feedback (``total_routes == 0``) score 0.0
+        and grade "?" — see :py:attr:`grade` for the vocabulary note.
         """
         if self.total_routes == 0:
-            # No routing data: fall back to confidence + user_score blend
-            return 0.5 + (self.avg_confidence * 0.05) + (self.user_score * 0.05)
+            # No routing feedback: there is nothing to score. Returning 0.0
+            # (instead of a fabricated neutral 0.5) must stay paired with the
+            # "?" grade below — a bare 0.0 would grade as F and trip the
+            # auto-deprecate rule in feedback_loop.
+            return 0.0
         return (
             self.routing_accuracy * 0.25
             + self.user_satisfaction * 0.25
@@ -76,12 +82,17 @@ class SkillEvaluation:
     def grade(self) -> str:
         """Letter grade based on quality score (0-100 scale).
 
+        ?: no routing feedback (skill exists but has never been routed to) —
+        distinct from the "?" in ``retention.RetentionPolicy.analyze_skill``,
+        which means *no evaluation object at all*.
         A: 90-100 (Excellent)
         B: 75-89  (Good)
         C: 60-74  (Acceptable)
         D: 40-59  (Needs improvement)
         F: 0-39   (Consider removal)
         """
+        if self.total_routes == 0:
+            return "?"
         score = self.quality_score * 100
         if score >= 90:
             return "A"

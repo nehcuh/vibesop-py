@@ -352,7 +352,7 @@ def status(
 @app.command()
 def stale(
     auto_deprecate: bool = typer.Option(
-        False, "--auto", "-a", help="Automatically deprecate stale skills"
+        False, "--auto", "-a", help="Apply suggested deprecations and archives (explicit opt-in; default is read-only)"
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
@@ -362,10 +362,15 @@ def stale(
     recently or have low quality scores. Skills with no recorded usage
     data are shown separately — these may be newly installed or never triggered.
 
+    The default path is fully read-only (no lifecycle writes, including
+    with --json). The explicit auto-disposition entry points are
+    ``vibe skill stale --auto``, ``vibe optimize --apply``, and
+    ``vibe skill cleanup --auto``.
+
     Examples:
-        vibe skill stale              # Show report only
+        vibe skill stale              # Show report only (read-only)
         vibe skill stale --auto       # Auto-deprecate F-grade skills
-        vibe skill stale --json       # Machine-readable output
+        vibe skill stale --json       # Machine-readable output (read-only)
     """
     from vibesop.core.skills.feedback_loop import FeedbackLoop
 

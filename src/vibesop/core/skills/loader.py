@@ -146,23 +146,10 @@ class SkillLoader:
             if config is not None:
                 if not config.enabled:
                     continue
-                # Auto-archive deprecated skills unused for 90+ days
-                if config.lifecycle == SkillLifecycleState.DEPRECATED.value:
-                    last_used = config.usage_stats.get("last_used")
-                    if last_used:
-                        try:
-                            from datetime import UTC, datetime
-
-                            last = datetime.fromisoformat(last_used.replace("Z", "+00:00"))
-                            now = datetime.now(UTC)
-                            days_since = (now - last).days
-                            if days_since >= 90:
-                                SkillConfigManager.set_lifecycle(
-                                    skill_id, SkillLifecycleState.ARCHIVED.value
-                                )
-                                continue
-                        except (ValueError, TypeError, OverflowError):
-                            pass
+                # DEPRECATED skills stay in the discovery set regardless of
+                # last_used — hiding by age without a state change would be a
+                # silent side channel. Explicit archival lives in
+                # feedback_loop (stale --auto / optimize --apply / cleanup --auto).
                 if config.lifecycle == SkillLifecycleState.ARCHIVED.value:
                     continue
                 # Scope isolation: project-scoped skills from other projects are hidden

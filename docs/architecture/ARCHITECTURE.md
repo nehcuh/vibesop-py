@@ -594,13 +594,13 @@ of platform. The difference is purely in execution concurrency.
 - Skill marketplace: search (`vibe market search`), install (`vibe market install`)
 - Publish via GitHub Issues (`vibe market publish`)
 - 5-dimension quality evaluation (routing accuracy, user satisfaction, execution success, usage frequency, health score)
-- Automated retention/deprecation with FeedbackLoop
+- Retention/deprecation analysis with FeedbackLoop (read-only by default; explicit flags apply changes, gate38)
 
 ### 5.2.0 — Intelligent Ecosystem ✅
 - Per-skill recommendation engine (SkillRecommender)
 - 4-level confidence-gated degradation (DegradationManager)
 - Proactive discovery of unused skills matching current workflow
-- Auto-deprecation enabled by default
+- Deprecation suggestions by default; lifecycle changes only via explicit flags (`--auto`/`--apply`, gate38)
 
 ---
 

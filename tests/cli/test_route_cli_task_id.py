@@ -241,3 +241,142 @@ class TestRouteCliLayerMetadata:
             metadata = json.loads(metadata)
         assert metadata.get("has_match") is False
         assert metadata.get("layer") == "levenshtein"
+
+
+class TestRouteCliTopSkills:
+    """gate38 L2a — CLI hit spans carry ``metadata.top_skills`` (≤3,
+    primary first). Gated on the same expression as
+    ``metadata["has_match"]`` and read from the routing result object.
+    On miss the CLI alternatives are fallback nearest-neighbours
+    (result_mixin), not a router ranking → the key is omitted entirely.
+    """
+
+    @staticmethod
+    def _metadata(span: dict) -> dict:
+        meta = span.get("metadata") or {}
+        return json.loads(meta) if isinstance(meta, str) else meta
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_hit_writes_top_skills_primary_first(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        from types import SimpleNamespace
+
+        mock_stdin.isatty.return_value = False
+        orch = mock_router._to_orchestration_result.return_value
+        orch.alternatives = [
+            SimpleNamespace(skill_id="alt-1"),
+            SimpleNamespace(skill_id="alt-2"),
+        ]
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "cmspark screenshot permission popup"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        route_spans = _read_route_spans(fresh_tracer)
+        assert len(route_spans) == 1
+        metadata = self._metadata(route_spans[0])
+        assert metadata.get("has_match") is True
+        assert metadata["top_skills"] == ["test-skill", "alt-1", "alt-2"]
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_top_skills_capped_at_three(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        from types import SimpleNamespace
+
+        mock_stdin.isatty.return_value = False
+        orch = mock_router._to_orchestration_result.return_value
+        orch.alternatives = [SimpleNamespace(skill_id=f"alt-{i}") for i in range(4)]
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "cmspark screenshot permission popup"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+        assert metadata["top_skills"] == ["test-skill", "alt-0", "alt-1"]
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_miss_with_fallback_alternatives_omits_top_skills(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        from types import SimpleNamespace
+
+        mock_stdin.isatty.return_value = False
+        miss_orch = MagicMock()
+        miss_orch.mode.value = "single"
+        miss_orch.execution_plan = None
+        miss_orch.primary = None
+        miss_orch.has_match = False
+        # Miss-path alternatives are fallback nearest-neighbours — they
+        # must NOT be snapshotted as a ranking.
+        miss_orch.alternatives = [SimpleNamespace(skill_id="fallback-nearest")]
+        miss_orch.layer_details = []
+        miss_orch.to_dict.return_value = {"mode": "single"}
+        mock_router._to_orchestration_result.return_value = miss_orch
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "totally unroutable xyzzy query"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+        assert metadata.get("has_match") is False
+        assert "top_skills" not in metadata
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_magicmock_alternative_does_not_leak(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        """A MagicMock alternative's auto-created skill_id (a MagicMock,
+        not a str) must never reach span metadata — same guard convention
+        as the layer write."""
+        mock_stdin.isatty.return_value = False
+        orch = mock_router._to_orchestration_result.return_value
+        orch.alternatives = [MagicMock()]
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "cmspark screenshot permission popup"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+        assert metadata["top_skills"] == ["test-skill"]

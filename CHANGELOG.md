@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 技能评价体系第二刀（gate38, 2026-08-23）
+
+按 `.omx/artifacts/gate38-synthesis.md` r3 定稿实施（三路对抗设计 +
+claude/pi/grok 三路评审两轮收敛,0 BLOCK)。三块内容：
+
+- **L2a 仪表化**：route span metadata 新增 `top_skills`（≤3,仅
+  `has_match is True` 时写键,写时数据不可回填）；`tool_call_bridge`
+  新增 hit 侧 outcome 派生（`_is_hit`/`_classify_hit`/
+  `_derive_hit_outcomes`,镜像 miss 侧 write-once + span_id 去重）,
+  行 schema 加 `side:"hit"` + `population:"hook"` 自描述。**行为变
+  化**:`route_outcomes.jsonl` 首跑会回灌全部历史 hit（其中
+  `hit_session_expired` 占主导、信号最弱,按 `hit_` 前缀可过滤）。
+  两侧 outcome 均仅覆盖 hook 路径,与 fire 列（含 CLI）总体不相交,
+  禁止拼 fire→成功率比率。`_is_miss`/`_classify` 函数体零改动。
+- **假 L2 处置**：默认路径全部只读。**行为变化**:
+  (a) 零路由反馈技能 `quality_score` 0.5→0.0、`grade` 新增 `"?"`
+  （原子对,同 commit),分数显示 "—" 而非 0%,"?" 不产生任何
+  deprecation/archive 建议;
+  (b) `FeedbackLoop.analyze_all` 默认 `auto_deprecate=False`,原先
+  每 20 次路由（`_check_stale_skills_post_route`)、no-match 渲染
+  （`_render_stale_suggestions`)、`stale --json`、`end-check` 四处
+  静默自动 deprecate/archive 全部转只读;
+  (c) loader 不再在 discovery 热路径静默 archive DEPRECATED≥90d 技
+  能（整块含 `continue` 删除）——已知后果:DEPRECATED+"?"/无评价
+  技能无任何到达 ARCHIVED 的规则路径,保持 DEPRECATED 留在发现池;
+  (d) `vibe optimize` 的 quality actions 修复（原构造 bug 使其恒为
+  空),`optimize --apply` 从三年静默死代码变为真实生效（三类动作
+  deprecate/archive/boost 复活按实际写入全部入 optimization log)。
+  显式自动处置入口三处:`vibe skill stale --auto`、
+  `vibe optimize --apply`、`vibe skill cleanup --auto`。
+- **report-only CI**:extended 评测集新增 `requires_packs` 字段
+  (4 条 pack 依赖条目标注,裸环境转 `skipped_env` 不计分母不进
+  errors,presence 检查失败按存在处理的保守方向）;`ci.yml` 新增
+  `routing-eval` job(`continue-on-error`,**永久 report-only,不
+  设观察期转硬门**),跑主集+extended 并上传 JSON artifact。裸环境
+  基线存档:主集 top-1 61.8%、extended 94.4%
+  (`.omx/artifacts/gate38-eval-baseline-bare.jsonl`)。
+
 ### 技能评价体系第一刀（gate37, 2026-08-23）
 
 按 `.omx/artifacts/gate37-synthesis.md` 定稿实施（三路评审两轮收敛,

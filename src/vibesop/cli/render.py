@@ -63,7 +63,7 @@ def _render_stale_suggestions() -> str:
         from vibesop.core.skills.feedback_loop import FeedbackLoop
 
         loop = FeedbackLoop()
-        suggestions = loop.analyze_all()
+        suggestions = loop.analyze_all(auto_deprecate=False)
 
         deprecated = [s for s in suggestions if s.action == "deprecate"]
         warned = [s for s in suggestions if s.action == "warn"]

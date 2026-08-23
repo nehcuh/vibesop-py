@@ -62,7 +62,12 @@ class RetentionPolicy:
         self._evaluator = evaluator or RoutingEvaluator()
 
     def analyze_skill(self, skill_id: str) -> DeprecatedRetentionSuggestion:
-        """Analyze a single skill and return retention recommendation."""
+        """Analyze a single skill and return retention recommendation.
+
+        Grade "?" here means *no evaluation object exists* for the skill —
+        distinct from ``evaluator.SkillEvaluation.grade == "?"``, which means
+        an evaluation object exists but has no routing feedback.
+        """
         evaluation = self._evaluator.evaluate_skill(skill_id)
         if evaluation is None:
             return DeprecatedRetentionSuggestion(

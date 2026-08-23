@@ -1,9 +1,14 @@
 """Feedback loop — closes the gap between evaluation and action.
 
 Connects SkillEvaluator quality scores to lifecycle management:
-- F-grade skills with sufficient data → auto-deprecate
-- A-grade skills → routing priority boost
+- F-grade skills with sufficient data → deprecate suggestion
+- A-grade skills → routing priority boost suggestion
 - Generates retention suggestions for user review
+
+Lifecycle writes are strictly opt-in: ``analyze_all()`` is read-only by
+default (``auto_deprecate=False``). The explicit auto-disposition
+entry points are ``vibe skill stale --auto``, ``vibe optimize --apply``,
+and ``vibe skill cleanup --auto``.
 """
 
 from __future__ import annotations
@@ -34,11 +39,14 @@ class RetentionSuggestion:
 
 
 class FeedbackLoop:
-    """Autonomous feedback loop for skill quality management.
+    """Opt-in feedback loop for skill quality management.
 
-    Analyzes skill evaluations and takes automated actions:
+    Analyzes skill evaluations and produces retention suggestions.
+    Lifecycle writes only happen when ``analyze_all`` is called with
+    ``auto_deprecate=True``:
     - Deprecates F-grade skills with sufficient data
-    - Boosts A-grade skills in routing priority
+    - Archives 90+ day unused C/D/F-grade skills
+    - Restores deprecated A-grade skills back to active (boost)
     - Generates retention suggestions for user review
 
     Example:
@@ -62,17 +70,28 @@ class FeedbackLoop:
     ) -> None:
         self._project_root = Path(project_root)
         self._evaluator = evaluator or RoutingEvaluator(project_root=project_root)
+        # Skill IDs whose lifecycle was actually written during the most
+        # recent analyze_all(auto_deprecate=True) call.
+        self._last_applied: list[str] = []
 
-    def analyze_all(self, auto_deprecate: bool = True) -> list[RetentionSuggestion]:
+    @property
+    def last_applied_skill_ids(self) -> list[str]:
+        """Skill IDs whose lifecycle was written by the last auto apply run."""
+        return list(self._last_applied)
+
+    def analyze_all(self, auto_deprecate: bool = False) -> list[RetentionSuggestion]:
         """Analyze all skills and return actionable suggestions.
 
         Args:
-            auto_deprecate: If True, automatically deprecates F-grade skills.
-                          If False, only returns suggestions for user review.
+            auto_deprecate: If True, applies lifecycle writes for
+                          deprecate/archive/boost suggestions.
+                          If False (default), only returns suggestions for
+                          user review — no lifecycle state is written.
 
         Returns:
             List of RetentionSuggestion objects.
         """
+        self._last_applied = []
         suggestions: list[RetentionSuggestion] = []
         evaluations = self._evaluator.evaluate_all_skills()
 
@@ -82,12 +101,16 @@ class FeedbackLoop:
                 continue
             suggestions.append(suggestion)
 
-            if auto_deprecate and suggestion.action == "deprecate":
-                self._apply_deprecation(skill_id, suggestion.reason)
-            elif auto_deprecate and suggestion.action == "archive":
-                self._apply_archive(skill_id, suggestion.reason)
-            elif auto_deprecate and suggestion.action == "boost":
-                self._apply_boost(skill_id)
+            applied = False
+            if auto_deprecate:
+                if suggestion.action == "deprecate":
+                    applied = self._apply_deprecation(skill_id, suggestion.reason)
+                elif suggestion.action == "archive":
+                    applied = self._apply_archive(skill_id, suggestion.reason)
+                elif suggestion.action == "boost":
+                    applied = self._apply_boost(skill_id)
+            if applied:
+                self._last_applied.append(skill_id)
 
         return sorted(suggestions, key=lambda s: s.quality_score)
 
@@ -177,35 +200,49 @@ class FeedbackLoop:
 
         return None
 
-    def _apply_deprecation(self, skill_id: str, reason: str) -> None:
-        """Deprecate a skill."""
+    def _apply_deprecation(self, skill_id: str, reason: str) -> bool:
+        """Deprecate a skill. Returns True iff the lifecycle was written."""
         try:
             SkillConfigManager.set_lifecycle(skill_id, "deprecated")
             logger.info("Auto-deprecated skill %s: %s", skill_id, reason)
+            return True
         except (ValueError, OSError, KeyError, AttributeError):
             logger.warning("Failed to deprecate skill %s", skill_id)
+            return False
 
-    def _apply_archive(self, skill_id: str, reason: str) -> None:
-        """Archive a stale skill."""
+    def _apply_archive(self, skill_id: str, reason: str) -> bool:
+        """Archive a stale skill. Returns True iff the lifecycle was written."""
         try:
             SkillConfigManager.set_lifecycle(skill_id, "archived")
             logger.info("Auto-archived skill %s: %s", skill_id, reason)
+            return True
         except (ValueError, OSError, KeyError, AttributeError):
             logger.warning("Failed to archive skill %s", skill_id)
+            return False
 
-    def _apply_boost(self, skill_id: str) -> None:
-        """Boost a high-quality skill — ensure it stays active if deprecated."""
+    def _apply_boost(self, skill_id: str) -> bool:
+        """Boost a high-quality skill — restore it to active if deprecated.
+
+        Returns True iff the lifecycle was written. An already-active
+        (or otherwise non-deprecated) skill is a no-op and returns False.
+        """
         try:
             config = SkillConfigManager.get_skill_config(skill_id)
             if config and config.lifecycle == "deprecated":
                 SkillConfigManager.set_lifecycle(skill_id, "active")
                 logger.info("Auto-boosted skill %s back to active", skill_id)
+                return True
+            return False
         except (ValueError, OSError, KeyError, AttributeError):
             logger.warning("Failed to boost skill %s", skill_id)
+            return False
 
     def generate_report(self) -> dict[str, Any]:
-        """Generate a summary report with evaluation results and actions."""
-        suggestions = self.analyze_all()
+        """Generate a summary report with evaluation results and actions.
+
+        Read-only: never writes lifecycle state.
+        """
+        suggestions = self.analyze_all(auto_deprecate=False)
         deprecate_count = sum(1 for s in suggestions if s.action == "deprecate")
         warn_count = sum(1 for s in suggestions if s.action == "warn")
         archive_count = sum(1 for s in suggestions if s.action == "archive")
@@ -240,10 +277,12 @@ class FeedbackLoop:
         suggestion detection (new patterns). Called by the
         session-end hook or `vibe skill end-check`.
 
+        Read-only: never writes lifecycle state.
+
         Returns:
             Dict with retention and suggestion data for display/logging.
         """
-        retention_suggestions = self.analyze_all()
+        retention_suggestions = self.analyze_all(auto_deprecate=False)
         retention_actions = [s for s in retention_suggestions if s.action != "none"]
 
         suggestion_stats: dict[str, Any] = {"pending": 0, "should_prompt": False}

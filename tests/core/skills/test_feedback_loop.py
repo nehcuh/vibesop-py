@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+from vibesop.core.models import SkillLifecycle
+from vibesop.core.skills.config_manager import SkillConfig
 from vibesop.core.skills.evaluator import SkillEvaluation
 from vibesop.core.skills.feedback_loop import FeedbackLoop
 
@@ -191,3 +193,147 @@ class TestFeedbackLoop:
         assert report["total_skills_analyzed"] == 2
         assert report["actions"]["deprecate"] == 1
         assert report["actions"]["boost"] == 1
+
+
+class TestFeedbackLoopOptIn:
+    """gate38: lifecycle writes are strictly opt-in (auto_deprecate=True)."""
+
+    _SET_LIFECYCLE = "vibesop.core.skills.feedback_loop.SkillConfigManager.set_lifecycle"
+    _GET_CONFIG = "vibesop.core.skills.feedback_loop.SkillConfigManager.get_skill_config"
+
+    @staticmethod
+    def _f_grade_eval(skill_id: str = "test/bad") -> SkillEvaluation:
+        """Real F-grade evaluation: 30+ days unused, < 3 uses."""
+        last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
+        return SkillEvaluation(
+            skill_id=skill_id,
+            total_routes=1,
+            routing_accuracy=0.3,
+            user_satisfaction=0.3,
+            execution_success=0.3,
+            usage_frequency=0.3,
+            health_score=0.3,
+            last_used=last_used,
+        )
+
+    def _loop_with(self, evaluations: dict[str, SkillEvaluation]) -> FeedbackLoop:
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = evaluations
+        return FeedbackLoop(evaluator=evaluator)
+
+    def test_analyze_all_default_writes_nothing(self) -> None:
+        loop = self._loop_with({"test/bad": self._f_grade_eval()})
+        with patch(self._SET_LIFECYCLE) as mock_set:
+            suggestions = loop.analyze_all()
+            assert [s.action for s in suggestions] == ["deprecate"]
+            mock_set.assert_not_called()
+            assert loop.last_applied_skill_ids == []
+
+    def test_generate_report_writes_nothing(self) -> None:
+        loop = self._loop_with({"test/bad": self._f_grade_eval()})
+        with patch(self._SET_LIFECYCLE) as mock_set:
+            loop.generate_report()
+            mock_set.assert_not_called()
+
+    def test_end_of_session_check_writes_nothing(self) -> None:
+        loop = self._loop_with({"test/bad": self._f_grade_eval()})
+        with patch(self._SET_LIFECYCLE) as mock_set:
+            loop.end_of_session_check()
+            mock_set.assert_not_called()
+
+    def test_zero_sample_never_disposed_even_with_auto(self) -> None:
+        """Joint must-NOT: a zero-sample skill graded "?" produces no
+        suggestion at all (no deprecate, no warn) and no lifecycle write,
+        even under analyze_all(auto_deprecate=True)."""
+        last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)).isoformat()
+        evaluation = SkillEvaluation(skill_id="test/zero", total_routes=0, last_used=last_used)
+        assert evaluation.grade == "?"
+        loop = self._loop_with({"test/zero": evaluation})
+        with patch(self._SET_LIFECYCLE) as mock_set:
+            suggestions = loop.analyze_all(auto_deprecate=True)
+            assert suggestions == []
+            mock_set.assert_not_called()
+            assert loop.last_applied_skill_ids == []
+
+    def test_explicit_auto_still_deprecates_real_f(self) -> None:
+        loop = self._loop_with({"test/bad": self._f_grade_eval()})
+        with patch(self._SET_LIFECYCLE) as mock_set:
+            suggestions = loop.analyze_all(auto_deprecate=True)
+            assert [s.action for s in suggestions] == ["deprecate"]
+            mock_set.assert_called_once_with("test/bad", "deprecated")
+            assert loop.last_applied_skill_ids == ["test/bad"]
+
+    def test_failed_apply_not_counted(self) -> None:
+        """A set_lifecycle failure swallowed by _apply_* must not count
+        as applied."""
+        loop = self._loop_with({"test/bad": self._f_grade_eval()})
+        with patch(self._SET_LIFECYCLE, side_effect=OSError("disk gone")):
+            suggestions = loop.analyze_all(auto_deprecate=True)
+            assert [s.action for s in suggestions] == ["deprecate"]
+            assert loop.last_applied_skill_ids == []
+
+    def test_boost_not_applied_without_auto(self) -> None:
+        """A deprecated A-grade skill is not restored to active when
+        auto_deprecate=False."""
+        evaluation = SkillEvaluation(
+            skill_id="test/great",
+            total_routes=5,
+            routing_accuracy=0.95,
+            user_satisfaction=0.95,
+            execution_success=0.95,
+            usage_frequency=0.95,
+            health_score=0.95,
+        )
+        loop = self._loop_with({"test/great": evaluation})
+        deprecated_config = SkillConfig(skill_id="test/great", lifecycle=SkillLifecycle.DEPRECATED)
+        with (
+            patch(self._SET_LIFECYCLE) as mock_set,
+            patch(self._GET_CONFIG, return_value=deprecated_config),
+        ):
+            suggestions = loop.analyze_all(auto_deprecate=False)
+            assert [s.action for s in suggestions] == ["boost"]
+            mock_set.assert_not_called()
+            assert loop.last_applied_skill_ids == []
+
+    def test_boost_restores_deprecated_with_auto(self) -> None:
+        evaluation = SkillEvaluation(
+            skill_id="test/great",
+            total_routes=5,
+            routing_accuracy=0.95,
+            user_satisfaction=0.95,
+            execution_success=0.95,
+            usage_frequency=0.95,
+            health_score=0.95,
+        )
+        loop = self._loop_with({"test/great": evaluation})
+        deprecated_config = SkillConfig(skill_id="test/great", lifecycle=SkillLifecycle.DEPRECATED)
+        with (
+            patch(self._SET_LIFECYCLE) as mock_set,
+            patch(self._GET_CONFIG, return_value=deprecated_config),
+        ):
+            loop.analyze_all(auto_deprecate=True)
+            mock_set.assert_called_once_with("test/great", "active")
+            assert loop.last_applied_skill_ids == ["test/great"]
+
+    def test_boost_on_active_skill_not_counted(self) -> None:
+        """must-NOT: a boost suggestion for an already-active skill is a
+        no-op — no lifecycle write and it must not appear in applied ids."""
+        evaluation = SkillEvaluation(
+            skill_id="test/active",
+            total_routes=5,
+            routing_accuracy=0.95,
+            user_satisfaction=0.95,
+            execution_success=0.95,
+            usage_frequency=0.95,
+            health_score=0.95,
+        )
+        loop = self._loop_with({"test/active": evaluation})
+        active_config = SkillConfig(skill_id="test/active", lifecycle=SkillLifecycle.ACTIVE)
+        with (
+            patch(self._SET_LIFECYCLE) as mock_set,
+            patch(self._GET_CONFIG, return_value=active_config),
+        ):
+            suggestions = loop.analyze_all(auto_deprecate=True)
+            assert [s.action for s in suggestions] == ["boost"]
+            mock_set.assert_not_called()
+            assert loop.last_applied_skill_ids == []

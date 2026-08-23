@@ -68,11 +68,17 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
         evals = evaluator.evaluate_all_skills()
 
         grade_counts: dict[str, int] = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+        no_data = 0
         for e in evals.values():
+            if e.grade == "?":
+                # No routing feedback — exclude from the graded denominator.
+                no_data += 1
+                continue
             grade_counts[e.grade] = grade_counts.get(e.grade, 0) + 1
-        evaluated = len(evals)
+        evaluated = len(evals) - no_data
     except Exception as e:
         evaluated = 0
+        no_data = 0
         grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
 
     lines: list[str] = []
@@ -82,6 +88,10 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
         lines.append(f"[dim]{evaluated} with evaluation data[/dim]")
         lines.append("")
         lines.append(_grade_bar(grade_counts, evaluated))
+        if no_data:
+            lines.append(f"[dim]+ {no_data} with no routing data (grade ?)[/dim]")
+    elif no_data:
+        lines.append(f"[dim]{no_data} with no routing data yet (grade ?)[/dim]")
     else:
         lines.append("")
         lines.append("[dim]No evaluation data yet. Skills are evaluated as you use them.[/dim]")

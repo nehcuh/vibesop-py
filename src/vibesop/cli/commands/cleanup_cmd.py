@@ -182,13 +182,13 @@ def cleanup(
         loop = analysis["loop"]
         applied = 0
         for s in archive:
-            loop._apply_archive(s.skill_id, s.reason)
-            console.print(f"  [dim]Archived:[/dim] {s.skill_id}")
-            applied += 1
+            if loop._apply_archive(s.skill_id, s.reason):
+                console.print(f"  [dim]Archived:[/dim] {s.skill_id}")
+                applied += 1
         for s in deprecate:
-            loop._apply_deprecation(s.skill_id, s.reason)
-            console.print(f"  [dim]Deprecated:[/dim] {s.skill_id}")
-            applied += 1
+            if loop._apply_deprecation(s.skill_id, s.reason):
+                console.print(f"  [dim]Deprecated:[/dim] {s.skill_id}")
+                applied += 1
         console.print(f"\n[green]Applied {applied} action(s).[/green]")
         console.print()
         return
@@ -246,11 +246,9 @@ def cleanup(
 
     loop = analysis["loop"]
     for action, skill_id in selected:
-        if action == "archive":
-            loop._apply_archive(skill_id, "User-initiated cleanup")
+        if action == "archive" and loop._apply_archive(skill_id, "User-initiated cleanup"):
             console.print(f"  [dim]Archived:[/dim] {skill_id}")
-        elif action == "deprecate":
-            loop._apply_deprecation(skill_id, "User-initiated cleanup")
+        elif action == "deprecate" and loop._apply_deprecation(skill_id, "User-initiated cleanup"):
             console.print(f"  [dim]Deprecated:[/dim] {skill_id}")
 
     console.print(f"\n[green]Cleaned up {len(selected)} skill(s).[/green]")

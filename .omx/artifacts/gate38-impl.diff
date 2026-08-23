@@ -1,0 +1,2722 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 3f768a2..9f6679e 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -200,3 +200,58 @@ jobs:
+ 
+       - name: Run routing benchmarks
+         run: uv run pytest -m benchmark -v
++
++  routing-eval:
++    name: Routing Eval (report-only)
++    runs-on: ubuntu-latest
++    # PERMANENTLY report-only (gate38): continue-on-error stays forever —
++    # there is NO observation period after which this job becomes a hard
++    # gate (contrast the test-windows observation-period note above). The
++    # harness itself always exits 0 and its absolute numbers are
++    # environment-sensitive (local skill index, installed packs), so this
++    # job exists to surface the JSON metrics for humans, never to block
++    # merges. Do not "graduate" it.
++    continue-on-error: true
++    steps:
++      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
++
++      - name: Install uv
++        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
++        with:
++          version: ${{ env.UV_VERSION }}
++
++      - name: Set up Python
++        run: uv python install 3.12
++
++      - name: Install dependencies
++        run: uv sync --extra dev
++
++      - name: Run main routing eval
++        run: uv run python scripts/eval_routing.py --json --json-out eval-main.json
++
++      - name: Run extended routing eval
++        run: uv run python scripts/eval_routing.py --file tests/benchmark/routing_eval_extended.yaml --json --json-out eval-extended.json
++
++      - name: Write step summary
++        run: |
++          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
++          import json
++
++          print("### Routing Eval (report-only)\n")
++          print("| dataset | scored | top-1 | recall@3 | skipped_env | errors |")
++          print("|---|---|---|---|---|---|")
++          for name, path in [("main", "eval-main.json"), ("extended", "eval-extended.json")]:
++              m = json.load(open(path))
++              print(
++                  f"| {name} | {m['total']} | {m['top1_accuracy']:.1%} "
++                  f"| {m['recall_at_3']:.1%} | {m['skipped_env']} | {len(m['errors'])} |"
++              )
++          EOF
++
++      - name: Upload eval JSON
++        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
++        with:
++          name: routing-eval
++          path: |
++            eval-main.json
++            eval-extended.json
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index a8674c6..a23af52 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### 技能评价体系第二刀（gate38, 2026-08-23）
++
++按 `.omx/artifacts/gate38-synthesis.md` r3 定稿实施（三路对抗设计 +
++claude/pi/grok 三路评审两轮收敛,0 BLOCK)。三块内容：
++
++- **L2a 仪表化**：route span metadata 新增 `top_skills`（≤3,仅
++  `has_match is True` 时写键,写时数据不可回填）；`tool_call_bridge`
++  新增 hit 侧 outcome 派生（`_is_hit`/`_classify_hit`/
++  `_derive_hit_outcomes`,镜像 miss 侧 write-once + span_id 去重）,
++  行 schema 加 `side:"hit"` + `population:"hook"` 自描述。**行为变
++  化**:`route_outcomes.jsonl` 首跑会回灌全部历史 hit（其中
++  `hit_session_expired` 占主导、信号最弱,按 `hit_` 前缀可过滤）。
++  两侧 outcome 均仅覆盖 hook 路径,与 fire 列（含 CLI）总体不相交,
++  禁止拼 fire→成功率比率。`_is_miss`/`_classify` 函数体零改动。
++- **假 L2 处置**：默认路径全部只读。**行为变化**:
++  (a) 零路由反馈技能 `quality_score` 0.5→0.0、`grade` 新增 `"?"`
++  （原子对,同 commit),分数显示 "—" 而非 0%,"?" 不产生任何
++  deprecation/archive 建议;
++  (b) `FeedbackLoop.analyze_all` 默认 `auto_deprecate=False`,原先
++  每 20 次路由（`_check_stale_skills_post_route`)、no-match 渲染
++  （`_render_stale_suggestions`)、`stale --json`、`end-check` 四处
++  静默自动 deprecate/archive 全部转只读;
++  (c) loader 不再在 discovery 热路径静默 archive DEPRECATED≥90d 技
++  能（整块含 `continue` 删除）——已知后果:DEPRECATED+"?"/无评价
++  技能无任何到达 ARCHIVED 的规则路径,保持 DEPRECATED 留在发现池;
++  (d) `vibe optimize` 的 quality actions 修复（原构造 bug 使其恒为
++  空),`optimize --apply` 从三年静默死代码变为真实生效（三类动作
++  deprecate/archive/boost 复活按实际写入全部入 optimization log)。
++  显式自动处置入口三处:`vibe skill stale --auto`、
++  `vibe optimize --apply`、`vibe skill cleanup --auto`。
++- **report-only CI**:extended 评测集新增 `requires_packs` 字段
++  (4 条 pack 依赖条目标注,裸环境转 `skipped_env` 不计分母不进
++  errors,presence 检查失败按存在处理的保守方向）;`ci.yml` 新增
++  `routing-eval` job(`continue-on-error`,**永久 report-only,不
++  设观察期转硬门**),跑主集+extended 并上传 JSON artifact。裸环境
++  基线存档:主集 top-1 61.8%、extended 94.4%
++  (`.omx/artifacts/gate38-eval-baseline-bare.jsonl`)。
++
+ ### 技能评价体系第一刀（gate37, 2026-08-23）
+ 
+ 按 `.omx/artifacts/gate37-synthesis.md` 定稿实施（三路评审两轮收敛,
+diff --git a/GOALS.md b/GOALS.md
+index 9febb34..f80ab15 100644
+--- a/GOALS.md
++++ b/GOALS.md
+@@ -52,7 +52,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发
+ #### 6. 清理不使用/过时技能
+ - `vibe skill cleanup` 交互式/自动清理
+ - `vibe skill stale` 健康分析报告
+-- 90 天自动归档（D/F 级技能）
++- 过期技能归档（默认只读；显式入口 `vibe skill cleanup --auto` / `vibe skill stale --auto`，gate38 起无全自动路径）
+ - `vibe skill end-check` 会话结束检查
+ - `vibe trace clean` 清理旧路由追踪
+ 
+@@ -101,7 +101,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发
+ #### 11. 失败处理与偏航记录
+ - `deviation.py`：记录 Agent 跳过路由推荐的偏航，6 种标准原因码
+ - `analyze_deviations()`：偏航模式分析
+-- `FeedbackLoop.analyze_all()`：低质量技能自动降级/归档
++- `FeedbackLoop.analyze_all()`：低质量技能分析（默认只读；显式 flag 才执行降级/归档，gate38 起）
+ - `RetentionPolicy`：F 级 30 天 + 使用 < 3 次 → 建议移除；D 级 60 天 → 警告
+ 
+ #### 12. `/instinct` 对话洞察
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+index a6c466a..ceaee4f 100644
+--- a/docs/ROADMAP.md
++++ b/docs/ROADMAP.md
+@@ -42,7 +42,7 @@
+ - [x] Feedback loop (usage analytics + satisfaction tracking) (v4.4.0)
+ - [x] Scope-aware routing isolation — project skills invisible outside project (v5.1-dev)
+ - [x] Retention system CLI visibility — `vibe skill stale` with archive detection (v5.1-dev)
+-- [x] Auto-archive for 90+ day unused skills + archived skills excluded from routing (v5.1-dev)
++- [x] Archive for 90+ day unused skills via explicit flag (`vibe skill cleanup --auto`) + archived skills excluded from routing (v5.1-dev; fully explicit-only since gate38)
+ - [x] Post-route retention nudge every N routes (v5.1-dev)
+ - [x] InstinctLearner sequence pattern detection for workflow-to-skill learning (v5.1-dev)
+ - [x] SkillSuggestionCollector — bridge from pattern detection to one-click skill creation (v5.1-dev)
+@@ -351,7 +351,7 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
+ 
+ - [x] **Retention System (CLI-visible)**
+   - `vibe skill stale` — detect stale/underperforming skills with archive actions
+-  - 90-day auto-archive for unused C/D/F-grade skills
++  - 90-day archive for unused C/D/F-grade skills (explicit `--auto` only since gate38; no fully automatic path)
+   - Archived skills excluded from routing (`is_routable(ARCHIVED) = False`)
+   - Post-route retention nudge every 20 routes
+   - `vibe skill end-check` — session-end review command
+diff --git a/docs/USE_CASES.en.md b/docs/USE_CASES.en.md
+index 3c796b9..74b6de7 100644
+--- a/docs/USE_CASES.en.md
++++ b/docs/USE_CASES.en.md
+@@ -278,7 +278,7 @@ Fires every Monday 8am, outputs "PR #234 (high severity, RCE) > PR #235 (medium)
+ 
+ **Pain**: Six months ago you installed a bunch of skills. Now you don't know **which are still used and which can be deleted**.
+ 
+-**VibeSOP approach**: Auto-tracks usage frequency, grades A-F, auto-archives expired ones.
++**VibeSOP approach**: Auto-tracks usage frequency, grades A-F; archive suggestions are read-only until you explicitly apply them.
+ 
+ **Commands**:
+ ```bash
+@@ -288,7 +288,7 @@ vibe skill stale
+ # Interactive cleanup
+ vibe skill cleanup
+ 
+-# Fully automatic (90 days unused + D/F grade → archive)
++# Explicitly apply archive suggestions (90 days idle + C/D/F grade; read-only by default)
+ vibe skill cleanup --auto
+ ```
+ 
+diff --git a/docs/USE_CASES.md b/docs/USE_CASES.md
+index 9601323..0005bb0 100644
+--- a/docs/USE_CASES.md
++++ b/docs/USE_CASES.md
+@@ -278,7 +278,7 @@ vibe loop create deps-scan \
+ 
+ **痛点**：半年前装了一堆技能，现在不知道**哪些还在用、哪些可以删**。
+ 
+-**VibeSOP 方案**：自动追踪使用频率，按 A-F 分级，过期自动归档。
++**VibeSOP 方案**：自动追踪使用频率，按 A-F 分级，归档建议默认只读，经你显式确认才执行。
+ 
+ **命令**：
+ ```bash
+@@ -288,7 +288,7 @@ vibe skill stale
+ # 交互式清理
+ vibe skill cleanup
+ 
+-# 全自动（90 天没用 + D/F 级 → 归档）
++# 显式应用归档建议（90 天没用 + C/D/F 级 → 归档；默认只读）
+ vibe skill cleanup --auto
+ ```
+ 
+diff --git a/docs/architecture/ARCHITECTURE.md b/docs/architecture/ARCHITECTURE.md
+index 7d0b474..679df85 100644
+--- a/docs/architecture/ARCHITECTURE.md
++++ b/docs/architecture/ARCHITECTURE.md
+@@ -594,13 +594,13 @@ of platform. The difference is purely in execution concurrency.
+ - Skill marketplace: search (`vibe market search`), install (`vibe market install`)
+ - Publish via GitHub Issues (`vibe market publish`)
+ - 5-dimension quality evaluation (routing accuracy, user satisfaction, execution success, usage frequency, health score)
+-- Automated retention/deprecation with FeedbackLoop
++- Retention/deprecation analysis with FeedbackLoop (read-only by default; explicit flags apply changes, gate38)
+ 
+ ### 5.2.0 — Intelligent Ecosystem ✅
+ - Per-skill recommendation engine (SkillRecommender)
+ - 4-level confidence-gated degradation (DegradationManager)
+ - Proactive discovery of unused skills matching current workflow
+-- Auto-deprecation enabled by default
++- Deprecation suggestions by default; lifecycle changes only via explicit flags (`--auto`/`--apply`, gate38)
+ 
+ ---
+ 
+diff --git a/docs/dev/eval-set-append-workflow.md b/docs/dev/eval-set-append-workflow.md
+index e6320db..15d7a09 100644
+--- a/docs/dev/eval-set-append-workflow.md
++++ b/docs/dev/eval-set-append-workflow.md
+@@ -11,6 +11,20 @@ append-only sample flow.
+   hand-edit this file.** Appends go through the script only.
+ - `tests/benchmark/routing_eval_extended.yaml` — the review queue. Human
+   editing happens HERE (it is an in-flow action, not a violation).
++
++### `requires_packs` field (gate38)
++
++Extended entries whose expected skills come from an external pack MUST
++declare it, e.g. `requires_packs: [omx]`. When none of the entry's
++`expect` ids resolve in the current environment, the harness scores it as
++`skipped_env` — excluded from the denominator and from `errors`, with
++`ok1: null` in per-query output. Presence-check failures fall back to
++"treat as resolvable" (conservative: rather report noise than hide a
++regression). Entries with `expect: []` are never skipped. The field is
++the single source of truth; the file header documents the two residual
++noise classes (reject-only entries vacuously pass without their packs;
++a handful of env-sensitive fallback entries remain unlabelled), so
++extended numbers are not a clean baseline.
+ - `tests/benchmark/routing_eval_retention.yaml` — insight-mining pool for
+   dismissed samples. Not scored by the eval harness.
+ - `scripts/build_eval_from_logs.py` — the only write path.
+diff --git a/docs/user/CLI_REFERENCE.md b/docs/user/CLI_REFERENCE.md
+index 423f075..8ebcd60 100644
+--- a/docs/user/CLI_REFERENCE.md
++++ b/docs/user/CLI_REFERENCE.md
+@@ -580,7 +580,7 @@ vibe skills report [options]
+ ```
+ 
+ **Options:**
+-- `--grade, -g` - Filter by grade (A, B, C, D, F)
++- `--grade, -g` - Filter by grade (A, B, C, D, F, ?)
+ - `--suggest-removal` - Show only skills recommended for removal (grade F)
+ 
+ **Examples:**
+@@ -612,6 +612,10 @@ Grades affect routing confidence:
+ - **C** (no change): Neutral
+ - **D** (-0.02 demote): Slight deprioritization
+ - **F** (-0.05 demote): Low-quality skills are avoided
++- **?** (no routing data): Shown when a skill has zero routing feedback.
++  Score displays as "—" (not 0%) — no data is NOT a bad score. Grade "?"
++  never triggers deprecation/archive suggestions. Note: routing-confidence
++  adjustments only apply with >=3 explicit feedback records.
+ 
+ > **Note:** Impact only applies when a skill has `>= 3` total routes (insufficient data otherwise).
+ 
+@@ -716,7 +720,10 @@ vibe skill list --project
+ - `Fire 30d²` — route hits in **this project's** spans over the last 30
+   days, CLI path included. Raw counts only — **n<30 proves nothing**.
+   Renaming or reinstalling a skill resets its history; `/` vs `-` id
+-  normalisation also breaks the chain.
++  normalisation also breaks the chain. Route outcomes
++  (`route_outcomes.jsonl`, gate38) cover the **hook path only** — do NOT
++  combine them with this column into a "fire → success rate"; the two
++  populations are disjoint by design.
+ - `Feedback³` — raw yes/no counts from project-level explicit feedback.
+   "partial" is recorded as "no". `no records` means no feedback exists —
+   it is NOT a neutral signal. `vibe skills feedback` writes to the global
+@@ -833,14 +840,19 @@ vibe skill stale [options]
+ ```
+ 
+ **Options:**
+-- `--auto, -a` - Automatically deprecate F-grade skills
+-- `--json, -j` - Output as machine-readable JSON
++- `--auto, -a` - Apply suggested deprecations/archives (explicit opt-in)
++- `--json, -j` - Output as machine-readable JSON (still read-only)
++
++Since gate38 the default path — including `--json` — performs **no
++lifecycle writes**. The only explicit auto-disposition entry points are
++`vibe skill stale --auto`, `vibe optimize --apply`, and
++`vibe skill cleanup --auto`.
+ 
+ **Examples:**
+ ```bash
+-vibe skill stale               # Report only
+-vibe skill stale --auto        # Auto-deprecate F-grade skills
+-vibe skill stale --json        # Machine-readable output
++vibe skill stale               # Report only (read-only)
++vibe skill stale --auto        # Apply suggested deprecations/archives
++vibe skill stale --json        # Machine-readable output (read-only)
+ ```
+ 
+ **Output:**
+@@ -859,9 +871,15 @@ Summary: 1 to deprecate, 1 to warn, 1 performing well
+ 
+ **How it works:**
+ - Reads `usage_stats` from `SkillConfig` (updated by each route via `record_usage()`)
+-- Reads quality scores from `RoutingEvaluator` (A-F grades)
++- Reads quality scores from `RoutingEvaluator` (A-F grades; "?" = no routing
++  feedback — such skills are never flagged)
+ - Skills unused >30 days or with F-grade are flagged for deprecation
+-- `--auto` transitions flagged skills to DEPRECATED lifecycle state
++- `--auto` transitions flagged skills to DEPRECATED/ARCHIVED lifecycle state
++- Discovery no longer silently archives DEPRECATED skills idle ≥90 days
++  (gate38): they stay DEPRECATED and visible in `discover_all` until you
++  archive them via an explicit entry point. Note: DEPRECATED skills with
++  grade "?" have no rule-based archive path — archive them manually if
++  needed.
+ 
+ ---
+ 
+@@ -874,7 +892,7 @@ vibe skill cleanup [options]
+ ```
+ 
+ **Options:**
+-- `--auto, -a` — Apply all suggested deprecations and archives automatically
++- `--auto, -a` — Apply all suggested deprecations and archives (one of the three explicit auto-disposition entry points; everything is read-only without it)
+ - `--dry-run, -n` — Preview what would be cleaned without making changes
+ 
+ **Examples:**
+diff --git a/scripts/eval_routing.py b/scripts/eval_routing.py
+index 021ae7f..8029f98 100644
+--- a/scripts/eval_routing.py
++++ b/scripts/eval_routing.py
+@@ -16,6 +16,18 @@ Entry semantics:
+                                RoutingResult.has_match is False (primary is
+                                None or its layer is fallback_llm; the
+                                "fallback-llm" skill id counts as no match).
++- requires_packs: [ns...]    — environment annotation (gate38): the entry's
++                               expect labels live in an external skill pack.
++                               An annotated entry with non-empty expect whose
++                               expect ids are ALL unresolvable in this
++                               environment is scored as skipped_env: excluded
++                               from total/denominator and from errors, and
++                               recorded with ok1: null in per_query. If the
++                               presence check itself fails, ids count as
++                               resolvable (conservative: a false error is
++                               reported rather than a regression hidden).
++                               requires_packs with expect: [] never skips —
++                               reject/no-match assertions stay scored.
+ 
+ Usage:
+     uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
+@@ -38,6 +50,49 @@ sys.path.insert(0, str(ROOT / "src"))
+ from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+ 
+ 
++def _builtin_skill_ids() -> set[str]:
++    """Resolvable builtin-side skill ids, parsed from core/registry.yaml in
++    canonical `namespace/name` form (already-namespaced ids kept as-is)."""
++    registry = yaml.safe_load((ROOT / "core" / "registry.yaml").read_text(encoding="utf-8"))
++    ids: set[str] = set()
++    for skill in (registry or {}).get("skills", []):
++        sid = skill.get("id")
++        if not sid:
++            continue
++        ids.add(sid if "/" in sid else f"{skill.get('namespace', 'builtin')}/{sid}")
++    return ids
++
++
++def _external_skill_ids() -> set[str]:
++    """Resolvable external-side skill ids from ExternalSkillLoader discovery
++    (keys are already in `pack/name` form)."""
++    from vibesop.core.skills.external_loader import ExternalSkillLoader
++
++    return set(ExternalSkillLoader(project_root=ROOT).discover_all())
++
++
++def _load_resolvable_ids() -> tuple[set[str] | None, set[str] | None]:
++    """(builtin_ids, external_ids); a source is None when its presence check
++    itself raised — that source then counts every id as resolvable
++    (conservative: better a false error than a regression hidden as
++    skipped_env)."""
++    try:
++        builtin = _builtin_skill_ids()
++    except Exception:
++        builtin = None
++    try:
++        external = _external_skill_ids()
++    except Exception:
++        external = None
++    return builtin, external
++
++
++def _is_resolvable(
++    skill_id: str, builtin_ids: set[str] | None, external_ids: set[str] | None
++) -> bool:
++    return any(ids is None or skill_id in ids for ids in (builtin_ids, external_ids))
++
++
+ def main() -> int:
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument(
+@@ -64,8 +119,9 @@ def main() -> int:
+     eval_file = args.file if args.file.is_absolute() else ROOT / args.file
+     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
+     router = UnifiedRouter(project_root=ROOT)
++    builtin_ids, external_ids = _load_resolvable_ids()
+ 
+-    total = len(entries)
++    skipped_env_count = 0
+     hits1 = hits3 = 0
+     errors: list[dict] = []
+     per_query: list[dict] = []
+@@ -73,6 +129,33 @@ def main() -> int:
+         query = e["query"]
+         expect: list[str] = e.get("expect", [])
+         reject: list[str] = e.get("reject", [])
++
++        # skipped_env (gate38): annotated with requires_packs AND a scored
++        # positive (expect non-empty — all([]) is True, so the emptiness
++        # check must come first) AND every expect id unresolvable here.
++        skipped_env = bool(
++            e.get("requires_packs")
++            and expect
++            and not any(_is_resolvable(s, builtin_ids, external_ids) for s in expect)
++        )
++        if skipped_env:
++            skipped_env_count += 1
++            per_query.append(
++                {
++                    "query": query[:80],
++                    "expect": expect,
++                    "reject": reject,
++                    "primary": None,
++                    "top3": [],
++                    "layer": None,
++                    "confidence": None,
++                    "ok1": None,
++                    "ok3": None,
++                    "skipped_env": True,
++                }
++            )
++            continue
++
+         result = router.route(query, record_telemetry=False)
+         primary = result.primary.skill_id if result.primary else None
+         layer = result.primary.layer.value if result.primary else None
+@@ -101,6 +184,7 @@ def main() -> int:
+                 "confidence": round(confidence, 3),
+                 "ok1": bool(ok1),
+                 "ok3": bool(ok3),
++                "skipped_env": False,
+             }
+         )
+         if not ok1:
+@@ -123,10 +207,14 @@ def main() -> int:
+         key = f"{(err['expect'] or ['<no-match>'])[0]} -> {err['actual']}"
+         confusion[key] = confusion.get(key, 0) + 1
+ 
++    # skipped_env entries count in neither total (denominator) nor errors;
++    # guard against an all-skipped dataset dividing by zero.
++    total = len(entries) - skipped_env_count
+     metrics = {
+         "total": total,
+-        "top1_accuracy": round(hits1 / total, 4),
+-        "recall_at_3": round(hits3 / total, 4),
++        "skipped_env": skipped_env_count,
++        "top1_accuracy": round(hits1 / total, 4) if total else 0.0,
++        "recall_at_3": round(hits3 / total, 4) if total else 0.0,
+         "errors": errors,
+         "confusion_pairs": confusion,
+     }
+@@ -156,8 +244,10 @@ def main() -> int:
+         print(json.dumps(metrics, ensure_ascii=False, indent=2))
+     else:
+         print(f"\n=== Routing Eval ({eval_file.name}) ===")
++        pct1 = hits1 / total if total else 0.0
++        pct3 = hits3 / total if total else 0.0
+         print(
+-            f"queries: {total} | top-1: {hits1}/{total} ({hits1 / total:.1%}) | recall@3: {hits3}/{total} ({hits3 / total:.1%})"
++            f"queries: {total} (skipped_env: {skipped_env_count}) | top-1: {hits1}/{total} ({pct1:.1%}) | recall@3: {hits3}/{total} ({pct3:.1%})"
+         )
+         if errors:
+             print(f"\nMisroutes ({len(errors)}):")
+diff --git a/src/vibesop/agent/runtime/agent_runtime.py b/src/vibesop/agent/runtime/agent_runtime.py
+index 437472d..5eb0f6a 100644
+--- a/src/vibesop/agent/runtime/agent_runtime.py
++++ b/src/vibesop/agent/runtime/agent_runtime.py
+@@ -699,6 +699,28 @@ class AgentRuntime:
+                 if isinstance(_route_layer, str) and _route_layer:
+                     _task_span.metadata["layer"] = _route_layer
+ 
++                # gate38 L2a: ordered routing snapshot ("top_skills", ≤3,
++                # primary first) for future L2b analysis. Written ONLY on
++                # a real router hit — gated on ``result.router_matched``,
++                # the SAME expression as metadata["has_match"] above, NOT
++                # the mode-derived ``has_match`` property (which stays
++                # True on intercepted misses, :671-675). On miss the key
++                # is omitted entirely. Duplication with
++                # metadata["skill_id"] is deliberate: this is the full
++                # at-write-time ranking snapshot — router state drifts
++                # and cannot be replayed later. Data source:
++                # ``result.alternatives`` (list[dict], populated from
++                # routing_result.alternatives at :619-626).
++                if result.router_matched:
++                    _alt_ids = [
++                        alt.get("skill_id", "")
++                        for alt in result.alternatives
++                        if isinstance(alt, dict)
++                    ]
++                    _top = [s for s in [result.skill_id, *_alt_ids] if isinstance(s, str) and s]
++                    if _top:
++                        _task_span.metadata["top_skills"] = _top[:3]
++
+                 # --- Instinct feedback bridge (neutral signal) ---
+                 if result.has_match and result.skill_id:
+                     try:
+diff --git a/src/vibesop/cli/commands/optimize_cmd.py b/src/vibesop/cli/commands/optimize_cmd.py
+index ecce7aa..ed487cb 100644
+--- a/src/vibesop/cli/commands/optimize_cmd.py
++++ b/src/vibesop/cli/commands/optimize_cmd.py
+@@ -28,14 +28,24 @@ def _grade_color(grade: str) -> str:
+ 
+ @app.callback(invoke_without_command=True)
+ def optimize(
+-    apply: bool = typer.Option(False, "--apply", help="Apply safe optimizations automatically"),
++    apply: bool = typer.Option(
++        False,
++        "--apply",
++        help=(
++            "Apply lifecycle actions: deprecate F-grade skills, archive 90+ day "
++            "unused C/D/F-grade skills, restore deprecated A-grade skills to active"
++        ),
++    ),
+     days: int = typer.Option(30, "--days", help="Lookback window in days"),
+ ) -> None:
+     """Analyze routing data and suggest optimizations.
+ 
+-    Without --apply, shows what would be optimized.
+-    With --apply, applies safe optimizations (auto-deprecate F-grade skills,
+-    boost A-grade skills, flag high-latency skills for review).
++    Without --apply (default), this command is fully read-only and only
++    shows what would be optimized.
++    With --apply, applies lifecycle actions (auto-deprecate F-grade skills,
++    auto-archive 90+ day unused C/D/F-grade skills, restore deprecated
++    A-grade skills to active). The other explicit auto-disposition entry
++    point is ``vibe skill stale --auto``.
+     """
+     project_root = Path.cwd()
+     analyzer = RoutingHealthAnalyzer(project_root)
+@@ -96,14 +106,14 @@ def optimize(
+ 
+ 
+ def _load_quality_actions(project_root: Path) -> list[dict]:
+-    """Load skill quality actions from FeedbackLoop."""
++    """Load skill quality actions from FeedbackLoop (read-only preview)."""
+     try:
+         from vibesop.core.skills.evaluator import RoutingEvaluator
+         from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+         evaluator = RoutingEvaluator(project_root=project_root)
+-        loop = FeedbackLoop(evaluator)
+-        suggestions = loop.analyze_all()
++        loop = FeedbackLoop(project_root=project_root, evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
+ 
+         actions = []
+         for s in suggestions:
+@@ -115,6 +125,14 @@ def _load_quality_actions(project_root: Path) -> list[dict]:
+                         "applied": False,
+                     }
+                 )
++            elif s.action == "archive":
++                actions.append(
++                    {
++                        "skill_id": s.skill_id,
++                        "reason": f"Archive: {s.reason} (grade {s.grade}, {s.total_routes} routes)",
++                        "applied": False,
++                    }
++                )
+             elif s.action == "warn":
+                 actions.append(
+                     {
+@@ -138,15 +156,19 @@ def _load_quality_actions(project_root: Path) -> list[dict]:
+ 
+ 
+ def _apply_optimizations(project_root: Path, days: int) -> list[str]:
+-    """Apply safe auto-optimizations and return list of affected skill IDs."""
++    """Apply lifecycle actions and return skill IDs actually written."""
+     applied: list[str] = []
+     try:
+         from vibesop.core.skills.evaluator import RoutingEvaluator
+         from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+         evaluator = RoutingEvaluator(project_root=project_root)
+-        loop = FeedbackLoop(evaluator)
+-        applied = loop.apply_auto_actions()
++        loop = FeedbackLoop(project_root=project_root, evaluator=evaluator)
++        loop.analyze_all(auto_deprecate=True)
++        # Only skills whose lifecycle write actually happened count as
++        # applied — failed writes (swallowed inside _apply_*) and no-op
++        # boosts on already-active skills are excluded.
++        applied = loop.last_applied_skill_ids
+ 
+         # Log to structured optimization log
+         if applied:
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index d5e0ce4..4b9a4de 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -362,10 +362,15 @@ def stale(
+     recently or have low quality scores. Skills with no recorded usage
+     data are shown separately — these may be newly installed or never triggered.
+ 
++    The default path is fully read-only (no lifecycle writes, including
++    with --json). The explicit auto-disposition entry points are
++    ``vibe skill stale --auto``, ``vibe optimize --apply``, and
++    ``vibe skill cleanup --auto``.
++
+     Examples:
+-        vibe skill stale              # Show report only
++        vibe skill stale              # Show report only (read-only)
+         vibe skill stale --auto       # Auto-deprecate F-grade skills
+-        vibe skill stale --json       # Machine-readable output
++        vibe skill stale --json       # Machine-readable output (read-only)
+     """
+     from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+diff --git a/src/vibesop/cli/commands/skills_commands/_health.py b/src/vibesop/cli/commands/skills_commands/_health.py
+index 0e5635c..d69e6fc 100644
+--- a/src/vibesop/cli/commands/skills_commands/_health.py
++++ b/src/vibesop/cli/commands/skills_commands/_health.py
+@@ -158,11 +158,18 @@ def health(
+                         if evaluation.grade in ("A", "B")
+                         else "⚠️"
+                         if evaluation.grade in ("C", "D")
++                        else "❔"
++                        if evaluation.grade == "?"
+                         else "🗑️"
+                     )
++                    # "?" = no routing feedback: no data is not a bad score,
++                    # so show "—" instead of a misleading 0%.
++                    score_str = (
++                        "—" if evaluation.grade == "?" else f"{evaluation.quality_score:.0%}"
++                    )
+                     console.print(
+                         f"  {icon} [cyan]{skill_id}[/cyan] "
+-                        f"[{grade_color}]{evaluation.grade} ({evaluation.quality_score:.0%})[/{grade_color}] "
++                        f"[{grade_color}]{evaluation.grade} ({score_str})[/{grade_color}] "
+                         f"[dim]{evaluation.total_routes} uses[/dim]"
+                     )
+         except (OSError, ValueError):
+diff --git a/src/vibesop/cli/commands/skills_commands/_quality.py b/src/vibesop/cli/commands/skills_commands/_quality.py
+index 28eb974..71a1c92 100644
+--- a/src/vibesop/cli/commands/skills_commands/_quality.py
++++ b/src/vibesop/cli/commands/skills_commands/_quality.py
+@@ -16,7 +16,7 @@ def report(
+         None,
+         "--grade",
+         "-g",
+-        help="Filter by grade (A, B, C, D, F)",
++        help="Filter by grade (A, B, C, D, F, ?)",
+     ),
+     suggest_removal: bool = typer.Option(
+         False,
+@@ -96,10 +96,13 @@ def report(
+         impact = impact_map.get(evaluation.grade, "—")
+         if evaluation.total_routes < 3:
+             impact = "[dim]insufficient data[/dim]"
++        # "?" = no routing feedback: no data is not a bad score, so show
++        # "—" instead of a misleading 0%.
++        score_str = f"{evaluation.quality_score:.0%}" if evaluation.total_routes > 0 else "—"
+         table.add_row(
+             evaluation.skill_id,
+             f"[{color}]{evaluation.grade}[/{color}] {icon}",
+-            f"{evaluation.quality_score:.0%}",
++            score_str,
+             str(evaluation.total_routes),
+             f"{evaluation.success_rate:.0%}" if evaluation.total_routes > 0 else "—",
+             f"{evaluation.user_score:.2f}",
+diff --git a/src/vibesop/cli/commands/status_cmd.py b/src/vibesop/cli/commands/status_cmd.py
+index 33f424f..c10eb2d 100644
+--- a/src/vibesop/cli/commands/status_cmd.py
++++ b/src/vibesop/cli/commands/status_cmd.py
+@@ -68,11 +68,17 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
+         evals = evaluator.evaluate_all_skills()
+ 
+         grade_counts: dict[str, int] = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
++        no_data = 0
+         for e in evals.values():
++            if e.grade == "?":
++                # No routing feedback — exclude from the graded denominator.
++                no_data += 1
++                continue
+             grade_counts[e.grade] = grade_counts.get(e.grade, 0) + 1
+-        evaluated = len(evals)
++        evaluated = len(evals) - no_data
+     except Exception as e:
+         evaluated = 0
++        no_data = 0
+         grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+ 
+     lines: list[str] = []
+@@ -82,6 +88,10 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
+         lines.append(f"[dim]{evaluated} with evaluation data[/dim]")
+         lines.append("")
+         lines.append(_grade_bar(grade_counts, evaluated))
++        if no_data:
++            lines.append(f"[dim]+ {no_data} with no routing data (grade ?)[/dim]")
++    elif no_data:
++        lines.append(f"[dim]{no_data} with no routing data yet (grade ?)[/dim]")
+     else:
+         lines.append("")
+         lines.append("[dim]No evaluation data yet. Skills are evaluated as you use them.[/dim]")
+diff --git a/src/vibesop/cli/main.py b/src/vibesop/cli/main.py
+index 28c3d33..1489a06 100644
+--- a/src/vibesop/cli/main.py
++++ b/src/vibesop/cli/main.py
+@@ -912,6 +912,22 @@ def route(
+         if _mode is not None:
+             _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
+         _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
++        # gate38 L2a: ordered routing snapshot ("top_skills", ≤3, primary
++        # first). Gated on the SAME expression as metadata["has_match"]
++        # above and read from the routing RESULT object (not the
++        # just-written metadata — the primary/skill_id writes above
++        # precede the has_match write). On miss the CLI alternatives are
++        # fallback nearest-neighbours (result_mixin), not a router
++        # ranking, so the key is omitted entirely. isinstance(str) guard:
++        # a mocked router's attributes (MagicMock) must not leak into
++        # span metadata — same convention as the layer guard below.
++        if bool(getattr(result, "has_match", False)):
++            _alts = getattr(result, "alternatives", None) or []
++            _alt_ids = [getattr(a, "skill_id", "") for a in _alts]
++            _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
++            _top = [s for s in [_primary_id, *_alt_ids] if isinstance(s, str) and s]
++            if _top:
++                _cli_task_span.metadata["top_skills"] = _top[:3]
+         # gate18 pi NIT-4: record the routing layer so ScanSummary
+         # .miss_share_by_layer has real buckets. Semantics (mirror
+         # agent_runtime.handle_query): match → the winning layer
+@@ -1704,7 +1720,7 @@ def _check_stale_skills_post_route() -> None:
+         from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+         loop = FeedbackLoop()
+-        suggestions = loop.analyze_all()
++        suggestions = loop.analyze_all(auto_deprecate=False)
+         critical = [s for s in suggestions if s.action in ("deprecate", "archive")]
+ 
+         if critical:
+diff --git a/src/vibesop/cli/render.py b/src/vibesop/cli/render.py
+index 12b893e..f615a39 100644
+--- a/src/vibesop/cli/render.py
++++ b/src/vibesop/cli/render.py
+@@ -63,7 +63,7 @@ def _render_stale_suggestions() -> str:
+         from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+         loop = FeedbackLoop()
+-        suggestions = loop.analyze_all()
++        suggestions = loop.analyze_all(auto_deprecate=False)
+ 
+         deprecated = [s for s in suggestions if s.action == "deprecate"]
+         warned = [s for s in suggestions if s.action == "warn"]
+diff --git a/src/vibesop/core/observability/tool_call_bridge.py b/src/vibesop/core/observability/tool_call_bridge.py
+index 09b8802..821f726 100644
+--- a/src/vibesop/core/observability/tool_call_bridge.py
++++ b/src/vibesop/core/observability/tool_call_bridge.py
+@@ -29,9 +29,11 @@ Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
+      time-window fallback would risk mis-attaching agent tool calls to an
+      unrelated ``vibe route`` that happened to run nearby.
+ 
+-2. **Outcome signals for miss route spans** (M1 slice), appended to
++2. **Outcome signals for route spans**, appended to
+    ``.vibe/observability/route_outcomes.jsonl`` (one JSON per line;
+-   corrupt lines skipped on read, per project JSONL convention):
++   corrupt lines skipped on read, per project JSONL convention).
++
++   Miss side (M1 slice):
+    - explicit accept (``vibe instinct accept`` → routing_pending item with
+      ``status="accepted"`` whose query matches the span) ≈ strong positive
+    - re-ask (the span's ``task_id`` — full-text derived, truncation-safe —
+@@ -46,6 +48,37 @@ Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
+    are excluded as well — they could only ever decay into hollow
+    expiry-based weak positives.
+ 
++   Hit side (gate38 L2a): non-CLI spans with ``has_match is True`` get
++   the mirror-image classification — the span's ``task_id`` reappearing
++   on a LATER route span ≈ weak negative (``hit_reask_same_task_id``);
++   a later different-task span in the same session ≈ weak positive
++   (``hit_session_moved_on``); older than ``SESSION_COMPLETE_HOURS`` ≈
++   weak positive (``hit_session_expired``). There is no explicit-accept
++   channel for hits (accepted_queries is a miss-only signal). Hit rows
++   add ``"side": "hit"`` and ``"population": "hook"`` so each row is
++   self-describing; miss rows are NOT rewritten — readers default a
++   missing ``side`` to ``"miss"`` and a missing ``population`` to
++   ``"hook"`` (the miss pool is hook-path only too).
++
++   Population disclosure (read before consuming EITHER side): both
++   outcome populations are hook-path only — CLI spans are excluded on
++   both sides — while the gate37 ``fire`` column (skill_health) counts
++   CLI hits as well. The populations differ in coverage: NEVER combine
++   outcomes with fires into a fire→success-rate ratio. Hit weak
++   positives are even softer than miss ones — "the user never came
++   back" after a hit may mean abandonment, not satisfaction. The first
++   bridge run backfills ALL historical hits at once (write-once +
++   span_id dedup keeps re-runs idempotent); ``hit_session_expired``
++   dominates that backfill and is the weakest signal — filter by the
++   ``hit_`` reason prefix when consuming.
++
++   Cost: hit classification scans all route spans per hit, the same
++   O(hits × spans) asymptotic as the miss side. The first run pays the
++   full backfill at once, and per-run cost grows quadratically while
++   spans.jsonl grows unbounded (rotation-coupling dependency recorded
++   in gate38 §5). This is an offline assembly path — the 100µs hook
++   hot-path budget is not involved.
++
+    Outcome derivation lives HERE (assembly stage), not in the M2 scan
+    stage: the bridge already pays a full spans.jsonl scan on every
+    assembly run and runs on the same cadence as capture, so outcomes
+@@ -118,6 +151,7 @@ class BridgeStats:
+     unmatched: int = 0
+     ambiguous: int = 0
+     outcomes_recorded: int = 0
++    hit_outcomes_recorded: int = 0
+     notes: list[str] = field(default_factory=list)
+ 
+ 
+@@ -219,6 +253,7 @@ def _run(entries: list[ToolEvent], root: Path, stats: BridgeStats) -> None:
+     # they tolerate re-runs; span emission does not.
+     _save_state(root / ".vibe" / "observability" / STATE_FILENAME, state)
+     _derive_outcomes(route_spans, root, stats)
++    _derive_hit_outcomes(route_spans, root, stats)
+ 
+ 
+ def _bridge_events(
+@@ -467,6 +502,66 @@ def _derive_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeSta
+     stats.outcomes_recorded += len(new_lines)
+ 
+ 
++def _derive_hit_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeStats) -> None:
++    """Append newly-determinable hit outcomes to route_outcomes.jsonl.
++
++    Mirrors ``_derive_outcomes`` (miss side) exactly: same outcomes file,
++    same WRITE-ONCE semantics, same span_id dedup against the outcomes
++    file itself (never the state file), plain append, no new lock. Hit
++    rows add ``"side": "hit"`` and ``"population": "hook"`` (gate38:
++    row-level self-describing population); miss rows are NOT rewritten —
++    readers default a missing ``side`` to ``"miss"`` and a missing
++    ``population`` to ``"hook"`` (the miss pool is hook-path only too).
++
++    These are weak PRIOR signals, not labels — the hit weak positives are
++    softer than the miss ones (not returning ≠ satisfaction; see the
++    module docstring's population disclosure).
++    """
++    outcomes_path = root / ".vibe" / "observability" / OUTCOMES_FILENAME
++    recorded = _load_recorded_span_ids(outcomes_path)
++
++    hits = [rs for rs in route_spans if _is_hit(rs)]
++    if not hits:
++        return
++    now = datetime.now(UTC)
++    session_complete_after = timedelta(hours=SESSION_COMPLETE_HOURS)
++
++    new_lines: list[str] = []
++    for hit in hits:
++        if not hit.id or hit.id in recorded:
++            continue
++        outcome = _classify_hit(hit, route_spans, now, session_complete_after)
++        if outcome is None:
++            continue  # not yet determinable — retried on the next run
++        kind, reason = outcome
++        new_lines.append(
++            json.dumps(
++                {
++                    "span_id": hit.id,
++                    "trace_id": hit.trace_id,
++                    "task_id": hit.task_id,
++                    "session_id": hit.session_id,
++                    "span_ts": hit.started_at.isoformat() if hit.started_at else None,
++                    "outcome": kind,
++                    "reason": reason,
++                    "side": "hit",
++                    "population": "hook",
++                    "recorded_at": now.isoformat(),
++                },
++                ensure_ascii=False,
++            )
++        )
++        recorded.add(hit.id)
++
++    if not new_lines:
++        return
++    outcomes_path.parent.mkdir(parents=True, exist_ok=True)
++    with outcomes_path.open("a", encoding="utf-8") as f:
++        for line in new_lines:
++            f.write(line + "\n")
++    stats.hit_outcomes_recorded += len(new_lines)
++
++
+ def _is_miss(rs: _RouteSpan) -> bool:
+     """Conservative miss rule: explicit has_match=False on a routed attempt.
+ 
+@@ -492,6 +587,25 @@ def _is_miss(rs: _RouteSpan) -> bool:
+     return rs.mode not in ("not_intercepted", "slash_command")
+ 
+ 
++def _is_hit(rs: _RouteSpan) -> bool:
++    """Conservative hit rule: explicit has_match=True on a routed attempt.
++
++    Mirror of ``_is_miss`` (gate17 cross-reference convention: change one,
++    re-read the other). CLI route spans are excluded for the same reason
++    as on the miss side: each CLI invocation mints its own session, so its
++    hits could never show "session moved on" evidence and would decay
++    into hollow ``hit_session_expired`` weak positives after 24h. Spans
++    with ``has_match`` missing are "unknown" and never enter the hit pool
++    (conservative direction); ``mode="not_intercepted"``/``"slash_command"``
++    spans are not routing attempts and are excluded too.
++    """
++    if rs.is_cli:
++        return False
++    if rs.has_match is not True:  # False → miss; None → unknown, never a hit
++        return False
++    return rs.mode not in ("not_intercepted", "slash_command")
++
++
+ def _classify(
+     miss: _RouteSpan,
+     route_spans: list[_RouteSpan],
+@@ -539,6 +653,52 @@ def _classify(
+     return None
+ 
+ 
++def _classify_hit(
++    hit: _RouteSpan,
++    route_spans: list[_RouteSpan],
++    now: datetime,
++    session_complete_after: timedelta,
++) -> tuple[str, str] | None:
++    """Return (outcome, reason) or None when not yet determinable.
++
++    Mirror of ``_classify`` minus the explicit-accept channel (accepted
++    routing_pending queries are a miss-only signal — there is no accept
++    path for hits). Reasons carry a ``hit_`` prefix so consumers can
++    filter the two pools apart. Precedence: re-ask (weak neg) >
++    completion (weak pos). A fresh hit with no completion evidence stays
++    undecided and is re-evaluated on the next run.
++    """
++    later_same_task = [
++        rs
++        for rs in route_spans
++        if rs.task_id
++        and hit.task_id
++        and rs.task_id == hit.task_id
++        and rs.id != hit.id
++        and rs.started_at is not None
++        and hit.started_at is not None
++        and rs.started_at > hit.started_at
++    ]
++    if later_same_task:
++        return "weak_negative", "hit_reask_same_task_id"
++
++    session_moved_on = any(
++        rs.session_id
++        and hit.session_id
++        and rs.session_id == hit.session_id
++        and rs.task_id != hit.task_id
++        and rs.started_at is not None
++        and hit.started_at is not None
++        and rs.started_at > hit.started_at
++        for rs in route_spans
++    )
++    if session_moved_on:
++        return "weak_positive", "hit_session_moved_on"
++    if hit.started_at is not None and now - hit.started_at > session_complete_after:
++        return "weak_positive", "hit_session_expired"
++    return None
++
++
+ def _matches_accepted(miss: _RouteSpan, accepted_queries: list[str]) -> bool:
+     """Match a miss span against accepted routing_pending queries.
+ 
+diff --git a/src/vibesop/core/skills/evaluator.py b/src/vibesop/core/skills/evaluator.py
+index db8c06a..fe404bd 100644
+--- a/src/vibesop/core/skills/evaluator.py
++++ b/src/vibesop/core/skills/evaluator.py
+@@ -60,10 +60,16 @@ class SkillEvaluation:
+         - execution_success: 25%
+         - usage_frequency: 15%
+         - health_score: 10%
++
++        Skills with zero routing feedback (``total_routes == 0``) score 0.0
++        and grade "?" — see :py:attr:`grade` for the vocabulary note.
+         """
+         if self.total_routes == 0:
+-            # No routing data: fall back to confidence + user_score blend
+-            return 0.5 + (self.avg_confidence * 0.05) + (self.user_score * 0.05)
++            # No routing feedback: there is nothing to score. Returning 0.0
++            # (instead of a fabricated neutral 0.5) must stay paired with the
++            # "?" grade below — a bare 0.0 would grade as F and trip the
++            # auto-deprecate rule in feedback_loop.
++            return 0.0
+         return (
+             self.routing_accuracy * 0.25
+             + self.user_satisfaction * 0.25
+@@ -76,12 +82,17 @@ class SkillEvaluation:
+     def grade(self) -> str:
+         """Letter grade based on quality score (0-100 scale).
+ 
++        ?: no routing feedback (skill exists but has never been routed to) —
++        distinct from the "?" in ``retention.RetentionPolicy.analyze_skill``,
++        which means *no evaluation object at all*.
+         A: 90-100 (Excellent)
+         B: 75-89  (Good)
+         C: 60-74  (Acceptable)
+         D: 40-59  (Needs improvement)
+         F: 0-39   (Consider removal)
+         """
++        if self.total_routes == 0:
++            return "?"
+         score = self.quality_score * 100
+         if score >= 90:
+             return "A"
+diff --git a/src/vibesop/core/skills/feedback_loop.py b/src/vibesop/core/skills/feedback_loop.py
+index 7f7267f..8b6161f 100644
+--- a/src/vibesop/core/skills/feedback_loop.py
++++ b/src/vibesop/core/skills/feedback_loop.py
+@@ -1,9 +1,14 @@
+ """Feedback loop — closes the gap between evaluation and action.
+ 
+ Connects SkillEvaluator quality scores to lifecycle management:
+-- F-grade skills with sufficient data → auto-deprecate
+-- A-grade skills → routing priority boost
++- F-grade skills with sufficient data → deprecate suggestion
++- A-grade skills → routing priority boost suggestion
+ - Generates retention suggestions for user review
++
++Lifecycle writes are strictly opt-in: ``analyze_all()`` is read-only by
++default (``auto_deprecate=False``). The explicit auto-disposition
++entry points are ``vibe skill stale --auto``, ``vibe optimize --apply``,
++and ``vibe skill cleanup --auto``.
+ """
+ 
+ from __future__ import annotations
+@@ -34,11 +39,14 @@ class RetentionSuggestion:
+ 
+ 
+ class FeedbackLoop:
+-    """Autonomous feedback loop for skill quality management.
++    """Opt-in feedback loop for skill quality management.
+ 
+-    Analyzes skill evaluations and takes automated actions:
++    Analyzes skill evaluations and produces retention suggestions.
++    Lifecycle writes only happen when ``analyze_all`` is called with
++    ``auto_deprecate=True``:
+     - Deprecates F-grade skills with sufficient data
+-    - Boosts A-grade skills in routing priority
++    - Archives 90+ day unused C/D/F-grade skills
++    - Restores deprecated A-grade skills back to active (boost)
+     - Generates retention suggestions for user review
+ 
+     Example:
+@@ -62,17 +70,28 @@ class FeedbackLoop:
+     ) -> None:
+         self._project_root = Path(project_root)
+         self._evaluator = evaluator or RoutingEvaluator(project_root=project_root)
++        # Skill IDs whose lifecycle was actually written during the most
++        # recent analyze_all(auto_deprecate=True) call.
++        self._last_applied: list[str] = []
++
++    @property
++    def last_applied_skill_ids(self) -> list[str]:
++        """Skill IDs whose lifecycle was written by the last auto apply run."""
++        return list(self._last_applied)
+ 
+-    def analyze_all(self, auto_deprecate: bool = True) -> list[RetentionSuggestion]:
++    def analyze_all(self, auto_deprecate: bool = False) -> list[RetentionSuggestion]:
+         """Analyze all skills and return actionable suggestions.
+ 
+         Args:
+-            auto_deprecate: If True, automatically deprecates F-grade skills.
+-                          If False, only returns suggestions for user review.
++            auto_deprecate: If True, applies lifecycle writes for
++                          deprecate/archive/boost suggestions.
++                          If False (default), only returns suggestions for
++                          user review — no lifecycle state is written.
+ 
+         Returns:
+             List of RetentionSuggestion objects.
+         """
++        self._last_applied = []
+         suggestions: list[RetentionSuggestion] = []
+         evaluations = self._evaluator.evaluate_all_skills()
+ 
+@@ -82,12 +101,16 @@ class FeedbackLoop:
+                 continue
+             suggestions.append(suggestion)
+ 
+-            if auto_deprecate and suggestion.action == "deprecate":
+-                self._apply_deprecation(skill_id, suggestion.reason)
+-            elif auto_deprecate and suggestion.action == "archive":
+-                self._apply_archive(skill_id, suggestion.reason)
+-            elif auto_deprecate and suggestion.action == "boost":
+-                self._apply_boost(skill_id)
++            applied = False
++            if auto_deprecate:
++                if suggestion.action == "deprecate":
++                    applied = self._apply_deprecation(skill_id, suggestion.reason)
++                elif suggestion.action == "archive":
++                    applied = self._apply_archive(skill_id, suggestion.reason)
++                elif suggestion.action == "boost":
++                    applied = self._apply_boost(skill_id)
++            if applied:
++                self._last_applied.append(skill_id)
+ 
+         return sorted(suggestions, key=lambda s: s.quality_score)
+ 
+@@ -177,35 +200,49 @@ class FeedbackLoop:
+ 
+         return None
+ 
+-    def _apply_deprecation(self, skill_id: str, reason: str) -> None:
+-        """Deprecate a skill."""
++    def _apply_deprecation(self, skill_id: str, reason: str) -> bool:
++        """Deprecate a skill. Returns True iff the lifecycle was written."""
+         try:
+             SkillConfigManager.set_lifecycle(skill_id, "deprecated")
+             logger.info("Auto-deprecated skill %s: %s", skill_id, reason)
++            return True
+         except (ValueError, OSError, KeyError, AttributeError):
+             logger.warning("Failed to deprecate skill %s", skill_id)
++            return False
+ 
+-    def _apply_archive(self, skill_id: str, reason: str) -> None:
+-        """Archive a stale skill."""
++    def _apply_archive(self, skill_id: str, reason: str) -> bool:
++        """Archive a stale skill. Returns True iff the lifecycle was written."""
+         try:
+             SkillConfigManager.set_lifecycle(skill_id, "archived")
+             logger.info("Auto-archived skill %s: %s", skill_id, reason)
++            return True
+         except (ValueError, OSError, KeyError, AttributeError):
+             logger.warning("Failed to archive skill %s", skill_id)
++            return False
+ 
+-    def _apply_boost(self, skill_id: str) -> None:
+-        """Boost a high-quality skill — ensure it stays active if deprecated."""
++    def _apply_boost(self, skill_id: str) -> bool:
++        """Boost a high-quality skill — restore it to active if deprecated.
++
++        Returns True iff the lifecycle was written. An already-active
++        (or otherwise non-deprecated) skill is a no-op and returns False.
++        """
+         try:
+             config = SkillConfigManager.get_skill_config(skill_id)
+             if config and config.lifecycle == "deprecated":
+                 SkillConfigManager.set_lifecycle(skill_id, "active")
+                 logger.info("Auto-boosted skill %s back to active", skill_id)
++                return True
++            return False
+         except (ValueError, OSError, KeyError, AttributeError):
+             logger.warning("Failed to boost skill %s", skill_id)
++            return False
+ 
+     def generate_report(self) -> dict[str, Any]:
+-        """Generate a summary report with evaluation results and actions."""
+-        suggestions = self.analyze_all()
++        """Generate a summary report with evaluation results and actions.
++
++        Read-only: never writes lifecycle state.
++        """
++        suggestions = self.analyze_all(auto_deprecate=False)
+         deprecate_count = sum(1 for s in suggestions if s.action == "deprecate")
+         warn_count = sum(1 for s in suggestions if s.action == "warn")
+         archive_count = sum(1 for s in suggestions if s.action == "archive")
+@@ -240,10 +277,12 @@ class FeedbackLoop:
+         suggestion detection (new patterns). Called by the
+         session-end hook or `vibe skill end-check`.
+ 
++        Read-only: never writes lifecycle state.
++
+         Returns:
+             Dict with retention and suggestion data for display/logging.
+         """
+-        retention_suggestions = self.analyze_all()
++        retention_suggestions = self.analyze_all(auto_deprecate=False)
+         retention_actions = [s for s in retention_suggestions if s.action != "none"]
+ 
+         suggestion_stats: dict[str, Any] = {"pending": 0, "should_prompt": False}
+diff --git a/src/vibesop/core/skills/loader.py b/src/vibesop/core/skills/loader.py
+index 79d8140..cfca599 100644
+--- a/src/vibesop/core/skills/loader.py
++++ b/src/vibesop/core/skills/loader.py
+@@ -146,23 +146,10 @@ class SkillLoader:
+             if config is not None:
+                 if not config.enabled:
+                     continue
+-                # Auto-archive deprecated skills unused for 90+ days
+-                if config.lifecycle == SkillLifecycleState.DEPRECATED.value:
+-                    last_used = config.usage_stats.get("last_used")
+-                    if last_used:
+-                        try:
+-                            from datetime import UTC, datetime
+-
+-                            last = datetime.fromisoformat(last_used.replace("Z", "+00:00"))
+-                            now = datetime.now(UTC)
+-                            days_since = (now - last).days
+-                            if days_since >= 90:
+-                                SkillConfigManager.set_lifecycle(
+-                                    skill_id, SkillLifecycleState.ARCHIVED.value
+-                                )
+-                                continue
+-                        except (ValueError, TypeError, OverflowError):
+-                            pass
++                # DEPRECATED skills stay in the discovery set regardless of
++                # last_used — hiding by age without a state change would be a
++                # silent side channel. Explicit archival lives in
++                # feedback_loop (stale --auto / optimize --apply).
+                 if config.lifecycle == SkillLifecycleState.ARCHIVED.value:
+                     continue
+                 # Scope isolation: project-scoped skills from other projects are hidden
+diff --git a/src/vibesop/core/skills/retention.py b/src/vibesop/core/skills/retention.py
+index 51f1afe..10bea35 100644
+--- a/src/vibesop/core/skills/retention.py
++++ b/src/vibesop/core/skills/retention.py
+@@ -62,7 +62,12 @@ class RetentionPolicy:
+         self._evaluator = evaluator or RoutingEvaluator()
+ 
+     def analyze_skill(self, skill_id: str) -> DeprecatedRetentionSuggestion:
+-        """Analyze a single skill and return retention recommendation."""
++        """Analyze a single skill and return retention recommendation.
++
++        Grade "?" here means *no evaluation object exists* for the skill —
++        distinct from ``evaluator.SkillEvaluation.grade == "?"``, which means
++        an evaluation object exists but has no routing feedback.
++        """
+         evaluation = self._evaluator.evaluate_skill(skill_id)
+         if evaluation is None:
+             return DeprecatedRetentionSuggestion(
+diff --git a/src/vibesop/core/skills/slash_commands.py b/src/vibesop/core/skills/slash_commands.py
+index 6e31610..f6a709e 100644
+--- a/src/vibesop/core/skills/slash_commands.py
++++ b/src/vibesop/core/skills/slash_commands.py
+@@ -366,11 +366,16 @@ class SlashCommandHandler:
+             if skill_id:
+                 evaluation = evaluator.evaluate_skill(skill_id)
+                 if evaluation:
++                    # "?" = no routing feedback: no data is not a bad score,
++                    # show "—" instead of a misleading 0%.
++                    quality_str = (
++                        f"{evaluation.quality_score:.0%}" if evaluation.total_routes > 0 else "—"
++                    )
+                     return (
+                         True,
+                         f"Skill: {skill_id}\n"
+                         f"Grade: {evaluation.grade}\n"
+-                        f"Quality: {evaluation.quality_score:.0%}\n"
++                        f"Quality: {quality_str}\n"
+                         f"Total uses: {evaluation.total_routes}",
+                     )
+                 return False, f"No evaluation data for {skill_id}"
+@@ -381,7 +386,8 @@ class SlashCommandHandler:
+ 
+             msg = "Skill Evaluation Summary:\n"
+             for sid, ev in all_evals.items():
+-                msg += f"  {sid}: {ev.grade} ({ev.quality_score:.0%})\n"
++                quality_str = f"{ev.quality_score:.0%}" if ev.total_routes > 0 else "—"
++                msg += f"  {sid}: {ev.grade} ({quality_str})\n"
+             return True, msg
+         except (OSError, ValueError, RuntimeError) as e:
+             logger.error(f"Evaluate command failed: {e}")
+diff --git a/tests/agent/runtime/test_agent_runtime.py b/tests/agent/runtime/test_agent_runtime.py
+index 3ed4a53..06e07d8 100644
+--- a/tests/agent/runtime/test_agent_runtime.py
++++ b/tests/agent/runtime/test_agent_runtime.py
+@@ -543,3 +543,157 @@ class TestRouterMatchedSpanVerdict:
+         bridge_span = _as_route_span(span)
+         assert bridge_span.has_match is None
+         assert _is_miss(bridge_span) is False
++
++
++class TestTopSkillsSpanMetadata:
++    """gate38 L2a — hook-path hit spans carry ``metadata.top_skills``
++    (≤3, primary first). Written ONLY on a real router hit
++    (``result.router_matched``, the same expression as
++    ``metadata["has_match"]``) — NOT on the mode-derived ``has_match``
++    property, which stays True on intercepted misses.
++    """
++
++    @pytest.fixture
++    def fresh_tracer(self, tmp_path, monkeypatch):
++        """Point the tracer singleton (and the agent_runtime cache) at tmp_path."""
++        import vibesop.core.observability.tracer as tracer_mod
++        from vibesop.agent.runtime import agent_runtime as ar_module
++        from vibesop.core.observability.tracer import ObservabilityTracer
++
++        span_file = tmp_path / "spans.jsonl"
++        fresh = ObservabilityTracer(storage_path=span_file, enabled=True)
++        monkeypatch.setattr(tracer_mod, "_tracer", fresh)
++        monkeypatch.setattr(ar_module, "_obs_tracer", None, raising=False)
++        return span_file
++
++    def _route_span(self, span_file) -> dict:
++        import json
++
++        spans = []
++        with span_file.open() as f:
++            for raw in f:
++                if raw.strip():
++                    spans.append(json.loads(raw))
++        route_spans = [s for s in spans if str(s.get("name", "")).startswith("route:")]
++        assert len(route_spans) == 1, f"expected 1 route span, got {len(route_spans)}"
++        return route_spans[0]
++
++    @staticmethod
++    def _metadata(span: dict) -> dict:
++        import json
++
++        meta = span.get("metadata") or {}
++        return json.loads(meta) if isinstance(meta, str) else meta
++
++    def _runtime_with_router(self, tmp_path, routing_result):
++        from unittest.mock import MagicMock
++
++        router = MagicMock()
++        router.route.return_value = routing_result
++        runtime = AgentRuntime(project_root=tmp_path)
++        runtime._router = router
++        return runtime
++
++    @staticmethod
++    def _hit_result(alternatives):
++        from types import SimpleNamespace
++        from unittest.mock import MagicMock
++
++        routing_result = MagicMock()
++        routing_result.has_match = True
++        routing_result.primary = SimpleNamespace(
++            skill_id="some-skill", skill_name="Some Skill", confidence=0.9, layer=None
++        )
++        routing_result.alternatives = alternatives
++        routing_result.plan = None
++        return routing_result
++
++    def test_hit_writes_top_skills_primary_first(self, fresh_tracer, tmp_path) -> None:
++        from types import SimpleNamespace
++
++        routing_result = self._hit_result(
++            [
++                SimpleNamespace(skill_id="alt-1", confidence=0.7),
++                SimpleNamespace(skill_id="alt-2", confidence=0.6),
++            ]
++        )
++        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
++
++        metadata = self._metadata(self._route_span(fresh_tracer))
++        assert metadata.get("has_match") is True
++        assert metadata["top_skills"] == ["some-skill", "alt-1", "alt-2"]
++
++    def test_top_skills_capped_at_three(self, fresh_tracer, tmp_path) -> None:
++        from types import SimpleNamespace
++
++        routing_result = self._hit_result(
++            [SimpleNamespace(skill_id=f"alt-{i}", confidence=0.5) for i in range(4)]
++        )
++        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
++
++        metadata = self._metadata(self._route_span(fresh_tracer))
++        assert metadata["top_skills"] == ["some-skill", "alt-0", "alt-1"]
++
++    def test_intercepted_miss_omits_top_skills(self, fresh_tracer, tmp_path) -> None:
++        """The grok-NIT pin: an intercepted miss leaves the mode-derived
++        ``has_match`` PROPERTY True while ``router_matched`` is False —
++        gating on the property would write fallback garbage here."""
++        from unittest.mock import MagicMock
++
++        routing_result = MagicMock()
++        routing_result.has_match = False
++        routing_result.primary = None
++        routing_result.layer_details = []
++        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
++
++        metadata = self._metadata(self._route_span(fresh_tracer))
++        assert metadata.get("has_match") is False
++        assert "top_skills" not in metadata
++
++    def test_magicmock_alternative_does_not_leak(self, fresh_tracer, tmp_path) -> None:
++        """A MagicMock alternative's auto-created skill_id (a MagicMock,
++        not a str) must never reach span metadata — same guard convention
++        as the layer write."""
++        from types import SimpleNamespace
++        from unittest.mock import MagicMock
++
++        routing_result = self._hit_result(
++            [MagicMock(), SimpleNamespace(skill_id="alt-1", confidence=0.7)]
++        )
++        self._runtime_with_router(tmp_path, routing_result).handle_query("review my code")
++
++        metadata = self._metadata(self._route_span(fresh_tracer))
++        assert metadata["top_skills"] == ["some-skill", "alt-1"]
++        # The metadata round-tripped through SpanWriter JSON — a leaked
++        # MagicMock would have failed serialization already.
++
++    def test_skill_health_reader_unaffected_by_top_skills_key(self, tmp_path) -> None:
++        """skill_health fire counts are identical for old spans (no
++        top_skills key) and new spans (with it) — additive metadata must
++        not move the gate37 reader."""
++        import json as _json
++        from datetime import UTC, datetime, timedelta
++
++        from vibesop.core.skills.skill_health import count_skill_fires
++
++        now = datetime.now(UTC)
++
++        def _span_meta(extra: dict) -> dict:
++            meta = {"skill_id": "demo/skill", "has_match": True, **extra}
++            return {
++                "span_kind": "task",
++                "name": "route:demo",
++                "metadata": _json.dumps(meta),
++                "started_at": (now - timedelta(days=1)).isoformat(),
++            }
++
++        path = tmp_path / ".vibe" / "observability" / "spans.dev.jsonl"
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text(
++            _json.dumps(_span_meta({}))
++            + "\n"
++            + _json.dumps(_span_meta({"top_skills": ["demo/skill", "alt-1"]}))
++            + "\n",
++            encoding="utf-8",
++        )
++        assert count_skill_fires(tmp_path, now=now) == {"demo/skill": 2}
+diff --git a/tests/benchmark/routing_eval_extended.yaml b/tests/benchmark/routing_eval_extended.yaml
+index 4bd72f8..1aacfdf 100644
+--- a/tests/benchmark/routing_eval_extended.yaml
++++ b/tests/benchmark/routing_eval_extended.yaml
+@@ -22,14 +22,29 @@
+ #
+ # Environment dependence: routing runs against the LOCAL skill index
+ # (~/.vibe/skill-index.json) and learned instincts (.vibe/instincts.jsonl),
+-# so absolute scores vary by machine. Of the 51 residual misroutes measured
+-# at audit time, ~40 land on locally-installed pack ids (mattpocock 21,
+-# omx 14, superpowers 5) rather than on repo-builtin skills. 4 of the 7
+-# positives (omx/git-master, superpowers/using-git-worktrees x2,
+-# superpowers/requesting-code-review) require the omx + superpowers packs
+-# installed in the eval env; a bare-env run shows these (~5 with
+-# env-sensitive fallback paths) as systematic misses that are NOT router
+-# regressions.
++# so absolute scores vary by machine.
++#
++# requires_packs field (gate38; this field is the single source of truth for
++# pack-environment dependence — the prose that used to live here is gone):
++# entries whose expect labels live in an external skill pack carry
++# `requires_packs: [<namespace>]`. scripts/eval_routing.py scores such an
++# entry as skipped_env when it is annotated AND expect is non-empty AND
++# every expect id is unresolvable in the current environment (builtin ids
++# resolve from core/registry.yaml; external ids from ExternalSkillLoader
++# discovery). skipped_env entries are excluded from total/denominator and
++# from the errors list, and record ok1: null in per_query. If the presence
++# check itself raises, ids count as resolvable (conservative: the entry is
++# scored — possibly as a false error — never silently skipped). Annotated
++# entries with expect: [] are NEVER skipped (a bare all([]) would
++# vacuously skip every annotation).
++#
++# Residual noise disclosure — extended numbers are NOT a clean baseline:
++# (a) reject-only entries (expect: [] with reject containing pack ids) pass
++#     vacuously in a bare environment where the pack is absent, inflating
++#     the measured pass rate;
++# (b) the ~5 env-sensitive fallback-path entries noted in the pre-gate38
++#     header are still unannotated and still count as errors on bare
++#     machines — they are environment misses, not router regressions.
+ #
+ # Known labeling tension: `commit 三批改动` is labeled omx/git-master (a
+ # positive) while sibling git-ish queries (按批次拆 commit / 保存并提交远程 /
+@@ -100,6 +115,7 @@
+ - query: commit 三批改动
+   expect:
+   - omx/git-master
++  requires_packs: [omx]
+   category: production_log
+   needs_review: false
+ - query: 拉取最新变更并进行评审
+@@ -118,6 +134,7 @@
+ - query: 删掉 mission-pack-p0 worktree 并清理远程分
+   expect:
+   - superpowers/using-git-worktrees
++  requires_packs: [superpowers]
+   category: production_log
+   needs_review: false
+ - query: 这块也可以作为后续优化的一个方向
+@@ -190,6 +207,7 @@
+ - query: 清 worktree/stash
+   expect:
+   - superpowers/using-git-worktrees
++  requires_packs: [superpowers]
+   category: production_log
+   needs_review: false
+ - query: 1. 输入 "/code" 后弹窗，选择工作区直接没有反映 2. 既然是 ACP 进入编程助手了， 我理解界面旁边就应该有独立的 Agent，可以看到编程助手内部的操作和流转才对
+@@ -302,6 +320,7 @@
+ - query: 走一遍 dual-review 对 diff 再
+   expect:
+   - superpowers/requesting-code-review
++  requires_packs: [superpowers]
+   category: production_log
+   needs_review: false
+ - query: 先让 pi 和 claude 进行双路复审
+diff --git a/tests/cli/test_optimize_cmd.py b/tests/cli/test_optimize_cmd.py
+index 7296ab1..50e39d4 100644
+--- a/tests/cli/test_optimize_cmd.py
++++ b/tests/cli/test_optimize_cmd.py
+@@ -1,11 +1,74 @@
+ """Tests for optimize_cmd.py."""
+ 
++import json
++from datetime import UTC, datetime, timedelta
++from unittest.mock import MagicMock, patch
++
+ from typer.testing import CliRunner
+ 
+ from vibesop.cli.main import app
++from vibesop.core.models import SkillLifecycle
++from vibesop.core.skills.config_manager import SkillConfig
++from vibesop.core.skills.evaluator import SkillEvaluation
+ 
+ runner = CliRunner()
+ 
++_EVALUATOR = "vibesop.core.skills.evaluator.RoutingEvaluator"
++_SET_LIFECYCLE = "vibesop.core.skills.feedback_loop.SkillConfigManager.set_lifecycle"
++_GET_CONFIG = "vibesop.core.skills.feedback_loop.SkillConfigManager.get_skill_config"
++
++
++def _days_ago(days: int) -> str:
++    return (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
++
++
++def _candidate_evaluations() -> dict[str, SkillEvaluation]:
++    """One real candidate per lifecycle action: deprecate, archive, boost."""
++    return {
++        # F-grade, 30+ days unused, < 3 uses → deprecate
++        "test/bad": SkillEvaluation(
++            skill_id="test/bad",
++            total_routes=1,
++            routing_accuracy=0.3,
++            user_satisfaction=0.3,
++            execution_success=0.3,
++            usage_frequency=0.3,
++            health_score=0.3,
++            last_used=_days_ago(45),
++        ),
++        # C-grade, 90+ days unused → archive
++        "test/stale": SkillEvaluation(
++            skill_id="test/stale",
++            total_routes=5,
++            routing_accuracy=0.65,
++            user_satisfaction=0.65,
++            execution_success=0.65,
++            usage_frequency=0.65,
++            health_score=0.65,
++            last_used=_days_ago(120),
++        ),
++        # A-grade, sufficient data → boost (restores deprecated → active)
++        "test/great": SkillEvaluation(
++            skill_id="test/great",
++            total_routes=5,
++            routing_accuracy=0.95,
++            user_satisfaction=0.95,
++            execution_success=0.95,
++            usage_frequency=0.95,
++            health_score=0.95,
++        ),
++    }
++
++
++def _mock_evaluator(evaluations: dict[str, SkillEvaluation]) -> MagicMock:
++    evaluator = MagicMock()
++    evaluator.evaluate_all_skills.return_value = evaluations
++    return evaluator
++
++
++def _deprecated_config(skill_id: str) -> SkillConfig:
++    return SkillConfig(skill_id=skill_id, lifecycle=SkillLifecycle.DEPRECATED)
++
+ 
+ class TestOptimizeCommand:
+     """Tests for vibe optimize command."""
+@@ -31,3 +94,88 @@ class TestOptimizeCommand:
+         result = runner.invoke(app, ["optimize", "--apply", "--days", "1"])
+         # --apply may fail gracefully if no evaluator data
+         assert "Applied Optimizations" in result.stdout or "Routing Health" in result.stdout
++
++
++class TestOptimizeLifecycleGating:
++    """gate38: dry-run must not write lifecycle; --apply writes only real ones."""
++
++    def test_dry_run_never_writes_lifecycle(self, tmp_path, monkeypatch):
++        """must-NOT: `vibe optimize` without --apply shows candidates but
++        writes no lifecycle state."""
++        monkeypatch.chdir(tmp_path)
++        with (
++            patch(_EVALUATOR, return_value=_mock_evaluator(_candidate_evaluations())),
++            patch(_SET_LIFECYCLE) as mock_set,
++        ):
++            result = runner.invoke(app, ["optimize"])
++            assert result.exit_code == 0
++            mock_set.assert_not_called()
++        # Candidates are still surfaced in the preview
++        assert "test/bad" in result.stdout
++        assert "Applied Optimizations" not in result.stdout
++        # Dry-run must not create the optimization log either
++        assert not (tmp_path / ".vibe" / "optimization-log.jsonl").exists()
++
++    def test_apply_writes_and_logs_all_three_action_types(self, tmp_path, monkeypatch):
++        """--apply deprecates F-grade, archives stale C-grade, restores
++        deprecated A-grade — and only actually-written skills reach the log
++        and the Applied Optimizations list."""
++        monkeypatch.chdir(tmp_path)
++        with (
++            patch(_EVALUATOR, return_value=_mock_evaluator(_candidate_evaluations())),
++            patch(_SET_LIFECYCLE) as mock_set,
++            patch(_GET_CONFIG, side_effect=_deprecated_config),
++        ):
++            result = runner.invoke(app, ["optimize", "--apply"])
++            assert result.exit_code == 0
++
++        writes = {c.args[0]: c.args[1] for c in mock_set.call_args_list}
++        assert writes == {
++            "test/bad": "deprecated",
++            "test/stale": "archived",
++            "test/great": "active",
++        }
++        for skill_id in ("test/bad", "test/stale", "test/great"):
++            assert skill_id in result.stdout
++
++        log_path = tmp_path / ".vibe" / "optimization-log.jsonl"
++        assert log_path.exists()
++        entries = [json.loads(line) for line in log_path.read_text().splitlines()]
++        assert len(entries) == 1
++        assert sorted(entries[0]["applied_skills"]) == [
++            "test/bad",
++            "test/great",
++            "test/stale",
++        ]
++
++    def test_apply_with_no_candidates_writes_nothing(self, tmp_path, monkeypatch):
++        """--apply with no candidates: no lifecycle write, no log entry."""
++        monkeypatch.chdir(tmp_path)
++        with (
++            patch(_EVALUATOR, return_value=_mock_evaluator({})),
++            patch(_SET_LIFECYCLE) as mock_set,
++        ):
++            result = runner.invoke(app, ["optimize", "--apply"])
++            assert result.exit_code == 0
++            mock_set.assert_not_called()
++        assert "Applied Optimizations" in result.stdout
++        assert not (tmp_path / ".vibe" / "optimization-log.jsonl").exists()
++
++    def test_apply_excludes_noop_boost_from_log(self, tmp_path, monkeypatch):
++        """must-NOT: a boost suggestion for an already-active skill is not
++        applied and must not appear in the log."""
++        monkeypatch.chdir(tmp_path)
++        evaluations = {"test/great": _candidate_evaluations()["test/great"]}
++
++        def _active_config(skill_id: str) -> SkillConfig:
++            return SkillConfig(skill_id=skill_id, lifecycle=SkillLifecycle.ACTIVE)
++
++        with (
++            patch(_EVALUATOR, return_value=_mock_evaluator(evaluations)),
++            patch(_SET_LIFECYCLE) as mock_set,
++            patch(_GET_CONFIG, side_effect=_active_config),
++        ):
++            result = runner.invoke(app, ["optimize", "--apply"])
++            assert result.exit_code == 0
++            mock_set.assert_not_called()
++        assert not (tmp_path / ".vibe" / "optimization-log.jsonl").exists()
+diff --git a/tests/cli/test_route_cli_task_id.py b/tests/cli/test_route_cli_task_id.py
+index d14595c..2ca0e32 100644
+--- a/tests/cli/test_route_cli_task_id.py
++++ b/tests/cli/test_route_cli_task_id.py
+@@ -241,3 +241,142 @@ class TestRouteCliLayerMetadata:
+             metadata = json.loads(metadata)
+         assert metadata.get("has_match") is False
+         assert metadata.get("layer") == "levenshtein"
++
++
++class TestRouteCliTopSkills:
++    """gate38 L2a — CLI hit spans carry ``metadata.top_skills`` (≤3,
++    primary first). Gated on the same expression as
++    ``metadata["has_match"]`` and read from the routing result object.
++    On miss the CLI alternatives are fallback nearest-neighbours
++    (result_mixin), not a router ranking → the key is omitted entirely.
++    """
++
++    @staticmethod
++    def _metadata(span: dict) -> dict:
++        meta = span.get("metadata") or {}
++        return json.loads(meta) if isinstance(meta, str) else meta
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_hit_writes_top_skills_primary_first(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        from types import SimpleNamespace
++
++        mock_stdin.isatty.return_value = False
++        orch = mock_router._to_orchestration_result.return_value
++        orch.alternatives = [
++            SimpleNamespace(skill_id="alt-1"),
++            SimpleNamespace(skill_id="alt-2"),
++        ]
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "cmspark screenshot permission popup"
++        mock_interceptor_cls.return_value = _make_interceptor(query)
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        route_spans = _read_route_spans(fresh_tracer)
++        assert len(route_spans) == 1
++        metadata = self._metadata(route_spans[0])
++        assert metadata.get("has_match") is True
++        assert metadata["top_skills"] == ["test-skill", "alt-1", "alt-2"]
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_top_skills_capped_at_three(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        from types import SimpleNamespace
++
++        mock_stdin.isatty.return_value = False
++        orch = mock_router._to_orchestration_result.return_value
++        orch.alternatives = [SimpleNamespace(skill_id=f"alt-{i}") for i in range(4)]
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "cmspark screenshot permission popup"
++        mock_interceptor_cls.return_value = _make_interceptor(query)
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
++        assert metadata["top_skills"] == ["test-skill", "alt-0", "alt-1"]
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_miss_with_fallback_alternatives_omits_top_skills(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        from types import SimpleNamespace
++
++        mock_stdin.isatty.return_value = False
++        miss_orch = MagicMock()
++        miss_orch.mode.value = "single"
++        miss_orch.execution_plan = None
++        miss_orch.primary = None
++        miss_orch.has_match = False
++        # Miss-path alternatives are fallback nearest-neighbours — they
++        # must NOT be snapshotted as a ranking.
++        miss_orch.alternatives = [SimpleNamespace(skill_id="fallback-nearest")]
++        miss_orch.layer_details = []
++        miss_orch.to_dict.return_value = {"mode": "single"}
++        mock_router._to_orchestration_result.return_value = miss_orch
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "totally unroutable xyzzy query"
++        mock_interceptor_cls.return_value = _make_interceptor(query)
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
++        assert metadata.get("has_match") is False
++        assert "top_skills" not in metadata
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_magicmock_alternative_does_not_leak(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        """A MagicMock alternative's auto-created skill_id (a MagicMock,
++        not a str) must never reach span metadata — same guard convention
++        as the layer write."""
++        mock_stdin.isatty.return_value = False
++        orch = mock_router._to_orchestration_result.return_value
++        orch.alternatives = [MagicMock()]
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "cmspark screenshot permission popup"
++        mock_interceptor_cls.return_value = _make_interceptor(query)
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
++        assert metadata["top_skills"] == ["test-skill"]
+diff --git a/tests/cli/test_stale_readonly.py b/tests/cli/test_stale_readonly.py
+new file mode 100644
+index 0000000..f90eef4
+--- /dev/null
++++ b/tests/cli/test_stale_readonly.py
+@@ -0,0 +1,78 @@
++"""gate38: hot-path and render stale-skill checks are read-only.
++
++``_check_stale_skills_post_route`` (every 20 routes) and
++``_render_stale_suggestions`` (no-match panel) must never write lifecycle
++state — auto-disposition is opt-in via ``stale --auto`` / ``optimize --apply``.
++"""
++
++from __future__ import annotations
++
++import json
++from datetime import UTC, datetime, timedelta
++from unittest.mock import MagicMock, patch
++
++from vibesop.core.skills.evaluator import SkillEvaluation
++
++_SET_LIFECYCLE = "vibesop.core.skills.feedback_loop.SkillConfigManager.set_lifecycle"
++_EVALUATOR = "vibesop.core.skills.feedback_loop.RoutingEvaluator"
++
++
++def _f_grade_evaluations() -> dict[str, SkillEvaluation]:
++    """A real F-grade candidate that WOULD be deprecated if auto were on."""
++    last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
++    return {
++        "test/bad": SkillEvaluation(
++            skill_id="test/bad",
++            total_routes=1,
++            routing_accuracy=0.3,
++            user_satisfaction=0.3,
++            execution_success=0.3,
++            usage_frequency=0.3,
++            health_score=0.3,
++            last_used=last_used,
++        )
++    }
++
++
++def _mock_evaluator() -> MagicMock:
++    evaluator = MagicMock()
++    evaluator.evaluate_all_skills.return_value = _f_grade_evaluations()
++    return evaluator
++
++
++def test_render_stale_suggestions_writes_nothing() -> None:
++    from vibesop.cli.render import _render_stale_suggestions
++
++    with (
++        patch(_EVALUATOR, return_value=_mock_evaluator()),
++        patch(_SET_LIFECYCLE) as mock_set,
++    ):
++        text = _render_stale_suggestions()
++        assert "test/bad" in text  # suggestion still surfaced
++        mock_set.assert_not_called()
++
++
++def test_check_stale_skills_post_route_writes_nothing(tmp_path, monkeypatch) -> None:
++    from vibesop.cli.main import _check_stale_skills_post_route
++
++    monkeypatch.chdir(tmp_path)
++    vibe_dir = tmp_path / ".vibe"
++    vibe_dir.mkdir()
++    # Preset the counter so this call crosses the check interval.
++    (vibe_dir / "routing_counter.json").write_text(
++        json.dumps({"routes_since_last_check": 19, "check_interval": 20}),
++        encoding="utf-8",
++    )
++
++    with (
++        patch(_EVALUATOR, return_value=_mock_evaluator()),
++        patch(_SET_LIFECYCLE) as mock_set,
++    ):
++        _check_stale_skills_post_route()
++        mock_set.assert_not_called()
++
++    # Counter reset proves the FeedbackLoop analysis path actually ran
++    # (the function swallows exceptions, so this guards against a
++    # vacuously-passing test).
++    counter = json.loads((vibe_dir / "routing_counter.json").read_text(encoding="utf-8"))
++    assert counter["routes_since_last_check"] == 0
+diff --git a/tests/core/observability/test_tool_call_bridge.py b/tests/core/observability/test_tool_call_bridge.py
+index 411bf90..fa8c2bb 100644
+--- a/tests/core/observability/test_tool_call_bridge.py
++++ b/tests/core/observability/test_tool_call_bridge.py
+@@ -318,7 +318,11 @@ class TestOutcomeSignals:
+         _route_span(tmp_path, has_match=True, started=T0, query="a matched question")
+         stats = bridge_entries([], tmp_path)
+         assert stats.outcomes_recorded == 0
+-        assert _read_outcomes(tmp_path) == []
++        # gate38 L2a: the has_match=True span is now a HIT and (T0 having
++        # aged past SESSION_COMPLETE_HOURS) yields a hit-side row — that
++        # is the new intended behavior. The miss-pool freeze this test
++        # guards is unchanged: no miss-side row (side absent = miss).
++        assert [o for o in _read_outcomes(tmp_path) if o.get("side") != "hit"] == []
+ 
+     def test_recent_miss_without_evidence_stays_undecided(self, tmp_path: Path) -> None:
+         _route_span(tmp_path, started=datetime.now(UTC) - timedelta(minutes=5))
+@@ -506,3 +510,203 @@ class TestHookPathMissPredicate:
+         assert stats.outcomes_recorded == 1
+         outcomes = _read_outcomes(tmp_path)
+         assert outcomes[0]["span_id"] == "hook-miss-1"
++
++
++class TestHitOutcomes:
++    """gate38 L2a — outcome signals for HIT route spans (mirror of the
++    miss side). Hit rows add ``side="hit"`` + ``population="hook"``;
++    miss rows are never rewritten (missing ``side`` defaults to miss).
++    """
++
++    def _hit(self, root: Path, **kwargs) -> Span:
++        kwargs.setdefault("has_match", True)
++        return _route_span(root, **kwargs)
++
++    def test_hit_reask_same_task_is_weak_negative(self, tmp_path: Path) -> None:
++        now = datetime.now(UTC)
++        hit = self._hit(
++            tmp_path,
++            query="deploy the service",
++            started=now - timedelta(minutes=10),
++            span_id="hit-1",
++            session="sess-h",
++        )
++        # The re-ask span itself stays fresh → undecided: exactly ONE row.
++        self._hit(
++            tmp_path,
++            query="deploy the service",
++            started=now - timedelta(minutes=5),
++            span_id="hit-2",
++            session="sess-h",
++        )
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 1
++        outcomes = _read_outcomes(tmp_path)
++        assert len(outcomes) == 1
++        assert outcomes[0]["span_id"] == hit.id
++        assert outcomes[0]["outcome"] == "weak_negative"
++        assert outcomes[0]["reason"] == "hit_reask_same_task_id"
++        assert outcomes[0]["side"] == "hit"
++        assert outcomes[0]["population"] == "hook"
++
++    def test_hit_session_moved_on_is_weak_positive(self, tmp_path: Path) -> None:
++        now = datetime.now(UTC)
++        hit = self._hit(
++            tmp_path,
++            query="first question",
++            started=now - timedelta(minutes=10),
++            span_id="hit-1",
++            session="sess-h",
++        )
++        # Later different-task span in the same session; itself fresh.
++        self._hit(
++            tmp_path,
++            query="a different question",
++            started=now - timedelta(minutes=5),
++            span_id="hit-2",
++            session="sess-h",
++        )
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 1
++        outcomes = _read_outcomes(tmp_path)
++        assert len(outcomes) == 1
++        assert outcomes[0]["span_id"] == hit.id
++        assert outcomes[0]["outcome"] == "weak_positive"
++        assert outcomes[0]["reason"] == "hit_session_moved_on"
++        assert outcomes[0]["side"] == "hit"
++
++    def test_hit_session_expired_is_weakest_weak_positive(self, tmp_path: Path) -> None:
++        hit = self._hit(
++            tmp_path,
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="hit-1",
++        )
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 1
++        outcomes = _read_outcomes(tmp_path)
++        assert outcomes[0]["span_id"] == hit.id
++        assert outcomes[0]["outcome"] == "weak_positive"
++        assert outcomes[0]["reason"] == "hit_session_expired"
++
++    def test_fresh_hit_stays_undecided_and_rerun_is_idempotent(self, tmp_path: Path) -> None:
++        self._hit(tmp_path, started=datetime.now(UTC) - timedelta(minutes=5), span_id="hit-1")
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 0
++        assert _read_outcomes(tmp_path) == []
++        # Second run: still nothing, and nothing duplicated.
++        stats2 = bridge_entries([], tmp_path)
++        assert stats2.hit_outcomes_recorded == 0
++        assert _read_outcomes(tmp_path) == []
++
++    def test_hit_outcomes_not_duplicated_on_rerun(self, tmp_path: Path) -> None:
++        self._hit(
++            tmp_path,
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="hit-1",
++        )
++        assert bridge_entries([], tmp_path).hit_outcomes_recorded == 1
++        assert bridge_entries([], tmp_path).hit_outcomes_recorded == 0
++        assert len(_read_outcomes(tmp_path)) == 1
++
++    def test_cli_hit_never_gets_outcome(self, tmp_path: Path) -> None:
++        """must-NOT: CLI hits (per-invocation session) are excluded —
++        they could only decay into hollow expiry weak positives."""
++        self._hit(
++            tmp_path,
++            platform="vibe-cli",
++            source="cli",
++            session="minted-per-invocation",
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="cli-hit",
++        )
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 0
++        assert _read_outcomes(tmp_path) == []
++
++    def test_hit_miss_unknown_pools_do_not_cross(self, tmp_path: Path) -> None:
++        """has_match True/False/None are three disjoint pools; miss rows
++        keep the old schema (no side/population keys — never rewritten)."""
++        old = datetime.now(UTC) - timedelta(hours=48)
++        self._hit(tmp_path, started=old, span_id="pool-hit", query="a hit query")
++        _route_span(
++            tmp_path, has_match=False, started=old, span_id="pool-miss", query="a miss query"
++        )
++        _route_span(tmp_path, has_match=None, started=old, span_id="pool-unknown")
++
++        stats = bridge_entries([], tmp_path)
++        assert stats.outcomes_recorded == 1  # miss side only
++        assert stats.hit_outcomes_recorded == 1  # hit side only
++        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
++        assert set(outcomes) == {"pool-hit", "pool-miss"}
++        miss_row = outcomes["pool-miss"]
++        assert "side" not in miss_row  # miss rows are NOT rewritten
++        assert "population" not in miss_row
++        assert miss_row["reason"] == "session_expired_without_reask"
++        hit_row = outcomes["pool-hit"]
++        assert hit_row["side"] == "hit"
++        assert hit_row["population"] == "hook"
++
++    def test_hit_skips_accepted_queries_channel(self, tmp_path: Path) -> None:
++        """accepted_queries is a miss-only signal: a hit whose query was
++        accepted still classifies by span evidence, never strong_positive."""
++        hit = self._hit(
++            tmp_path,
++            query="run tests",
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="hit-1",
++        )
++        pending = tmp_path / ".vibe" / "instincts" / "routing_pending.jsonl"
++        pending.parent.mkdir(parents=True, exist_ok=True)
++        pending.write_text(
++            json.dumps(
++                {"id": "rp-1", "query": "run tests", "kind": "no_match", "status": "accepted"}
++            )
++            + "\n",
++            encoding="utf-8",
++        )
++        bridge_entries([], tmp_path)
++        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
++        assert outcomes[hit.id]["outcome"] == "weak_positive"
++        assert outcomes[hit.id]["reason"] == "hit_session_expired"
++
++    def test_corrupt_spans_and_bad_metadata_json_skipped_not_raised(self, tmp_path: Path) -> None:
++        """A broken spans line and a span whose metadata string is invalid
++        JSON are skipped; the valid expired hit still gets its outcome."""
++        spans_dir = tmp_path / ".vibe" / "observability"
++        spans_dir.mkdir(parents=True, exist_ok=True)
++        (spans_dir / "spans.jsonl").write_text("{broken json\n", encoding="utf-8")
++        (spans_dir / "spans.jsonl").write_text(
++            "{broken json\n"
++            + json.dumps(
++                {
++                    "span_kind": "task",
++                    "name": "route:badmeta",
++                    "id": "bad-meta",
++                    "trace_id": "t",
++                    "metadata": "{not valid json",
++                }
++            )
++            + "\n",
++            encoding="utf-8",
++        )
++        self._hit(
++            tmp_path,
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="hit-ok",
++        )
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 1
++        outcomes = _read_outcomes(tmp_path)
++        assert [o["span_id"] for o in outcomes] == ["hit-ok"]
++
++    def test_corrupt_outcome_lines_skipped_for_hit_side(self, tmp_path: Path) -> None:
++        self._hit(
++            tmp_path,
++            started=datetime.now(UTC) - timedelta(hours=48),
++            span_id="hit-1",
++        )
++        path = _outcomes_path(tmp_path)
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text("{broken json\n", encoding="utf-8")
++        stats = bridge_entries([], tmp_path)
++        assert stats.hit_outcomes_recorded == 1
+diff --git a/tests/core/skills/test_feedback_loop.py b/tests/core/skills/test_feedback_loop.py
+index e98d77e..b1313ce 100644
+--- a/tests/core/skills/test_feedback_loop.py
++++ b/tests/core/skills/test_feedback_loop.py
+@@ -2,9 +2,11 @@
+ 
+ from __future__ import annotations
+ 
+-from datetime import UTC, datetime
++from datetime import UTC, datetime, timedelta
+ from unittest.mock import MagicMock, patch
+ 
++from vibesop.core.models import SkillLifecycle
++from vibesop.core.skills.config_manager import SkillConfig
+ from vibesop.core.skills.evaluator import SkillEvaluation
+ from vibesop.core.skills.feedback_loop import FeedbackLoop
+ 
+@@ -191,3 +193,147 @@ class TestFeedbackLoop:
+         assert report["total_skills_analyzed"] == 2
+         assert report["actions"]["deprecate"] == 1
+         assert report["actions"]["boost"] == 1
++
++
++class TestFeedbackLoopOptIn:
++    """gate38: lifecycle writes are strictly opt-in (auto_deprecate=True)."""
++
++    _SET_LIFECYCLE = "vibesop.core.skills.feedback_loop.SkillConfigManager.set_lifecycle"
++    _GET_CONFIG = "vibesop.core.skills.feedback_loop.SkillConfigManager.get_skill_config"
++
++    @staticmethod
++    def _f_grade_eval(skill_id: str = "test/bad") -> SkillEvaluation:
++        """Real F-grade evaluation: 30+ days unused, < 3 uses."""
++        last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
++        return SkillEvaluation(
++            skill_id=skill_id,
++            total_routes=1,
++            routing_accuracy=0.3,
++            user_satisfaction=0.3,
++            execution_success=0.3,
++            usage_frequency=0.3,
++            health_score=0.3,
++            last_used=last_used,
++        )
++
++    def _loop_with(self, evaluations: dict[str, SkillEvaluation]) -> FeedbackLoop:
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = evaluations
++        return FeedbackLoop(evaluator=evaluator)
++
++    def test_analyze_all_default_writes_nothing(self) -> None:
++        loop = self._loop_with({"test/bad": self._f_grade_eval()})
++        with patch(self._SET_LIFECYCLE) as mock_set:
++            suggestions = loop.analyze_all()
++            assert [s.action for s in suggestions] == ["deprecate"]
++            mock_set.assert_not_called()
++            assert loop.last_applied_skill_ids == []
++
++    def test_generate_report_writes_nothing(self) -> None:
++        loop = self._loop_with({"test/bad": self._f_grade_eval()})
++        with patch(self._SET_LIFECYCLE) as mock_set:
++            loop.generate_report()
++            mock_set.assert_not_called()
++
++    def test_end_of_session_check_writes_nothing(self) -> None:
++        loop = self._loop_with({"test/bad": self._f_grade_eval()})
++        with patch(self._SET_LIFECYCLE) as mock_set:
++            loop.end_of_session_check()
++            mock_set.assert_not_called()
++
++    def test_zero_sample_never_disposed_even_with_auto(self) -> None:
++        """Joint must-NOT: a zero-sample skill graded "?" produces no
++        suggestion at all (no deprecate, no warn) and no lifecycle write,
++        even under analyze_all(auto_deprecate=True)."""
++        last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=90)).isoformat()
++        evaluation = SkillEvaluation(skill_id="test/zero", total_routes=0, last_used=last_used)
++        assert evaluation.grade == "?"
++        loop = self._loop_with({"test/zero": evaluation})
++        with patch(self._SET_LIFECYCLE) as mock_set:
++            suggestions = loop.analyze_all(auto_deprecate=True)
++            assert suggestions == []
++            mock_set.assert_not_called()
++            assert loop.last_applied_skill_ids == []
++
++    def test_explicit_auto_still_deprecates_real_f(self) -> None:
++        loop = self._loop_with({"test/bad": self._f_grade_eval()})
++        with patch(self._SET_LIFECYCLE) as mock_set:
++            suggestions = loop.analyze_all(auto_deprecate=True)
++            assert [s.action for s in suggestions] == ["deprecate"]
++            mock_set.assert_called_once_with("test/bad", "deprecated")
++            assert loop.last_applied_skill_ids == ["test/bad"]
++
++    def test_failed_apply_not_counted(self) -> None:
++        """A set_lifecycle failure swallowed by _apply_* must not count
++        as applied."""
++        loop = self._loop_with({"test/bad": self._f_grade_eval()})
++        with patch(self._SET_LIFECYCLE, side_effect=OSError("disk gone")):
++            suggestions = loop.analyze_all(auto_deprecate=True)
++            assert [s.action for s in suggestions] == ["deprecate"]
++            assert loop.last_applied_skill_ids == []
++
++    def test_boost_not_applied_without_auto(self) -> None:
++        """A deprecated A-grade skill is not restored to active when
++        auto_deprecate=False."""
++        evaluation = SkillEvaluation(
++            skill_id="test/great",
++            total_routes=5,
++            routing_accuracy=0.95,
++            user_satisfaction=0.95,
++            execution_success=0.95,
++            usage_frequency=0.95,
++            health_score=0.95,
++        )
++        loop = self._loop_with({"test/great": evaluation})
++        deprecated_config = SkillConfig(skill_id="test/great", lifecycle=SkillLifecycle.DEPRECATED)
++        with (
++            patch(self._SET_LIFECYCLE) as mock_set,
++            patch(self._GET_CONFIG, return_value=deprecated_config),
++        ):
++            suggestions = loop.analyze_all(auto_deprecate=False)
++            assert [s.action for s in suggestions] == ["boost"]
++            mock_set.assert_not_called()
++            assert loop.last_applied_skill_ids == []
++
++    def test_boost_restores_deprecated_with_auto(self) -> None:
++        evaluation = SkillEvaluation(
++            skill_id="test/great",
++            total_routes=5,
++            routing_accuracy=0.95,
++            user_satisfaction=0.95,
++            execution_success=0.95,
++            usage_frequency=0.95,
++            health_score=0.95,
++        )
++        loop = self._loop_with({"test/great": evaluation})
++        deprecated_config = SkillConfig(skill_id="test/great", lifecycle=SkillLifecycle.DEPRECATED)
++        with (
++            patch(self._SET_LIFECYCLE) as mock_set,
++            patch(self._GET_CONFIG, return_value=deprecated_config),
++        ):
++            loop.analyze_all(auto_deprecate=True)
++            mock_set.assert_called_once_with("test/great", "active")
++            assert loop.last_applied_skill_ids == ["test/great"]
++
++    def test_boost_on_active_skill_not_counted(self) -> None:
++        """must-NOT: a boost suggestion for an already-active skill is a
++        no-op — no lifecycle write and it must not appear in applied ids."""
++        evaluation = SkillEvaluation(
++            skill_id="test/active",
++            total_routes=5,
++            routing_accuracy=0.95,
++            user_satisfaction=0.95,
++            execution_success=0.95,
++            usage_frequency=0.95,
++            health_score=0.95,
++        )
++        loop = self._loop_with({"test/active": evaluation})
++        active_config = SkillConfig(skill_id="test/active", lifecycle=SkillLifecycle.ACTIVE)
++        with (
++            patch(self._SET_LIFECYCLE) as mock_set,
++            patch(self._GET_CONFIG, return_value=active_config),
++        ):
++            suggestions = loop.analyze_all(auto_deprecate=True)
++            assert [s.action for s in suggestions] == ["boost"]
++            mock_set.assert_not_called()
++            assert loop.last_applied_skill_ids == []
+diff --git a/tests/core/skills/test_loader.py b/tests/core/skills/test_loader.py
+index 574358f..2b81eb7 100644
+--- a/tests/core/skills/test_loader.py
++++ b/tests/core/skills/test_loader.py
+@@ -2,10 +2,13 @@
+ 
+ from __future__ import annotations
+ 
++from datetime import UTC, datetime, timedelta
+ from pathlib import Path
+-from unittest.mock import MagicMock
++from unittest.mock import MagicMock, patch
+ 
++from vibesop.core.models import SkillLifecycle
+ from vibesop.core.skills.base import PromptSkill, WorkflowSkill
++from vibesop.core.skills.config_manager import SkillConfig, SkillConfigManager
+ from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
+ from vibesop.core.skills.loader import LoadedSkill, SkillLoader
+ from vibesop.spec.models import SkillSpec, SkillType
+@@ -243,6 +246,65 @@ description: A real skill
+         skills = loader.discover_all()
+         assert skills == {}
+ 
++    def test_deprecated_skill_stays_visible_without_lifecycle_write(self, tmp_path: Path):
++        """gate38: discovery must not silently auto-archive.
++
++        A DEPRECATED skill unused for 90+ days must remain in the
++        discover_all() return value AND discovery must not call
++        set_lifecycle. Both locks are required: visibility without the
++        no-write check would allow the old hidden write back; the no-write
++        check alone would allow hiding-by-continue as a new side channel.
++        """
++        skills_dir = tmp_path / "skills"
++        skills_dir.mkdir()
++        (skills_dir / "old-skill.md").write_text(
++            """---
++id: old-skill
++name: Old Skill
++description: A deprecated skill
++---
++# Content
++""",
++            encoding="utf-8",
++        )
++        last_used = (datetime.now(UTC) - timedelta(days=120)).isoformat()
++        deprecated_config = SkillConfig(
++            skill_id="old-skill",
++            lifecycle=SkillLifecycle.DEPRECATED,
++            usage_stats={"last_used": last_used},
++        )
++        loader = SkillLoader(project_root=tmp_path, enable_external=False)
++        with (
++            patch.object(SkillConfigManager, "get_skill_config", return_value=deprecated_config),
++            patch.object(SkillConfigManager, "set_lifecycle") as mock_set,
++        ):
++            skills = loader.discover_all()
++            assert "old-skill" in skills
++            mock_set.assert_not_called()
++
++    def test_archived_skill_still_filtered(self, tmp_path: Path):
++        """ARCHIVED skills remain excluded from discovery."""
++        skills_dir = tmp_path / "skills"
++        skills_dir.mkdir()
++        (skills_dir / "dead-skill.md").write_text(
++            """---
++id: dead-skill
++name: Dead Skill
++description: An archived skill
++---
++# Content
++""",
++            encoding="utf-8",
++        )
++        archived_config = SkillConfig(
++            skill_id="dead-skill",
++            lifecycle=SkillLifecycle.ARCHIVED,
++        )
++        loader = SkillLoader(project_root=tmp_path, enable_external=False)
++        with patch.object(SkillConfigManager, "get_skill_config", return_value=archived_config):
++            skills = loader.discover_all()
++            assert "dead-skill" not in skills
++
+ 
+ class TestGetSkill:
+     """Test get_skill method."""
+diff --git a/tests/core/test_evaluation.py b/tests/core/test_evaluation.py
+index 3dfef5b..d028017 100644
+--- a/tests/core/test_evaluation.py
++++ b/tests/core/test_evaluation.py
+@@ -38,16 +38,45 @@ class TestSkillEvaluation:
+         assert eval.quality_score == pytest.approx(1.0)
+ 
+     def test_quality_score_no_routes(self):
+-        """quality_score should fall back to neutral when no routes exist."""
++        """Zero-sample skills score 0.0 — no data is not a neutral 0.5."""
+         eval = SkillEvaluation(skill_id="s", total_routes=0)
+-        # 0.5 + (0.0 * 0.05) + (0.0 * 0.05)
+-        assert eval.quality_score == pytest.approx(0.5)
++        assert eval.quality_score == 0.0
++        # Atomic pair: a bare 0.0 must not flow through to a letter grade.
++        assert eval.grade == "?"
+ 
+     def test_quality_score_no_routes_with_confidence_and_user_score(self):
+-        """quality_score should blend confidence and user_score when no routes exist."""
++        """Zero-sample score stays 0.0 regardless of confidence/user_score."""
+         eval = SkillEvaluation(skill_id="s", total_routes=0, avg_confidence=1.0, user_score=1.0)
+-        # 0.5 + (1.0 * 0.05) + (1.0 * 0.05) = 0.6
+-        assert eval.quality_score == pytest.approx(0.6)
++        assert eval.quality_score == 0.0
++        assert eval.grade == "?"
++
++    def test_zero_sample_grade_is_not_a_letter(self):
++        """must-NOT: zero-sample grade must never be D or F.
++
++        A 0.0-quality skill graded F would trip the auto-deprecate rule in
++        feedback_loop (F + 30d stale + < 3 routes) — the reason the
++        quality_score=0.0 / grade="?" pair must land atomically.
++        """
++        eval = SkillEvaluation(skill_id="s", total_routes=0)
++        assert eval.grade not in ("A", "B", "C", "D", "F")
++
++    def test_grade_vocabulary_includes_question_mark(self):
++        """The grade vocabulary is A/B/C/D/F plus "?" (no routing feedback)."""
++        grades = {
++            SkillEvaluation(skill_id="s", total_routes=0).grade,
++            SkillEvaluation(
++                skill_id="s",
++                total_routes=1,
++                routing_accuracy=1.0,
++                user_satisfaction=1.0,
++                execution_success=1.0,
++                usage_frequency=1.0,
++                health_score=1.0,
++            ).grade,
++            SkillEvaluation(skill_id="s", total_routes=1).grade,
++        }
++        assert "?" in grades
++        assert grades == {"?", "A", "F"}
+ 
+     def test_grade_boundaries(self):
+         """grade should map correctly to letter boundaries."""
+@@ -149,13 +178,14 @@ class TestRoutingEvaluator:
+         assert evaluator._preferences is mock_prefs
+ 
+     def test_evaluate_skill_no_data(self, tmp_path):
+-        """Evaluating a skill with no data returns a neutral result."""
++        """Evaluating a skill with no data returns a zero-sample result."""
+         evaluator = RoutingEvaluator(project_root=tmp_path)
+         result = evaluator.evaluate_skill("unknown-skill")
+         assert result is not None
+         assert result.skill_id == "unknown-skill"
+         assert result.total_routes == 0
+-        assert result.quality_score == pytest.approx(0.5)
++        assert result.quality_score == 0.0
++        assert result.grade == "?"
+ 
+     def test_evaluate_skill_with_feedback(self, tmp_path):
+         """Evaluating a skill with feedback records computes metrics."""
+diff --git a/tests/unit/test_eval_routing.py b/tests/unit/test_eval_routing.py
+new file mode 100644
+index 0000000..0eeed7a
+--- /dev/null
++++ b/tests/unit/test_eval_routing.py
+@@ -0,0 +1,263 @@
++"""Tests for scripts/eval_routing.py skipped_env handling (gate38).
++
++The skipped_env predicate keeps pack-dependent entries (annotated with
++``requires_packs``) out of the scored denominator and the errors list when
++the pack is not installed in the eval environment — without ever hiding a
++real regression for unannotated entries.
++"""
++
++from __future__ import annotations
++
++import importlib.util
++import json
++import sys
++from pathlib import Path
++from types import SimpleNamespace
++from typing import TYPE_CHECKING
++
++import yaml
++
++if TYPE_CHECKING:
++    import pytest
++
++ROOT = Path(__file__).resolve().parents[2]
++SCRIPT = ROOT / "scripts" / "eval_routing.py"
++spec = importlib.util.spec_from_file_location("eval_routing", SCRIPT)
++evr = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(evr)
++
++EXTENDED_YAML = ROOT / "tests" / "benchmark" / "routing_eval_extended.yaml"
++REGISTRY_YAML = ROOT / "core" / "registry.yaml"
++
++
++def _fake_router(responses: dict[str, tuple[str | None, bool]]):
++    """UnifiedRouter stand-in: query -> (primary skill_id, has_match)."""
++
++    class FakeRouter:
++        def __init__(self, project_root):
++            pass
++
++        def route(self, query, record_telemetry=False):
++            primary_id, has_match = responses.get(query, (None, False))
++            primary = (
++                SimpleNamespace(
++                    skill_id=primary_id,
++                    layer=SimpleNamespace(value="lexical"),
++                    confidence=0.9,
++                )
++                if primary_id
++                else None
++            )
++            return SimpleNamespace(primary=primary, alternatives=[], has_match=has_match)
++
++    return FakeRouter
++
++
++def _run_eval(
++    monkeypatch: pytest.MonkeyPatch,
++    tmp_path: Path,
++    entries: list[dict],
++    *,
++    resolvable: tuple[set[str] | None, set[str] | None] = (set(), set()),
++    responses: dict[str, tuple[str | None, bool]] | None = None,
++) -> tuple[int, dict]:
++    dataset = tmp_path / "eval.yaml"
++    dataset.write_text(yaml.safe_dump(entries, allow_unicode=True), encoding="utf-8")
++    out = tmp_path / "out.json"
++    monkeypatch.setattr(evr, "UnifiedRouter", _fake_router(responses or {}))
++    monkeypatch.setattr(evr, "_load_resolvable_ids", lambda: resolvable)
++    monkeypatch.setattr(
++        sys,
++        "argv",
++        ["eval_routing.py", "--file", str(dataset), "--json-out", str(out)],
++    )
++    rc = evr.main()
++    return rc, json.loads(out.read_text(encoding="utf-8"))
++
++
++def test_skipped_env_excluded_from_denominator_and_errors(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    entries = [
++        {"query": "hit", "expect": ["builtin/session-end"]},
++        {
++            "query": "pack miss",
++            "expect": ["omx/git-master"],
++            "requires_packs": ["omx"],
++        },
++    ]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=({"builtin/session-end"}, set()),  # omx pack absent
++        responses={"hit": ("builtin/session-end", True), "pack miss": ("other/thing", True)},
++    )
++    assert rc == 0
++    assert m["total"] == 1
++    assert m["skipped_env"] == 1
++    assert m["top1_accuracy"] == 1.0
++    assert m["recall_at_3"] == 1.0
++    # The skipped row would have been a misroute; it must NOT enter errors.
++    assert m["errors"] == []
++
++    skipped_rows = [r for r in m["per_query"] if r["query"] == "pack miss"]
++    assert len(skipped_rows) == 1
++    assert skipped_rows[0]["ok1"] is None
++    assert skipped_rows[0]["skipped_env"] is True
++    scored_rows = [r for r in m["per_query"] if r["query"] == "hit"]
++    assert scored_rows[0]["ok1"] is True
++    assert scored_rows[0]["skipped_env"] is False
++
++
++def test_unannotated_misroute_still_counts_as_error(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    """must-NOT: a pack-dependent entry WITHOUT requires_packs is scored
++    normally — skipping is opt-in via the annotation only."""
++    entries = [{"query": "pack miss", "expect": ["omx/git-master"]}]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=(set(), set()),
++        responses={"pack miss": ("other/thing", True)},
++    )
++    assert rc == 0
++    assert m["total"] == 1
++    assert m["skipped_env"] == 0
++    assert m["top1_accuracy"] == 0.0
++    assert len(m["errors"]) == 1
++
++
++def test_presence_check_failure_counts_as_present(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    """If the resolvability probe itself raises (None sources), every id
++    counts as resolvable — annotated entries are scored (possibly as false
++    errors), never silently skipped."""
++    entries = [
++        {
++            "query": "pack miss",
++            "expect": ["omx/git-master"],
++            "requires_packs": ["omx"],
++        }
++    ]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=(None, None),
++        responses={"pack miss": ("other/thing", True)},
++    )
++    assert rc == 0
++    assert m["skipped_env"] == 0
++    assert m["total"] == 1
++    assert len(m["errors"]) == 1
++
++
++def test_empty_expect_with_requires_packs_is_not_skipped(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    """all([]) is True — an annotated no-match/reject assertion (expect: [])
++    must never be treated as skipped_env."""
++    entries = [
++        {
++            "query": "neg",
++            "expect": [],
++            "reject": ["omx/git-master"],
++            "requires_packs": ["omx"],
++        }
++    ]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=(set(), set()),
++        responses={"neg": (None, False)},
++    )
++    assert rc == 0
++    assert m["skipped_env"] == 0
++    assert m["total"] == 1
++    assert m["top1_accuracy"] == 1.0
++
++
++def test_all_skipped_aggregates_without_zero_division(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    entries = [
++        {"query": "a", "expect": ["omx/git-master"], "requires_packs": ["omx"]},
++        {
++            "query": "b",
++            "expect": ["superpowers/using-git-worktrees"],
++            "requires_packs": ["superpowers"],
++        },
++    ]
++    rc, m = _run_eval(monkeypatch, tmp_path, entries, resolvable=(set(), set()))
++    assert rc == 0
++    assert m["total"] == 0
++    assert m["skipped_env"] == 2
++    assert m["top1_accuracy"] == 0.0
++    assert m["recall_at_3"] == 0.0
++    assert m["errors"] == []
++
++
++def test_exit_code_always_zero_with_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
++    """Report-only contract: misroutes never change the exit code."""
++    entries = [{"query": "miss", "expect": ["builtin/session-end"]}]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=(set(), set()),
++        responses={"miss": ("other/thing", True)},
++    )
++    assert rc == 0
++    assert len(m["errors"]) == 1
++
++
++def test_partially_resolvable_expect_is_scored(
++    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++) -> None:
++    """Skip requires ALL expect ids unresolvable; one resolvable id keeps
++    the entry scored."""
++    entries = [
++        {
++            "query": "multi",
++            "expect": ["omx/git-master", "builtin/session-end"],
++            "requires_packs": ["omx"],
++        }
++    ]
++    rc, m = _run_eval(
++        monkeypatch,
++        tmp_path,
++        entries,
++        resolvable=({"builtin/session-end"}, set()),
++        responses={"multi": ("builtin/session-end", True)},
++    )
++    assert rc == 0
++    assert m["skipped_env"] == 0
++    assert m["top1_accuracy"] == 1.0
++
++
++def test_extended_yaml_requires_packs_namespaces_valid() -> None:
++    """Hand-edited annotations must reference namespaces declared in
++    core/registry.yaml — pins against typos drifting the field away from
++    the router's id space."""
++    registry = yaml.safe_load(REGISTRY_YAML.read_text(encoding="utf-8"))
++    namespaces = set(registry.get("namespaces", {}))
++    entries = yaml.safe_load(EXTENDED_YAML.read_text(encoding="utf-8"))
++
++    annotated = [e for e in entries if e.get("requires_packs")]
++    assert annotated, "extended set lost its requires_packs annotations"
++    for e in annotated:
++        for ns in e["requires_packs"]:
++            assert ns in namespaces, f"{e['query']!r}: unknown pack {ns!r}"
++        # The annotation must match the namespace the expect ids actually
++        # live in (a wrong-but-valid namespace would silently mis-skip).
++        for sid in e.get("expect", []):
++            prefix = sid.split("/", 1)[0]
++            assert prefix in namespaces, f"{e['query']!r}: unknown expect namespace {prefix!r}"
++            assert prefix in e["requires_packs"], (
++                f"{e['query']!r}: expect {sid!r} not covered by requires_packs"
++            )
