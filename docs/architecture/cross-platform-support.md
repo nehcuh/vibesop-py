@@ -13,6 +13,7 @@ VibeSOP is designed to work across multiple AI coding platforms. The architectur
 |----------|--------|--------------|-------|------------------|
 | **Claude Code** | ✅ Full Support | ✅ Yes | ✅ Yes | ✅ Automatic |
 | **Kimi Code CLI** | ✅ Full Support | ✅ Yes | ⚠️ Beta | ✅ Automatic |
+| **Grok Build** | ✅ Full Support | ✅ Yes | ✅ Yes（`UserPromptSubmit` 路由 + `PostToolUse` 工具序列采集，gate33） | ✅ Automatic |
 | **OpenCode** | ✅ Basic Support | ✅ Yes | ❌ No | ⚠️ Manual |
 | **Cursor** | 🚧 Planned | - | - | - |
 | **Continue.dev** | 🚧 Planned | - | - | - |
@@ -209,6 +210,40 @@ vibe switch kimi-cli
 Kimi Code CLI uses the Agent Skills open standard, making its skill format
 fully compatible with Claude Code skills. Skills are automatically loaded
 from `~/.kimi-code/skills/` at startup.
+
+### Grok Build
+
+**Strengths**:
+- ✅ Native JSON hooks (`~/.grok/hooks/*.json`) — `UserPromptSubmit` routing +
+  `PostToolUse` tool-sequence capture (M12 behavior evidence, gate33)
+- ✅ Grok-native rules (`~/.grok/rules/*.md`) and skills (`~/.grok/skills/`)
+- ✅ Direct deploy to `~/.grok/`, no `.claude/` dependency
+
+**Limitations**:
+- ⚠️ The adapter deploys only routing rules + hooks — it does **not** manage
+  `~/.grok/skills/` (orphan cleanup disabled; the dir may contain Grok's own
+  builtin skills)
+
+**Configuration Output**:
+```
+~/.grok/
+├── rules/
+│   └── routing.md              # Routing protocol (always loaded)
+├── hooks/
+│   ├── vibesop-route.json      # UserPromptSubmit → vibe route --hook
+│   └── vibesop-tool-seq.json   # PostToolUse → tool-sequence capture (gate33)
+└── skills/                     # Grok-managed, not deployed by VibeSOP
+```
+
+**Usage**:
+```bash
+vibe build --platform grok-build
+vibe switch grok-build
+```
+
+Adapter: `src/vibesop/adapters/grok_build.py`. The `vibesop-tool-seq.json`
+hook is deployed when `sequences.enabled` (default true) and feeds the
+M12 candidate-discovery trace data source.
 
 ### OpenCode
 

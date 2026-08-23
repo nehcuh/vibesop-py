@@ -137,7 +137,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 
 #### 16. 社区分享与发现
 - `vibe skill share <id>`：通过 GitHub Issues 分享技能到社区
-- `vibe skill discover [query]`：搜索社区分享的技能
+- `vibe skill discover [query]`：搜索社区分享的技能（命名冲突已识：现 `vibe skill discover` 为本地候选队列；本愿景落地时应命名为 `vibe market search` 之类）
 - 按 👍 反应排序
 
 ### F. 自主执行与在线值守（v8.0+）

@@ -91,6 +91,7 @@ vibe route <query> [options]
 - `--yes, -y` - Skip confirmation prompt
 - `--guided, -x` - Interactive step-by-step guided execution mode (prints a plan checklist; you or your Agent perform the actual execution)
 - `--strategy, -s` - Force execution strategy: auto, sequential, parallel, hybrid
+- `--hook` - Hook mode: read the host agent's hook event JSON from stdin instead of a query argument (gate33; deployed as the Grok Build `UserPromptSubmit` JSON hook). Prints the hook response envelope and always exits 0
 
 **Examples:**
 ```bash
@@ -984,6 +985,23 @@ the literal tokens the CLI prints, for easy grepping: `consistent` /
 `divergent` / `unavailable` / `未采集`; see
 `scan-candidates --behavior-threshold`).
 
+**列说明（gate35 N1 自解释列头）:** `ID` / `评分` / `模式` / `Examples` /
+`来源` / `行为` / `为什么在` / `First seen`（`--all` 时追加 `Status`）。
+其中 **为什么在** 只从实存字段直译（gate35 N1，修订 F）：`source`、
+`gold_rate`、`span_count`、`task_ids` 数量、`first_seen_at`（存量行缺
+`first_seen_at` 时回退 `created_at`）——不编造 recurrence pairs/days
+等不落库的口径。完整字段词汇表见 `vibe skill discover --help`。
+
+**agent-echo 卡片（gate35 D2）:** 代表 query 命中 agent prompt 前缀谓词的
+候选在 `模式` 列打 `shape: agent-echo` 标签并沉底（组内保持既有评分排序；
+CLI 与看板共用同一沉底规则与分组键），表后附计数行提示
+`vibe skill discover dismiss --shape agent-echo` 批量否决。
+
+**来源统计（只读）:** 表尾按来源输出成功/否决计数——成功 = promoted →
+activated 后路由命中 ≥5（仅统计当前项目 cwd 的 `analytics.jsonl`，全局
+scope 提升在其他项目的命中不计入）；否决 = 池状态翻转，**不含
+shape-batch**（shape-batch 批量否决单列展示，见下文 dismiss 小节）。
+
 ```bash
 vibe skill discover [options] [command]
 ```
@@ -1011,13 +1029,28 @@ raising admission thresholds (suggestion only, never auto-applied).
 
 ```bash
 vibe skill discover dismiss <cluster-id> [--reason <text>]
+vibe skill discover dismiss --shape agent-echo [--yes]
 ```
 
 **Arguments:**
-- `cluster_id` — Cluster ID (full or 8-char prefix)
+- `cluster_id` — Cluster ID (full or 8-char prefix). Omit when using `--shape`
 
 **Options:**
-- `--reason <text>` — Why this candidate is rejected (recorded in the negative list)
+- `--reason <text>` — Why this candidate is rejected (recorded in the negative list). Not accepted together with `--shape` (batch reason is fixed to `shape-batch`)
+- `--shape <agent-echo>` — Batch-dismiss every pending candidate carrying this display shape tag (currently only `agent-echo`)
+- `--yes` — Confirm a `--shape` batch dismissal (required to execute)
+
+**批量否决 `--shape agent-echo`（gate35 D2）:** 与逐条 dismiss 是**另一条
+路、另一套语义**：逐条 dismiss 进指纹负名单（`discovery_dismissals.jsonl`）
+并计入 threshold_suggestion 的 dismiss 输入；`--shape` 走**候选行池状态
+翻转**（pending → dismissed，`dismiss_reason=shape-batch`），project 与
+global 两个 scope 的镜像行一并翻转（只翻一边会让另一边下次渲染复活），
+**不进指纹负名单、豁免 threshold_suggestion 输入**。选择谓词与展示打标
+同一前缀谓词（标集 = 否决集）；terminal 状态粘性，重扫不会复活。不带
+`--yes` 时只打印预览并要求确认——确认文案点名 **bd1bc217 先例**：回声簇
+是合法池成员，全系统唯一真实 promote 成功案例正来自这类簇，批量否决前请
+确认。`--history` 视图中 shape-batch 批量否决**单列展示**，不进 Dismissed
+表（否则会一次灌满否决分母、污染发现精度）。
 
 ---
 
@@ -1037,6 +1070,23 @@ hash, not mtime — a bare `touch` doesn't count, but any byte change, even
 whitespace, does). A re-promote over an existing draft does NOT re-baseline
 the guard; legacy candidates (promoted before the guard existed) require
 `--force`.
+
+**Shadow verifier（gate36）:** promote 成功后自动对草稿跑 `verify_draft`，
+输出 PASS / WARN 徽章加明细（接住 / 未捕获的 query、最近邻、hijack 冲突
+数）。徽章测的是**触发召回**（候选 query 能否被该草稿的 trigger 接住），
+不是内容质量。要点：
+
+- **只有 PASS / WARN 两级，无 FAIL；永不阻断激活**——verifier 是提示灯
+  不是门（"the lamp must never become a gate"），异常时打印
+  `shadow verifier unavailable (已跳过, 不阻断)` 继续。
+- PASS 分母**排除 agent-echo 行**；任一 embedding 线不可用或被 skipped 时
+  徽章至多为 WARN(degraded/skipped)——degraded 运行永不发 PASS。
+- `--activate` 时复用 verdict：当前草稿哈希与 promote 时一致则直接复用，
+  已变（用户编辑过）则以 `activate-rerun` 相位重跑；degraded 的重跑不会
+  覆盖已有的非 degraded verdict（展示偏好完整结果）。
+- verdict 存项目 `.vibe/observability/promote_verdicts.jsonl`
+  （`RULESET_VERSION=gate36-r1`，随规则集演进）；**global scope 只存计数
+  + query 的 sha256 哈希，不存原文**（修订 D 隐私口径）。
 
 ```bash
 vibe skill promote <cluster-id> [options]
@@ -1206,6 +1256,9 @@ vibe dashboard --project /path/to/project
   duration), filterable by skill
 - **🔍 Traces** — Per-route decision trees with per-layer match/reject details
 - **💬 Conversations** — Multi-turn conversation history with full turn details
+- **✨ Discoveries** — Read-only Discovery 队列：候选卡片（与 CLI 同一沉底
+  规则/打标口径）、promote verdict 徽章（PASS/WARN，gate36 shadow verifier）、
+  按来源的成功/否决统计
 
 ---
 

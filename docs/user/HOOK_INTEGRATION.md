@@ -60,11 +60,16 @@ agent-agnostic.
 | Claude Code   | `claude_code.py`    | `claude`    | `adapter.detect()` |
 | OpenCode      | `opencode.py`       | `opencode`  | `adapter.detect()` |
 | Kimi Code CLI | `kimi_cli.py`       | `kimi`      | `adapter.detect()` |
+| Grok Build    | `grok_build.py`     | `grok`      | `adapter.detect()` |
 | Cursor        | `cursor.py`         | `cursor`    | `adapter.detect()` |
 | Pi Agent      | `pi_coding_agent.py`| `pi`        | `adapter.detect()` |
 
 Each adapter exposes `is_available()` (bool) and `detect()` (path or None) via
 `PlatformAdapter` in `adapters/base.py`.
+
+**Grok Build hooks（gate33）:** 配置写在 `~/.grok/hooks/`。
+`UserPromptSubmit` 调 `vibe route --hook`（stdin 事件 JSON → 路由结果注入）；
+`PostToolUse` 采集工具序列到 `vibesop-tool-seq.json`（候选发现的 trace 数据源）。
 
 ## Quick start
 

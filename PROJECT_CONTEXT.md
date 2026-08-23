@@ -3,6 +3,24 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-22/23 S41 [vibesop-py] gate33-36：grok hooks · 队列可读性 · shadow verifier → push 2359026
+
+**Session Summary**:
+- gate33：Grok Build 平台 hooks 落地——`vibe route --hook`（stdin 事件 JSON 模式）+ PostToolUse `vibesop-tool-seq.json` 工具序列采集；adapter `src/vibesop/adapters/grok_build.py`
+- gate34：路线图梳理；gate35：Discovery 队列可读性——自解释列头（评分/模式/来源/行为/为什么在）、`为什么在` 只从实存字段直译、agent-echo 打 `shape: agent-echo` 标沉底、`dismiss --shape agent-echo --yes` 批量否决（池翻转/镜像同翻/`dismiss_reason=shape-batch`/豁免 threshold_suggestion）
+- gate36：promote shadow verifier——`verify_draft` 输出 PASS/WARN 徽章（无 FAIL、永不阻断、degraded 至多 WARN），verdict 存 `promote_verdicts.jsonl`（global 只存计数+query 哈希，RULESET_VERSION=gate36-r1）
+- 验证：pytest 6123 passed / 14 skipped；e2e smoke 68/68 + routing 7/7；最新 push `2359026`
+
+**Key Decisions**:
+- 批量否决选择去重后的队列视图、翻转在 project+global 双 scope 都执行（只翻一边会复活）；确认文案点名 bd1bc217 先例（回声簇也曾 promote 成功）
+- shadow verifier 是提示灯不是门：异常时跳过不阻断；PASS 分母排除 agent-echo 行；activate 时草稿未变复用 verdict、已变以 activate-rerun 重跑
+- 看板 ✨ Discoveries tab 与 CLI 共用同一沉底规则/打标/why_here 口径
+
+**Next Steps**:
+1. 用户：grok 侧 `vibe build --platform grok-build` 部署后验证 UserPromptSubmit 注入与 PostToolUse 采集落盘
+2. 观察 shadow verifier 在真实 promote 流上的徽章分布（WARN 率、degraded 占比）
+3. 愿景条目命名冲突跟进：`vibe skill discover` 已被本地队列占用，社区搜索落地时改名 `vibe market search` 之类
+
 ### 2026-08-22 S40 [vibesop-py + cmspark] 候选池 id 漂移去重（gate30）→ push f76dd61
 
 **Session Summary**:
