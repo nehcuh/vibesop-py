@@ -22,6 +22,7 @@ from vibesop.core.observability.task_id import derive_task_id
 from vibesop.core.observability.tool_call_bridge import (
     OUTCOMES_FILENAME,
     BridgeStats,
+    _spans_filename,
     bridge_entries,
     run_bridge,
 )
@@ -30,7 +31,9 @@ T0 = datetime(2026, 8, 20, 10, 0, 0, tzinfo=UTC)
 
 
 def _spans_path(root: Path) -> Path:
-    return root / ".vibe" / "observability" / "spans.jsonl"
+    # Under pytest is_dev_environment() is True → the bridge reads/writes
+    # spans.dev.jsonl; fixtures must use the same dev/prod selection.
+    return root / ".vibe" / "observability" / _spans_filename()
 
 
 def _outcomes_path(root: Path) -> Path:
@@ -461,7 +464,7 @@ class TestEndToEnd:
         # …and even called directly (broken spans file) it degrades quietly.
         spans_dir = tmp_path / ".vibe" / "observability"
         spans_dir.mkdir(parents=True)
-        (spans_dir / "spans.jsonl").write_text("{broken\n", encoding="utf-8")
+        (spans_dir / _spans_filename()).write_text("{broken\n", encoding="utf-8")
         stats = bridge_entries([_event("Read", T0, "s")], tmp_path)
         assert isinstance(stats, BridgeStats)
         assert stats.bridged == 0
@@ -674,8 +677,8 @@ class TestHitOutcomes:
         JSON are skipped; the valid expired hit still gets its outcome."""
         spans_dir = tmp_path / ".vibe" / "observability"
         spans_dir.mkdir(parents=True, exist_ok=True)
-        (spans_dir / "spans.jsonl").write_text("{broken json\n", encoding="utf-8")
-        (spans_dir / "spans.jsonl").write_text(
+        (spans_dir / _spans_filename()).write_text("{broken json\n", encoding="utf-8")
+        (spans_dir / _spans_filename()).write_text(
             "{broken json\n"
             + json.dumps(
                 {
@@ -710,3 +713,37 @@ class TestHitOutcomes:
         path.write_text("{broken json\n", encoding="utf-8")
         stats = bridge_entries([], tmp_path)
         assert stats.hit_outcomes_recorded == 1
+
+
+class TestSpansFilenameSelection:
+    """gate39 搭车 A — the bridge mirrors SpanWriter's dev/prod filename
+    selection (span_writer.py:65 / skill_health.py:41-47), WITHOUT
+    skill_health's exists-gate: the write side needs the path even when
+    the file is missing."""
+
+    def test_dev_environment_selects_dev_file(self, monkeypatch) -> None:
+        import vibesop.core.observability.tool_call_bridge as bridge_mod
+
+        monkeypatch.setattr(bridge_mod, "is_dev_environment", lambda: True)
+        assert bridge_mod._spans_filename() == "spans.dev.jsonl"
+
+    def test_prod_environment_selects_prod_file(self, monkeypatch) -> None:
+        import vibesop.core.observability.tool_call_bridge as bridge_mod
+
+        monkeypatch.setattr(bridge_mod, "is_dev_environment", lambda: False)
+        assert bridge_mod._spans_filename() == "spans.jsonl"
+
+    def test_bridge_reads_dev_file_under_pytest(self, tmp_path: Path) -> None:
+        """Integration pin: fixtures write via _spans_filename() (dev under
+        pytest) and the bridge must find them through the same selection —
+        an expired miss written to the dev file still gets its outcome."""
+        _route_span(
+            tmp_path,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            span_id="dev-miss-1",
+        )
+        assert _spans_path(tmp_path).name == "spans.dev.jsonl"  # pytest = dev
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert outcomes[0]["span_id"] == "dev-miss-1"

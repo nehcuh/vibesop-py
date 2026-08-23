@@ -1,6 +1,8 @@
 """Tool-call span bridge + route outcome signals (M12 M1).
 
-Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
+Two jobs share one scan of the spans file (``.vibe/observability/spans.jsonl``,
+or ``spans.dev.jsonl`` in dev/test contexts — same dev/prod selection as
+``SpanWriter``, see ``_spans_filename``):
 
 1. **Assembly bridge (producer of ``span_kind="tool_call"`` spans).**
    ``tool_call`` consumers already exist (``aggregator.get_skill_metrics``
@@ -108,6 +110,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.observability._span_fields import span_timestamp
+from vibesop.core.observability.dev_detect import is_dev_environment
 from vibesop.core.observability.models import Span
 from vibesop.core.observability.span_writer import SpanWriter
 from vibesop.core.observability.task_id import derive_task_id, normalize_query
@@ -127,12 +130,20 @@ MAX_SEEN_KEYS = 50_000
 
 STATE_FILENAME = "tool_call_bridge_state.json"
 OUTCOMES_FILENAME = "route_outcomes.jsonl"
-SPANS_FILENAME = "spans.jsonl"
 BRIDGE_SOURCE = "tool_call_bridge"
 
 #: metadata["query"] on route spans is truncated to this many chars by the
 #: producers (agent_runtime.py / cli/main.py: ``query[:200]``).
 SPAN_QUERY_MAX_CHARS = 200
+
+
+def _spans_filename() -> str:
+    """Dev/prod spans filename, mirroring SpanWriter's selection
+    (span_writer.py:65 / skill_health.py:41-47). Unlike skill_health's
+    ``spans_file_for`` there is NO exists-gate here: the bridge write side
+    needs the path even when the file is missing."""
+    return "spans.dev.jsonl" if is_dev_environment() else "spans.jsonl"
+
 
 #: metadata markers of the CLI route path (cli/main.py) — excluded from join.
 _CLI_PLATFORM = "vibe-cli"
@@ -226,7 +237,7 @@ def run_bridge(project_root: str | Path) -> BridgeStats:
 
 
 def _run(entries: list[ToolEvent], root: Path, stats: BridgeStats) -> None:
-    spans_path = root / ".vibe" / "observability" / SPANS_FILENAME
+    spans_path = root / ".vibe" / "observability" / _spans_filename()
     route_spans = _load_route_spans(spans_path)
     state = _load_state(root / ".vibe" / "observability" / STATE_FILENAME)
 
