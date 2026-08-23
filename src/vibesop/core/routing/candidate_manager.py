@@ -262,7 +262,7 @@ class CandidateManager:
         """Buffer usage stats update; flush to SkillConfig every N routes.
 
         Increments call_count, updates last_used, and tracks success rate
-        so the RetentionPolicy and FeedbackLoop can detect stale skills.
+        so the FeedbackLoop can detect stale skills.
         """
         try:
             from datetime import UTC, datetime

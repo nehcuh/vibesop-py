@@ -82,9 +82,7 @@ class SkillEvaluation:
     def grade(self) -> str:
         """Letter grade based on quality score (0-100 scale).
 
-        ?: no routing feedback (skill exists but has never been routed to) —
-        distinct from the "?" in ``retention.RetentionPolicy.analyze_skill``,
-        which means *no evaluation object at all*.
+        ?: no routing feedback (skill exists but has never been routed to).
         A: 90-100 (Excellent)
         B: 75-89  (Good)
         C: 60-74  (Acceptable)

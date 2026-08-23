@@ -45,7 +45,6 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 
 #### 5. 全局技能排序和整理
 - A-F 质量分级（`RoutingEvaluator`）
-- `RetentionPolicy` 按时效/使用频率排序
 - `FeedbackLoop` 收集满意度数据
 - `vibe skills featured` 按技术栈和评分浏览精选技能
 
@@ -102,7 +101,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 - `deviation.py`：记录 Agent 跳过路由推荐的偏航，6 种标准原因码
 - `analyze_deviations()`：偏航模式分析
 - `FeedbackLoop.analyze_all()`：低质量技能分析（默认只读；显式 flag 才执行降级/归档，gate38 起）
-- `RetentionPolicy`：F 级 30 天 + 使用 < 3 次 → 建议移除；D 级 60 天 → 警告
+- `FeedbackLoop` 处置规则：F 级 30 天 + 使用 < 3 次 → 建议移除；D 级 60 天 → 警告
 
 #### 12. `/instinct` 对话洞察
 - `vibe instinct` 全命令行系统

@@ -119,7 +119,7 @@ class FeedbackLoop:
     ) -> RetentionSuggestion | None:
         """Analyze a single skill evaluation and produce a suggestion.
 
-        Rules (aligned with RetentionPolicy and GOALS.md):
+        Rules (aligned with GOALS.md):
         - Grade F, 30+ days unused, < 3 uses → deprecate
         - Grade D, 60+ days unused → warn
         - Grade C/D/F, 90+ days unused → archive

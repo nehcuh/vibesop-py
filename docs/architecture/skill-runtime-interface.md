@@ -262,8 +262,7 @@ Tasks:
 - Populate `SkillConfig.usage_stats` after each skill invocation
 - Run `RoutingEvaluator` as a background cron/scheduled task
 - Write evaluation results back to `SkillConfig.evaluation_context`
-- Trigger `RetentionPolicy.analyze_all()` weekly
-- Render retention suggestions in `vibe skills report`
+- Render retention suggestions in `vibe skill stale`
 
 ### 5.2 v5.2: Discovery + Community
 
@@ -338,7 +337,6 @@ skills:
 | SkillLoader | `src/vibesop/core/skills/loader.py` |
 | UnifiedRouter | `src/vibesop/core/routing/unified.py` |
 | RoutingEvaluator | `src/vibesop/core/skills/evaluator.py` |
-| RetentionPolicy | `src/vibesop/core/skills/retention.py` |
 | ExecutionFeedbackCollector | `src/vibesop/core/feedback.py` |
 | This Interface Document | `docs/architecture/skill-runtime-interface.md` |
 
