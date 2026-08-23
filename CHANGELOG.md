@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 技能评价体系第一刀（gate37, 2026-08-23）
+
+按 `.omx/artifacts/gate37-synthesis.md` 定稿实施（三路评审两轮收敛,
+0 BLOCK）。三块内容，全部只读/advisory，无任何自动处置：
+
+- **L1 极简 lint**：新模块 `core/skills/skill_lint.py`,3 条静态规则
+  （§6 修订 A)——triggers 非空且非全卫生形状（只读复用冻结谓词
+  `_is_agent_prompt_shape`)、正文非 gate31 TODO 空壳（骨架槽位残留
+  检测）、description ≥10 字符（复用 `_is_valid_skill` 硬门口径）。
+  每条 finding 一行白话，带 must-NOT-catch 反例测试。挂载：
+  pack 安装在安全审计之后追加独立 advisory 行（**不喂进**
+  `is_safe`/`has_high` fail-closed 门）;`skill_installer` 走
+  `warnings[]`；新增 `vibe skill lint <path>` 子命令（退出码恒 0)。
+- **L2-lite 健康列**:`vibe skill list` 加三列只读事实——来源
+  （`_get_skill_source` 三值口径，pack 折叠为 external)、近 30 天
+  fire 计数（本项目 spans 单次全表扫描，谓词 `span_kind=="task"` ∧
+  `name.startswith("route:")` ∧ `metadata.has_match is True`,CLI
+  命中计入；不持 flock、file-missing→空）、显式反馈原始计数
+  （项目级 store,`get_records()` 自行数 was_helpful，禁用只返回
+  比率的 `get_skill_summary`)。空反馈显示"无记录"不暗示中性；列
+  文案披露 n<30 不下结论、partial 记为负、`vibe skills feedback`
+  全局存储断链不计入、改名/规范化断链。不算比率、不派生处置动作、
+  不调用 evaluator/aggregator.success_rate（仓内既有假 L2，修订 C)。
+- **L4 样本追加流程修复**:`build_eval_from_logs.py` 落盘前强制
+  redact(export 与 merge 双点，埋 sk-… 种子断言）;dismiss 样本
+  (expect=[])经 `--merge` 移入 retention yaml（扩充 merge 逻辑，
+  决策记档）；流程文档化进 `docs/dev/eval-set-append-workflow.md`
+  （主集 yaml 禁手改，extended 人审是流程内动作）。
+
 ### Promote shadow verifier（gate36 阶段二, 2026-08-22）
 
 按 gate34 定稿路线实施，双路复审（claude+pi）一轮 PASS_WITH_NITS、0 MAJOR。

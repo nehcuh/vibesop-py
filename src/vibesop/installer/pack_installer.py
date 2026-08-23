@@ -156,6 +156,7 @@ class PackInstaller:
                         audit_results = self._audit_skills(
                             installed_skill_files, pack_name=pack_name
                         )
+                        lint_results = self._lint_skills(installed_skill_files)
                         symlink_results = (
                             self._create_symlinks(pack_name, platforms) if scope == "global" else []
                         )
@@ -165,6 +166,7 @@ class PackInstaller:
                             audit_results,
                             symlink_results,
                             already_installed=True,
+                            lint_results=lint_results,
                         )
                         if scope == "global":
                             self._rebuild_global_index(pack_name)
@@ -227,6 +229,7 @@ class PackInstaller:
             audit_results = self._audit_skills(
                 installed_skill_files, pack_name=pack_name, pack_path=target_path
             )
+            lint_results = self._lint_skills(installed_skill_files)
             # Project-scope installs stay inside .vibe/skills/ (discovered by
             # SkillLoader directly) — no platform symlinks, no global index.
             symlink_results = (
@@ -242,6 +245,7 @@ class PackInstaller:
                 build_output=build_output,
                 pre_audit_summary=pre_audit.summary,
                 pre_audit_files=pre_audit.files_scanned,
+                lint_results=lint_results,
             )
             if scope == "global":
                 self._rebuild_global_index(pack_name)
@@ -281,6 +285,22 @@ class PackInstaller:
             results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
         return results
 
+    @staticmethod
+    def _lint_skills(skill_files: list[Path]) -> list[str]:
+        """gate37 L1: advisory lint lines, shown AFTER the security audit.
+
+        Deliberately separate from ``_audit_skills``: lint findings must
+        never feed the fail-closed ``is_safe``/``has_high`` security gate
+        (gate37 synthesis §6 修订 A). Advisory only — nothing here blocks.
+        """
+        from vibesop.core.skills.skill_lint import lint_skill
+
+        results = []
+        for skill_file in skill_files:
+            for finding in lint_skill(skill_file):
+                results.append(f"{skill_file.parent.name}: {finding}")
+        return results
+
     def _build_install_msg(
         self,
         pack_name: str,
@@ -292,6 +312,7 @@ class PackInstaller:
         build_output: str = "",
         pre_audit_summary: str | None = None,
         pre_audit_files: int = 0,
+        lint_results: list[str] | None = None,
     ) -> str:
         parts: list[str] = []
 
@@ -306,6 +327,12 @@ class PackInstaller:
             parts.append(f"Pre-audit ({pre_audit_files} files): {pre_audit_summary}")
         if audit_results:
             parts.append(f"Audit: {', '.join(audit_results)}")
+        if lint_results:
+            # gate37 L1: independent advisory block AFTER the security audit
+            # — never merged into the Audit line, never fail-closed.
+            parts.append("Lint (advisory, non-blocking):")
+            for line in lint_results:
+                parts.append(f"  ⚠ {line}")
         if build_output:
             parts.append(f"Build: {build_output}")
         if symlink_results:

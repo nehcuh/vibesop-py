@@ -100,6 +100,15 @@ class SkillInstaller:
             self._copy_skill_files(skill_path, target_dir)
             self._update_registry(manifest, project_path)
 
+            # gate37 L1: advisory lint rides warnings[] — never blocks,
+            # never feeds the security audit (修订 A mounting contract).
+            skill_md = skill_path / "SKILL.md"
+            if skill_md.exists():
+                from vibesop.core.skills.skill_lint import lint_skill
+
+                for finding in lint_skill(skill_md):
+                    result["warnings"].append(f"lint: {finding}")
+
             result["success"] = True
             result["installed_path"] = str(target_dir)
 

@@ -675,7 +675,8 @@ Manage skill lifecycle states: enable, disable, and check status.
 
 #### `vibe skill list`
 
-List all skills with their lifecycle state.
+List all skills with their lifecycle state and read-only health summary
+columns (gate37 L2-lite).
 
 ```bash
 vibe skill list [options]
@@ -699,13 +700,55 @@ vibe skill list --project
 
 **Output:**
 ```
-┌──────────────────────┬─────────────────┬────────┬─────────┬─────────┐
-│ ID                   │ Name            │ State  │ Scope   │ Version │
-├──────────────────────┼─────────────────┼────────┼─────────┼─────────┤
-│ gstack/review        │ Code Review     │ active │ global  │ 2.1.0   │
-│ systematic-debugging │ Debug Workflow  │ active │ global  │ 1.5.0   │
-│ old-deploy-skill     │ Deploy Helper   │ deprecated│ global │ 0.9.0   │
-└──────────────────────┴─────────────────┴────────┴─────────┴─────────┘
+┌──────────────────────┬─────────────────┬────────┬─────────┬─────────┬─────────┬──────────┬───────────┐
+│ ID                   │ Name            │ State  │ Scope   │ Version │ Source¹ │ Fire 30d²│ Feedback³ │
+├──────────────────────┼─────────────────┼────────┼─────────┼─────────┼─────────┼──────────┼───────────┤
+│ gstack/review        │ Code Review     │ active │ global  │ 2.1.0   │ builtin │        3 │ +2/-1     │
+│ systematic-debugging │ Debug Workflow  │ active │ global  │ 1.5.0   │ builtin │        0 │ no records│
+│ old-deploy-skill     │ Deploy Helper   │ deprecated│ global │ 0.9.0  │ external│        0 │ no records│
+└──────────────────────┴─────────────────┴────────┴─────────┴─────────┴─────────┴──────────┴───────────┘
+```
+
+**Health columns (raw facts only — no rates, no derived actions):**
+- `Source¹` — `builtin` / `project` / `external` (pack-installed skills
+  fold into `external`; promoted/hand-installed skills carry no
+  provenance data and are not specially labelled).
+- `Fire 30d²` — route hits in **this project's** spans over the last 30
+  days, CLI path included. Raw counts only — **n<30 proves nothing**.
+  Renaming or reinstalling a skill resets its history; `/` vs `-` id
+  normalisation also breaks the chain.
+- `Feedback³` — raw yes/no counts from project-level explicit feedback.
+  "partial" is recorded as "no". `no records` means no feedback exists —
+  it is NOT a neutral signal. `vibe skills feedback` writes to the global
+  store (a known gap) and is not counted here.
+
+---
+
+#### `vibe skill lint`
+
+Advisory static checks on a skill (gate37 L1). Three plain-language
+checks: triggers declared and not all machine-prompt-shaped, no unedited
+auto-draft TODO skeleton left in the body, description present (≥10
+chars). **Advisory only** — findings never block anything and the exit
+code is always 0. The same checks also run during `vibe skill add` and
+pack installs: when an install actually happens, the lint findings ride
+the install's `warnings`/advisory output (an already-installed skill
+returns early and is not re-linted).
+
+```bash
+vibe skill lint <path>
+```
+
+**Example:**
+```bash
+vibe skill lint ./skills/my-skill
+```
+
+**Output:**
+```
+⚠ ./skills/my-skill: 1 advisory finding(s)
+  • No triggers declared — the router can never match this skill automatically; ...
+Advisory only — these findings block nothing.
 ```
 
 ---

@@ -6,6 +6,7 @@ Consolidated from: skill_cmd.py, skill_add.py, skill_config.py.
 Usage:
     vibe skill                        — Show skill ecosystem overview
     vibe skill list [--all] [--project]
+    vibe skill lint <path>
     vibe skill enable <skill_id>
     vibe skill disable <skill_id>
     vibe skill status <skill_id>
@@ -142,12 +143,23 @@ def list_skills(
     """List all skills with their lifecycle state."""
     skills = _load_skills()
 
+    # gate37 L2-lite: read-only health facts (修订 B/H). Raw counts only —
+    # no rates, no derived actions. Single scans, done once up front.
+    from vibesop.core.skills.skill_health import count_skill_feedback, count_skill_fires
+
+    project_root = Path.cwd()
+    fire_counts = count_skill_fires(project_root)
+    feedback_counts = count_skill_feedback(project_root)
+
     table = Table(title="Skills")
     table.add_column("ID", style="bold")
     table.add_column("Name")
     table.add_column("State", justify="center")
     table.add_column("Scope", justify="center")
     table.add_column("Version")
+    table.add_column("Source¹", justify="center")
+    table.add_column("Fire 30d²", justify="right")
+    table.add_column("Feedback³", justify="center")
 
     for skill in skills:
         lifecycle = skill.get("lifecycle", "active")
@@ -168,15 +180,74 @@ def list_skills(
         if not enabled:
             state_text += " [dim](disabled)[/dim]"
 
+        skill_id = skill.get("id", "unknown")
+        # Source: _get_skill_source three-value scheme (pack folds into
+        # external) — already populated on the candidate dict.
+        source = skill.get("source", "external")
+        fires = fire_counts.get(skill_id, 0)
+        yes, no = feedback_counts.get(skill_id, (0, 0))
+        # "no records" when there is no feedback at all — never imply a
+        # neutral verdict with "0/0" (修订 H).
+        feedback_text = f"+{yes}/-{no}" if yes + no > 0 else "no records"
+
         table.add_row(
-            skill.get("id", "unknown"),
+            skill_id,
             skill.get("name", "")[:30],
             state_text,
             skill.get("scope", "global"),
             skill.get("version", "1.0.0"),
+            source,
+            str(fires),
+            feedback_text,
         )
 
     console.print(table)
+    console.print(
+        "[dim]¹ pack-installed skills show as external; promoted/hand-installed "
+        "skills carry no provenance data and are not labelled.[/dim]"
+    )
+    console.print(
+        "[dim]² route hits in THIS project's spans over the last 30 days (CLI "
+        "path included). Raw counts only — n<30 proves nothing. Renaming or "
+        "reinstalling a skill resets its history ('/' vs '-' id normalisation "
+        "also breaks the chain).[/dim]"
+    )
+    console.print(
+        "[dim]³ raw yes/no from project-level explicit feedback ('partial' is "
+        "recorded as 'no'). 'no records' means no feedback exists — not a "
+        "neutral signal. `vibe skills feedback` writes to the global store "
+        "(known gap) and is not counted here.[/dim]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# lint
+# ---------------------------------------------------------------------------
+
+
+@app.command("lint")
+def lint_skill_cmd(
+    skill_path: str = typer.Argument(..., help="Skill directory or SKILL.md path"),
+) -> None:
+    """Advisory static checks on a skill (gate37 L1).
+
+    Three plain-language checks: triggers declared and not all
+    machine-prompt-shaped, no unedited auto-draft TODO skeleton in the
+    body, description present. Advisory only — warnings never block
+    anything and the exit code is always 0.
+    """
+    from vibesop.core.skills.skill_lint import lint_skill_path
+
+    findings = lint_skill_path(Path(skill_path))
+
+    if not findings:
+        console.print(f"[green]✓ {skill_path}: no lint findings[/green]")
+        return
+
+    console.print(f"[yellow]⚠ {skill_path}: {len(findings)} advisory finding(s)[/yellow]")
+    for finding in findings:
+        console.print(f"  [yellow]• {finding}[/yellow]")
+    console.print("[dim]Advisory only — these findings block nothing.[/dim]")
 
 
 # ---------------------------------------------------------------------------
