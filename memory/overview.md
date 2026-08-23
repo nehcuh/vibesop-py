@@ -1,20 +1,18 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-22 (S40 — gate30 候选池去重 push；M12 全收官)
+**Last Updated**: 2026-08-23 (S41 — gate34 路线图 + gate35/36 收官 push a59eb13；文档同步清零)
 
 ---
 
 ## Goals
 
-### Current Week (August 17-22, 2026)
+### Current Week (August 23-29, 2026)
 
-1. **M12 语义洞察→技能发现里程碑** ✅ (Completed - Aug 21-22)
-   - M2 出口验证（cmspark 真实数据 5/5 候选人工可认）；M3 行为一致性门（bigram-Jaccard 三态）
-   - LoopStore 项目归属（spec `project_root`）；CLI_REFERENCE 补全；文档存量债清零（双 checker 0+0）
-2. **gate30 候选池 id 漂移去重** ✅ (Completed - Aug 22, push `f76dd61`)
-   - upsert Jaccard>0.5 absorb-merge + 守卫全集化；三轮 claude+pi 复审收敛
-   - cmspark 池自愈：8 对重复归零
-3. **发现精度首个真实数据点**（等用户）：cmspark 5 条 stable 候选 promote/dismiss + bd1bc217 激活
+1. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
+   - 三路对抗设计+三轮三路评审定稿；gate35 队列可读性+展示层去噪；gate36 shadow verifier（PASS/WARN 永不阻断）
+   - 基线：pytest 6123 passed/14 skipped；e2e 68/68+7/7；文档同步清零（双 checker 0+0）
+2. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
+3. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
 4. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
 5. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
 

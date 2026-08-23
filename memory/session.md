@@ -1,4 +1,24 @@
 
+### S41 (2026-08-23) [vibesop-py] EvoTrace 学习落地：gate34 路线图 + gate35/36 实施收官 → push a59eb13
+
+- [x] **gate34**：EvoTrace 评估 4 吸收方向（D1 verifier/D2 去重/D3 分源阈值/D4 不可变记录）→ 三路独立对抗设计（产品/架构/质疑）+ claude+pi+grok 三轮评审定稿：D2 只做展示层（intake 过滤否决——gate32 A1 已裁决回声是合法池成员，bd1bc217 是唯一真实 promote 案例）；D1 shadow-only 徽章永不阻断；D3 只读统计列；D4 否决立项（决策记录落 docs/decisions/）
+- [x] **gate35 阶段一**（push `af1b680`）：discover 列头自解释+词汇表+"为什么在"行（只写实存字段，防文案说谎测试）；`_has_agent_prompt_prefix` 展示谓词（冻结谓词不动）；echo 打标沉底；批量否决 `--shape agent-echo` 走池翻转（双 scope 镜像同翻）；per-source 只读统计；`measure_echo_share.py` 基线：cmspark 卡片回声 42.9% vs 池 3.0%
+- [x] **gate36 阶段二**（push `2359026`）：promote shadow verifier——`promote_verifier.py`，PASS/WARN 徽章+明细，activate 复用/重跑，双 embedding 线 fail-open 降级不发 PASS，trigger 侧泛化包装 `query_matches_triggers`（不碰 guarded-only 匹配器）；verdict store（global 只存计数+全量哈希）
+- [x] **文档同步**（push `a59eb13`）：CLI_REFERENCE/HOOK_INTEGRATION/cross-platform-support/PROJECT_CONTEXT/GOALS 补齐 gate33-36；双 checker 0+0
+- [x] **验证**：pytest 6123 passed/14 skipped；orbstack e2e smoke 68/68 + routing 7/7；复审两轮均收敛（pi BLOCK→PASS_WITH_NITS：跨 scope 批量 dismiss 复活 bug 实证修复）
+
+**Key Discoveries**:
+1. 三路评审的 MAJOR 互不重叠（隐私边界/时效性/分母冲突各出一洞）——设计稿三路值得；裁决层修订必须回写执行层（§3/§6 同步断裂被抓）
+2. "过滤自动化，不过滤人审"：intake 过滤会掐死 bd1bc217 类训练信号；准入改动先算 FN/FP 不对称性
+3. 回声痛点在卡片层（42.9%）不在池层（3.0%）——展示层裁决获数据背书，intake 重议门槛两条件均不满足继续封存
+4. `explicit_guarded_skill_match` 是 guarded 专用，照字面用 verifier 会空转（pi+grok 独立命中）
+
+**Next Steps**:
+- 触发器（全部等数据，无待办）：grok 真实会话 probe（用户下次用 grok）；verdict ≥30 条议阈值固化；M3 复检等候选簇工具序列；留存池 2026-09-19 复挖；P0-lite 观察期
+- 用户侧：cmspark 用新 discover/promote 流程处理队列（verifier 徽章首个真实数据点）
+
+**Recorded**: yes — 多路对抗评审实证纪律 → project-knowledge.md Reusable Patterns
+
 ### S40 (2026-08-22) [vibesop-py + cmspark] 候选池 id 漂移去重（gate30 三轮双路复审）→ push f76dd61
 
 - [x] **真 bug 发现**：cmspark 候选池 27 条 pending 里 8 对重复——`cluster_id` = 成员复合键 sha1，簇吸收新 task 后 id 漂移，exact-match upsert 每轮重扫追加重复行

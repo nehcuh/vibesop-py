@@ -9,7 +9,7 @@
 - gate33：Grok Build 平台 hooks 落地——`vibe route --hook`（stdin 事件 JSON 模式）+ PostToolUse `vibesop-tool-seq.json` 工具序列采集；adapter `src/vibesop/adapters/grok_build.py`
 - gate34：路线图梳理；gate35：Discovery 队列可读性——自解释列头（评分/模式/来源/行为/为什么在）、`为什么在` 只从实存字段直译、agent-echo 打 `shape: agent-echo` 标沉底、`dismiss --shape agent-echo --yes` 批量否决（池翻转/镜像同翻/`dismiss_reason=shape-batch`/豁免 threshold_suggestion）
 - gate36：promote shadow verifier——`verify_draft` 输出 PASS/WARN 徽章（无 FAIL、永不阻断、degraded 至多 WARN），verdict 存 `promote_verdicts.jsonl`（global 只存计数+query 哈希，RULESET_VERSION=gate36-r1）
-- 验证：pytest 6123 passed / 14 skipped；e2e smoke 68/68 + routing 7/7；最新 push `2359026`
+- 验证：pytest 6123 passed / 14 skipped；e2e smoke 68/68 + routing 7/7；最新 push `a59eb13`（文档同步）
 
 **Key Decisions**:
 - 批量否决选择去重后的队列视图、翻转在 project+global 双 scope 都执行（只翻一边会复活）；确认文案点名 bd1bc217 先例（回声簇也曾 promote 成功）
@@ -37,8 +37,4 @@
 1. 用户：cmspark `vibe skill discover` 处理 5 条 stable 候选；bd1bc217 草稿 `--activate`
 2. 新开 kimi 会话激活 hooks（M3 行为证据前提）；3 个 dead loop 可 reset 复活
 3. 数据触发：簇攒 ≥2 条工具序列 trace → M3 阈值复检；留存池 2026-09-19 前复挖再 purge
-
-### 2026-07-31 S39 [vibesop-py + cmspark] 定位对抗 → Sprint1 → dogfood
-
-**Session Summary**: 产品演化 4 路对抗 Binding + Sprint 1（RoutingPending/accept/dismiss/replay inject）+ cmspark dogfood。后续已由 S40 前的 M12 系列 session 推进（M2 出口验证 5/5、M3 行为门、LoopStore 归属、文档债清零 3f5ef0f/e30f392 均已 push）。
 <!-- handoff:end -->

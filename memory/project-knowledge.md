@@ -169,6 +169,15 @@ with self._path.open("a") as f:
 
 当 plan 文档写的目标路径与 codebase 已有目录约定冲突时，跟 codebase 约定（而非 plan 字面值）。例：plan 说 `src/vibesop/observability/reflection.py`（top-level），实际 observability 全在 `src/vibesop/core/observability/`（与 tracer/aggregator/span_writer/models 同居）— 选了后者避免分裂。在 commit message + PR 描述里明说 deviation 原因即可。
 
+### 多路独立对抗评审的实证纪律 (2026-08-23, gate34-36)
+
+- **三路评审抓到的 MAJOR 互不重叠**：同一设计稿，claude 抓到隐私边界+反馈环污染，pi 抓到 verdict 时效+口径 provenance，grok 抓到 PASS 分母与回声合法成员冲突。双路是下限；设计稿阶段三路值得。
+- **裁决层修订必须回写执行层**：gate34 §6 修订后 §3 实施步骤未同步，claude round2 抓到"实施者按 §3 原文动工就会做出修订明确禁止的事"。设计文档收敛后，第一步是同步正文，不是发复审。
+- **"过滤自动化，不过滤人审"**：形状谓词用于自动预填 OK，用于数据准入会掐死训练信号（bd1bc217——全系统唯一真实 promote 成功案例就来自 agent 回声簇）。准入层改动先算失败不对称性：FN=人审多看一眼，FP=永远学不到这个模式。
+- **基线测量要落在痛点语料上，口径钉死**：cmspark 回声占比池子 3.0% vs 已入队卡片 42.9%——同一现象两个口径差 14 倍，"64% 回声"的旧注释就是池/卡口径混淆的产物。
+- **引用他模块函数先确认适用域**：`explicit_guarded_skill_match` 是 guarded 技能专用（只认硬编码表内 id），被两路评审独立发现"照字面用会让 verifier 空转"。
+- **复审运行期间不改被审文件**（gate33 教训复验）：评审撞上并发修复的中间态会误报 BLOCK。
+
 ### Plan → Adversarial → Execute → Verify
 1. Write structured plan with exact diffs
 2. Spawn adversarial `plan` agent to challenge the plan
