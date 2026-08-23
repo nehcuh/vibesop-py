@@ -1,0 +1,2112 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index f8f3ff2..7f44c01 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### 止血与真实痛点（gate40, 2026-08-23）
++
++按 `.omx/artifacts/gate40-synthesis.md` r2.2 定稿实施（三路对抗 +
++claude/pi/grok 评审两轮 + 确认轮,0 BLOCK)。
++
++- **hook 冷启动修复（主项）**：新共享 helper
++  `core/embedding_loader.load_sentence_transformer`——
++  `local_files_only=True` 离线优先,缓存缺失/损坏时显式在线重试;
++  异常分类学钉死(ImportError/KeyboardInterrupt/SystemExit/
++  MemoryError 不重试原样抛,二次异常原样重抛,helper 无状态)。
++  6 处 SentenceTransformer 加载点全部改走 helper(strategies/
++  learner/triage_recall/promote_verifier/_layers/indexer),各点既有
++  fail-open 形态不变。实测(cmspark 生产 hook,n=3×2 批):online
++  中位 17.7s → offline 4.4s,每次 prompt 省去 13-30s HF Hub 在线
++  等待;Grok hook(10s timeout)此前必超时。注意:各平台已部署的
++  hook 无需重跑 build——修复在包代码内,随升级自动生效。
++- **项 5 性能**:`evaluator` 的 usage-frequency 计数从每技能
++  O(distinct×records) 重建改为单遍 Counter(`evaluate_skill` 无参
++  路径自算,`evaluate_all_skills` hoist 经可选参数传入,向后兼容)。
++  同值重算零行为变化;实测 200 技能×2000 记录:1.059s → 0.0116s
++  (~91x)。
++- **项 4 空 skill_id 遥测对齐**:CLI/hook 两侧 span metadata 的
++  has_match/skill_id/top_skills 统一按"首个真技能步"谓词写入
++  (all-fallback → has_match=false、skill_id="");**结果契约不动**
++  (`OrchestrationResult.has_match` property 与 result.skill_id 及其
++  消费者保持不变)。**读侧**:`fallback-llm` sentinel 从 fire 列与
++  outcomes 技能列排除——cmspark 实测该桶是 30d fire 最大桶
++  (1061/2822=37.6%,多为 M12 前化石)与 hit outcome 的 44.6%
++  (1088/2440),整桶移入 outcomes 顶层 `(fallback: N)` 计数(不
++  进 unjoined,对账式 Σ三列+unjoined+fallback=hit 总数);反方向:
++  CLI orchestrated 有真步的命中从此进入 fire(cmspark 69 行潜在
++  增量上界)。发现池组成变化:all-fallback CLI 翻 miss 后进入
++  gold_detection 发现池(合法且有意)。
++- **项 2 F/archive 规则对齐(处置语义变更)**:F-deprecate 从
++  `total_routes<3` 翻为 `>=3` 且新增质量下限 `routing_accuracy<0.5`
++  ——原规则实测会命中"路由全对但用得相对少"的技能(唯一的罪是
++  不是最常用);archive 加 >=3 闸(作用于 C/D/F 三档)。证据门槛
++  1→3 + 质量下限,**不等于**"质量 vs 用量"问题已修复(3 条全对+
++  用得少仍可能 F,只是不再被处置);薄样本(1-2 条反馈)F 档进入
++  无 warn/deprecate/archive 的有意真空区,终局裁决等第一批真实
++  feedback。两个已知 dogfood 现场 feedback 文件均不存在,今天零
++  行为变化。
++- **项 1 dashboard**:五处 spans.jsonl 硬编码(server.py
++  :137/:195/:296/:330/:344)统一走 `_spans_path()` dev/prod 选择,
++  生产逐字节不变。记档:仓内另有 6 处非 dashboard 同型硬编码
++  (recall_cmd/trace_cmd/pool_cmd/dag_rebuilder)未修——dev 环境下
++  dashboard DAG 端点的存在性检查与重建读不同文件是其现实后果。
++
+ ### 让数据开口：outcomes 只读出口（gate39, 2026-08-23）
+ 
+ 按 `.omx/artifacts/gate39-synthesis.md` r2 定稿实施（三路对抗 +
+diff --git a/docs/user/CLI_REFERENCE.md b/docs/user/CLI_REFERENCE.md
+index f80b88c..f143e57 100644
+--- a/docs/user/CLI_REFERENCE.md
++++ b/docs/user/CLI_REFERENCE.md
+@@ -772,6 +772,13 @@ actions):**
+   the `(unjoined: N)` trailer row keeps them visible — a rising unjoined count after
+   `vibe trace prune` means the spans were deleted, not that outcomes
+   stopped.
++- `fallback-llm` rows (the no-match fallback route) are NOT a skill: they
++  are counted in a separate `(fallback: N)` trailer, never in the
++  per-skill columns and never in `unjoined`; their signal belongs to the
++  discovery queue. (gate40: in the first dogfood dump this bucket was
++  1088/2440 = 44.6% of all hit-outcome rows — mostly pre-M12 fossils.
++  The same sentinel is also excluded from the Fire column, where it was
++  the largest bucket at 1061/2822 of 30d fires.)
+ 
+ ---
+ 
+diff --git a/src/vibesop/agent/runtime/agent_runtime.py b/src/vibesop/agent/runtime/agent_runtime.py
+index 5826fd2..5933672 100644
+--- a/src/vibesop/agent/runtime/agent_runtime.py
++++ b/src/vibesop/agent/runtime/agent_runtime.py
+@@ -664,8 +664,31 @@ class AgentRuntime:
+                     except Exception as e:
+                         logger.debug(f"Skill injection failed: {e}")
+ 
+-                # Enrich the task span with routing metadata
+-                _task_span.metadata["skill_id"] = result.skill_id or ""
++                # Enrich the task span with routing metadata.
++                # gate40 项4: the SPAN's skill_id / top_skills are built
++                # from the first REAL-skill step — the ``fallback-llm``
++                # sentinel (plan_builder all-fallback / steps[0]-fallback
++                # plans) is filtered out, so all-fallback orchestrated
++                # runs write skill_id="" and omit top_skills instead of
++                # leaking the sentinel. The RESULT object (skill_id /
++                # skill_name / alternatives — consumed by the :653
++                # injection gate and the :727 instinct bridge) is
++                # deliberately UNTOUCHED (result contract).
++                _span_skill_ids = [
++                    s
++                    for s in [
++                        result.skill_id,
++                        *(
++                            alt.get("skill_id", "")
++                            for alt in result.alternatives
++                            if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance] MagicMock guard
++                                alt, dict
++                            )
++                        ),
++                    ]
++                    if isinstance(s, str) and s and s != "fallback-llm"
++                ]
++                _task_span.metadata["skill_id"] = _span_skill_ids[0] if _span_skill_ids else ""
+                 _task_span.metadata["mode"] = result.mode
+                 _task_span.metadata["confidence"] = result.confidence
+                 # Deliberate asymmetry (M12 miss blind-spot fix): the span
+@@ -708,20 +731,12 @@ class AgentRuntime:
+                 # is omitted entirely. Duplication with
+                 # metadata["skill_id"] is deliberate: this is the full
+                 # at-write-time ranking snapshot — router state drifts
+-                # and cannot be replayed later. Data source:
+-                # ``result.alternatives`` (list[dict], populated from
+-                # routing_result.alternatives at :619-626).
+-                if result.router_matched:
+-                    _alt_ids = [
+-                        alt.get("skill_id", "")
+-                        for alt in result.alternatives
+-                        if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance] MagicMock guard
+-                            alt, dict
+-                        )
+-                    ]
+-                    _top = [s for s in [result.skill_id, *_alt_ids] if isinstance(s, str) and s]
+-                    if _top:
+-                        _task_span.metadata["top_skills"] = _top[:3]
++                # and cannot be replayed later. Data source: the same
++                # sentinel-filtered ``_span_skill_ids`` list built above
++                # (gate40 项4: fallback-llm steps never enter the
++                # snapshot; all-fallback plans omit the key).
++                if result.router_matched and _span_skill_ids:
++                    _task_span.metadata["top_skills"] = _span_skill_ids[:3]
+ 
+                 # --- Instinct feedback bridge (neutral signal) ---
+                 if result.has_match and result.skill_id:
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index 22ba968..1ec81cb 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -236,10 +236,11 @@ def skill_outcomes_cmd(
+     """Show per-skill hit-outcome raw counts (gate38 data, read-only).
+ 
+     Joins ``route_outcomes.jsonl`` to this project's spans on span_id and
+-    reports the three hit-outcome reasons per skill, plus a trailing
+-    ``(unjoined)`` row for hit rows that cannot be attributed (span
+-    missing, empty skill_id, or an unknown reason). Raw counts only —
+-    no rates, no grades.
++    reports the three hit-outcome reasons per skill, plus trailing
++    ``(unjoined)`` / ``(fallback)`` rows: hit rows that cannot be
++    attributed (span missing, empty skill_id, or an unknown reason) and
++    hit rows whose span carried the ``fallback-llm`` sentinel (gate40 项4).
++    Raw counts only — no rates, no grades.
+     """
+     from vibesop.core.skills.skill_outcomes import count_skill_outcomes
+ 
+@@ -267,6 +268,8 @@ def skill_outcomes_cmd(
+         )
+     # gate39 §1.2：unjoined 必须有末行可见性（防 spans 轮转后表静默缩水）。
+     table.add_row(f"[dim](unjoined: {result['unjoined']})[/dim]", "", "", "", "")
++    # gate40 项4：fallback-llm sentinel 行独立计数，不进 unjoined。
++    table.add_row(f"[dim](fallback: {result['fallback']})[/dim]", "", "", "", "")
+ 
+     console.print(table)
+     console.print(
+@@ -286,6 +289,10 @@ def skill_outcomes_cmd(
+     console.print(
+         "[dim]⁵ 空 skill_id 的脏 hit 行跳过（cmspark 实测 37/2437）；unjoined 计数见末行。[/dim]"
+     )
++    console.print(
++        "[dim]⁶ fallback-llm=未命中兜底路由，其计数属发现队列范畴"
++        "（cmspark 实测 1088/2440 hit 行，全为 gate40 前的存量），不进 unjoined 与技能列。[/dim]"
++    )
+ 
+ 
+ # ---------------------------------------------------------------------------
+diff --git a/src/vibesop/cli/main.py b/src/vibesop/cli/main.py
+index 1489a06..223fa91 100644
+--- a/src/vibesop/cli/main.py
++++ b/src/vibesop/cli/main.py
+@@ -898,12 +898,32 @@ def route(
+ 
+         # Populate skill_id / mode / confidence on the task span so
+         # SpanAggregator can attribute llm-spans to a skill via trace_id.
+-        # Mirrors agent_runtime.handle_query lines 551-554. Defensive
++        # Mirrors agent_runtime.handle_query lines 667-724. Defensive
+         # getattr because some test fixtures use SimpleNamespace mocks.
++        #
++        # gate40 项4: the span's match verdict now follows the hook-path
++        # predicate — primary real hit ∨ any plan step routed to a REAL
++        # skill (skill_id not in {"", "fallback-llm"}) — instead of the
++        # OrchestrationResult.has_match property, which stays True on
++        # all-fallback orchestrated plans (CLI orchestrated results always
++        # have primary=None). The property and the result object itself
++        # are the RESULT CONTRACT (JSON output / confirmation flow) and
++        # are deliberately UNTOUCHED. Miss rows always write skill_id=""
++        # (single-mode misses used to leak the fallback-llm sentinel here).
+         _primary = getattr(result, "primary", None)
+-        _cli_task_span.metadata["skill_id"] = (
+-            getattr(_primary, "skill_id", "") or "" if _primary else ""
+-        )
++        _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
++        _plan = getattr(result, "execution_plan", None)
++        _steps = getattr(_plan, "steps", None) or [] if _plan else []
++        _step_ids = [
++            s
++            for s in (getattr(step, "skill_id", "") for step in _steps)
++            if isinstance(s, str) and s and s != "fallback-llm"
++        ]
++        if isinstance(_primary_id, str) and _primary_id and _primary_id != "fallback-llm":
++            _span_skill_id = _primary_id
++        else:
++            _span_skill_id = _step_ids[0] if _step_ids else ""
++        _cli_task_span.metadata["skill_id"] = _span_skill_id
+         _mode = getattr(result, "mode", None)
+         # Only overwrite the dispatch-level mode set at trace open time if
+         # the result actually carries a richer mode. result.mode can be None
+@@ -911,21 +931,27 @@ def route(
+         # with the literal string "None".
+         if _mode is not None:
+             _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
+-        _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
++        _cli_task_span.metadata["has_match"] = bool(_span_skill_id)
+         # gate38 L2a: ordered routing snapshot ("top_skills", ≤3, primary
+         # first). Gated on the SAME expression as metadata["has_match"]
+-        # above and read from the routing RESULT object (not the
+-        # just-written metadata — the primary/skill_id writes above
+-        # precede the has_match write). On miss the CLI alternatives are
++        # above (gate40 项4: the hook-path verdict, not the mode-derived
++        # property) and built from the same source — real plan-step ids
++        # first, then alternatives. On miss the CLI alternatives are
+         # fallback nearest-neighbours (result_mixin), not a router
+         # ranking, so the key is omitted entirely. isinstance(str) guard:
+         # a mocked router's attributes (MagicMock) must not leak into
+         # span metadata — same convention as the layer guard below.
+-        if bool(getattr(result, "has_match", False)):
++        if _span_skill_id:
+             _alts = getattr(result, "alternatives", None) or []
+             _alt_ids = [getattr(a, "skill_id", "") for a in _alts]
+-            _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
+-            _top = [s for s in [_primary_id, *_alt_ids] if isinstance(s, str) and s]
++            _top = [
++                _span_skill_id,
++                *(
++                    s
++                    for s in [*_step_ids, *_alt_ids]
++                    if isinstance(s, str) and s and s not in ("fallback-llm", _span_skill_id)
++                ),
++            ]
+             if _top:
+                 _cli_task_span.metadata["top_skills"] = _top[:3]
+         # gate18 pi NIT-4: record the routing layer so ScanSummary
+diff --git a/src/vibesop/core/embedding_loader.py b/src/vibesop/core/embedding_loader.py
+new file mode 100644
+index 0000000..355a08e
+--- /dev/null
++++ b/src/vibesop/core/embedding_loader.py
+@@ -0,0 +1,59 @@
++"""Shared SentenceTransformer loader — offline-first with explicit online retry.
++
++gate40 主项 (r2.2 §1): hook cold-start paid 13-30s per prompt because every
++``SentenceTransformer(...)`` load went online (HF Hub HEAD requests). All six
++load sites route through :func:`load_sentence_transformer`: try
++``local_files_only=True`` first (cache hit → no network), and on any
++cache-miss-class failure retry exactly once online (first download, or
++completion of a broken/partial cache — no silent downgrade).
++
++Exception taxonomy (pinned by gate40 §1.2):
++
++- ``ImportError`` / ``KeyboardInterrupt`` / ``SystemExit`` / ``MemoryError``
++  from the offline attempt are re-raised WITHOUT retry. They are not
++  cache-miss signals, and retrying would turn a millisecond fail-open into
++  a 13-30s online wait (the Grok hook's 10s timeout would kill the process
++  before fail-open even ran).
++- Any other ``Exception`` from the offline attempt triggers one online
++  retry; if the retry also raises, that exception propagates AS-IS — no
++  new wrapper type — so each call site's existing ``except`` shape keeps
++  its exact semantics.
++
++The helper is stateless: every call is independent. Per-site sticky-failure
++semantics (e.g. ``EmbeddingRecall._model_failed``) stay with the call sites.
++"""
++
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++logger = logging.getLogger(__name__)
++
++__all__ = ["load_sentence_transformer"]
++
++
++def load_sentence_transformer(model_name: str) -> Any:
++    """Load a SentenceTransformer offline-first, with one explicit online retry.
++
++    Raises whatever the underlying load raises (see module docstring for the
++    retry taxonomy); the caller's existing fail-open handling applies.
++    """
++    from sentence_transformers import (
++        SentenceTransformer,  # pyright: ignore[reportMissingImports]
++    )
++
++    try:
++        model = SentenceTransformer(model_name, local_files_only=True)
++    except (ImportError, KeyboardInterrupt, SystemExit, MemoryError):
++        raise  # not a cache-miss class — never retry online
++    except Exception:
++        logger.debug(
++            "offline load of %r failed; retrying online (first download or broken cache)",
++            model_name,
++        )
++        model = SentenceTransformer(model_name)  # second failure re-raises as-is
++        logger.debug("online retry of %r succeeded", model_name)
++    else:
++        logger.debug("loaded %r from local cache (local_files_only=True)", model_name)
++    return model
+diff --git a/src/vibesop/core/instinct/learner.py b/src/vibesop/core/instinct/learner.py
+index 8b51ed0..a8a93b8 100644
+--- a/src/vibesop/core/instinct/learner.py
++++ b/src/vibesop/core/instinct/learner.py
+@@ -509,8 +509,7 @@ class InstinctLearner:
+                 if (i.source == "auto_routing" or "auto_extracted" in i.tags)
+                 and i.success_count == 0  # explicit positive feedback => human-confirmed
+                 and (
+-                    not is_auto_extract_worthy(i.pattern)
+-                    or _is_untrusted_layer_context(i.context)
++                    not is_auto_extract_worthy(i.pattern) or _is_untrusted_layer_context(i.context)
+                 )
+             ]
+             if dry_run or not victims:
+@@ -688,11 +687,9 @@ class InstinctLearner:
+         if self._embedding_model is not None:
+             return True
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+ 
+-            self._embedding_model = SentenceTransformer(self._embedding_model_name)
++            self._embedding_model = load_sentence_transformer(self._embedding_model_name)
+             return True
+         except (ImportError, OSError, RuntimeError):
+             return False
+diff --git a/src/vibesop/core/matching/strategies.py b/src/vibesop/core/matching/strategies.py
+index 69238fb..9d6ef27 100644
+--- a/src/vibesop/core/matching/strategies.py
++++ b/src/vibesop/core/matching/strategies.py
+@@ -592,11 +592,9 @@ class EmbeddingMatcher:
+             return
+ 
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+ 
+-            self._model = SentenceTransformer(self._model_name)
++            self._model = load_sentence_transformer(self._model_name)
+         except ImportError:
+             raise ImportError(
+                 "sentence-transformers is required for EmbeddingMatcher. "
+diff --git a/src/vibesop/core/observability/gold_detection.py b/src/vibesop/core/observability/gold_detection.py
+index 8c28214..19d2fed 100644
+--- a/src/vibesop/core/observability/gold_detection.py
++++ b/src/vibesop/core/observability/gold_detection.py
+@@ -113,8 +113,10 @@ def is_route_miss_span(span: dict[str, Any]) -> bool:
+     - it is a route span: ``span_kind == "task"`` and ``name`` starts
+       with ``"route:"``;
+     - ``metadata.has_match`` is explicitly ``False`` (producers set
+-      ``has_match=False`` for no-match, which already excludes the
+-      ``fallback_llm`` sentinel — a fallback is not a match);
++      ``has_match=False`` for no-match AND for all-fallback routing
++      since gate40 项4 — a fallback is not a match, and miss rows never
++      carry the ``fallback-llm`` sentinel anymore, so this predicate
++      excludes the sentinel bucket by construction);
+     - ``metadata.mode`` is NOT ``"not_intercepted"`` (the interceptor
+       deliberately abstained — e.g. "继续"-style continuation prompts —
+       so no routing attempt happened).
+@@ -122,11 +124,18 @@ def is_route_miss_span(span: dict[str, Any]) -> bool:
+     Spans with ``has_match`` missing (CLI error paths, pre-W5.0 legacy
+     spans) are **unknown**, never misses (conservative direction).
+ 
+-    Producer alignment (gate20): both route-span producers now write the
+-    router's REAL match verdict — the CLI path always did
+-    (``cli/main.py``), and the hook path (``agent_runtime.handle_query``)
+-    writes ``router_matched`` here since gate20 (previously a mode-derived
+-    value that hid hook-path misses from this predicate).
++    Producer alignment (gate20, completed by gate40 项4): both
++    route-span producers write the router's REAL match verdict. The
++    hook path (``agent_runtime.handle_query``) writes ``router_matched``
++    since gate20 (previously a mode-derived value that hid hook-path
++    misses from this predicate). The CLI path (``cli/main.py``) claimed
++    to but did NOT for orchestrated all-fallback plans — the
++    mode-derived ``OrchestrationResult.has_match`` property stayed True
++    there (that property remains the untouched result contract); gate40
++    项4 aligned the CLI span write to the hook predicate (primary real
++    hit ∨ any real-skill plan step), so CLI all-fallback runs now write
++    ``has_match=False`` and enter this discovery pool (legitimate: a
++    CLI miss is a real discovery signal, see below).
+ 
+     Metadata may be a dict or a JSON-encoded string (SpanWriter
+     serialises it); malformed JSON is treated as unknown, never raises.
+diff --git a/src/vibesop/core/observability/promote_verifier.py b/src/vibesop/core/observability/promote_verifier.py
+index 9ffac1b..b40b912 100644
+--- a/src/vibesop/core/observability/promote_verifier.py
++++ b/src/vibesop/core/observability/promote_verifier.py
+@@ -129,11 +129,9 @@ def _get_embedding_model() -> Any | None:
+         if _MODEL_STATE["model"] is not None or _MODEL_STATE["failed"]:
+             return _MODEL_STATE["model"]
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+ 
+-            _MODEL_STATE["model"] = SentenceTransformer(MODEL_NAME)
++            _MODEL_STATE["model"] = load_sentence_transformer(MODEL_NAME)
+         except Exception as e:  # missing dep / no network / OOM — all fail-open
+             logger.debug("promote verifier: embedding model unavailable: %s", e)
+             _MODEL_STATE["failed"] = True
+diff --git a/src/vibesop/core/observability/recall.py b/src/vibesop/core/observability/recall.py
+index 7b1f86d..729b8fd 100644
+--- a/src/vibesop/core/observability/recall.py
++++ b/src/vibesop/core/observability/recall.py
+@@ -382,22 +382,33 @@ def _extract_skill_id(span: dict) -> str | None:
+     - ``metadata.skill_id`` (current main.py:786 pattern)
+     - ``output_data.skill_id`` (route decision result)
+ 
+-    Returns None if no skill_id is found.
++    Returns None if no skill_id is found. The ``fallback-llm`` sentinel
++    is NOT a skill (gate40 项4 — a fallback is a routing miss whose
++    outcomes are discovery-queue signals), so it is excluded here:
++    pre-gate40 producers wrote it into span metadata (活洞群 B), and the
++    metadata branch must never surface it as a skill in recall / W3
++    replay. (Today disk spans carry metadata as a JSON-encoded string —
++    SpanWriter serialises it — so the metadata branch is inert for them;
++    the guard is for the top-level/output_data branches and any future
++    dict-metadata activation.)
+     """
++    candidate: str | None = None
+     top = span.get("skill_id")
+     if isinstance(top, str) and top:
+-        return top
+-    metadata = span.get("metadata")
+-    if isinstance(metadata, dict):
+-        sk = metadata.get("skill_id")
+-        if isinstance(sk, str) and sk:
+-            return sk
+-    output = span.get("output_data")
+-    if isinstance(output, dict):
+-        sk = output.get("skill_id")
+-        if isinstance(sk, str) and sk:
+-            return sk
+-    return None
++        candidate = top
++    if candidate is None:
++        metadata = span.get("metadata")
++        if isinstance(metadata, dict):
++            sk = metadata.get("skill_id")
++            if isinstance(sk, str) and sk:
++                candidate = sk
++    if candidate is None:
++        output = span.get("output_data")
++        if isinstance(output, dict):
++            sk = output.get("skill_id")
++            if isinstance(sk, str) and sk:
++                candidate = sk
++    return candidate if candidate != "fallback-llm" else None
+ 
+ 
+ def _extract_query(span: dict) -> str | None:
+diff --git a/src/vibesop/core/routing/_layers.py b/src/vibesop/core/routing/_layers.py
+index 5ed91ff..2ada30c 100644
+--- a/src/vibesop/core/routing/_layers.py
++++ b/src/vibesop/core/routing/_layers.py
+@@ -396,11 +396,9 @@ def _try_embedding_fallback(
+     model = getattr(router, "_index_embedding_model", None)
+     if model is None:
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+ 
+-            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
++            model = load_sentence_transformer("paraphrase-multilingual-MiniLM-L12-v2")
+             router._index_embedding_model = model
+         except Exception:
+             return None, LayerDetail(
+diff --git a/src/vibesop/core/routing/triage_recall.py b/src/vibesop/core/routing/triage_recall.py
+index e210864..1207a78 100644
+--- a/src/vibesop/core/routing/triage_recall.py
++++ b/src/vibesop/core/routing/triage_recall.py
+@@ -116,11 +116,9 @@ class EmbeddingRecall:
+         if self._model_failed:
+             return None
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+ 
+-            self._model = SentenceTransformer(MODEL_NAME)
++            self._model = load_sentence_transformer(MODEL_NAME)
+         except Exception as e:
+             logger.debug("sentence-transformers unavailable for triage recall: %s", e)
+             self._model_failed = True
+diff --git a/src/vibesop/core/skills/evaluator.py b/src/vibesop/core/skills/evaluator.py
+index d3c49f6..3626134 100644
+--- a/src/vibesop/core/skills/evaluator.py
++++ b/src/vibesop/core/skills/evaluator.py
+@@ -11,6 +11,7 @@ Provides aggregated quality metrics for skills based on 5 dimensions:
+ from __future__ import annotations
+ 
+ import logging
++from collections import Counter
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Any
+@@ -164,8 +165,18 @@ class RoutingEvaluator:
+         else:
+             self._preferences = preference_learner
+ 
+-    def evaluate_skill(self, skill_id: str) -> SkillEvaluation | None:
+-        """Evaluate a single skill across all 5 dimensions."""
++    def evaluate_skill(
++        self, skill_id: str, all_counts: Counter[str] | None = None
++    ) -> SkillEvaluation | None:
++        """Evaluate a single skill across all 5 dimensions.
++
++        Args:
++            skill_id: Skill identifier
++            all_counts: Optional pre-computed routing counts per skill
++                (``Counter(routed_skill)`` over all feedback records).
++                Computed in a single pass when omitted; callers evaluating
++                many skills should hoist it once and pass it in.
++        """
+         # 1. Routing accuracy from FeedbackCollector
+         feedback_records = [r for r in self._feedback.get_records() if r.routed_skill == skill_id]
+         total_routes = len(feedback_records)
+@@ -198,10 +209,8 @@ class RoutingEvaluator:
+         execution_success = exec_summary.get("success_rate") or 0.0
+ 
+         # 3. Usage frequency: normalize against most-used skill
+-        all_counts = {
+-            sid: len([r for r in self._feedback.get_records() if r.routed_skill == sid])
+-            for sid in {r.routed_skill for r in self._feedback.get_records()}
+-        }
++        if all_counts is None:
++            all_counts = Counter(r.routed_skill for r in self._feedback.get_records())
+         max_count = max(all_counts.values(), default=0)
+         usage_frequency = total_routes / max_count if max_count > 0 else 0.0
+ 
+@@ -254,8 +263,12 @@ class RoutingEvaluator:
+ 
+     def evaluate_all_skills(self) -> dict[str, SkillEvaluation]:
+         """Evaluate all skills with feedback data."""
++        records = self._feedback.get_records()
++        # Hoist the per-skill routing counts once (single pass) instead of
++        # letting each evaluate_skill call re-scan every record.
++        all_counts = Counter(r.routed_skill for r in records)
+         skill_ids: set[str] = set()
+-        for record in self._feedback.get_records():
++        for record in records:
+             skill_ids.add(record.routed_skill)
+         skill_ids.update(self._preferences._storage.skill_scores.keys())  # pyright: ignore[reportPrivateUsage]
+         # Also include skills with execution feedback
+@@ -264,7 +277,7 @@ class RoutingEvaluator:
+ 
+         result: dict[str, SkillEvaluation] = {}
+         for skill_id in skill_ids:
+-            evaluation = self.evaluate_skill(skill_id)
++            evaluation = self.evaluate_skill(skill_id, all_counts=all_counts)
+             if evaluation is not None:
+                 result[skill_id] = evaluation
+         return result
+diff --git a/src/vibesop/core/skills/feedback_loop.py b/src/vibesop/core/skills/feedback_loop.py
+index d1598f9..ae51da5 100644
+--- a/src/vibesop/core/skills/feedback_loop.py
++++ b/src/vibesop/core/skills/feedback_loop.py
+@@ -1,7 +1,8 @@
+ """Feedback loop — closes the gap between evaluation and action.
+ 
+ Connects SkillEvaluator quality scores to lifecycle management:
+-- F-grade skills with sufficient data → deprecate suggestion
++- F-grade skills with proven poor routing (≥3 routed uses, accuracy < 50%)
++  → deprecate suggestion
+ - A-grade skills → routing priority boost suggestion
+ - Generates retention suggestions for user review
+ 
+@@ -44,8 +45,10 @@ class FeedbackLoop:
+     Analyzes skill evaluations and produces retention suggestions.
+     Lifecycle writes only happen when ``analyze_all`` is called with
+     ``auto_deprecate=True``:
+-    - Deprecates F-grade skills with sufficient data
+-    - Archives 90+ day unused C/D/F-grade skills
++    - Deprecates F-grade skills with sufficient evidence of poor routing
++      (≥3 routed uses, routing accuracy < 50%)
++    - Archives 90+ day unused C/D/F-grade skills with sufficient usage
++      data (≥3 routed uses)
+     - Restores deprecated A-grade skills back to active (boost)
+     - Generates retention suggestions for user review
+ 
+@@ -58,6 +61,7 @@ class FeedbackLoop:
+ 
+     F_QUALITY_THRESHOLD = 0.30
+     F_MIN_ROUTES = 3
++    F_ACCURACY_THRESHOLD = 0.50  # Deprecate only when routing accuracy is below this
+     F_STALE_DAYS = 30  # Must be unused 30+ days before F-grade triggers deprecation
+     D_STALE_DAYS = 60  # Must be unused 60+ days before D-grade triggers warning
+     ARCHIVE_DAYS = 90  # Unused 90+ days with C/D/F grade → auto-archive
+@@ -120,9 +124,10 @@ class FeedbackLoop:
+         """Analyze a single skill evaluation and produce a suggestion.
+ 
+         Rules (aligned with GOALS.md):
+-        - Grade F, 30+ days unused, < 3 uses → deprecate
++        - Grade F, 30+ days unused, ≥ 3 uses with routing accuracy < 50%
++          → deprecate
+         - Grade D, 60+ days unused → warn
+-        - Grade C/D/F, 90+ days unused → archive
++        - Grade C/D/F, 90+ days unused, ≥ 3 uses → archive
+         - Grade A, sufficient data → boost
+         """
+         grade = evaluation.grade
+@@ -139,18 +144,22 @@ class FeedbackLoop:
+             except (ValueError, TypeError):
+                 days_since = None
+ 
+-        # Rule: Grade F, 30+ days unused, < 3 uses → deprecate
++        # Rule: Grade F, 30+ days unused, ≥ 3 uses with routing accuracy
++        # < 50% → deprecate. Thin-sample F (< F_MIN_ROUTES) intentionally
++        # gets no disposition — wait for more feedback data.
+         if (
+             grade == "F"
+             and days_since is not None
+             and days_since >= self.F_STALE_DAYS
+-            and evaluation.total_routes < self.F_MIN_ROUTES
++            and evaluation.total_routes >= self.F_MIN_ROUTES
++            and evaluation.routing_accuracy < self.F_ACCURACY_THRESHOLD
+         ):
+             return RetentionSuggestion(
+                 skill_id=skill_id,
+                 action="deprecate",
+                 reason=(
+-                    f"Grade F, only {evaluation.total_routes} use(s), "
++                    f"Grade F, routing accuracy {evaluation.routing_accuracy:.0%} "
++                    f"over {evaluation.total_routes} use(s), "
+                     f"unused for {days_since}d — quality {quality:.0%}"
+                 ),
+                 grade=grade,
+@@ -174,8 +183,13 @@ class FeedbackLoop:
+                 quality_score=quality,
+             )
+ 
+-        # Rule: 90+ days unused with grade C/D/F → archive
+-        if days_since is not None and days_since >= self.ARCHIVE_DAYS and grade in ("C", "D", "F"):
++        # Rule: 90+ days unused with grade C/D/F and ≥ 3 uses → archive
++        if (
++            days_since is not None
++            and days_since >= self.ARCHIVE_DAYS
++            and grade in ("C", "D", "F")
++            and evaluation.total_routes >= self.F_MIN_ROUTES
++        ):
+             return RetentionSuggestion(
+                 skill_id=skill_id,
+                 action="archive",
+diff --git a/src/vibesop/core/skills/indexer.py b/src/vibesop/core/skills/indexer.py
+index 8bc59f3..353c927 100644
+--- a/src/vibesop/core/skills/indexer.py
++++ b/src/vibesop/core/skills/indexer.py
+@@ -469,15 +469,13 @@ class SkillIndexer:
+ 
+     def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
+         try:
+-            from sentence_transformers import (
+-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+-            )
++            from vibesop.core.embedding_loader import load_sentence_transformer
+         except ImportError:
+             logger.debug("sentence-transformers not installed; skipping embeddings")
+             return
+ 
+         try:
+-            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
++            model = load_sentence_transformer("paraphrase-multilingual-MiniLM-L12-v2")
+         except Exception as e:
+             logger.warning("Failed to load sentence-transformers model: %s", e)
+             return
+diff --git a/src/vibesop/core/skills/skill_health.py b/src/vibesop/core/skills/skill_health.py
+index 4c965d4..6eb0574 100644
+--- a/src/vibesop/core/skills/skill_health.py
++++ b/src/vibesop/core/skills/skill_health.py
+@@ -47,14 +47,24 @@ def spans_file_for(project_root: Path) -> Path | None:
+     return path if path.exists() else None
+ 
+ 
+-def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
+-    """Fire predicate (修订 B): a route HIT span's matched skill id.
++#: PlanBuilder's no-match step sentinel (plan_builder.py:321-339/:626) —
++#: written into span metadata by pre-gate40 producers (活洞群 B). A
++#: fallback is a routing miss, not a skill: its reask/expired outcomes
++#: are discovery-queue signals, so the sentinel is excluded from the
++#: fire/skill columns and bucketed separately by the outcomes read model
++#: (skill_outcomes top-level ``fallback`` count).
++FALLBACK_SENTINEL = "fallback-llm"
++
+ 
+-    ``span_kind == "task"`` ∧ ``name.startswith("route:")`` ∧
+-    ``metadata.has_match is True`` — the hit-side mirror of the
+-    gold_detection.py:108-163 miss predicate. CLI-path hits count too
+-    (修订 B 补丁: the feedback UI lives on the CLI path; excluding CLI
+-    would disconnect the fire and feedback populations).
++def _route_hit_skill_id_raw(span: dict[str, Any]) -> str | None:
++    """Raw extraction: a route HIT span's ``metadata.skill_id`` AS WRITTEN.
++
++    Same span gates as ``_route_hit_skill_id`` (``span_kind == "task"`` ∧
++    ``name.startswith("route:")`` ∧ ``metadata.has_match is True``), but
++    returns the raw string — including ``""`` and the ``fallback-llm``
++    sentinel — so bucketing layers (skill_outcomes) can distinguish the
++    sentinel from a genuinely empty id. None only when the span is not a
++    route hit or the id is missing/not a string.
+ 
+     Metadata may be a dict or a JSON-encoded string (SpanWriter
+     serialises it); malformed JSON → not a hit, never raises.
+@@ -75,7 +85,22 @@ def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
+         return None
+ 
+     skill_id = meta.get("skill_id")
+-    return skill_id if isinstance(skill_id, str) and skill_id else None
++    return skill_id if isinstance(skill_id, str) else None
++
++
++def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
++    """Fire predicate (修订 B): a route HIT span's matched skill id.
++
++    ``_route_hit_skill_id_raw`` minus the empty string AND the
++    ``fallback-llm`` sentinel (gate40 项4 — cmspark measured the sentinel
++    as the largest 30d fire bucket, 1061/2822; it is not a skill). CLI-path
++    hits count too (修订 B 补丁: the feedback UI lives on the CLI path;
++    excluding CLI would disconnect the fire and feedback populations).
++    """
++    skill_id = _route_hit_skill_id_raw(span)
++    if skill_id is None or not skill_id or skill_id == FALLBACK_SENTINEL:
++        return None
++    return skill_id
+ 
+ 
+ def _parse_span_time(span: dict[str, Any]) -> datetime | None:
+diff --git a/src/vibesop/core/skills/skill_outcomes.py b/src/vibesop/core/skills/skill_outcomes.py
+index 325c704..90df026 100644
+--- a/src/vibesop/core/skills/skill_outcomes.py
++++ b/src/vibesop/core/skills/skill_outcomes.py
+@@ -4,9 +4,11 @@ Feeds the ``vibe skill outcomes`` table: the gate38 hit-outcome data
+ (``route_outcomes.jsonl``) made visible for the first time. Outcome rows
+ carry no ``skill_id`` — the join key is ``outcome.span_id`` → span ``id``,
+ with the skill id taken from the span's metadata. Span metadata may be a
+-JSON-encoded string, so the join reuses ``skill_health._route_hit_skill_id``
+-verbatim (str→json.loads tolerance + non-empty-str predicate) instead of a
+-literal ``span["metadata"]["skill_id"]``.
++JSON-encoded string, so the join reuses ``skill_health``'s route-hit
++extraction (str→json.loads tolerance + span gates) instead of a literal
++``span["metadata"]["skill_id"]`` — the raw variant
++(``_route_hit_skill_id_raw``) so the ``fallback-llm`` sentinel can be
++told apart from a genuinely empty id (gate40 项4).
+ 
+ Hard discipline (same bar as skill_health.py — do not relax):
+ - RAW COUNTS ONLY. No rates, no ratios, no percentages, no grades, no
+@@ -31,8 +33,13 @@ Hard discipline (same bar as skill_health.py — do not relax):
+   predicate — cmspark measured 37/2437 dirty hits) OR an unknown reason
+   (defensive: only three reasons exist today; if the writer adds a fourth,
+   this keeps the invariant instead of silently dropping rows).
++- ``fallback`` counts hit rows whose span carried the ``fallback-llm``
++  sentinel (gate40 项4 — the sentinel is not a skill; its outcomes are
++  discovery-queue signals, so it must NOT collapse into ``unjoined``:
++  cmspark measured 1088/2440 hit-outcome rows). Producers stopped writing
++  the sentinel on miss rows in gate40; these are pre-gate40 rows.
+   Reconciliation invariant: Σ(per-skill reask + moved_on + expired) +
+-  unjoined == total hit rows.
++  unjoined + fallback == total hit rows.
+ """
+ 
+ from __future__ import annotations
+@@ -43,7 +50,11 @@ from datetime import UTC, datetime
+ from pathlib import Path
+ from typing import Any
+ 
+-from vibesop.core.skills.skill_health import _route_hit_skill_id, spans_file_for
++from vibesop.core.skills.skill_health import (
++    FALLBACK_SENTINEL,
++    _route_hit_skill_id_raw,
++    spans_file_for,
++)
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -67,8 +78,11 @@ def outcomes_file_for(project_root: Path) -> Path | None:
+ 
+ 
+ def _span_skill_map(project_root: Path) -> dict[str, str]:
+-    """Single scan of the spans file → ``{span_id: skill_id}`` for route-hit
+-    spans. Spans whose metadata is malformed or whose skill_id is empty are
++    """Single scan of the spans file → ``{span_id: raw skill_id}`` for
++    route-hit spans. The raw id is kept (including ``""`` and the
++    ``fallback-llm`` sentinel) so the bucketing layer can route sentinel
++    rows to the top-level ``fallback`` count instead of ``unjoined``.
++    Spans whose metadata is malformed or whose skill_id is missing are
+     absent from the map — their outcome rows land in ``unjoined``.
+     """
+     path = spans_file_for(project_root)
+@@ -89,7 +103,7 @@ def _span_skill_map(project_root: Path) -> dict[str, str]:
+                 span_id = span.get("id")
+                 if not isinstance(span_id, str) or not span_id:
+                     continue
+-                skill_id = _route_hit_skill_id(span)
++                skill_id = _route_hit_skill_id_raw(span)
+                 if skill_id is None:
+                     continue
+                 mapping[span_id] = skill_id
+@@ -113,11 +127,11 @@ def _parse_outcome_ts(raw: Any) -> datetime | None:
+ 
+ 
+ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
+-    """Raw per-skill hit-outcome counts + top-level ``unjoined``.
++    """Raw per-skill hit-outcome counts + top-level ``unjoined``/``fallback``.
+ 
+     Returns ``{"skills": {skill_id: {"reask", "moved_on", "expired",
+-    "last_at"}}, "unjoined": int}`` with skills sorted by skill_id
+-    (lexicographic — never by count, which would be a leaderboard).
++    "last_at"}}, "unjoined": int, "fallback": int}`` with skills sorted by
++    skill_id (lexicographic — never by count, which would be a leaderboard).
+     ``last_at`` is the raw ``span_ts`` string of the latest outcome row
+     for the skill (None when no row carried a parseable one).
+ 
+@@ -127,6 +141,7 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
+     skills: dict[str, dict[str, Any]] = {}
+     last_dt: dict[str, datetime] = {}
+     unjoined = 0
++    fallback = 0
+ 
+     outcomes_path = outcomes_file_for(project_root)
+     if outcomes_path is not None:
+@@ -146,8 +161,14 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
+ 
+                     span_id = row.get("span_id")
+                     skill_id = span_skills.get(span_id) if isinstance(span_id, str) else None
++                    if skill_id == FALLBACK_SENTINEL:
++                        # Fallback routing is a miss, not a skill — its
++                        # outcomes belong to the discovery queue, counted
++                        # separately so they don't collapse into unjoined.
++                        fallback += 1
++                        continue
+                     column = _REASON_TO_COLUMN.get(row.get("reason"))
+-                    if skill_id is None or column is None:
++                    if not skill_id or column is None:
+                         # Span missing, empty skill_id, or unknown reason —
+                         # unattributable. Bucketing here (not silently
+                         # dropping) keeps the reconciliation invariant.
+@@ -164,6 +185,10 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
+                         last_dt[skill_id] = ts
+                         entry["last_at"] = raw_ts
+         except OSError:
+-            return {"skills": {}, "unjoined": 0}
++            return {"skills": {}, "unjoined": 0, "fallback": 0}
+ 
+-    return {"skills": {sid: skills[sid] for sid in sorted(skills)}, "unjoined": unjoined}
++    return {
++        "skills": {sid: skills[sid] for sid in sorted(skills)},
++        "unjoined": unjoined,
++        "fallback": fallback,
++    }
+diff --git a/src/vibesop/dashboard/server.py b/src/vibesop/dashboard/server.py
+index 1469de4..2d795ae 100644
+--- a/src/vibesop/dashboard/server.py
++++ b/src/vibesop/dashboard/server.py
+@@ -17,6 +17,7 @@ from typing import Any, Literal
+ from fastapi import FastAPI, Query
+ from fastapi.responses import HTMLResponse, JSONResponse
+ 
++from vibesop.core.observability.dev_detect import is_dev_environment
+ from vibesop.core.observability.reflection import Reflection, ReflectionStore
+ from vibesop.dashboard._discoveries import build_discoveries_payload
+ from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
+@@ -39,6 +40,15 @@ def _resolve_project_root() -> Path:
+     return cwd
+ 
+ 
++def _spans_path(vibe_dir: Path) -> Path:
++    """Dev/prod spans path, mirroring SpanWriter's selection
++    (span_writer.py:65 / skill_health.py:41-47). Unlike skill_health's
++    ``spans_file_for`` there is NO exists-gate here: each call site
++    already handles a missing file."""
++    filename = "spans.dev.jsonl" if is_dev_environment() else "spans.jsonl"
++    return vibe_dir / "observability" / filename
++
++
+ # ---------------------------------------------------------------------------
+ # Data readers — each reads from .vibe/ files without importing heavy modules
+ # ---------------------------------------------------------------------------
+@@ -53,6 +63,7 @@ def _read_jsonl(path: Path, limit: int = 200) -> list[dict[str, Any]]:
+     if not path.exists():
+         return []
+     from collections import deque
++
+     ring: deque[str] = deque(maxlen=limit)
+     with path.open("r", encoding="utf-8") as f:
+         for raw_line in f:
+@@ -104,7 +115,7 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
+     """Return True if ``trace_id`` appears in any persisted artefact.
+ 
+     Scans ``execution_plans.jsonl`` (matching ``metadata.trace_id``) and
+-    ``observability/spans.jsonl`` (matching top-level ``trace_id``). Used
++    the dev/prod-selected spans file (matching top-level ``trace_id``). Used
+     by ``GET /api/orchestration/dag`` to distinguish 404 (trace_id not
+     found anywhere) from 200-with-partial-DAG (trace exists but maybe
+     only plans OR only spans persisted).
+@@ -134,7 +145,7 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
+                 if meta.get("trace_id") == trace_id:
+                     return True
+ 
+-    spans_path = vibe_dir / "observability" / "spans.jsonl"
++    spans_path = _spans_path(vibe_dir)
+     if spans_path.exists():
+         with spans_path.open("r", encoding="utf-8") as f:
+             for raw in f:
+@@ -192,7 +203,7 @@ def create_app() -> FastAPI:
+ 
+         # Agent span count from observability JSONL (file size approximation)
+         span_count = 0
+-        spans_path = vibe_dir / "observability" / "spans.jsonl"
++        spans_path = _spans_path(vibe_dir)
+         if spans_path.exists():
+             # Quick estimate: count lines without parsing JSON
+             span_count = sum(1 for _ in spans_path.open("r", encoding="utf-8"))
+@@ -293,7 +304,7 @@ def create_app() -> FastAPI:
+                     traces.append(data)
+ 
+         if source in ("all", "agent"):
+-            spans_path = root / ".vibe" / "observability" / "spans.jsonl"
++            spans_path = _spans_path(root / ".vibe")
+             agent_spans = _read_jsonl(spans_path, limit=limit * 2)
+             for span in agent_spans:
+                 span["_id"] = span.get("id", "")
+@@ -317,7 +328,7 @@ def create_app() -> FastAPI:
+         return JSONResponse(data)
+ 
+     # ------------------------------------------------------------------
+-    # API: Agent spans (from .vibe/observability/spans.jsonl)
++    # API: Agent spans (from the dev/prod-selected spans file)
+     # ------------------------------------------------------------------
+ 
+     @app.get("/api/spans")
+@@ -327,7 +338,7 @@ def create_app() -> FastAPI:
+         skill_id: str | None = Query(default=None),
+     ) -> JSONResponse:
+         root = _resolve_project_root()
+-        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
++        spans_path = _spans_path(root / ".vibe")
+         records = _read_jsonl(spans_path, limit=limit)
+ 
+         if span_kind:
+@@ -341,7 +352,7 @@ def create_app() -> FastAPI:
+     @app.get("/api/spans/{span_id}")
+     async def api_span_detail(span_id: str) -> JSONResponse:
+         root = _resolve_project_root()
+-        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
++        spans_path = _spans_path(root / ".vibe")
+         if not spans_path.exists():
+             return JSONResponse({"error": "No spans data"}, status_code=404)
+ 
+@@ -472,9 +483,7 @@ def create_app() -> FastAPI:
+ 
+         # Read back the updated reflection. list_all is O(N) but reflection
+         # volumes are low (UI-driven, ~10s per project).
+-        updated = next(
+-            (r for r in store.list_all() if r.id == reflection_id), None
+-        )
++        updated = next((r for r in store.list_all() if r.id == reflection_id), None)
+         if updated is None:
+             # Should never happen — update_status succeeded so the row is
+             # in the file. If we hit this, the store invariant is broken
+diff --git a/tests/agent/runtime/test_agent_runtime.py b/tests/agent/runtime/test_agent_runtime.py
+index 788b63e..7d0831c 100644
+--- a/tests/agent/runtime/test_agent_runtime.py
++++ b/tests/agent/runtime/test_agent_runtime.py
+@@ -477,7 +477,10 @@ class TestRouterMatchedSpanVerdict:
+     def test_orchestrate_all_fallback_plan_is_miss(self, fresh_tracer, tmp_path) -> None:
+         """gate20 claude NIT-1: PlanBuilder steps can carry
+         skill_id="fallback-llm" — an all-fallback plan is a MISS, same
+-        verdict the single-intent branch gives fallback-llm."""
++        verdict the single-intent branch gives fallback-llm.
++        gate40 项4: the SPAN must also write skill_id="" (never the
++        sentinel) and omit top_skills — the result object itself keeps
++        steps[0].skill_id (result contract, untouched)."""
+         from vibesop.core.observability.gold_detection import is_route_miss_span
+ 
+         runtime = self._orchestrate_runtime(
+@@ -492,16 +495,23 @@ class TestRouterMatchedSpanVerdict:
+                 },
+             },
+         )
+-        runtime.handle_query("orchestrate this")
++        result = runtime.handle_query("orchestrate this")
+ 
+         span = self._route_span(fresh_tracer)
+         metadata = self._metadata(span)
+         assert metadata.get("has_match") is False
++        assert metadata.get("skill_id") == ""
++        assert "top_skills" not in metadata
+         assert is_route_miss_span(span) is True
++        # Result contract pin: result.skill_id is UNTOUCHED (steps[0]) —
++        # the injection gate (:653) and instinct bridge (:727) consume it.
++        assert result.skill_id == "fallback-llm"
+ 
+     def test_orchestrate_mixed_plan_is_match(self, fresh_tracer, tmp_path) -> None:
+         """A plan with at least one REAL skill step is a match even if
+-        other steps fell back."""
++        other steps fell back. gate40 项4: the span attributes the FIRST
++        REAL step — skill_id=次步, top_skills[0]=次步 (the result object
++        still carries steps[0], the fallback sentinel)."""
+         runtime = self._orchestrate_runtime(
+             tmp_path,
+             {
+@@ -514,10 +524,14 @@ class TestRouterMatchedSpanVerdict:
+                 },
+             },
+         )
+-        runtime.handle_query("orchestrate this")
++        result = runtime.handle_query("orchestrate this")
+ 
+         metadata = self._metadata(self._route_span(fresh_tracer))
+         assert metadata.get("has_match") is True
++        assert metadata.get("skill_id") == "real-skill"
++        assert metadata["top_skills"] == ["real-skill"]
++        # Result contract pin: steps[0] still flows into result.skill_id.
++        assert result.skill_id == "fallback-llm"
+ 
+     def test_routing_exception_span_is_unknown_not_miss(self, fresh_tracer, tmp_path) -> None:
+         """gate20 pi NIT-2: routing raises → early return BEFORE the
+diff --git a/tests/cli/test_optimize_cmd.py b/tests/cli/test_optimize_cmd.py
+index 50e39d4..6df8807 100644
+--- a/tests/cli/test_optimize_cmd.py
++++ b/tests/cli/test_optimize_cmd.py
+@@ -25,10 +25,10 @@ def _days_ago(days: int) -> str:
+ def _candidate_evaluations() -> dict[str, SkillEvaluation]:
+     """One real candidate per lifecycle action: deprecate, archive, boost."""
+     return {
+-        # F-grade, 30+ days unused, < 3 uses → deprecate
++        # F-grade, 30+ days unused, >= 3 uses, accuracy < 0.5 → deprecate
+         "test/bad": SkillEvaluation(
+             skill_id="test/bad",
+-            total_routes=1,
++            total_routes=3,
+             routing_accuracy=0.3,
+             user_satisfaction=0.3,
+             execution_success=0.3,
+diff --git a/tests/cli/test_route_cli_task_id.py b/tests/cli/test_route_cli_task_id.py
+index 2ca0e32..61cf442 100644
+--- a/tests/cli/test_route_cli_task_id.py
++++ b/tests/cli/test_route_cli_task_id.py
+@@ -246,9 +246,12 @@ class TestRouteCliLayerMetadata:
+ class TestRouteCliTopSkills:
+     """gate38 L2a — CLI hit spans carry ``metadata.top_skills`` (≤3,
+     primary first). Gated on the same expression as
+-    ``metadata["has_match"]`` and read from the routing result object.
+-    On miss the CLI alternatives are fallback nearest-neighbours
+-    (result_mixin), not a router ranking → the key is omitted entirely.
++    ``metadata["has_match"]`` — since gate40 项4 that expression is the
++    hook-path verdict (primary real hit ∨ any real-skill plan step), NOT
++    the mode-derived ``OrchestrationResult.has_match`` property — and
++    read from the routing result object. On miss the CLI alternatives
++    are fallback nearest-neighbours (result_mixin), not a router
++    ranking → the key is omitted entirely.
+     """
+ 
+     @staticmethod
+@@ -380,3 +383,161 @@ class TestRouteCliTopSkills:
+ 
+         metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+         assert metadata["top_skills"] == ["test-skill"]
++
++
++class TestRouteCliFallbackSentinel:
++    """gate40 项4 — CLI span metadata follows the hook-path verdict.
++
++    The mode-derived ``OrchestrationResult.has_match`` property stays
++    True on all-fallback orchestrated plans (result contract — JSON
++    output / confirmation flow); the SPAN must instead write the real
++    routing verdict: primary real hit ∨ any real-skill plan step.
++    Miss rows always write ``skill_id=""`` — never the ``fallback-llm``
++    sentinel.
++    """
++
++    @staticmethod
++    def _metadata(span: dict) -> dict:
++        meta = span.get("metadata") or {}
++        return json.loads(meta) if isinstance(meta, str) else meta
++
++    @staticmethod
++    def _orchestrated_result(step_skill_ids: list[str]):
++        from vibesop.core.models import (
++            ExecutionPlan,
++            ExecutionStep,
++            OrchestrationMode,
++            OrchestrationResult,
++        )
++
++        return OrchestrationResult(
++            mode=OrchestrationMode.ORCHESTRATED,
++            original_query="orchestrate this",
++            execution_plan=ExecutionPlan(
++                plan_id="plan-1",
++                steps=[
++                    ExecutionStep(
++                        step_id=f"step-{i}",
++                        step_number=i,
++                        skill_id=sid,
++                        intent=f"step {i}",
++                    )
++                    for i, sid in enumerate(step_skill_ids, start=1)
++                ],
++            ),
++        )
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_all_fallback_orchestrated_writes_miss(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        """All-fallback plan → span has_match=False, skill_id="",
++        top_skills absent — while the RESULT property stays True
++        (property-unchanged pin: OrchestrationResult.has_match is the
++        untouched result contract)."""
++        mock_stdin.isatty.return_value = False
++        orch_result = self._orchestrated_result(["fallback-llm", "fallback-llm"])
++        mock_router.orchestrate.return_value = orch_result
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "deploy then notify the team"
++        mock_interceptor_cls.return_value = _make_interceptor(
++            query, mode=InterceptionMode.ORCHESTRATE
++        )
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        route_spans = _read_route_spans(fresh_tracer)
++        assert len(route_spans) == 1
++        metadata = self._metadata(route_spans[0])
++        assert metadata.get("has_match") is False
++        assert metadata.get("skill_id") == ""
++        assert "top_skills" not in metadata
++        # Property pin: the result contract is deliberately unchanged —
++        # the mode-derived property still says True on all-fallback plans.
++        assert orch_result.has_match is True
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_first_fallback_then_real_step_writes_real_step(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        """First step fallback + second step real → span attributes the
++        FIRST REAL step: skill_id=次步, top_skills[0]=次步, has_match=True."""
++        mock_stdin.isatty.return_value = False
++        orch_result = self._orchestrated_result(["fallback-llm", "real-skill"])
++        mock_router.orchestrate.return_value = orch_result
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "deploy then notify the team"
++        mock_interceptor_cls.return_value = _make_interceptor(
++            query, mode=InterceptionMode.ORCHESTRATE
++        )
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
++        assert metadata.get("has_match") is True
++        assert metadata.get("skill_id") == "real-skill"
++        assert metadata["top_skills"][0] == "real-skill"
++
++    @patch("vibesop.agent.runtime.AgentRuntime")
++    @patch("vibesop.agent.runtime.IntentInterceptor")
++    @patch("vibesop.cli.main.sys.stdin")
++    def test_single_mode_miss_writes_empty_skill_id(
++        self,
++        mock_stdin: MagicMock,
++        mock_interceptor_cls: MagicMock,
++        mock_runtime_cls: MagicMock,
++        mock_router: MagicMock,
++        cli_runner: CliRunner,
++        fresh_tracer: Path,
++    ) -> None:
++        """Single-mode miss: primary is the fallback-llm sentinel route
++        (result_mixin) — the span must write skill_id="" (miss rows never
++        carry the sentinel) with has_match=False."""
++        from vibesop.core.models import (
++            OrchestrationMode,
++            OrchestrationResult,
++            RoutingLayer,
++            SkillRoute,
++        )
++
++        mock_stdin.isatty.return_value = False
++        miss_orch = OrchestrationResult(
++            mode=OrchestrationMode.SINGLE,
++            original_query="totally unroutable xyzzy query",
++            primary=SkillRoute(
++                skill_id="fallback-llm",
++                confidence=1.0,
++                layer=RoutingLayer.FALLBACK_LLM,
++                source="builtin",
++            ),
++        )
++        mock_router._to_orchestration_result.return_value = miss_orch
++        mock_runtime_cls.return_value.router._router = mock_router
++
++        query = "totally unroutable xyzzy query"
++        mock_interceptor_cls.return_value = _make_interceptor(query)
++        r = cli_runner.invoke(app, ["route", "--json", query])
++        assert r.exit_code == 0, f"failed: {r.output}"
++
++        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
++        assert metadata.get("has_match") is False
++        assert metadata.get("skill_id") == ""
++        assert "top_skills" not in metadata
+diff --git a/tests/cli/test_stale_readonly.py b/tests/cli/test_stale_readonly.py
+index f90eef4..5396947 100644
+--- a/tests/cli/test_stale_readonly.py
++++ b/tests/cli/test_stale_readonly.py
+@@ -18,12 +18,13 @@ _EVALUATOR = "vibesop.core.skills.feedback_loop.RoutingEvaluator"
+ 
+ 
+ def _f_grade_evaluations() -> dict[str, SkillEvaluation]:
+-    """A real F-grade candidate that WOULD be deprecated if auto were on."""
++    """A real F-grade candidate that WOULD be deprecated if auto were on
++    (>=3 routes, accuracy<0.5, 45d unused — gate40 double conjunct)."""
+     last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
+     return {
+         "test/bad": SkillEvaluation(
+             skill_id="test/bad",
+-            total_routes=1,
++            total_routes=3,
+             routing_accuracy=0.3,
+             user_satisfaction=0.3,
+             execution_success=0.3,
+diff --git a/tests/core/skills/test_feedback_loop.py b/tests/core/skills/test_feedback_loop.py
+index b1313ce..e28fa33 100644
+--- a/tests/core/skills/test_feedback_loop.py
++++ b/tests/core/skills/test_feedback_loop.py
+@@ -40,16 +40,39 @@ class TestFeedbackLoop:
+             last_used=last_used,
+         )
+ 
++    @staticmethod
++    def _days_ago(days: int) -> str:
++        return (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
++
++    @staticmethod
++    def _lane_a_evaluation(skill_id: str, total_routes: int, last_used: str) -> SkillEvaluation:
++        """Lane A counterexample: perfect routing accuracy with low usage
++        still grades F (quality 0.325). The routing_accuracy < 50% conjunct
++        exists precisely so this shape is never deprecated."""
++        evaluation = SkillEvaluation(
++            skill_id=skill_id,
++            total_routes=total_routes,
++            routing_accuracy=1.0,
++            user_satisfaction=0.0,
++            execution_success=0.0,
++            usage_frequency=0.5,
++            health_score=0.0,
++            last_used=last_used,
++        )
++        assert evaluation.grade == "F"
++        return evaluation
++
+     def test_f_grade_deprecates(self) -> None:
+-        """F-grade + 30+ days unused + < 3 uses → deprecate."""
++        """F-grade + 30+ days unused + ≥3 uses with routing accuracy < 50%
++        → deprecate."""
+         evaluator = MagicMock()
+         evaluator.evaluate_all_skills.return_value = {
+             "test/skill": self._make_evaluation(
+                 "test/skill",
+                 "F",
+-                total_routes=1,
++                total_routes=3,
+                 quality=0.3,
+-                last_used="2026-04-01T00:00:00",
++                last_used=self._days_ago(45),
+             ),
+         }
+         loop = FeedbackLoop(evaluator=evaluator)
+@@ -58,6 +81,112 @@ class TestFeedbackLoop:
+         assert suggestions[0].action == "deprecate"
+         assert suggestions[0].grade == "F"
+ 
++    def test_thin_sample_f_grade_never_disposed(self) -> None:
++        """gate40 pin: total_routes=1/2 in every accuracy/staleness
++        combination — zero disposition (no deprecate, no warn, no
++        archive). Thin-sample F intentionally sits in a no-action zone
++        until more feedback data arrives."""
++        for total_routes in (1, 2):
++            for days in (45, 100):
++                for evaluation in (
++                    # Low routing accuracy (would have deprecated pre-gate40)
++                    self._make_evaluation(
++                        "test/thin",
++                        "F",
++                        total_routes=total_routes,
++                        quality=0.3,
++                        last_used=self._days_ago(days),
++                    ),
++                    # Lane A: accuracy 1.0 + usage 0.5 → still F
++                    self._lane_a_evaluation("test/thin", total_routes, self._days_ago(days)),
++                ):
++                    evaluator = MagicMock()
++                    evaluator.evaluate_all_skills.return_value = {"test/thin": evaluation}
++                    loop = FeedbackLoop(evaluator=evaluator)
++                    suggestions = loop.analyze_all(auto_deprecate=False)
++                    assert suggestions == [], (
++                        f"total_routes={total_routes}, days={days}, "
++                        f"accuracy={evaluation.routing_accuracy}"
++                    )
++
++    def test_f_grade_high_accuracy_not_deprecated(self) -> None:
++        """Quality-floor counterexample: ≥3 uses + F + 30d stale but
++        routing accuracy 1.0 → NOT deprecated. Deprecate means proven-poor
++        routing, not low usage."""
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = {
++            "test/lane-a": self._lane_a_evaluation("test/lane-a", 5, self._days_ago(45)),
++        }
++        loop = FeedbackLoop(evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
++        assert suggestions == []
++
++    def test_f_grade_accuracy_at_threshold_not_deprecated(self) -> None:
++        """Boundary: routing accuracy exactly 0.5 is not below the
++        threshold → no deprecate."""
++        evaluation = SkillEvaluation(
++            skill_id="test/boundary",
++            total_routes=5,
++            routing_accuracy=0.5,
++            user_satisfaction=0.3,
++            execution_success=0.3,
++            usage_frequency=0.3,
++            health_score=0.3,
++            last_used=self._days_ago(45),
++        )
++        assert evaluation.grade == "F"
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = {"test/boundary": evaluation}
++        loop = FeedbackLoop(evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
++        assert suggestions == []
++
++    def test_f_grade_archive_after_90d_with_sufficient_routes(self) -> None:
++        """≥3 uses + F + 90d stale → archive positive (Lane A accuracy
++        blocks deprecate, but the archive gate passes)."""
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = {
++            "test/stale-f": self._lane_a_evaluation("test/stale-f", 5, self._days_ago(100)),
++        }
++        loop = FeedbackLoop(evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
++        assert len(suggestions) == 1
++        assert suggestions[0].action == "archive"
++
++    def test_thin_sample_stale_c_grade_not_archived(self) -> None:
++        """gate40 pin: thin-sample C (< 3 uses) + 90d unused → no archive."""
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = {
++            "test/thin-c": self._make_evaluation(
++                "test/thin-c",
++                "C",
++                total_routes=2,
++                quality=0.65,
++                last_used=self._days_ago(100),
++            ),
++        }
++        loop = FeedbackLoop(evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
++        assert suggestions == []
++
++    def test_thin_sample_stale_d_grade_warns_not_archived(self) -> None:
++        """gate40 pin: thin-sample D (< 3 uses) + 90d unused → warn
++        (unchanged), never archive."""
++        evaluator = MagicMock()
++        evaluator.evaluate_all_skills.return_value = {
++            "test/thin-d": self._make_evaluation(
++                "test/thin-d",
++                "D",
++                total_routes=2,
++                quality=0.45,
++                last_used=self._days_ago(100),
++            ),
++        }
++        loop = FeedbackLoop(evaluator=evaluator)
++        suggestions = loop.analyze_all(auto_deprecate=False)
++        assert len(suggestions) == 1
++        assert suggestions[0].action == "warn"
++
+     def test_d_grade_warns(self) -> None:
+         """D-grade + 60+ days unused → warn."""
+         evaluator = MagicMock()
+@@ -88,6 +217,7 @@ class TestFeedbackLoop:
+         assert suggestions[0].grade == "A"
+ 
+     def test_stale_skill_archives(self) -> None:
++        """C-grade + ≥3 uses + 90+ days unused → archive."""
+         evaluator = MagicMock()
+         evaluator.evaluate_all_skills.return_value = {
+             "test/stale": self._make_evaluation(
+@@ -148,7 +278,7 @@ class TestFeedbackLoop:
+             "test/bad": self._make_evaluation(
+                 "test/bad",
+                 "F",
+-                total_routes=1,
++                total_routes=3,
+                 quality=0.3,
+                 last_used="2026-04-01T00:00:00",
+             ),
+@@ -165,7 +295,7 @@ class TestFeedbackLoop:
+             "test/bad": self._make_evaluation(
+                 "test/bad",
+                 "F",
+-                total_routes=1,
++                total_routes=3,
+                 quality=0.3,
+                 last_used="2026-04-01T00:00:00",
+             ),
+@@ -183,7 +313,7 @@ class TestFeedbackLoop:
+             "test/f": self._make_evaluation(
+                 "test/f",
+                 "F",
+-                total_routes=1,
++                total_routes=3,
+                 quality=0.3,
+                 last_used="2026-04-01T00:00:00",
+             ),
+@@ -203,11 +333,12 @@ class TestFeedbackLoopOptIn:
+ 
+     @staticmethod
+     def _f_grade_eval(skill_id: str = "test/bad") -> SkillEvaluation:
+-        """Real F-grade evaluation: 30+ days unused, < 3 uses."""
++        """Real F-grade evaluation: 30+ days unused, ≥ 3 uses, routing
++        accuracy < 50% (gate40 double conjunct)."""
+         last_used = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45)).isoformat()
+         return SkillEvaluation(
+             skill_id=skill_id,
+-            total_routes=1,
++            total_routes=3,
+             routing_accuracy=0.3,
+             user_satisfaction=0.3,
+             execution_success=0.3,
+diff --git a/tests/core/skills/test_skill_health.py b/tests/core/skills/test_skill_health.py
+index a174455..ca88007 100644
+--- a/tests/core/skills/test_skill_health.py
++++ b/tests/core/skills/test_skill_health.py
+@@ -105,6 +105,49 @@ class TestCountSkillFires:
+         _write_spans(tmp_path, [_span(skill_id="")])
+         assert count_skill_fires(tmp_path, now=NOW) == {}
+ 
++    def test_fallback_sentinel_is_not_a_fire(self, tmp_path: Path) -> None:
++        """gate40 项4: pre-gate40 producers wrote the ``fallback-llm``
++        sentinel into hit spans (活洞群 B; cmspark measured it as the
++        largest 30d fire bucket, 1061/2822). A fallback is a routing
++        miss, not a skill — excluded from the fire column."""
++        _write_spans(
++            tmp_path,
++            [
++                _span(skill_id="fallback-llm"),
++                _span(skill_id="fallback-llm", meta_as_string=False),  # dict form too
++                _span(skill_id="demo/skill"),
++            ],
++        )
++        assert count_skill_fires(tmp_path, now=NOW) == {"demo/skill": 1}
++
++
++class TestRouteHitSkillIdRaw:
++    """gate40 项4: the raw extraction keeps the sentinel/empty string so
++    bucketing layers (skill_outcomes) can tell them apart; the fire
++    predicate excludes both."""
++
++    def test_raw_extraction_vs_fire_predicate(self, tmp_path: Path) -> None:
++        from vibesop.core.skills.skill_health import (
++            _route_hit_skill_id,
++            _route_hit_skill_id_raw,
++        )
++
++        sentinel = _span(skill_id="fallback-llm")
++        assert _route_hit_skill_id_raw(sentinel) == "fallback-llm"
++        assert _route_hit_skill_id(sentinel) is None
++
++        empty = _span(skill_id="")
++        assert _route_hit_skill_id_raw(empty) == ""
++        assert _route_hit_skill_id(empty) is None
++
++        real = _span(skill_id="demo/skill")
++        assert _route_hit_skill_id_raw(real) == "demo/skill"
++        assert _route_hit_skill_id(real) == "demo/skill"
++
++        miss = _span(skill_id="demo/skill", has_match=False)
++        assert _route_hit_skill_id_raw(miss) is None
++        assert _route_hit_skill_id(miss) is None
++
+ 
+ class TestParseSpanTime:
+     """Timezone handling of the 30-day window (pi NIT)."""
+diff --git a/tests/core/skills/test_skill_outcomes.py b/tests/core/skills/test_skill_outcomes.py
+index 7ea6d0b..324e17b 100644
+--- a/tests/core/skills/test_skill_outcomes.py
++++ b/tests/core/skills/test_skill_outcomes.py
+@@ -84,7 +84,7 @@ def _assert_no_forbidden_keys(obj: object) -> None:
+ 
+ def _total_hit_rows(result: dict) -> int:
+     per_skill = sum(c["reask"] + c["moved_on"] + c["expired"] for c in result["skills"].values())
+-    return per_skill + result["unjoined"]
++    return per_skill + result["unjoined"] + result["fallback"]
+ 
+ 
+ class TestOutcomesFileFor:
+@@ -153,6 +153,41 @@ class TestCountSkillOutcomes:
+         assert "" not in result["skills"]
+         assert _total_hit_rows(result) == 3
+ 
++    def test_fallback_sentinel_rows_bucketed_separately(self, tmp_path: Path) -> None:
++        """gate40 项4: hit rows joined to a ``fallback-llm`` sentinel span
++        (pre-gate40 活洞群 B; cmspark measured 1088/2440) go to the
++        top-level ``fallback`` count — NOT unjoined, NOT the per-skill
++        columns — and the reconciliation invariant still holds."""
++        _write_spans(
++            tmp_path,
++            [
++                _span("s1", "a/x"),
++                _span("s2", "fallback-llm"),
++                _span("s3", "fallback-llm", meta_as_string=False),  # dict form too
++                _span("s4", ""),  # dirty hit → unjoined (gate39 behavior unchanged)
++                _span("s5", "fallback-llm"),
++            ],
++        )
++        _write_outcomes(
++            tmp_path,
++            [
++                _outcome("s1", "hit_reask_same_task_id"),  # attributable
++                _outcome("s2", "hit_session_expired"),  # sentinel → fallback
++                _outcome("s3", "hit_session_moved_on"),  # sentinel → fallback
++                _outcome("s4", "hit_reask_same_task_id"),  # empty skill_id → unjoined
++                # sentinel + unknown reason → fallback (sentinel wins; the
++                # row is attributable to the fallback bucket, not a skill).
++                _outcome("s5", "hit_future_reason"),
++            ],
++        )
++        result = count_skill_outcomes(tmp_path)
++        assert result["fallback"] == 3
++        assert result["unjoined"] == 1
++        assert list(result["skills"]) == ["a/x"]
++        assert result["skills"]["a/x"]["reask"] == 1
++        assert "fallback-llm" not in result["skills"]
++        assert _total_hit_rows(result) == 5  # reconciliation incl. fallback
++
+     def test_miss_rows_not_counted(self, tmp_path: Path) -> None:
+         _write_spans(tmp_path, [_span("s1", "a/x")])
+         _write_outcomes(
+@@ -163,7 +198,7 @@ class TestCountSkillOutcomes:
+             ],
+         )
+         result = count_skill_outcomes(tmp_path)
+-        assert result == {"skills": {}, "unjoined": 0}
++        assert result == {"skills": {}, "unjoined": 0, "fallback": 0}
+ 
+     def test_last_at_uses_span_ts_not_recorded_at(self, tmp_path: Path) -> None:
+         """recorded_at is the backfill day for replayed rows — Last must come
+@@ -209,7 +244,7 @@ class TestCountSkillOutcomes:
+         _write_spans(tmp_path, [_span("s1", "a/x")])
+         _write_outcomes(tmp_path, [_outcome("s1", "hit_future_reason")])
+         result = count_skill_outcomes(tmp_path)
+-        assert result == {"skills": {}, "unjoined": 1}
++        assert result == {"skills": {}, "unjoined": 1, "fallback": 0}
+         assert _total_hit_rows(result) == 1
+ 
+     def test_no_rates_or_grades_anywhere(self, tmp_path: Path) -> None:
+@@ -224,7 +259,7 @@ class TestCountSkillOutcomes:
+             assert isinstance(counts["expired"], int)
+ 
+     def test_missing_files_are_empty_not_error(self, tmp_path: Path) -> None:
+-        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0}
++        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0, "fallback": 0}
+         assert not (tmp_path / ".vibe").exists()
+ 
+     def test_missing_spans_file_makes_every_hit_row_unjoined(self, tmp_path: Path) -> None:
+@@ -233,11 +268,11 @@ class TestCountSkillOutcomes:
+             [_outcome("s1", "hit_reask_same_task_id"), _outcome("s2", "hit_session_expired")],
+         )
+         result = count_skill_outcomes(tmp_path)
+-        assert result == {"skills": {}, "unjoined": 2}
++        assert result == {"skills": {}, "unjoined": 2, "fallback": 0}
+ 
+     def test_missing_outcomes_file_with_spans_is_empty(self, tmp_path: Path) -> None:
+         _write_spans(tmp_path, [_span("s1", "a/x")])
+-        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0}
++        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0, "fallback": 0}
+ 
+     def test_bad_lines_and_bad_metadata_skipped(self, tmp_path: Path) -> None:
+         spans_path = tmp_path / ".vibe" / "observability" / "spans.dev.jsonl"
+@@ -303,6 +338,7 @@ def patched_outcomes(monkeypatch: pytest.MonkeyPatch) -> None:
+                 },
+             },
+             "unjoined": 3,
++            "fallback": 2,
+         },
+     )
+ 
+@@ -318,13 +354,15 @@ class TestOutcomesCommand:
+         assert out.index("a/skill") < out.index("b/skill")
+         assert "2026-08-20T10:00:00+00:00" in out
+         assert "(unjoined: 3)" in out  # join failure stays visible (末行)
++        assert "(fallback: 2)" in out  # sentinel bucket stays visible too
+ 
+     def test_json_is_raw_counts_only(self, patched_outcomes: None) -> None:
+         result = runner.invoke(skill_app, ["outcomes", "--json"])
+         assert result.exit_code == 0
+         payload = json.loads(result.output)
+-        assert set(payload) == {"skills", "unjoined"}
++        assert set(payload) == {"skills", "unjoined", "fallback"}
+         assert payload["unjoined"] == 3
++        assert payload["fallback"] == 2
+         assert payload["skills"]["a/skill"]["reask"] == 2
+         _assert_no_forbidden_keys(payload)
+         for counts in payload["skills"].values():
+@@ -341,6 +379,8 @@ class TestOutcomesCommand:
+         assert "放弃" in out
+         assert "37/2437" in out  # 空 skill_id 脏 hit 实测
+         assert "unjoined 计数见末行" in out
++        assert "fallback-llm=未命中兜底路由" in out  # gate40 项4 sentinel 脚注
++        assert "发现队列" in out
+ 
+     def test_no_rate_or_grade_tokens_in_output(self, patched_outcomes: None) -> None:
+         out = runner.invoke(skill_app, ["outcomes"]).output
+diff --git a/tests/core/test_embedding_loader.py b/tests/core/test_embedding_loader.py
+new file mode 100644
+index 0000000..710140c
+--- /dev/null
++++ b/tests/core/test_embedding_loader.py
+@@ -0,0 +1,242 @@
++"""gate40 主项: shared SentenceTransformer loader (offline-first + online retry).
++
++Pins the exception taxonomy of ``load_sentence_transformer`` (gate40 r2.2 §1.2):
++
++- offline attempt always uses ``local_files_only=True``;
++- cache-miss-class failure → exactly one explicit online retry;
++- non-miss-class failure (ImportError/KeyboardInterrupt/SystemExit/
++  MemoryError) → zero online calls, original exception bubbles as-is;
++- double failure → the second exception re-raises as-is (no wrapper type);
++- the helper is stateless (every call retries offline first).
++
++And pins that all six load sites keep their existing fail-open shapes when
++the load ultimately fails (double failure).
++
++The suite-wide autouse stub (tests/conftest.py) sets
++``sys.modules["sentence_transformers"] = None``; tests that need a fake
++module override it with ``monkeypatch.setitem`` (inner patch wins).
++"""
++
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++from types import SimpleNamespace
++from typing import Any
++from unittest.mock import MagicMock, call
++
++import pytest
++
++from vibesop.core.embedding_loader import load_sentence_transformer
++
++_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
++
++
++def _install_fake_st(monkeypatch: pytest.MonkeyPatch, side_effect: list[Any]) -> MagicMock:
++    """Install a fake sentence_transformers module; return the ST mock."""
++    st_mock = MagicMock(side_effect=side_effect)
++    fake_module = SimpleNamespace(SentenceTransformer=st_mock)
++    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
++    return st_mock
++
++
++class TestLoadSentenceTransformer:
++    def test_offline_success_no_online_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
++        model = object()
++        st_mock = _install_fake_st(monkeypatch, [model])
++
++        result = load_sentence_transformer(_MODEL)
++
++        assert result is model
++        assert st_mock.call_args_list == [call(_MODEL, local_files_only=True)]
++
++    def test_cache_miss_triggers_online_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
++        model = object()
++        st_mock = _install_fake_st(monkeypatch, [OSError("not in cache"), model])
++
++        result = load_sentence_transformer(_MODEL)
++
++        assert result is model
++        assert st_mock.call_args_list == [
++            call(_MODEL, local_files_only=True),
++            call(_MODEL),
++        ]
++
++    @pytest.mark.parametrize(
++        "exc",
++        [
++            ImportError("transformers missing"),
++            MemoryError("oom"),
++            KeyboardInterrupt(),
++            SystemExit(1),
++        ],
++        ids=["ImportError", "MemoryError", "KeyboardInterrupt", "SystemExit"],
++    )
++    def test_non_miss_failure_no_retry_original_bubbles(
++        self, monkeypatch: pytest.MonkeyPatch, exc: BaseException
++    ) -> None:
++        st_mock = _install_fake_st(monkeypatch, [exc])
++
++        with pytest.raises(type(exc)) as excinfo:
++            load_sentence_transformer(_MODEL)
++
++        assert excinfo.value is exc  # as-is, no wrapper type
++        assert st_mock.call_args_list == [call(_MODEL, local_files_only=True)]
++
++    def test_double_failure_reraises_second_exception_as_is(
++        self, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        second = RuntimeError("download failed")
++        st_mock = _install_fake_st(monkeypatch, [OSError("not in cache"), second])
++
++        with pytest.raises(RuntimeError) as excinfo:
++            load_sentence_transformer(_MODEL)
++
++        assert excinfo.value is second
++        assert st_mock.call_args_list == [
++            call(_MODEL, local_files_only=True),
++            call(_MODEL),
++        ]
++
++    def test_package_missing_raises_import_error(self) -> None:
++        # Autouse conftest stub has sys.modules["sentence_transformers"] = None.
++        with pytest.raises(ImportError):
++            load_sentence_transformer(_MODEL)
++
++    def test_helper_is_stateless(self, monkeypatch: pytest.MonkeyPatch) -> None:
++        """Two calls are independent: the second call tries offline first."""
++        m1, m2 = object(), object()
++        st_mock = _install_fake_st(monkeypatch, [OSError("miss"), m1, OSError("miss"), m2])
++
++        assert load_sentence_transformer(_MODEL) is m1
++        assert load_sentence_transformer(_MODEL) is m2
++        assert st_mock.call_args_list == [
++            call(_MODEL, local_files_only=True),
++            call(_MODEL),
++            call(_MODEL, local_files_only=True),
++            call(_MODEL),
++        ]
++
++
++class TestLoadSitesFailOpenUnchanged:
++    """Double failure at every load site → the site's existing fail-open path."""
++
++    def _double_fail_st(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
++        return _install_fake_st(monkeypatch, [OSError("not in cache"), OSError("download failed")])
++
++    def test_strategies_import_error_shape(self) -> None:
++        """Package missing → the site's ImportError rewrite (only catches ImportError)."""
++        from vibesop.core.matching.strategies import EmbeddingMatcher
++
++        matcher = EmbeddingMatcher()
++        with pytest.raises(ImportError, match="sentence-transformers is required"):
++            matcher._load_model()
++
++    def test_strategies_double_failure_bubbles(self, monkeypatch: pytest.MonkeyPatch) -> None:
++        from vibesop.core.matching.strategies import EmbeddingMatcher
++
++        st_mock = self._double_fail_st(monkeypatch)
++        matcher = EmbeddingMatcher()
++        with pytest.raises(OSError, match="download failed"):
++            matcher._load_model()
++        assert st_mock.call_count == 2
++
++    def test_learner_double_failure_returns_false(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++    ) -> None:
++        from vibesop.core.instinct.learner import InstinctLearner
++
++        st_mock = self._double_fail_st(monkeypatch)
++        learner = InstinctLearner(storage_path=tmp_path / "instincts.yaml")
++        assert learner._embedding_enabled() is False
++        assert learner._embedding_model is None
++        assert st_mock.call_count == 2
++
++    def test_triage_recall_double_failure_sticky_none(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++    ) -> None:
++        from vibesop.core.routing.triage_recall import EmbeddingRecall
++
++        st_mock = self._double_fail_st(monkeypatch)
++        recall = EmbeddingRecall(storage_dir=tmp_path)
++        assert recall._get_model() is None
++        assert recall._model_failed is True
++        # Sticky: a second call does not touch the loader again.
++        assert recall._get_model() is None
++        assert st_mock.call_count == 2
++
++    def test_promote_verifier_double_failure_fail_open(
++        self, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from vibesop.core.observability import promote_verifier
++
++        st_mock = self._double_fail_st(monkeypatch)
++        saved = dict(promote_verifier._MODEL_STATE)
++        try:
++            promote_verifier._MODEL_STATE["model"] = None
++            promote_verifier._MODEL_STATE["failed"] = False
++            assert promote_verifier._get_embedding_model() is None
++            assert promote_verifier._MODEL_STATE["failed"] is True
++        finally:
++            promote_verifier._MODEL_STATE.update(saved)
++        assert st_mock.call_count == 2
++
++    def test_index_layer_double_failure_skips_fallback(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++    ) -> None:
++        import json
++
++        from vibesop.core.routing._layers import try_index_layer
++
++        st_mock = self._double_fail_st(monkeypatch)
++
++        router = MagicMock()
++        router.project_root = tmp_path
++        router._config.index_match_threshold = 0.35
++        router._index_embedding_model = None  # prevent MagicMock auto-creation
++
++        index_path = tmp_path / ".vibe" / "skill-index.json"
++        index_path.parent.mkdir(parents=True)
++        index_path.write_text(
++            json.dumps(
++                {
++                    "version": "1.3.0",
++                    "skills": {
++                        "gstack/review": {
++                            "skill_id": "gstack/review",
++                            "scenarios": ["code review"],
++                            "query_patterns": ["review this code"],
++                            "differentiation": "",
++                            "confidence_boosters": ["review"],
++                            "embedding": [1.0, 0.0, 0.0],
++                        }
++                    },
++                }
++            ),
++            encoding="utf-8",
++        )
++
++        match, detail = try_index_layer(router, "audit the auth flow", [])
++
++        assert match is None
++        assert detail.matched is False
++        assert "not available" in detail.reason.lower()
++        assert st_mock.call_count == 2
++
++    def test_indexer_double_failure_skips_embeddings(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
++    ) -> None:
++        from vibesop.core.skills.indexer import SkillIndexer, SkillProfile
++
++        st_mock = self._double_fail_st(monkeypatch)
++        indexer = SkillIndexer(project_root=tmp_path)
++        prof = SkillProfile(
++            skill_id="a/b",
++            scenarios=["scenario one"],
++            query_patterns=["query a"],
++            differentiation="",
++            confidence_boosters=[],
++        )
++        indexer._compute_embeddings({"a/b": prof})
++        assert prof.embedding is None
++        assert st_mock.call_count == 2
+diff --git a/tests/core/test_evaluation.py b/tests/core/test_evaluation.py
+index d028017..b3589dd 100644
+--- a/tests/core/test_evaluation.py
++++ b/tests/core/test_evaluation.py
+@@ -1,5 +1,7 @@
+ """Tests for evaluation shim and re-exported logic."""
+ 
++import time
++from types import SimpleNamespace
+ from unittest.mock import MagicMock
+ 
+ import pytest
+@@ -54,8 +56,9 @@ class TestSkillEvaluation:
+         """must-NOT: zero-sample grade must never be D or F.
+ 
+         A 0.0-quality skill graded F would trip the auto-deprecate rule in
+-        feedback_loop (F + 30d stale + < 3 routes) — the reason the
+-        quality_score=0.0 / grade="?" pair must land atomically.
++        feedback_loop (F + 30d stale + ≥3 uses with routing accuracy < 50%)
++        — the reason the quality_score=0.0 / grade="?" pair must land
++        atomically.
+         """
+         eval = SkillEvaluation(skill_id="s", total_routes=0)
+         assert eval.grade not in ("A", "B", "C", "D", "F")
+@@ -267,6 +270,61 @@ class TestRoutingEvaluator:
+         assert results["skill-a"].total_routes == 1
+         assert results["skill-b"].total_routes == 1
+ 
++    def test_evaluate_all_skills_single_pass_scaling(self, tmp_path, monkeypatch):
++        """Synthetic-scale regression for the per-skill Counter rebuild.
++
++        200 skills x 2000 routing records must complete well under 5s.
++        The pre-fix per-skill O(distinct x records) recount took ~1.06s on
++        this scale locally (post-fix ~0.012s); the loose bound guards CI
++        jitter while still catching a quadratic regression.
++        """
++        from vibesop.core.skills.config_manager import SkillConfigManager
++
++        n_skills, n_records = 200, 2000
++        records = [
++            SimpleNamespace(
++                routed_skill=f"skill-{i % n_skills}",
++                was_correct=True,
++                confidence=0.8,
++                timestamp=f"2026-08-{(i % 28) + 1:02d}T00:00:00",
++            )
++            for i in range(n_records)
++        ]
++
++        evaluator = RoutingEvaluator(project_root=tmp_path)
++
++        mock_feedback = MagicMock()
++        mock_feedback.get_records.return_value = records
++        evaluator._feedback = mock_feedback
++
++        mock_exec = MagicMock()
++        mock_exec.get_skill_summary.return_value = {
++            "total": 0,
++            "helpful_rate": None,
++            "success_rate": None,
++        }
++        mock_exec.get_records.return_value = []
++        evaluator._execution = mock_exec
++
++        mock_prefs = MagicMock()
++        mock_prefs.get_preference_score.return_value = 0.5
++        evaluator._preferences = mock_prefs
++
++        # Isolate the counting hot path from unrelated per-skill I/O.
++        monkeypatch.setattr(evaluator, "_get_health_score", lambda skill_id: 0.5)
++        monkeypatch.setattr(
++            SkillConfigManager, "get_skill_config", classmethod(lambda cls, skill_id: None)
++        )
++
++        start = time.perf_counter()
++        results = evaluator.evaluate_all_skills()
++        elapsed = time.perf_counter() - start
++
++        assert len(results) == n_skills
++        assert results["skill-0"].total_routes == n_records // n_skills
++        assert results["skill-0"].usage_frequency == 1.0
++        assert elapsed < 5.0
++
+     def test_get_low_quality_skills(self, tmp_path):
+         """get_low_quality_skills should filter by threshold and min_routes."""
+         evaluator = RoutingEvaluator(project_root=tmp_path)
+diff --git a/tests/dashboard/test_server_endpoints.py b/tests/dashboard/test_server_endpoints.py
+index 7a54d1c..12f001d 100644
+--- a/tests/dashboard/test_server_endpoints.py
++++ b/tests/dashboard/test_server_endpoints.py
+@@ -89,6 +89,17 @@ def _write_plan(
+         f.write(json.dumps(plan.to_dict()) + "\n")
+ 
+ 
++def _spans_path(project: Path) -> Path:
++    """Spans path via the same dev/prod selection the server reads.
++
++    Under pytest ``is_dev_environment()`` is True → the dashboard reads
++    ``spans.dev.jsonl``; fixtures must write through the same selection
++    (gate39 test_tool_call_bridge.py template)."""
++    from vibesop.dashboard import server as server_mod
++
++    return server_mod._spans_path(project / ".vibe")
++
++
+ def _write_span(
+     project: Path,
+     *,
+@@ -99,8 +110,14 @@ def _write_span(
+     name: str | None = None,
+     task_id: str | None = None,
+     metadata: dict[str, Any] | None = None,
++    dag: bool = False,
+ ) -> None:
+-    """Append a span to ``.vibe/observability/spans.jsonl``."""
++    """Append a span to the project's spans file (dev/prod selection).
++
++    ``dag=True`` additionally mirrors to the legacy prod ``spans.jsonl``:
++    the DAG endpoint's existence check reads the dev/prod-selected file
++    while ``rebuild_dag`` (dag_rebuilder.py:227) still hardcodes
++    ``spans.jsonl`` — a gate40 §5 recorded site, not fixed this gate."""
+     span: dict[str, Any] = {
+         "id": span_id,
+         "trace_id": trace_id,
+@@ -113,10 +130,52 @@ def _write_span(
+         span["task_id"] = task_id
+     if metadata:
+         span["metadata"] = metadata
+-    spans_file = project / ".vibe" / "observability" / "spans.jsonl"
+-    spans_file.parent.mkdir(parents=True, exist_ok=True)
+-    with spans_file.open("a") as f:
+-        f.write(json.dumps(span) + "\n")
++    paths = {_spans_path(project)}
++    if dag:
++        paths.add(project / ".vibe" / "observability" / "spans.jsonl")
++    for spans_file in paths:
++        spans_file.parent.mkdir(parents=True, exist_ok=True)
++        with spans_file.open("a") as f:
++            f.write(json.dumps(span) + "\n")
++
++
++# ---------------------------------------------------------------------------
++# _spans_path dev/prod selection (gate40 项 1)
++# ---------------------------------------------------------------------------
++
++
++class TestSpansPathSelection:
++    """gate40 项 1 — the dashboard mirrors SpanWriter's dev/prod spans
++    filename selection via ``_spans_path`` (span_writer.py:65 /
++    skill_health.py:41-47), WITHOUT skill_health's exists-gate: each
++    endpoint handles a missing spans file itself."""
++
++    def test_dev_environment_selects_dev_file(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from vibesop.dashboard import server as server_mod
++
++        monkeypatch.setattr(server_mod, "is_dev_environment", lambda: True)
++        assert server_mod._spans_path(tmp_path) == tmp_path / "observability" / "spans.dev.jsonl"
++
++    def test_prod_environment_selects_prod_file(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from vibesop.dashboard import server as server_mod
++
++        monkeypatch.setattr(server_mod, "is_dev_environment", lambda: False)
++        assert server_mod._spans_path(tmp_path) == tmp_path / "observability" / "spans.jsonl"
++
++    def test_fixture_writes_dev_file_under_pytest(
++        self, client: TestClient, tmp_project: Path
++    ) -> None:
++        """Integration pin: fixtures write via the same selection the
++        server reads — a span written under pytest (dev) is served."""
++        assert _spans_path(tmp_project).name == "spans.dev.jsonl"  # pytest = dev
++        _write_span(tmp_project, span_id="s-dev", trace_id="T-dev")
++        response = client.get("/api/spans/s-dev")
++        assert response.status_code == 200
++        assert response.json()["id"] == "s-dev"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -154,6 +213,7 @@ class TestOrchestrationDagEndpoint:
+             span_kind="task",
+             name="orchestrate",
+             metadata={"query": "test query"},
++            dag=True,
+         )
+         _write_span(
+             tmp_project,
+@@ -162,6 +222,7 @@ class TestOrchestrationDagEndpoint:
+             parent_span_id="root",
+             span_kind="llm",
+             task_id="s1",
++            dag=True,
+         )
+ 
+         response = client.get("/api/orchestration/dag", params={"trace_id": "T-full"})
+@@ -206,6 +267,7 @@ class TestOrchestrationDagEndpoint:
+             span_kind="task",
+             name="orchestrate",
+             metadata={"query": "q"},
++            dag=True,
+         )
+ 
+         response = client.get("/api/orchestration/dag", params={"trace_id": "T-span-only"})

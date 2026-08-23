@@ -17,6 +17,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from vibesop.core.observability.dev_detect import is_dev_environment
 from vibesop.core.observability.reflection import Reflection, ReflectionStore
 from vibesop.dashboard._discoveries import build_discoveries_payload
 from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
@@ -39,6 +40,15 @@ def _resolve_project_root() -> Path:
     return cwd
 
 
+def _spans_path(vibe_dir: Path) -> Path:
+    """Dev/prod spans path, mirroring SpanWriter's selection
+    (span_writer.py:65 / skill_health.py:41-47). Unlike skill_health's
+    ``spans_file_for`` there is NO exists-gate here: each call site
+    already handles a missing file."""
+    filename = "spans.dev.jsonl" if is_dev_environment() else "spans.jsonl"
+    return vibe_dir / "observability" / filename
+
+
 # ---------------------------------------------------------------------------
 # Data readers — each reads from .vibe/ files without importing heavy modules
 # ---------------------------------------------------------------------------
@@ -53,6 +63,7 @@ def _read_jsonl(path: Path, limit: int = 200) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     from collections import deque
+
     ring: deque[str] = deque(maxlen=limit)
     with path.open("r", encoding="utf-8") as f:
         for raw_line in f:
@@ -104,7 +115,7 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
     """Return True if ``trace_id`` appears in any persisted artefact.
 
     Scans ``execution_plans.jsonl`` (matching ``metadata.trace_id``) and
-    ``observability/spans.jsonl`` (matching top-level ``trace_id``). Used
+    the dev/prod-selected spans file (matching top-level ``trace_id``). Used
     by ``GET /api/orchestration/dag`` to distinguish 404 (trace_id not
     found anywhere) from 200-with-partial-DAG (trace exists but maybe
     only plans OR only spans persisted).
@@ -134,7 +145,7 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
                 if meta.get("trace_id") == trace_id:
                     return True
 
-    spans_path = vibe_dir / "observability" / "spans.jsonl"
+    spans_path = _spans_path(vibe_dir)
     if spans_path.exists():
         with spans_path.open("r", encoding="utf-8") as f:
             for raw in f:
@@ -192,7 +203,7 @@ def create_app() -> FastAPI:
 
         # Agent span count from observability JSONL (file size approximation)
         span_count = 0
-        spans_path = vibe_dir / "observability" / "spans.jsonl"
+        spans_path = _spans_path(vibe_dir)
         if spans_path.exists():
             # Quick estimate: count lines without parsing JSON
             span_count = sum(1 for _ in spans_path.open("r", encoding="utf-8"))
@@ -293,7 +304,7 @@ def create_app() -> FastAPI:
                     traces.append(data)
 
         if source in ("all", "agent"):
-            spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+            spans_path = _spans_path(root / ".vibe")
             agent_spans = _read_jsonl(spans_path, limit=limit * 2)
             for span in agent_spans:
                 span["_id"] = span.get("id", "")
@@ -317,7 +328,7 @@ def create_app() -> FastAPI:
         return JSONResponse(data)
 
     # ------------------------------------------------------------------
-    # API: Agent spans (from .vibe/observability/spans.jsonl)
+    # API: Agent spans (from the dev/prod-selected spans file)
     # ------------------------------------------------------------------
 
     @app.get("/api/spans")
@@ -327,7 +338,7 @@ def create_app() -> FastAPI:
         skill_id: str | None = Query(default=None),
     ) -> JSONResponse:
         root = _resolve_project_root()
-        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+        spans_path = _spans_path(root / ".vibe")
         records = _read_jsonl(spans_path, limit=limit)
 
         if span_kind:
@@ -341,7 +352,7 @@ def create_app() -> FastAPI:
     @app.get("/api/spans/{span_id}")
     async def api_span_detail(span_id: str) -> JSONResponse:
         root = _resolve_project_root()
-        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+        spans_path = _spans_path(root / ".vibe")
         if not spans_path.exists():
             return JSONResponse({"error": "No spans data"}, status_code=404)
 
@@ -371,7 +382,7 @@ def create_app() -> FastAPI:
         Status codes:
         - 200: trace_id found in artefacts (DAG may be partial — only plans,
           only spans, or both)
-        - 404: trace_id not present in execution_plans.jsonl OR spans.jsonl
+        - 404: trace_id not present in execution_plans.jsonl OR the spans file (spans.dev.jsonl in dev, spans.jsonl in prod)
 
         The 404-vs-200 distinction matters for dashboard UX: a typo'd
         trace_id in the URL should look obviously wrong, not render an
@@ -472,9 +483,7 @@ def create_app() -> FastAPI:
 
         # Read back the updated reflection. list_all is O(N) but reflection
         # volumes are low (UI-driven, ~10s per project).
-        updated = next(
-            (r for r in store.list_all() if r.id == reflection_id), None
-        )
+        updated = next((r for r in store.list_all() if r.id == reflection_id), None)
         if updated is None:
             # Should never happen — update_status succeeded so the row is
             # in the file. If we hit this, the store invariant is broken

@@ -89,6 +89,17 @@ def _write_plan(
         f.write(json.dumps(plan.to_dict()) + "\n")
 
 
+def _spans_path(project: Path) -> Path:
+    """Spans path via the same dev/prod selection the server reads.
+
+    Under pytest ``is_dev_environment()`` is True → the dashboard reads
+    ``spans.dev.jsonl``; fixtures must write through the same selection
+    (gate39 test_tool_call_bridge.py template)."""
+    from vibesop.dashboard import server as server_mod
+
+    return server_mod._spans_path(project / ".vibe")
+
+
 def _write_span(
     project: Path,
     *,
@@ -99,8 +110,14 @@ def _write_span(
     name: str | None = None,
     task_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    dag: bool = False,
 ) -> None:
-    """Append a span to ``.vibe/observability/spans.jsonl``."""
+    """Append a span to the project's spans file (dev/prod selection).
+
+    ``dag=True`` additionally mirrors to the legacy prod ``spans.jsonl``:
+    the DAG endpoint's existence check reads the dev/prod-selected file
+    while ``rebuild_dag`` (dag_rebuilder.py:227) still hardcodes
+    ``spans.jsonl`` — a gate40 §5 recorded site, not fixed this gate."""
     span: dict[str, Any] = {
         "id": span_id,
         "trace_id": trace_id,
@@ -113,10 +130,52 @@ def _write_span(
         span["task_id"] = task_id
     if metadata:
         span["metadata"] = metadata
-    spans_file = project / ".vibe" / "observability" / "spans.jsonl"
-    spans_file.parent.mkdir(parents=True, exist_ok=True)
-    with spans_file.open("a") as f:
-        f.write(json.dumps(span) + "\n")
+    paths = {_spans_path(project)}
+    if dag:
+        paths.add(project / ".vibe" / "observability" / "spans.jsonl")
+    for spans_file in paths:
+        spans_file.parent.mkdir(parents=True, exist_ok=True)
+        with spans_file.open("a") as f:
+            f.write(json.dumps(span) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# _spans_path dev/prod selection (gate40 项 1)
+# ---------------------------------------------------------------------------
+
+
+class TestSpansPathSelection:
+    """gate40 项 1 — the dashboard mirrors SpanWriter's dev/prod spans
+    filename selection via ``_spans_path`` (span_writer.py:65 /
+    skill_health.py:41-47), WITHOUT skill_health's exists-gate: each
+    endpoint handles a missing spans file itself."""
+
+    def test_dev_environment_selects_dev_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from vibesop.dashboard import server as server_mod
+
+        monkeypatch.setattr(server_mod, "is_dev_environment", lambda: True)
+        assert server_mod._spans_path(tmp_path) == tmp_path / "observability" / "spans.dev.jsonl"
+
+    def test_prod_environment_selects_prod_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from vibesop.dashboard import server as server_mod
+
+        monkeypatch.setattr(server_mod, "is_dev_environment", lambda: False)
+        assert server_mod._spans_path(tmp_path) == tmp_path / "observability" / "spans.jsonl"
+
+    def test_fixture_writes_dev_file_under_pytest(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """Integration pin: fixtures write via the same selection the
+        server reads — a span written under pytest (dev) is served."""
+        assert _spans_path(tmp_project).name == "spans.dev.jsonl"  # pytest = dev
+        _write_span(tmp_project, span_id="s-dev", trace_id="T-dev")
+        response = client.get("/api/spans/s-dev")
+        assert response.status_code == 200
+        assert response.json()["id"] == "s-dev"
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +213,7 @@ class TestOrchestrationDagEndpoint:
             span_kind="task",
             name="orchestrate",
             metadata={"query": "test query"},
+            dag=True,
         )
         _write_span(
             tmp_project,
@@ -162,6 +222,7 @@ class TestOrchestrationDagEndpoint:
             parent_span_id="root",
             span_kind="llm",
             task_id="s1",
+            dag=True,
         )
 
         response = client.get("/api/orchestration/dag", params={"trace_id": "T-full"})
@@ -206,6 +267,7 @@ class TestOrchestrationDagEndpoint:
             span_kind="task",
             name="orchestrate",
             metadata={"query": "q"},
+            dag=True,
         )
 
         response = client.get("/api/orchestration/dag", params={"trace_id": "T-span-only"})
