@@ -11,6 +11,7 @@ Provides aggregated quality metrics for skills based on 5 dimensions:
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -164,8 +165,18 @@ class RoutingEvaluator:
         else:
             self._preferences = preference_learner
 
-    def evaluate_skill(self, skill_id: str) -> SkillEvaluation | None:
-        """Evaluate a single skill across all 5 dimensions."""
+    def evaluate_skill(
+        self, skill_id: str, all_counts: Counter[str] | None = None
+    ) -> SkillEvaluation | None:
+        """Evaluate a single skill across all 5 dimensions.
+
+        Args:
+            skill_id: Skill identifier
+            all_counts: Optional pre-computed routing counts per skill
+                (``Counter(routed_skill)`` over all feedback records).
+                Computed in a single pass when omitted; callers evaluating
+                many skills should hoist it once and pass it in.
+        """
         # 1. Routing accuracy from FeedbackCollector
         feedback_records = [r for r in self._feedback.get_records() if r.routed_skill == skill_id]
         total_routes = len(feedback_records)
@@ -198,10 +209,8 @@ class RoutingEvaluator:
         execution_success = exec_summary.get("success_rate") or 0.0
 
         # 3. Usage frequency: normalize against most-used skill
-        all_counts = {
-            sid: len([r for r in self._feedback.get_records() if r.routed_skill == sid])
-            for sid in {r.routed_skill for r in self._feedback.get_records()}
-        }
+        if all_counts is None:
+            all_counts = Counter(r.routed_skill for r in self._feedback.get_records())
         max_count = max(all_counts.values(), default=0)
         usage_frequency = total_routes / max_count if max_count > 0 else 0.0
 
@@ -254,8 +263,12 @@ class RoutingEvaluator:
 
     def evaluate_all_skills(self) -> dict[str, SkillEvaluation]:
         """Evaluate all skills with feedback data."""
+        records = self._feedback.get_records()
+        # Hoist the per-skill routing counts once (single pass) instead of
+        # letting each evaluate_skill call re-scan every record.
+        all_counts = Counter(r.routed_skill for r in records)
         skill_ids: set[str] = set()
-        for record in self._feedback.get_records():
+        for record in records:
             skill_ids.add(record.routed_skill)
         skill_ids.update(self._preferences._storage.skill_scores.keys())  # pyright: ignore[reportPrivateUsage]
         # Also include skills with execution feedback
@@ -264,7 +277,7 @@ class RoutingEvaluator:
 
         result: dict[str, SkillEvaluation] = {}
         for skill_id in skill_ids:
-            evaluation = self.evaluate_skill(skill_id)
+            evaluation = self.evaluate_skill(skill_id, all_counts=all_counts)
             if evaluation is not None:
                 result[skill_id] = evaluation
         return result

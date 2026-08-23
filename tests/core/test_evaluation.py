@@ -1,5 +1,7 @@
 """Tests for evaluation shim and re-exported logic."""
 
+import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -54,8 +56,9 @@ class TestSkillEvaluation:
         """must-NOT: zero-sample grade must never be D or F.
 
         A 0.0-quality skill graded F would trip the auto-deprecate rule in
-        feedback_loop (F + 30d stale + < 3 routes) — the reason the
-        quality_score=0.0 / grade="?" pair must land atomically.
+        feedback_loop (F + 30d stale + ≥3 uses with routing accuracy < 50%)
+        — the reason the quality_score=0.0 / grade="?" pair must land
+        atomically.
         """
         eval = SkillEvaluation(skill_id="s", total_routes=0)
         assert eval.grade not in ("A", "B", "C", "D", "F")
@@ -266,6 +269,61 @@ class TestRoutingEvaluator:
         assert "skill-b" in results
         assert results["skill-a"].total_routes == 1
         assert results["skill-b"].total_routes == 1
+
+    def test_evaluate_all_skills_single_pass_scaling(self, tmp_path, monkeypatch):
+        """Synthetic-scale regression for the per-skill Counter rebuild.
+
+        200 skills x 2000 routing records must complete well under 5s.
+        The pre-fix per-skill O(distinct x records) recount took ~1.06s on
+        this scale locally (post-fix ~0.012s); the loose bound guards CI
+        jitter while still catching a quadratic regression.
+        """
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        n_skills, n_records = 200, 2000
+        records = [
+            SimpleNamespace(
+                routed_skill=f"skill-{i % n_skills}",
+                was_correct=True,
+                confidence=0.8,
+                timestamp=f"2026-08-{(i % 28) + 1:02d}T00:00:00",
+            )
+            for i in range(n_records)
+        ]
+
+        evaluator = RoutingEvaluator(project_root=tmp_path)
+
+        mock_feedback = MagicMock()
+        mock_feedback.get_records.return_value = records
+        evaluator._feedback = mock_feedback
+
+        mock_exec = MagicMock()
+        mock_exec.get_skill_summary.return_value = {
+            "total": 0,
+            "helpful_rate": None,
+            "success_rate": None,
+        }
+        mock_exec.get_records.return_value = []
+        evaluator._execution = mock_exec
+
+        mock_prefs = MagicMock()
+        mock_prefs.get_preference_score.return_value = 0.5
+        evaluator._preferences = mock_prefs
+
+        # Isolate the counting hot path from unrelated per-skill I/O.
+        monkeypatch.setattr(evaluator, "_get_health_score", lambda skill_id: 0.5)
+        monkeypatch.setattr(
+            SkillConfigManager, "get_skill_config", classmethod(lambda cls, skill_id: None)
+        )
+
+        start = time.perf_counter()
+        results = evaluator.evaluate_all_skills()
+        elapsed = time.perf_counter() - start
+
+        assert len(results) == n_skills
+        assert results["skill-0"].total_routes == n_records // n_skills
+        assert results["skill-0"].usage_frequency == 1.0
+        assert elapsed < 5.0
 
     def test_get_low_quality_skills(self, tmp_path):
         """get_low_quality_skills should filter by threshold and min_routes."""
