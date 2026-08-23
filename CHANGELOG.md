@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 让数据开口：outcomes 只读出口（gate39, 2026-08-23）
+
+按 `.omx/artifacts/gate39-synthesis.md` r2 定稿实施（三路对抗 +
+claude/pi/grok 评审 + 确认轮,0 BLOCK)。叙事纪律：这是"已有数据
+第一次可见",不是技能效用结论。
+
+- **`vibe skill outcomes`**：新只读子命令，per-skill hit outcome 原
+  始计数（Reask/Moved-on/Expired 三列下界计数 + Last=span_ts +
+  字典序），join outcome.span_id→span id 取 skill_id（复用
+  `_route_hit_skill_id` 谓词，空 id/span 缺失行计入顶层 unjoined
+  并对账：Σ三列+unjoined=hit 总数）。五条脚注披露：与 fire 列路
+  径+时间窗皆不同禁止拼比率、reask 证据含任意路径后续路由、
+  expired 回灌占主导、跨技能原始计数不可比、n<30 不下结论。
+  `vibe skill list` fire 列脚注同步补票（gate38 双挂点的另一半）。
+- **bridge dev/prod 文件名镜像修复**：`tool_call_bridge` 的
+  SPANS_FILENAME 硬编码改走 `_spans_filename()`（与 span_writer /
+  skill_health 同谓词），读侧与写侧（显式 storage_path 绕过 dev
+  自检）一并修正。行为变化仅限 dev 环境，prod 逐字节不变。
+- **破坏性变更：RetentionPolicy 删除**——`core/skills/retention.py`
+  整文件（含 `DeprecatedRetentionSuggestion` 与无人把守的
+  `apply_auto_actions` 自动处置暗道）连同其测试移除；代码引用三处
+  （candidate_manager/feedback_loop/evaluator）与文档引用四处
+  （GOALS.md ×2、skill-runtime-interface.md ×2）同步清理。该类无
+  生产调用方。历史计划档案（`.vibe/plans/`、`.vibe/optimization-plan.md`）
+  中的引用属实施前快照，不在清理范围。
+- 记档：verdict backfill 永久否决（答错问题/时空错位第二总体/有机
+  verdict 才是硬瓶颈）；dashboard health 端点推迟（真实需求+愿意
+  带脚注原文时再议）；薄样本字母档需独立对抗轮（F 规则
+  feedback_loop.py:143-148 的唯一燃料冲突）；hit 写侧空 skill_id
+  活洞另立项。
+
 ### 技能评价体系第二刀（gate38, 2026-08-23）
 
 按 `.omx/artifacts/gate38-synthesis.md` r3 定稿实施（三路对抗设计 +

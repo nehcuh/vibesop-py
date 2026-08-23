@@ -212,11 +212,79 @@ def list_skills(
         "reinstalling a skill resets its history ('/' vs '-' id normalisation "
         "also breaks the chain).[/dim]"
     )
+    # gate38 双挂点补票（gate39 §1.2）：与 outcomes 表的口径差异必须双向披露。
+    console.print("[dim]  与 outcomes 口径不同（含 CLI、30d 窗），禁止拼比率。[/dim]")
     console.print(
         "[dim]³ raw yes/no from project-level explicit feedback ('partial' is "
         "recorded as 'no'). 'no records' means no feedback exists — not a "
         "neutral signal. `vibe skills feedback` writes to the global store "
         "(known gap) and is not counted here.[/dim]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# outcomes
+# ---------------------------------------------------------------------------
+
+
+@app.command("outcomes")
+def skill_outcomes_cmd(
+    json_output: bool = typer.Option(
+        False, "--json", "-j", help="Output as JSON (raw counts only)"
+    ),
+) -> None:
+    """Show per-skill hit-outcome raw counts (gate38 data, read-only).
+
+    Joins ``route_outcomes.jsonl`` to this project's spans on span_id and
+    reports the three hit-outcome reasons per skill, plus a trailing
+    ``(unjoined)`` row for hit rows that cannot be attributed (span
+    missing, empty skill_id, or an unknown reason). Raw counts only —
+    no rates, no grades.
+    """
+    from vibesop.core.skills.skill_outcomes import count_skill_outcomes
+
+    result = count_skill_outcomes(Path.cwd())
+
+    if json_output:
+        console.print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    table = Table(title="Skill Route Outcomes¹ (hook path, all-time)")
+    table.add_column("Skill", style="bold")
+    table.add_column("Reask²", justify="right")
+    table.add_column("Moved-on²", justify="right")
+    table.add_column("Expired²", justify="right")
+    table.add_column("Last")
+
+    for skill_id in sorted(result["skills"]):
+        counts = result["skills"][skill_id]
+        table.add_row(
+            skill_id,
+            str(counts["reask"]),
+            str(counts["moved_on"]),
+            str(counts["expired"]),
+            counts["last_at"] or "—",
+        )
+    # gate39 §1.2：unjoined 必须有末行可见性（防 spans 轮转后表静默缩水）。
+    table.add_row(f"[dim](unjoined: {result['unjoined']})[/dim]", "", "", "", "")
+
+    console.print(table)
+    console.print(
+        "[dim]¹ 同源 spans，但路径（本表仅 hook vs fire 列含 CLI）与时间窗"
+        "（本表全量 vs fire 列 30d）皆不同，禁止拼比率。[/dim]"
+    )
+    console.print(
+        "[dim]² 三种 outcome 分列：reask=同任务重问（弱负；证据含任意路径后续路由），"
+        "moved_on=会话推进（弱正），expired=24h 无证据到期"
+        "（最弱；cmspark 实测回灌占主导 1268/2437）。[/dim]"
+    )
+    console.print(
+        "[dim]³ 三列均为下界计数（task_id 由 query 全文派生，改述即换 id）；"
+        "原始计数跨技能不可比（fire 基数不同）。[/dim]"
+    )
+    console.print("[dim]⁴ 原始计数，n<30 不下结论；不再回来 ≠ 满意，也可能是放弃。[/dim]")
+    console.print(
+        "[dim]⁵ 空 skill_id 的脏 hit 行跳过（cmspark 实测 37/2437）；unjoined 计数见末行。[/dim]"
     )
 
 
@@ -352,7 +420,10 @@ def status(
 @app.command()
 def stale(
     auto_deprecate: bool = typer.Option(
-        False, "--auto", "-a", help="Apply suggested deprecations and archives (explicit opt-in; default is read-only)"
+        False,
+        "--auto",
+        "-a",
+        help="Apply suggested deprecations and archives (explicit opt-in; default is read-only)",
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:

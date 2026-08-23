@@ -65,6 +65,8 @@ def test_list_footnotes_disclose_caveats(patched_health: None) -> None:
     assert "partial" in out
     assert "global store" in out
     assert "pack-installed skills show as external" in out
+    # gate39 双挂点补票：fire 列与 outcomes 表口径差异的双向披露。
+    assert "与 outcomes 口径不同" in out
 
 
 def test_real_loader_populates_source_key() -> None:

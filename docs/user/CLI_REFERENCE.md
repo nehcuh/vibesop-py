@@ -731,6 +731,50 @@ vibe skill list --project
 
 ---
 
+#### `vibe skill outcomes`
+
+Read-only view of per-skill hit outcomes (gate39) — the first place the
+outcome data collected since gate38 becomes visible. **Data visibility
+only; it is NOT an effectiveness verdict.**
+
+```bash
+vibe skill outcomes [--json]
+```
+
+**Output:**
+```
+┌──────────────────────────┬────────┬──────────┬─────────┬──────────────────────────┐
+│ Skill                    │ Reask² │ Moved-on²│ Expired²│ Last                     │
+├──────────────────────────┼────────┼──────────┼─────────┼──────────────────────────┤
+│ custom/main-64d301b8     │     14 │        1 │       0 │ 2026-08-21T03:02:44+00:00│
+│ (unjoined: 37)           │        │          │         │                          │
+└──────────────────────────┴────────┴──────────┴─────────┴──────────────────────────┘
+```
+
+**What the columns mean (raw counts — no rates, no grades, no derived
+actions):**
+- Same spans source as the Fire column, but different coverage: this
+  table is **hook-path hits only, all-time**; the Fire 30d column
+  **includes CLI hits and uses a 30d window**. Do NOT combine them into
+  a ratio.
+- `Reask` — same task re-routed later (weak negative; the evidence may
+  come from a later route on ANY path, CLI included).
+- `Moved-on` — session moved to a different task (weak positive).
+- `Expired` — 24h passed with no evidence (weakest; dominated by the
+  one-time history backfill, e.g. 1268/2437 in the first dogfood dump).
+- All three columns are **lower bounds** (task ids derive from the full
+  query text — a rephrased retry counts as a new task). Raw counts are
+  **not comparable across skills** (their fire bases differ).
+- n<30 proves nothing. "No re-ask" ≠ satisfied — the user may simply
+  have given up.
+- Hit rows whose span is missing, carries an empty `skill_id`, or has an
+  unknown reason are not attributed (37/2437 in the first dogfood dump);
+  the `(unjoined: N)` trailer row keeps them visible — a rising unjoined count after
+  `vibe trace prune` means the spans were deleted, not that outcomes
+  stopped.
+
+---
+
 #### `vibe skill lint`
 
 Advisory static checks on a skill (gate37 L1). Three plain-language
