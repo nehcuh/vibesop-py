@@ -236,10 +236,11 @@ def skill_outcomes_cmd(
     """Show per-skill hit-outcome raw counts (gate38 data, read-only).
 
     Joins ``route_outcomes.jsonl`` to this project's spans on span_id and
-    reports the three hit-outcome reasons per skill, plus a trailing
-    ``(unjoined)`` row for hit rows that cannot be attributed (span
-    missing, empty skill_id, or an unknown reason). Raw counts only —
-    no rates, no grades.
+    reports the three hit-outcome reasons per skill, plus trailing
+    ``(unjoined)`` / ``(fallback)`` rows: hit rows that cannot be
+    attributed (span missing, empty skill_id, or an unknown reason) and
+    hit rows whose span carried the ``fallback-llm`` sentinel (gate40 项4).
+    Raw counts only — no rates, no grades.
     """
     from vibesop.core.skills.skill_outcomes import count_skill_outcomes
 
@@ -267,6 +268,8 @@ def skill_outcomes_cmd(
         )
     # gate39 §1.2：unjoined 必须有末行可见性（防 spans 轮转后表静默缩水）。
     table.add_row(f"[dim](unjoined: {result['unjoined']})[/dim]", "", "", "", "")
+    # gate40 项4：fallback-llm sentinel 行独立计数，不进 unjoined。
+    table.add_row(f"[dim](fallback: {result['fallback']})[/dim]", "", "", "", "")
 
     console.print(table)
     console.print(
@@ -285,6 +288,10 @@ def skill_outcomes_cmd(
     console.print("[dim]⁴ 原始计数，n<30 不下结论；不再回来 ≠ 满意，也可能是放弃。[/dim]")
     console.print(
         "[dim]⁵ 空 skill_id 的脏 hit 行跳过（cmspark 实测 37/2437）；unjoined 计数见末行。[/dim]"
+    )
+    console.print(
+        "[dim]⁶ fallback-llm=未命中兜底路由，其计数属发现队列范畴"
+        "（cmspark 实测 1088/2440 hit 行，全为 gate40 前的存量），不进 unjoined 与技能列。[/dim]"
     )
 
 

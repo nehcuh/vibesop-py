@@ -664,8 +664,43 @@ class AgentRuntime:
                     except Exception as e:
                         logger.debug(f"Skill injection failed: {e}")
 
-                # Enrich the task span with routing metadata
-                _task_span.metadata["skill_id"] = result.skill_id or ""
+                # Enrich the task span with routing metadata.
+                # gate40 项4: the SPAN's skill_id / top_skills are built
+                # from the first REAL-skill step — the ``fallback-llm``
+                # sentinel (plan_builder all-fallback / steps[0]-fallback
+                # plans) is filtered out, so all-fallback orchestrated
+                # runs write skill_id="" and omit top_skills instead of
+                # leaking the sentinel. The RESULT object (skill_id /
+                # skill_name / alternatives — consumed by the :653
+                # injection gate and the :727 instinct bridge) is
+                # deliberately UNTOUCHED (result contract).
+                _full_steps = (
+                    result.plan.get("steps", []) if isinstance(result.plan, dict) else None
+                )
+                if _full_steps is not None:
+                    # gate40 follow-up: scan ALL plan steps, not just the
+                    # steps[0] + steps[1:5] window that result.skill_id /
+                    # result.alternatives cover — a >5-step plan whose first
+                    # five steps are all fallback would otherwise leak the
+                    # same has_match=true ∧ skill_id="" hole.
+                    _span_candidates = [
+                        step.get("skill_id", "") for step in _full_steps if isinstance(step, dict)
+                    ]
+                else:
+                    _span_candidates = [
+                        result.skill_id,
+                        *(
+                            alt.get("skill_id", "")
+                            for alt in result.alternatives
+                            if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance] MagicMock guard
+                                alt, dict
+                            )
+                        ),
+                    ]
+                _span_skill_ids = [
+                    s for s in _span_candidates if isinstance(s, str) and s and s != "fallback-llm"
+                ]
+                _task_span.metadata["skill_id"] = _span_skill_ids[0] if _span_skill_ids else ""
                 _task_span.metadata["mode"] = result.mode
                 _task_span.metadata["confidence"] = result.confidence
                 # Deliberate asymmetry (M12 miss blind-spot fix): the span
@@ -708,20 +743,12 @@ class AgentRuntime:
                 # is omitted entirely. Duplication with
                 # metadata["skill_id"] is deliberate: this is the full
                 # at-write-time ranking snapshot — router state drifts
-                # and cannot be replayed later. Data source:
-                # ``result.alternatives`` (list[dict], populated from
-                # routing_result.alternatives at :619-626).
-                if result.router_matched:
-                    _alt_ids = [
-                        alt.get("skill_id", "")
-                        for alt in result.alternatives
-                        if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance] MagicMock guard
-                            alt, dict
-                        )
-                    ]
-                    _top = [s for s in [result.skill_id, *_alt_ids] if isinstance(s, str) and s]
-                    if _top:
-                        _task_span.metadata["top_skills"] = _top[:3]
+                # and cannot be replayed later. Data source: the same
+                # sentinel-filtered ``_span_skill_ids`` list built above
+                # (gate40 项4: fallback-llm steps never enter the
+                # snapshot; all-fallback plans omit the key).
+                if result.router_matched and _span_skill_ids:
+                    _task_span.metadata["top_skills"] = _span_skill_ids[:3]
 
                 # --- Instinct feedback bridge (neutral signal) ---
                 if result.has_match and result.skill_id:

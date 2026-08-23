@@ -84,7 +84,7 @@ def _assert_no_forbidden_keys(obj: object) -> None:
 
 def _total_hit_rows(result: dict) -> int:
     per_skill = sum(c["reask"] + c["moved_on"] + c["expired"] for c in result["skills"].values())
-    return per_skill + result["unjoined"]
+    return per_skill + result["unjoined"] + result["fallback"]
 
 
 class TestOutcomesFileFor:
@@ -153,6 +153,41 @@ class TestCountSkillOutcomes:
         assert "" not in result["skills"]
         assert _total_hit_rows(result) == 3
 
+    def test_fallback_sentinel_rows_bucketed_separately(self, tmp_path: Path) -> None:
+        """gate40 项4: hit rows joined to a ``fallback-llm`` sentinel span
+        (pre-gate40 活洞群 B; cmspark measured 1088/2440) go to the
+        top-level ``fallback`` count — NOT unjoined, NOT the per-skill
+        columns — and the reconciliation invariant still holds."""
+        _write_spans(
+            tmp_path,
+            [
+                _span("s1", "a/x"),
+                _span("s2", "fallback-llm"),
+                _span("s3", "fallback-llm", meta_as_string=False),  # dict form too
+                _span("s4", ""),  # dirty hit → unjoined (gate39 behavior unchanged)
+                _span("s5", "fallback-llm"),
+            ],
+        )
+        _write_outcomes(
+            tmp_path,
+            [
+                _outcome("s1", "hit_reask_same_task_id"),  # attributable
+                _outcome("s2", "hit_session_expired"),  # sentinel → fallback
+                _outcome("s3", "hit_session_moved_on"),  # sentinel → fallback
+                _outcome("s4", "hit_reask_same_task_id"),  # empty skill_id → unjoined
+                # sentinel + unknown reason → fallback (sentinel wins; the
+                # row is attributable to the fallback bucket, not a skill).
+                _outcome("s5", "hit_future_reason"),
+            ],
+        )
+        result = count_skill_outcomes(tmp_path)
+        assert result["fallback"] == 3
+        assert result["unjoined"] == 1
+        assert list(result["skills"]) == ["a/x"]
+        assert result["skills"]["a/x"]["reask"] == 1
+        assert "fallback-llm" not in result["skills"]
+        assert _total_hit_rows(result) == 5  # reconciliation incl. fallback
+
     def test_miss_rows_not_counted(self, tmp_path: Path) -> None:
         _write_spans(tmp_path, [_span("s1", "a/x")])
         _write_outcomes(
@@ -163,7 +198,7 @@ class TestCountSkillOutcomes:
             ],
         )
         result = count_skill_outcomes(tmp_path)
-        assert result == {"skills": {}, "unjoined": 0}
+        assert result == {"skills": {}, "unjoined": 0, "fallback": 0}
 
     def test_last_at_uses_span_ts_not_recorded_at(self, tmp_path: Path) -> None:
         """recorded_at is the backfill day for replayed rows — Last must come
@@ -209,7 +244,7 @@ class TestCountSkillOutcomes:
         _write_spans(tmp_path, [_span("s1", "a/x")])
         _write_outcomes(tmp_path, [_outcome("s1", "hit_future_reason")])
         result = count_skill_outcomes(tmp_path)
-        assert result == {"skills": {}, "unjoined": 1}
+        assert result == {"skills": {}, "unjoined": 1, "fallback": 0}
         assert _total_hit_rows(result) == 1
 
     def test_no_rates_or_grades_anywhere(self, tmp_path: Path) -> None:
@@ -224,7 +259,7 @@ class TestCountSkillOutcomes:
             assert isinstance(counts["expired"], int)
 
     def test_missing_files_are_empty_not_error(self, tmp_path: Path) -> None:
-        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0}
+        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0, "fallback": 0}
         assert not (tmp_path / ".vibe").exists()
 
     def test_missing_spans_file_makes_every_hit_row_unjoined(self, tmp_path: Path) -> None:
@@ -233,11 +268,11 @@ class TestCountSkillOutcomes:
             [_outcome("s1", "hit_reask_same_task_id"), _outcome("s2", "hit_session_expired")],
         )
         result = count_skill_outcomes(tmp_path)
-        assert result == {"skills": {}, "unjoined": 2}
+        assert result == {"skills": {}, "unjoined": 2, "fallback": 0}
 
     def test_missing_outcomes_file_with_spans_is_empty(self, tmp_path: Path) -> None:
         _write_spans(tmp_path, [_span("s1", "a/x")])
-        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0}
+        assert count_skill_outcomes(tmp_path) == {"skills": {}, "unjoined": 0, "fallback": 0}
 
     def test_bad_lines_and_bad_metadata_skipped(self, tmp_path: Path) -> None:
         spans_path = tmp_path / ".vibe" / "observability" / "spans.dev.jsonl"
@@ -303,6 +338,7 @@ def patched_outcomes(monkeypatch: pytest.MonkeyPatch) -> None:
                 },
             },
             "unjoined": 3,
+            "fallback": 2,
         },
     )
 
@@ -318,13 +354,15 @@ class TestOutcomesCommand:
         assert out.index("a/skill") < out.index("b/skill")
         assert "2026-08-20T10:00:00+00:00" in out
         assert "(unjoined: 3)" in out  # join failure stays visible (末行)
+        assert "(fallback: 2)" in out  # sentinel bucket stays visible too
 
     def test_json_is_raw_counts_only(self, patched_outcomes: None) -> None:
         result = runner.invoke(skill_app, ["outcomes", "--json"])
         assert result.exit_code == 0
         payload = json.loads(result.output)
-        assert set(payload) == {"skills", "unjoined"}
+        assert set(payload) == {"skills", "unjoined", "fallback"}
         assert payload["unjoined"] == 3
+        assert payload["fallback"] == 2
         assert payload["skills"]["a/skill"]["reask"] == 2
         _assert_no_forbidden_keys(payload)
         for counts in payload["skills"].values():
@@ -341,6 +379,8 @@ class TestOutcomesCommand:
         assert "放弃" in out
         assert "37/2437" in out  # 空 skill_id 脏 hit 实测
         assert "unjoined 计数见末行" in out
+        assert "fallback-llm=未命中兜底路由" in out  # gate40 项4 sentinel 脚注
+        assert "发现队列" in out
 
     def test_no_rate_or_grade_tokens_in_output(self, patched_outcomes: None) -> None:
         out = runner.invoke(skill_app, ["outcomes"]).output

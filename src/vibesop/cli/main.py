@@ -898,12 +898,32 @@ def route(
 
         # Populate skill_id / mode / confidence on the task span so
         # SpanAggregator can attribute llm-spans to a skill via trace_id.
-        # Mirrors agent_runtime.handle_query lines 551-554. Defensive
+        # Mirrors agent_runtime.handle_query lines 667-724. Defensive
         # getattr because some test fixtures use SimpleNamespace mocks.
+        #
+        # gate40 项4: the span's match verdict now follows the hook-path
+        # predicate — primary real hit ∨ any plan step routed to a REAL
+        # skill (skill_id not in {"", "fallback-llm"}) — instead of the
+        # OrchestrationResult.has_match property, which stays True on
+        # all-fallback orchestrated plans (CLI orchestrated results always
+        # have primary=None). The property and the result object itself
+        # are the RESULT CONTRACT (JSON output / confirmation flow) and
+        # are deliberately UNTOUCHED. Miss rows always write skill_id=""
+        # (single-mode misses used to leak the fallback-llm sentinel here).
         _primary = getattr(result, "primary", None)
-        _cli_task_span.metadata["skill_id"] = (
-            getattr(_primary, "skill_id", "") or "" if _primary else ""
-        )
+        _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
+        _plan = getattr(result, "execution_plan", None)
+        _steps = getattr(_plan, "steps", None) or [] if _plan else []
+        _step_ids = [
+            s
+            for s in (getattr(step, "skill_id", "") for step in _steps)
+            if isinstance(s, str) and s and s != "fallback-llm"
+        ]
+        if isinstance(_primary_id, str) and _primary_id and _primary_id != "fallback-llm":
+            _span_skill_id = _primary_id
+        else:
+            _span_skill_id = _step_ids[0] if _step_ids else ""
+        _cli_task_span.metadata["skill_id"] = _span_skill_id
         _mode = getattr(result, "mode", None)
         # Only overwrite the dispatch-level mode set at trace open time if
         # the result actually carries a richer mode. result.mode can be None
@@ -911,21 +931,27 @@ def route(
         # with the literal string "None".
         if _mode is not None:
             _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
-        _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
+        _cli_task_span.metadata["has_match"] = bool(_span_skill_id)
         # gate38 L2a: ordered routing snapshot ("top_skills", ≤3, primary
         # first). Gated on the SAME expression as metadata["has_match"]
-        # above and read from the routing RESULT object (not the
-        # just-written metadata — the primary/skill_id writes above
-        # precede the has_match write). On miss the CLI alternatives are
+        # above (gate40 项4: the hook-path verdict, not the mode-derived
+        # property) and built from the same source — real plan-step ids
+        # first, then alternatives. On miss the CLI alternatives are
         # fallback nearest-neighbours (result_mixin), not a router
         # ranking, so the key is omitted entirely. isinstance(str) guard:
         # a mocked router's attributes (MagicMock) must not leak into
         # span metadata — same convention as the layer guard below.
-        if bool(getattr(result, "has_match", False)):
+        if _span_skill_id:
             _alts = getattr(result, "alternatives", None) or []
             _alt_ids = [getattr(a, "skill_id", "") for a in _alts]
-            _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
-            _top = [s for s in [_primary_id, *_alt_ids] if isinstance(s, str) and s]
+            _top = [
+                _span_skill_id,
+                *(
+                    s
+                    for s in [*_step_ids, *_alt_ids]
+                    if isinstance(s, str) and s and s not in ("fallback-llm", _span_skill_id)
+                ),
+            ]
             if _top:
                 _cli_task_span.metadata["top_skills"] = _top[:3]
         # gate18 pi NIT-4: record the routing layer so ScanSummary

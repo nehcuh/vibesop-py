@@ -113,8 +113,10 @@ def is_route_miss_span(span: dict[str, Any]) -> bool:
     - it is a route span: ``span_kind == "task"`` and ``name`` starts
       with ``"route:"``;
     - ``metadata.has_match`` is explicitly ``False`` (producers set
-      ``has_match=False`` for no-match, which already excludes the
-      ``fallback_llm`` sentinel — a fallback is not a match);
+      ``has_match=False`` for no-match AND for all-fallback routing
+      since gate40 项4 — a fallback is not a match, and miss rows never
+      carry the ``fallback-llm`` sentinel anymore, so this predicate
+      excludes the sentinel bucket by construction);
     - ``metadata.mode`` is NOT ``"not_intercepted"`` (the interceptor
       deliberately abstained — e.g. "继续"-style continuation prompts —
       so no routing attempt happened).
@@ -122,11 +124,18 @@ def is_route_miss_span(span: dict[str, Any]) -> bool:
     Spans with ``has_match`` missing (CLI error paths, pre-W5.0 legacy
     spans) are **unknown**, never misses (conservative direction).
 
-    Producer alignment (gate20): both route-span producers now write the
-    router's REAL match verdict — the CLI path always did
-    (``cli/main.py``), and the hook path (``agent_runtime.handle_query``)
-    writes ``router_matched`` here since gate20 (previously a mode-derived
-    value that hid hook-path misses from this predicate).
+    Producer alignment (gate20, completed by gate40 项4): both
+    route-span producers write the router's REAL match verdict. The
+    hook path (``agent_runtime.handle_query``) writes ``router_matched``
+    since gate20 (previously a mode-derived value that hid hook-path
+    misses from this predicate). The CLI path (``cli/main.py``) claimed
+    to but did NOT for orchestrated all-fallback plans — the
+    mode-derived ``OrchestrationResult.has_match`` property stayed True
+    there (that property remains the untouched result contract); gate40
+    项4 aligned the CLI span write to the hook predicate (primary real
+    hit ∨ any real-skill plan step), so CLI all-fallback runs now write
+    ``has_match=False`` and enter this discovery pool (legitimate: a
+    CLI miss is a real discovery signal, see below).
 
     Metadata may be a dict or a JSON-encoded string (SpanWriter
     serialises it); malformed JSON is treated as unknown, never raises.

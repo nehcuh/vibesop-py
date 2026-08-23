@@ -47,14 +47,24 @@ def spans_file_for(project_root: Path) -> Path | None:
     return path if path.exists() else None
 
 
-def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
-    """Fire predicate (修订 B): a route HIT span's matched skill id.
+#: PlanBuilder's no-match step sentinel (plan_builder.py:321-339/:626) —
+#: written into span metadata by pre-gate40 producers (活洞群 B). A
+#: fallback is a routing miss, not a skill: its reask/expired outcomes
+#: are discovery-queue signals, so the sentinel is excluded from the
+#: fire/skill columns and bucketed separately by the outcomes read model
+#: (skill_outcomes top-level ``fallback`` count).
+FALLBACK_SENTINEL = "fallback-llm"
 
-    ``span_kind == "task"`` ∧ ``name.startswith("route:")`` ∧
-    ``metadata.has_match is True`` — the hit-side mirror of the
-    gold_detection.py:108-163 miss predicate. CLI-path hits count too
-    (修订 B 补丁: the feedback UI lives on the CLI path; excluding CLI
-    would disconnect the fire and feedback populations).
+
+def _route_hit_skill_id_raw(span: dict[str, Any]) -> str | None:
+    """Raw extraction: a route HIT span's ``metadata.skill_id`` AS WRITTEN.
+
+    Same span gates as ``_route_hit_skill_id`` (``span_kind == "task"`` ∧
+    ``name.startswith("route:")`` ∧ ``metadata.has_match is True``), but
+    returns the raw string — including ``""`` and the ``fallback-llm``
+    sentinel — so bucketing layers (skill_outcomes) can distinguish the
+    sentinel from a genuinely empty id. None only when the span is not a
+    route hit or the id is missing/not a string.
 
     Metadata may be a dict or a JSON-encoded string (SpanWriter
     serialises it); malformed JSON → not a hit, never raises.
@@ -75,7 +85,22 @@ def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
         return None
 
     skill_id = meta.get("skill_id")
-    return skill_id if isinstance(skill_id, str) and skill_id else None
+    return skill_id if isinstance(skill_id, str) else None
+
+
+def _route_hit_skill_id(span: dict[str, Any]) -> str | None:
+    """Fire predicate (修订 B): a route HIT span's matched skill id.
+
+    ``_route_hit_skill_id_raw`` minus the empty string AND the
+    ``fallback-llm`` sentinel (gate40 项4 — cmspark measured the sentinel
+    as the largest 30d fire bucket, 1061/2822; it is not a skill). CLI-path
+    hits count too (修订 B 补丁: the feedback UI lives on the CLI path;
+    excluding CLI would disconnect the fire and feedback populations).
+    """
+    skill_id = _route_hit_skill_id_raw(span)
+    if skill_id is None or not skill_id or skill_id == FALLBACK_SENTINEL:
+        return None
+    return skill_id
 
 
 def _parse_span_time(span: dict[str, Any]) -> datetime | None:

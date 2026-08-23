@@ -105,6 +105,49 @@ class TestCountSkillFires:
         _write_spans(tmp_path, [_span(skill_id="")])
         assert count_skill_fires(tmp_path, now=NOW) == {}
 
+    def test_fallback_sentinel_is_not_a_fire(self, tmp_path: Path) -> None:
+        """gate40 项4: pre-gate40 producers wrote the ``fallback-llm``
+        sentinel into hit spans (活洞群 B; cmspark measured it as the
+        largest 30d fire bucket, 1061/2822). A fallback is a routing
+        miss, not a skill — excluded from the fire column."""
+        _write_spans(
+            tmp_path,
+            [
+                _span(skill_id="fallback-llm"),
+                _span(skill_id="fallback-llm", meta_as_string=False),  # dict form too
+                _span(skill_id="demo/skill"),
+            ],
+        )
+        assert count_skill_fires(tmp_path, now=NOW) == {"demo/skill": 1}
+
+
+class TestRouteHitSkillIdRaw:
+    """gate40 项4: the raw extraction keeps the sentinel/empty string so
+    bucketing layers (skill_outcomes) can tell them apart; the fire
+    predicate excludes both."""
+
+    def test_raw_extraction_vs_fire_predicate(self, tmp_path: Path) -> None:
+        from vibesop.core.skills.skill_health import (
+            _route_hit_skill_id,
+            _route_hit_skill_id_raw,
+        )
+
+        sentinel = _span(skill_id="fallback-llm")
+        assert _route_hit_skill_id_raw(sentinel) == "fallback-llm"
+        assert _route_hit_skill_id(sentinel) is None
+
+        empty = _span(skill_id="")
+        assert _route_hit_skill_id_raw(empty) == ""
+        assert _route_hit_skill_id(empty) is None
+
+        real = _span(skill_id="demo/skill")
+        assert _route_hit_skill_id_raw(real) == "demo/skill"
+        assert _route_hit_skill_id(real) == "demo/skill"
+
+        miss = _span(skill_id="demo/skill", has_match=False)
+        assert _route_hit_skill_id_raw(miss) is None
+        assert _route_hit_skill_id(miss) is None
+
 
 class TestParseSpanTime:
     """Timezone handling of the 30-day window (pi NIT)."""

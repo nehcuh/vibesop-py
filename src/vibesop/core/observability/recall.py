@@ -382,22 +382,33 @@ def _extract_skill_id(span: dict) -> str | None:
     - ``metadata.skill_id`` (current main.py:786 pattern)
     - ``output_data.skill_id`` (route decision result)
 
-    Returns None if no skill_id is found.
+    Returns None if no skill_id is found. The ``fallback-llm`` sentinel
+    is NOT a skill (gate40 项4 — a fallback is a routing miss whose
+    outcomes are discovery-queue signals), so it is excluded here:
+    pre-gate40 producers wrote it into span metadata (活洞群 B), and the
+    metadata branch must never surface it as a skill in recall / W3
+    replay. (Today disk spans carry metadata as a JSON-encoded string —
+    SpanWriter serialises it — so the metadata branch is inert for them;
+    the guard is for the top-level/output_data branches and any future
+    dict-metadata activation.)
     """
+    candidate: str | None = None
     top = span.get("skill_id")
     if isinstance(top, str) and top:
-        return top
-    metadata = span.get("metadata")
-    if isinstance(metadata, dict):
-        sk = metadata.get("skill_id")
-        if isinstance(sk, str) and sk:
-            return sk
-    output = span.get("output_data")
-    if isinstance(output, dict):
-        sk = output.get("skill_id")
-        if isinstance(sk, str) and sk:
-            return sk
-    return None
+        candidate = top
+    if candidate is None:
+        metadata = span.get("metadata")
+        if isinstance(metadata, dict):
+            sk = metadata.get("skill_id")
+            if isinstance(sk, str) and sk:
+                candidate = sk
+    if candidate is None:
+        output = span.get("output_data")
+        if isinstance(output, dict):
+            sk = output.get("skill_id")
+            if isinstance(sk, str) and sk:
+                candidate = sk
+    return candidate if candidate != "fallback-llm" else None
 
 
 def _extract_query(span: dict) -> str | None:

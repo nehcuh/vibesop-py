@@ -477,7 +477,10 @@ class TestRouterMatchedSpanVerdict:
     def test_orchestrate_all_fallback_plan_is_miss(self, fresh_tracer, tmp_path) -> None:
         """gate20 claude NIT-1: PlanBuilder steps can carry
         skill_id="fallback-llm" — an all-fallback plan is a MISS, same
-        verdict the single-intent branch gives fallback-llm."""
+        verdict the single-intent branch gives fallback-llm.
+        gate40 项4: the SPAN must also write skill_id="" (never the
+        sentinel) and omit top_skills — the result object itself keeps
+        steps[0].skill_id (result contract, untouched)."""
         from vibesop.core.observability.gold_detection import is_route_miss_span
 
         runtime = self._orchestrate_runtime(
@@ -492,16 +495,23 @@ class TestRouterMatchedSpanVerdict:
                 },
             },
         )
-        runtime.handle_query("orchestrate this")
+        result = runtime.handle_query("orchestrate this")
 
         span = self._route_span(fresh_tracer)
         metadata = self._metadata(span)
         assert metadata.get("has_match") is False
+        assert metadata.get("skill_id") == ""
+        assert "top_skills" not in metadata
         assert is_route_miss_span(span) is True
+        # Result contract pin: result.skill_id is UNTOUCHED (steps[0]) —
+        # the injection gate (:653) and instinct bridge (:727) consume it.
+        assert result.skill_id == "fallback-llm"
 
     def test_orchestrate_mixed_plan_is_match(self, fresh_tracer, tmp_path) -> None:
         """A plan with at least one REAL skill step is a match even if
-        other steps fell back."""
+        other steps fell back. gate40 项4: the span attributes the FIRST
+        REAL step — skill_id=次步, top_skills[0]=次步 (the result object
+        still carries steps[0], the fallback sentinel)."""
         runtime = self._orchestrate_runtime(
             tmp_path,
             {
@@ -514,10 +524,39 @@ class TestRouterMatchedSpanVerdict:
                 },
             },
         )
+        result = runtime.handle_query("orchestrate this")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+        assert metadata.get("skill_id") == "real-skill"
+        assert metadata["top_skills"] == ["real-skill"]
+        # Result contract pin: steps[0] still flows into result.skill_id.
+        assert result.skill_id == "fallback-llm"
+
+    def test_orchestrate_plan_beyond_five_steps(self, fresh_tracer, tmp_path) -> None:
+        """gate40 impl-review MAJOR: the span write must scan ALL plan
+        steps, not just the steps[0] + steps[1:5] window that
+        result.skill_id / result.alternatives cover. A >5-step plan whose
+        first five steps are all fallback used to leak has_match=true ∧
+        skill_id="" — the exact hole gate40 项4 set out to close."""
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": True,
+                "plan": {
+                    "steps": [
+                        *[{"skill_id": "fallback-llm", "intent": f"step {i}"} for i in range(5)],
+                        {"skill_id": "late-real-skill", "intent": "do it"},
+                    ]
+                },
+            },
+        )
         runtime.handle_query("orchestrate this")
 
         metadata = self._metadata(self._route_span(fresh_tracer))
         assert metadata.get("has_match") is True
+        assert metadata.get("skill_id") == "late-real-skill"
+        assert metadata["top_skills"] == ["late-real-skill"]
 
     def test_routing_exception_span_is_unknown_not_miss(self, fresh_tracer, tmp_path) -> None:
         """gate20 pi NIT-2: routing raises → early return BEFORE the

@@ -4,9 +4,11 @@ Feeds the ``vibe skill outcomes`` table: the gate38 hit-outcome data
 (``route_outcomes.jsonl``) made visible for the first time. Outcome rows
 carry no ``skill_id`` — the join key is ``outcome.span_id`` → span ``id``,
 with the skill id taken from the span's metadata. Span metadata may be a
-JSON-encoded string, so the join reuses ``skill_health._route_hit_skill_id``
-verbatim (str→json.loads tolerance + non-empty-str predicate) instead of a
-literal ``span["metadata"]["skill_id"]``.
+JSON-encoded string, so the join reuses ``skill_health``'s route-hit
+extraction (str→json.loads tolerance + span gates) instead of a literal
+``span["metadata"]["skill_id"]`` — the raw variant
+(``_route_hit_skill_id_raw``) so the ``fallback-llm`` sentinel can be
+told apart from a genuinely empty id (gate40 项4).
 
 Hard discipline (same bar as skill_health.py — do not relax):
 - RAW COUNTS ONLY. No rates, no ratios, no percentages, no grades, no
@@ -31,8 +33,13 @@ Hard discipline (same bar as skill_health.py — do not relax):
   predicate — cmspark measured 37/2437 dirty hits) OR an unknown reason
   (defensive: only three reasons exist today; if the writer adds a fourth,
   this keeps the invariant instead of silently dropping rows).
+- ``fallback`` counts hit rows whose span carried the ``fallback-llm``
+  sentinel (gate40 项4 — the sentinel is not a skill; its outcomes are
+  discovery-queue signals, so it must NOT collapse into ``unjoined``:
+  cmspark measured 1088/2440 hit-outcome rows). Producers stopped writing
+  the sentinel on miss rows in gate40; these are pre-gate40 rows.
   Reconciliation invariant: Σ(per-skill reask + moved_on + expired) +
-  unjoined == total hit rows.
+  unjoined + fallback == total hit rows.
 """
 
 from __future__ import annotations
@@ -43,7 +50,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from vibesop.core.skills.skill_health import _route_hit_skill_id, spans_file_for
+from vibesop.core.skills.skill_health import (
+    FALLBACK_SENTINEL,
+    _route_hit_skill_id_raw,
+    spans_file_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +78,11 @@ def outcomes_file_for(project_root: Path) -> Path | None:
 
 
 def _span_skill_map(project_root: Path) -> dict[str, str]:
-    """Single scan of the spans file → ``{span_id: skill_id}`` for route-hit
-    spans. Spans whose metadata is malformed or whose skill_id is empty are
+    """Single scan of the spans file → ``{span_id: raw skill_id}`` for
+    route-hit spans. The raw id is kept (including ``""`` and the
+    ``fallback-llm`` sentinel) so the bucketing layer can route sentinel
+    rows to the top-level ``fallback`` count instead of ``unjoined``.
+    Spans whose metadata is malformed or whose skill_id is missing are
     absent from the map — their outcome rows land in ``unjoined``.
     """
     path = spans_file_for(project_root)
@@ -89,7 +103,7 @@ def _span_skill_map(project_root: Path) -> dict[str, str]:
                 span_id = span.get("id")
                 if not isinstance(span_id, str) or not span_id:
                     continue
-                skill_id = _route_hit_skill_id(span)
+                skill_id = _route_hit_skill_id_raw(span)
                 if skill_id is None:
                     continue
                 mapping[span_id] = skill_id
@@ -113,11 +127,11 @@ def _parse_outcome_ts(raw: Any) -> datetime | None:
 
 
 def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
-    """Raw per-skill hit-outcome counts + top-level ``unjoined``.
+    """Raw per-skill hit-outcome counts + top-level ``unjoined``/``fallback``.
 
     Returns ``{"skills": {skill_id: {"reask", "moved_on", "expired",
-    "last_at"}}, "unjoined": int}`` with skills sorted by skill_id
-    (lexicographic — never by count, which would be a leaderboard).
+    "last_at"}}, "unjoined": int, "fallback": int}`` with skills sorted by
+    skill_id (lexicographic — never by count, which would be a leaderboard).
     ``last_at`` is the raw ``span_ts`` string of the latest outcome row
     for the skill (None when no row carried a parseable one).
 
@@ -127,6 +141,7 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
     skills: dict[str, dict[str, Any]] = {}
     last_dt: dict[str, datetime] = {}
     unjoined = 0
+    fallback = 0
 
     outcomes_path = outcomes_file_for(project_root)
     if outcomes_path is not None:
@@ -146,8 +161,14 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
 
                     span_id = row.get("span_id")
                     skill_id = span_skills.get(span_id) if isinstance(span_id, str) else None
+                    if skill_id == FALLBACK_SENTINEL:
+                        # Fallback routing is a miss, not a skill — its
+                        # outcomes belong to the discovery queue, counted
+                        # separately so they don't collapse into unjoined.
+                        fallback += 1
+                        continue
                     column = _REASON_TO_COLUMN.get(row.get("reason"))
-                    if skill_id is None or column is None:
+                    if not skill_id or column is None:
                         # Span missing, empty skill_id, or unknown reason —
                         # unattributable. Bucketing here (not silently
                         # dropping) keeps the reconciliation invariant.
@@ -164,6 +185,10 @@ def count_skill_outcomes(project_root: Path) -> dict[str, Any]:
                         last_dt[skill_id] = ts
                         entry["last_at"] = raw_ts
         except OSError:
-            return {"skills": {}, "unjoined": 0}
+            return {"skills": {}, "unjoined": 0, "fallback": 0}
 
-    return {"skills": {sid: skills[sid] for sid in sorted(skills)}, "unjoined": unjoined}
+    return {
+        "skills": {sid: skills[sid] for sid in sorted(skills)},
+        "unjoined": unjoined,
+        "fallback": fallback,
+    }

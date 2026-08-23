@@ -246,9 +246,12 @@ class TestRouteCliLayerMetadata:
 class TestRouteCliTopSkills:
     """gate38 L2a — CLI hit spans carry ``metadata.top_skills`` (≤3,
     primary first). Gated on the same expression as
-    ``metadata["has_match"]`` and read from the routing result object.
-    On miss the CLI alternatives are fallback nearest-neighbours
-    (result_mixin), not a router ranking → the key is omitted entirely.
+    ``metadata["has_match"]`` — since gate40 项4 that expression is the
+    hook-path verdict (primary real hit ∨ any real-skill plan step), NOT
+    the mode-derived ``OrchestrationResult.has_match`` property — and
+    read from the routing result object. On miss the CLI alternatives
+    are fallback nearest-neighbours (result_mixin), not a router
+    ranking → the key is omitted entirely.
     """
 
     @staticmethod
@@ -380,3 +383,161 @@ class TestRouteCliTopSkills:
 
         metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
         assert metadata["top_skills"] == ["test-skill"]
+
+
+class TestRouteCliFallbackSentinel:
+    """gate40 项4 — CLI span metadata follows the hook-path verdict.
+
+    The mode-derived ``OrchestrationResult.has_match`` property stays
+    True on all-fallback orchestrated plans (result contract — JSON
+    output / confirmation flow); the SPAN must instead write the real
+    routing verdict: primary real hit ∨ any real-skill plan step.
+    Miss rows always write ``skill_id=""`` — never the ``fallback-llm``
+    sentinel.
+    """
+
+    @staticmethod
+    def _metadata(span: dict) -> dict:
+        meta = span.get("metadata") or {}
+        return json.loads(meta) if isinstance(meta, str) else meta
+
+    @staticmethod
+    def _orchestrated_result(step_skill_ids: list[str]):
+        from vibesop.core.models import (
+            ExecutionPlan,
+            ExecutionStep,
+            OrchestrationMode,
+            OrchestrationResult,
+        )
+
+        return OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query="orchestrate this",
+            execution_plan=ExecutionPlan(
+                plan_id="plan-1",
+                steps=[
+                    ExecutionStep(
+                        step_id=f"step-{i}",
+                        step_number=i,
+                        skill_id=sid,
+                        intent=f"step {i}",
+                    )
+                    for i, sid in enumerate(step_skill_ids, start=1)
+                ],
+            ),
+        )
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_all_fallback_orchestrated_writes_miss(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        """All-fallback plan → span has_match=False, skill_id="",
+        top_skills absent — while the RESULT property stays True
+        (property-unchanged pin: OrchestrationResult.has_match is the
+        untouched result contract)."""
+        mock_stdin.isatty.return_value = False
+        orch_result = self._orchestrated_result(["fallback-llm", "fallback-llm"])
+        mock_router.orchestrate.return_value = orch_result
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "deploy then notify the team"
+        mock_interceptor_cls.return_value = _make_interceptor(
+            query, mode=InterceptionMode.ORCHESTRATE
+        )
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        route_spans = _read_route_spans(fresh_tracer)
+        assert len(route_spans) == 1
+        metadata = self._metadata(route_spans[0])
+        assert metadata.get("has_match") is False
+        assert metadata.get("skill_id") == ""
+        assert "top_skills" not in metadata
+        # Property pin: the result contract is deliberately unchanged —
+        # the mode-derived property still says True on all-fallback plans.
+        assert orch_result.has_match is True
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_first_fallback_then_real_step_writes_real_step(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        """First step fallback + second step real → span attributes the
+        FIRST REAL step: skill_id=次步, top_skills[0]=次步, has_match=True."""
+        mock_stdin.isatty.return_value = False
+        orch_result = self._orchestrated_result(["fallback-llm", "real-skill"])
+        mock_router.orchestrate.return_value = orch_result
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "deploy then notify the team"
+        mock_interceptor_cls.return_value = _make_interceptor(
+            query, mode=InterceptionMode.ORCHESTRATE
+        )
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+        assert metadata.get("has_match") is True
+        assert metadata.get("skill_id") == "real-skill"
+        assert metadata["top_skills"][0] == "real-skill"
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_single_mode_miss_writes_empty_skill_id(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        """Single-mode miss: primary is the fallback-llm sentinel route
+        (result_mixin) — the span must write skill_id="" (miss rows never
+        carry the sentinel) with has_match=False."""
+        from vibesop.core.models import (
+            OrchestrationMode,
+            OrchestrationResult,
+            RoutingLayer,
+            SkillRoute,
+        )
+
+        mock_stdin.isatty.return_value = False
+        miss_orch = OrchestrationResult(
+            mode=OrchestrationMode.SINGLE,
+            original_query="totally unroutable xyzzy query",
+            primary=SkillRoute(
+                skill_id="fallback-llm",
+                confidence=1.0,
+                layer=RoutingLayer.FALLBACK_LLM,
+                source="builtin",
+            ),
+        )
+        mock_router._to_orchestration_result.return_value = miss_orch
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "totally unroutable xyzzy query"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        metadata = self._metadata(_read_route_spans(fresh_tracer)[0])
+        assert metadata.get("has_match") is False
+        assert metadata.get("skill_id") == ""
+        assert "top_skills" not in metadata
