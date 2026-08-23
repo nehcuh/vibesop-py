@@ -396,11 +396,9 @@ def _try_embedding_fallback(
     model = getattr(router, "_index_embedding_model", None)
     if model is None:
         try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
+            from vibesop.core.embedding_loader import load_sentence_transformer
 
-            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+            model = load_sentence_transformer("paraphrase-multilingual-MiniLM-L12-v2")
             router._index_embedding_model = model
         except Exception:
             return None, LayerDetail(

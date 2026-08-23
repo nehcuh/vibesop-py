@@ -116,11 +116,9 @@ class EmbeddingRecall:
         if self._model_failed:
             return None
         try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
+            from vibesop.core.embedding_loader import load_sentence_transformer
 
-            self._model = SentenceTransformer(MODEL_NAME)
+            self._model = load_sentence_transformer(MODEL_NAME)
         except Exception as e:
             logger.debug("sentence-transformers unavailable for triage recall: %s", e)
             self._model_failed = True

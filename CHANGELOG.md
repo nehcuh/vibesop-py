@@ -9,6 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 止血与真实痛点（gate40, 2026-08-23）
+
+按 `.omx/artifacts/gate40-synthesis.md` r2.2 定稿实施（三路对抗 +
+claude/pi/grok 评审两轮 + 确认轮,0 BLOCK)。
+
+- **hook 冷启动修复（主项）**：新共享 helper
+  `core/embedding_loader.load_sentence_transformer`——
+  `local_files_only=True` 离线优先,缓存缺失/损坏时显式在线重试;
+  异常分类学钉死(ImportError/KeyboardInterrupt/SystemExit/
+  MemoryError 不重试原样抛,二次异常原样重抛,helper 无状态)。
+  6 处 SentenceTransformer 加载点全部改走 helper(strategies/
+  learner/triage_recall/promote_verifier/_layers/indexer),各点既有
+  fail-open 形态不变。实测(cmspark 生产 hook,n=3×2 批):online
+  中位 17.7s → offline 4.4s,每次 prompt 省去 13-30s HF Hub 在线
+  等待;Grok hook(10s timeout)此前必超时。注意:各平台已部署的
+  hook 无需重跑 build——修复在包代码内,随升级自动生效。
+- **项 5 性能**:`evaluator` 的 usage-frequency 计数从每技能
+  O(distinct×records) 重建改为单遍 Counter(`evaluate_skill` 无参
+  路径自算,`evaluate_all_skills` hoist 经可选参数传入,向后兼容)。
+  同值重算零行为变化;实测 200 技能×2000 记录:1.059s → 0.0116s
+  (~91x)。
+- **项 4 空 skill_id 遥测对齐**:CLI/hook 两侧 span metadata 的
+  has_match/skill_id/top_skills 统一按"首个真技能步"谓词写入
+  (all-fallback → has_match=false、skill_id="");**结果契约不动**
+  (`OrchestrationResult.has_match` property 与 result.skill_id 及其
+  消费者保持不变)。**读侧**:`fallback-llm` sentinel 从 fire 列与
+  outcomes 技能列排除——cmspark 实测该桶是 30d fire 最大桶
+  (1061/2822=37.6%,多为 M12 前化石)与 hit outcome 的 44.6%
+  (1088/2440),整桶移入 outcomes 顶层 `(fallback: N)` 计数(不
+  进 unjoined,对账式 Σ三列+unjoined+fallback=hit 总数);反方向:
+  CLI orchestrated 有真步的命中从此进入 fire(cmspark 69 行潜在
+  增量上界)。发现池组成变化:all-fallback CLI 翻 miss 后进入
+  gold_detection 发现池(合法且有意)。
+- **项 2 F/archive 规则对齐(处置语义变更)**:F-deprecate 从
+  `total_routes<3` 翻为 `>=3` 且新增质量下限 `routing_accuracy<0.5`
+  ——原规则实测会命中"路由全对但用得相对少"的技能(唯一的罪是
+  不是最常用);archive 加 >=3 闸(作用于 C/D/F 三档)。证据门槛
+  1→3 + 质量下限,**不等于**"质量 vs 用量"问题已修复(3 条全对+
+  用得少仍可能 F,只是不再被处置);薄样本(1-2 条反馈)F 档进入
+  无 warn/deprecate/archive 的有意真空区,终局裁决等第一批真实
+  feedback。注意:>=3 条的 F 档在 90 天后仍会被 archive(archive
+  不带 accuracy 闸,处置语义=长期闲置而非质量判决,有测试钉死)。两个已知 dogfood 现场 feedback 文件均不存在,今天零
+  行为变化。
+- **项 1 dashboard**:五处 spans.jsonl 硬编码(server.py
+  :137/:195/:296/:330/:344)统一走 `_spans_path()` dev/prod 选择,
+  生产逐字节不变。记档:仓内另有 6 处非 dashboard 同型硬编码
+  (recall_cmd/trace_cmd/pool_cmd/dag_rebuilder)未修——dev 环境下
+  dashboard DAG 端点的存在性检查与重建读不同文件是其现实后果。
+
 ### 让数据开口：outcomes 只读出口（gate39, 2026-08-23）
 
 按 `.omx/artifacts/gate39-synthesis.md` r2 定稿实施（三路对抗 +

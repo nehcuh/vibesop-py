@@ -772,6 +772,13 @@ actions):**
   the `(unjoined: N)` trailer row keeps them visible — a rising unjoined count after
   `vibe trace prune` means the spans were deleted, not that outcomes
   stopped.
+- `fallback-llm` rows (the no-match fallback route) are NOT a skill: they
+  are counted in a separate `(fallback: N)` trailer, never in the
+  per-skill columns and never in `unjoined`; their signal belongs to the
+  discovery queue. (gate40: in the first dogfood dump this bucket was
+  1088/2440 = 44.6% of all hit-outcome rows — mostly pre-M12 fossils.
+  The same sentinel is also excluded from the Fire column, where it was
+  the largest bucket at 1061/2822 of 30d fires.)
 
 ---
 

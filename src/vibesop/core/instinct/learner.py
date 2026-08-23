@@ -509,8 +509,7 @@ class InstinctLearner:
                 if (i.source == "auto_routing" or "auto_extracted" in i.tags)
                 and i.success_count == 0  # explicit positive feedback => human-confirmed
                 and (
-                    not is_auto_extract_worthy(i.pattern)
-                    or _is_untrusted_layer_context(i.context)
+                    not is_auto_extract_worthy(i.pattern) or _is_untrusted_layer_context(i.context)
                 )
             ]
             if dry_run or not victims:
@@ -688,11 +687,9 @@ class InstinctLearner:
         if self._embedding_model is not None:
             return True
         try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
+            from vibesop.core.embedding_loader import load_sentence_transformer
 
-            self._embedding_model = SentenceTransformer(self._embedding_model_name)
+            self._embedding_model = load_sentence_transformer(self._embedding_model_name)
             return True
         except (ImportError, OSError, RuntimeError):
             return False

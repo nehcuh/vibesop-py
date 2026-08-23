@@ -592,11 +592,9 @@ class EmbeddingMatcher:
             return
 
         try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
+            from vibesop.core.embedding_loader import load_sentence_transformer
 
-            self._model = SentenceTransformer(self._model_name)
+            self._model = load_sentence_transformer(self._model_name)
         except ImportError:
             raise ImportError(
                 "sentence-transformers is required for EmbeddingMatcher. "

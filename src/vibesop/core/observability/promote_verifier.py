@@ -129,11 +129,9 @@ def _get_embedding_model() -> Any | None:
         if _MODEL_STATE["model"] is not None or _MODEL_STATE["failed"]:
             return _MODEL_STATE["model"]
         try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
+            from vibesop.core.embedding_loader import load_sentence_transformer
 
-            _MODEL_STATE["model"] = SentenceTransformer(MODEL_NAME)
+            _MODEL_STATE["model"] = load_sentence_transformer(MODEL_NAME)
         except Exception as e:  # missing dep / no network / OOM — all fail-open
             logger.debug("promote verifier: embedding model unavailable: %s", e)
             _MODEL_STATE["failed"] = True

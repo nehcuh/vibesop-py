@@ -468,16 +468,13 @@ class SkillIndexer:
         return " ".join(parts)
 
     def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
-        try:
-            from sentence_transformers import (
-                SentenceTransformer,  # pyright: ignore[reportMissingImports]
-            )
-        except ImportError:
-            logger.debug("sentence-transformers not installed; skipping embeddings")
-            return
+        # The helper import itself cannot fail (stdlib-only module); a
+        # missing sentence-transformers package raises ImportError inside
+        # the helper and lands in the except below (gate40).
+        from vibesop.core.embedding_loader import load_sentence_transformer
 
         try:
-            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+            model = load_sentence_transformer("paraphrase-multilingual-MiniLM-L12-v2")
         except Exception as e:
             logger.warning("Failed to load sentence-transformers model: %s", e)
             return
