@@ -44,6 +44,28 @@ def _load_fixture() -> list[dict]:
             line = line.strip()
             if line:
                 spans.append(json.loads(line))
+    # Date-aging guard: recall_similar() applies a 30-day look-back window
+    # against datetime.now(), so static fixture timestamps eventually age out
+    # and the retrieval tests silently return nothing (observed 2026-08-24,
+    # fixture dated 2026-07-20~25). Rebase all timestamps so the NEWEST one
+    # lands at now, preserving relative deltas.
+    from datetime import UTC, datetime
+
+    def _parse(ts: str | None) -> datetime | None:
+        if not ts:
+            return None
+        try:
+            return datetime.fromisoformat(ts)
+        except ValueError:
+            return None
+
+    timestamps = [dt for dt in (_parse(s.get("timestamp")) for s in spans) if dt]
+    if timestamps:
+        shift = datetime.now(UTC) - max(timestamps)
+        for span in spans:
+            dt = _parse(span.get("timestamp"))
+            if dt is not None:
+                span["timestamp"] = (dt + shift).isoformat()
     return spans
 
 
