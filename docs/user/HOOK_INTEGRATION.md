@@ -71,6 +71,14 @@ Each adapter exposes `is_available()` (bool) and `detect()` (path or None) via
 `UserPromptSubmit` 调 `vibe route --hook`（stdin 事件 JSON → 路由结果注入）；
 `PostToolUse` 采集工具序列到 `vibesop-tool-seq.json`（候选发现的 trace 数据源）。
 
+**Claude Code 注册层互斥（gate41）:** `vibesop-route.sh` 只允许注册在一个层级
+——用户级（`~/.claude/settings.json`）或项目级（`<project>/.claude/settings.json`）。
+双层同时注册会让每个 prompt 触发两次 hook（skill 注入两份、route span 双写、
+fire 计数虚高）。`vibe build --platform claude-code`（项目级）与
+`vibe deploy`（用户级）现在写入本层后会自动摘除另一层的 route 注册（保留
+mirror/PostToolUse 等其他 hooks），并警告提示两个路径与另一层脚本的新旧状态。
+若看到该警告，一般无需动作；想换层级时重跑对应命令即可。
+
 ## Quick start
 
 ```bash

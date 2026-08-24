@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### route span 写侧遥测可信性（gate41, 2026-08-24）
+
+按 `.omx/artifacts/gate41-synthesis.md` v2.2 定稿实施（三路对抗 +
+claude/pi/grok 评审三轮 + 确认轮）。立项依据：cmspark dogfood 数据实测
+route span 写侧三类失真——hook 双层注册双写（30d fire 虚高约 45%、
+outcomes 幻影 reask 约七成）、redact 腐蚀 JSON（约 14% span metadata
+不可解析静默丢弃）、has_match/confidence 三元组不自洽。
+
+- **项 1 hook 注册层互斥（P0）**：`claude_code.py` 的
+  `_render_settings_json` 改合并语义（同层既有非 route 的
+  UserPromptSubmit 条目如 mirror 保留、幂等去重），写入后外科摘除
+  另一层 settings.json 中全部 vibesop-route.sh 注册（保留
+  env/model/mirror/PostToolUse,空键两级移除,原子写回）,警告含
+  两路径 + 另一层脚本 SESSION_ID 转发检测。对 vibe build（项目级）
+  与 deploy.py（用户级）两个写入方对称生效。grok-build 的
+  `vibe route --hook` 注册有意保留。bash /tmp 锁方案经评审否决
+  （DOS 面 + 盖不住 grok 路径）,Python 侧 in-flight 去重列为
+  gate42 候选。
+- **项 2 三层 redact（P1）**：`span_writer.py` 改为 (a) 递归 str
+  叶子 redact → (b) json.dumps → (c) 收窄正则再 redact;`redaction.py`
+  PATH 正则收窄（POSIX 段排除引号/反斜杠,Windows 段保留反斜杠）。
+  消灭"redact 破坏 JSON 结构"类别（约 269 条历史 span metadata
+  损坏的根因）,顺带修复 Windows 路径在 span 中从未脱敏的问题;
+  SECRET/KEY/EMAIL 依赖 `"api_key": "…"` JSON 上下文的匹配能力由
+  (c) 层保住。
+- **项 3 has_match/confidence 不变量（P2）**：`agent_runtime.py`
+  引入统一谓词 `matched = router_matched and bool(_span_skill_ids)`,
+  has_match 与 confidence 共用——all-fallback orchestrated 计划不再
+  写出 `has_match=false ∧ confidence=0.8` 的噪声组合（miss 行
+  confidence 归零）。`router_matched` 原始判决与
+  `OrchestrationResult.has_match` property 本体不动。
+- **项 4 outcomes 一次性 remediation**：新脚本
+  `scripts/rebuild_route_outcomes.py`——dry-run 默认（新旧 reason
+  计数对照 + 去重清单 + 投影 reask:moved_on）,`--apply` 且投影
+  ≤10:1（pooled 与 hit-only 双口径）才 .bak 交换重建。三签名（S1 双
+  hook [0,10]s / S2 同 session 新形态 / S3 空心 once-session）只作用
+  于输入材料,bridge 谓词、state 文件、run_bridge 全不碰。cmspark
+  dry-run 实测（2026-08-24 窗）：现状 808:1 → 投影 5.73:1（pooled）
+  / 6.30:1（hit-only）。另：POSIX 含反斜杠路径的尾段脱敏残余为已知
+  取舍（PII 前缀恒覆盖,redaction.py 注释固化）。
+- **基线迁移注记**：项 3 使 miss 行 confidence 归零、项 4 重建改变
+  outcomes 分布,`vibe skill outcomes` 的 reask/expired 计数与历史
+  不可直接对比;老模板部署（无 SESSION_ID 转发）的翻转 miss span
+  会落 session_expired 空心桶,重跑 `vibe build --platform
+  claude-code` 收敛。
+
 ### 止血与真实痛点（gate40, 2026-08-23）
 
 按 `.omx/artifacts/gate40-synthesis.md` r2.2 定稿实施（三路对抗 +
