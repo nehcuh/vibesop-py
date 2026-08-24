@@ -55,4 +55,6 @@ uv run python scripts/rebuild_route_outcomes.py --project-root /path/to/project 
 - 不删/不写 `tool_call_bridge_state.json`。
 - 不触发 discover/scan。
 - 残余噪声：claude-code→vibe-cli 同 task 幻影 reask（agent 在 hook 注入
-  后再跑 `vibe route` CLI 所致）不在本脚本签名内，属 gate42 候选。
+  后再跑 `vibe route` CLI 所致）不在本脚本签名内；gate42 已把 reask
+  触发面收窄为非 CLI（user-turn）span，该类幻影在 outcome 派生侧消除，
+  无需新增签名。

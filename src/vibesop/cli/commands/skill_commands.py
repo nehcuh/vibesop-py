@@ -277,7 +277,8 @@ def skill_outcomes_cmd(
         "（本表全量 vs fire 列 30d）皆不同，禁止拼比率。[/dim]"
     )
     console.print(
-        "[dim]² 三种 outcome 分列：reask=同任务重问（弱负；证据含任意路径后续路由），"
+        "[dim]² 三种 outcome 分列：reask=同任务重问（弱负；证据为任意非 CLI"
+        "（hook/user-turn）路径的后续路由），"
         "moved_on=会话推进（弱正），expired=24h 无证据到期"
         "（最弱；cmspark 实测回灌占主导 1268/2437）。[/dim]"
     )

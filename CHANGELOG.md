@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### route outcome reask 触发面语义收窄（gate42, 2026-08-24）
+
+按 `.omx/artifacts/gate42-synthesis.md` v2 终稿实施（三路评审 + 确认轮
+全 CONFIRM-PASS）。性质：gate41 §6 预授权的冻结谓词**语义收窄**
+（"CLI span 不应作为 reask 触发器"）。机制根因：编程 agent 在 hook
+注入路由结果后按模板再跑一次 CLI 路由，同 task_id、异 session、
+Δt p50≈18s 的 vibe-cli span 把 hook span 误判为 write-once 的 reask
+弱负信号（cmspark 实测投影残余 reask 294 条中 217 条为 CLI 触发幻影）。
+
+- **触发面加 `is_cli` 过滤**：`tool_call_bridge.py` 的 `_classify` 与
+  `_classify_hit` 两处 `later_same_task` 扫描各加 `not rs.is_cli`
+  子句——reask 触发器只认 user-turn span,CLI 自路由是程序化回声，
+  不构成用户重问证据。注释钉死四条：为何不镜像 pool 的三重排除
+  （not_intercepted/slash_command 是用户主动发起的合法重问证据）、
+  is_cli 依赖 cli/main.py 恒写 platform/source 双标记的生产方不变量、
+  `session_moved_on` 不加子句的结构性依据（hook 路径在铸 UUID 前提前
+  退出,session 命名空间不同）。
+- **reask 定义收窄**：模块 docstring 与 `vibe skill outcomes` 脚注的
+  reask 定义从 "LATER route span" 收窄为 "LATER user-turn (non-CLI)
+  route span"(miss/hit 两侧对称）;pool 谓词、moved_on、
+  gold_detection、rebuild 脚本零改动。
+- **接受的取舍**（机制论证）:hook 注入后、无后续 hook 重问、仅 CLI
+  再路由的路径不再记 reask；该路径的 CLI 一次性 session 证据本就
+  hollow，历史窗口（217 条全部 <10min、p50≈18s，与真实重问 p50≈24h
+  两个数量级分离）未见可分离的真人 CLI 重问类。
+- **抽样核对**：≥60s 的 CLI 触发样本（约 11 条）人工核对结论——
+  待 cmspark rebuild 验收后回填（设计稿 §4,pi F4）。
+
 ### route span 写侧遥测可信性（gate41, 2026-08-24）
 
 按 `.omx/artifacts/gate41-synthesis.md` v2.2 定稿实施（三路对抗 +

@@ -371,7 +371,7 @@ class TestOutcomesCommand:
     def test_footnotes_disclose_caveats(self, patched_outcomes: None) -> None:
         out = runner.invoke(skill_app, ["outcomes"]).output
         assert "禁止拼比率" in out  # 口径差异（路径+时间窗）
-        assert "证据含任意路径后续路由" in out
+        assert "证据为任意非 CLI（hook/user-turn）路径的后续路由" in out
         assert "1268/2437" in out  # expired 回灌占主导实测
         assert "下界计数" in out
         assert "跨技能不可比" in out
