@@ -611,9 +611,24 @@ def launchd_home(tmp_path, monkeypatch):
     tests are hermetic simulations of macOS semantics and must run on any
     host. This mirrors the per-test ``_is_macos`` monkeypatch convention
     established in ``TestMigrateOwnership``.
+
+    ``shutil.which("uv")`` is defaulted to a whitelisted Homebrew path for
+    the same reason: install-launchd resolves the host's real uv at
+    :1235, which is whitelisted on dev machines (/opt/homebrew/bin) but
+    NOT on CI runners (/opt/hostedtoolcache/...) — the P1-5 whitelist
+    gate would fail every non-dry-run test there. Tests that exercise the
+    uv resolution itself override this with their own per-test patch
+    (later ``monkeypatch.setattr`` wins).
     """
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+    import shutil
+
+    real_which = shutil.which
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda cmd, *a, **kw: "/opt/homebrew/bin/uv" if cmd == "uv" else real_which(cmd, *a, **kw),
+    )
     return tmp_path
 
 
