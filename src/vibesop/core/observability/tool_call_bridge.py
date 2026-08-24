@@ -39,7 +39,7 @@ or ``spans.dev.jsonl`` in dev/test contexts — same dev/prod selection as
    - explicit accept (``vibe instinct accept`` → routing_pending item with
      ``status="accepted"`` whose query matches the span) ≈ strong positive
    - re-ask (the span's ``task_id`` — full-text derived, truncation-safe —
-     reappears on a LATER route span) ≈ weak negative
+     reappears on a LATER user-turn (non-CLI) route span) ≈ weak negative
    - session completed without re-ask (a later different-task span in the
      same session, or the span is older than ``SESSION_COMPLETE_HOURS``)
      ≈ weak positive
@@ -52,7 +52,8 @@ or ``spans.dev.jsonl`` in dev/test contexts — same dev/prod selection as
 
    Hit side (gate38 L2a): non-CLI spans with ``has_match is True`` get
    the mirror-image classification — the span's ``task_id`` reappearing
-   on a LATER route span ≈ weak negative (``hit_reask_same_task_id``);
+   on a LATER user-turn (non-CLI) route span ≈ weak negative
+   (``hit_reask_same_task_id``);
    a later different-task span in the same session ≈ weak positive
    (``hit_session_moved_on``); older than ``SESSION_COMPLETE_HOURS`` ≈
    weak positive (``hit_session_expired``). There is no explicit-accept
@@ -627,12 +628,32 @@ def _classify(
     """Return (outcome, reason) or None when not yet determinable.
 
     Precedence: explicit accept (strong) > re-ask (weak neg) > completion
-    (weak pos). A span with no re-ask and no completion evidence stays
-    undecided and is re-evaluated on the next run.
+    (weak pos). The re-ask trigger surface is a LATER non-CLI (user-turn)
+    route span on the same task — CLI self-route spans never trigger it
+    (gate42 semantic narrowing). A span with no re-ask and no completion
+    evidence stays undecided and is re-evaluated on the next run.
     """
     if _matches_accepted(miss, accepted_queries):
         return "strong_positive", "explicit_accept"
 
+    # gate42: the re-ask trigger only recognizes user-turn spans.
+    # ``not rs.is_cli`` pins four things down:
+    # 1. A re-ask is evidence that a HUMAN re-asked; a vibe-cli self-route
+    #    (agent re-running `vibe route` after the hook already injected the
+    #    route result) is a programmatic echo of the same turn, not a re-ask.
+    # 2. Only ``is_cli`` is excluded — deliberately NOT mirroring the pool
+    #    predicates' triple exclusion: ``not_intercepted``/``slash_command``
+    #    spans are user-initiated, so as TRIGGERS they are legitimate re-ask
+    #    evidence and must stay in.
+    # 3. ``is_cli`` relies on the producer invariant that cli/main.py always
+    #    writes the dual markers ``platform="vibe-cli"``/``source="cli"`` on
+    #    CLI route spans; if that ever breaks, this filter silently widens.
+    # 4. ``session_moved_on`` below needs no such clause on structural
+    #    grounds: the hook path (cli/main.py:641) exits before minting its
+    #    per-invocation UUID (:816), so CLI span sessions come from an
+    #    independent mint whose format and namespace differ from the hook's
+    #    host-payload sessions — collision probability is zero (cmspark's
+    #    0/601 shared-session count is corroboration, not the argument).
     later_same_task = [
         rs
         for rs in route_spans
@@ -643,6 +664,7 @@ def _classify(
         and rs.started_at is not None
         and miss.started_at is not None
         and rs.started_at > miss.started_at
+        and not rs.is_cli
     ]
     if later_same_task:
         return "weak_negative", "reask_same_task_id"
@@ -676,9 +698,17 @@ def _classify_hit(
     routing_pending queries are a miss-only signal — there is no accept
     path for hits). Reasons carry a ``hit_`` prefix so consumers can
     filter the two pools apart. Precedence: re-ask (weak neg) >
-    completion (weak pos). A fresh hit with no completion evidence stays
-    undecided and is re-evaluated on the next run.
+    completion (weak pos). The re-ask trigger surface is a LATER non-CLI
+    (user-turn) route span on the same task — CLI self-route spans never
+    trigger it (gate42, mirror of the miss side). A fresh hit with no
+    completion evidence stays undecided and is re-evaluated on the next
+    run.
     """
+    # gate42: same ``not rs.is_cli`` trigger filter as ``_classify`` — see
+    # the four pinned-down points there (user-turn-only evidence, deliberate
+    # non-mirroring of the pool's triple exclusion, the cli/main.py
+    # dual-marker producer invariant, and why ``session_moved_on`` needs no
+    # clause). Keep the two sides in lockstep (mirror convention).
     later_same_task = [
         rs
         for rs in route_spans
@@ -689,6 +719,7 @@ def _classify_hit(
         and rs.started_at is not None
         and hit.started_at is not None
         and rs.started_at > hit.started_at
+        and not rs.is_cli
     ]
     if later_same_task:
         return "weak_negative", "hit_reask_same_task_id"

@@ -747,3 +747,227 @@ class TestSpansFilenameSelection:
         assert stats.outcomes_recorded == 1
         outcomes = _read_outcomes(tmp_path)
         assert outcomes[0]["span_id"] == "dev-miss-1"
+
+
+class TestCliReaskTriggerExclusion:
+    """gate42 — CLI self-route spans are programmatic echoes, never re-ask
+    triggers: both ``later_same_task`` scans (miss + hit sides) filter
+    ``not rs.is_cli``. Existing re-ask cases all build spans with the
+    default ``platform="claude-code"``, so the new clause is a no-op for
+    them; these tests pin the narrowed trigger surface. CLI fixtures use
+    ``platform="vibe-cli"``/``source="cli"`` (the producer invariant the
+    filter relies on) and deterministic sha1-derived task ids (no builtin
+    ``hash()`` anywhere in the derivation path)."""
+
+    def _cli_echo(self, root: Path, *, query: str, started: datetime, span_id: str) -> Span:
+        return _route_span(
+            root,
+            query=query,
+            platform="vibe-cli",
+            source="cli",
+            session="minted-per-invocation",
+            started=started,
+            span_id=span_id,
+        )
+
+    def test_fresh_miss_plus_cli_echo_stays_undecided(self, tmp_path: Path) -> None:
+        """The live path: a hook miss followed minutes later by the agent's
+        CLI self-route echo must NOT be nailed as a write-once weak negative
+        (cmspark 8-24: 55/55 new outcomes were exactly this phantom)."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="how do I rotate the signing keys",
+            started=now - timedelta(minutes=5),
+            span_id="miss-1",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="how do I rotate the signing keys",
+            started=now - timedelta(minutes=4),
+            span_id="cli-echo",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 0
+        assert miss.id not in {o["span_id"] for o in _read_outcomes(tmp_path)}
+
+    def test_cli_echo_does_not_block_expiry(self, tmp_path: Path) -> None:
+        """A miss older than 24h whose only same-task successor is a CLI
+        echo decays into session_expired_without_reask, never reask."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="how do I rotate the signing keys",
+            started=now - timedelta(hours=25),
+            span_id="miss-1",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="how do I rotate the signing keys",
+            started=now - timedelta(hours=23, minutes=30),
+            span_id="cli-echo",
+        )
+        bridge_entries([], tmp_path)
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert outcomes[miss.id]["outcome"] == "weak_positive"
+        assert outcomes[miss.id]["reason"] == "session_expired_without_reask"
+
+    def test_cli_echo_yields_to_session_moved_on(self, tmp_path: Path) -> None:
+        """Priority flip: miss + interleaved same-task CLI echo + later
+        different-task hook span in the same session → the CLI echo must not
+        grab the re-ask; session continuation wins."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=15),
+            span_id="miss-1",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=10),
+            span_id="cli-echo",
+        )
+        _route_span(
+            tmp_path,
+            query="a different question",
+            started=now - timedelta(minutes=5),
+            span_id="other-1",
+        )
+        bridge_entries([], tmp_path)
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert outcomes[miss.id]["outcome"] == "weak_positive"
+        assert outcomes[miss.id]["reason"] == "session_continued_without_reask"
+
+    def test_sandwich_hook_reask_still_counts(self, tmp_path: Path) -> None:
+        """Sandwich: miss + CLI echo + EVEN LATER same-task hook span still
+        classifies as re-ask — the filter is per-candidate, not first-match
+        or a time window (guard against future "simplification"). Note:
+        this case stays green when the is_cli clause is removed (clause
+        removal is covered by the other six tests); it only guards against
+        CLI-echo-shielding simplifications."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=15),
+            span_id="miss-1",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=10),
+            span_id="cli-echo",
+        )
+        _route_span(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=5),
+            span_id="miss-2",
+        )
+        bridge_entries([], tmp_path)
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert outcomes[miss.id]["outcome"] == "weak_negative"
+        assert outcomes[miss.id]["reason"] == "reask_same_task_id"
+
+    def test_hit_side_cli_echo_never_triggers_reask(self, tmp_path: Path) -> None:
+        """Hit-side mirror: a fresh hit followed only by a same-task CLI
+        echo stays undecided (no hit_reask_same_task_id)."""
+        now = datetime.now(UTC)
+        hit = _route_span(
+            tmp_path,
+            query="deploy the service",
+            has_match=True,
+            started=now - timedelta(minutes=10),
+            span_id="hit-1",
+            session="sess-h",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="deploy the service",
+            started=now - timedelta(minutes=5),
+            span_id="cli-echo",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.hit_outcomes_recorded == 0
+        assert hit.id not in {o["span_id"] for o in _read_outcomes(tmp_path)}
+
+    def test_hit_side_hook_reask_still_counts(self, tmp_path: Path) -> None:
+        """Hit-side mirror: an interleaved CLI echo must not shield a later
+        genuine hook re-ask on the same task. Note: this case stays green
+        when the is_cli clause is removed (covered by the sibling tests);
+        it only guards against CLI-echo-shielding simplifications."""
+        now = datetime.now(UTC)
+        hit = _route_span(
+            tmp_path,
+            query="deploy the service",
+            has_match=True,
+            started=now - timedelta(minutes=15),
+            span_id="hit-1",
+            session="sess-h",
+        )
+        self._cli_echo(
+            tmp_path,
+            query="deploy the service",
+            started=now - timedelta(minutes=10),
+            span_id="cli-echo",
+        )
+        _route_span(
+            tmp_path,
+            query="deploy the service",
+            has_match=True,
+            started=now - timedelta(minutes=5),
+            span_id="hit-2",
+            session="sess-h",
+        )
+        bridge_entries([], tmp_path)
+        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
+        assert outcomes[hit.id]["outcome"] == "weak_negative"
+        assert outcomes[hit.id]["reason"] == "hit_reask_same_task_id"
+
+    def test_is_cli_recognized_by_platform_marker_only(self, tmp_path: Path) -> None:
+        """Producer-invariant guard: ``platform="vibe-cli"`` alone (no
+        ``source="cli"``) must already mark the span as CLI — a fresh miss
+        followed by such an echo stays undecided."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=10),
+            span_id="miss-1",
+        )
+        _route_span(
+            tmp_path,
+            query="question one",
+            platform="vibe-cli",
+            session="minted-per-invocation",
+            started=now - timedelta(minutes=5),
+            span_id="cli-echo",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 0
+        assert miss.id not in {o["span_id"] for o in _read_outcomes(tmp_path)}
+
+    def test_is_cli_recognized_by_source_marker_only(self, tmp_path: Path) -> None:
+        """Producer-invariant guard: ``source="cli"`` alone (platform not
+        ``vibe-cli``) must already mark the span as CLI — a fresh miss
+        followed by such an echo stays undecided."""
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path,
+            query="question one",
+            started=now - timedelta(minutes=10),
+            span_id="miss-1",
+        )
+        _route_span(
+            tmp_path,
+            query="question one",
+            source="cli",
+            session="minted-per-invocation",
+            started=now - timedelta(minutes=5),
+            span_id="cli-echo",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 0
+        assert miss.id not in {o["span_id"] for o in _read_outcomes(tmp_path)}
