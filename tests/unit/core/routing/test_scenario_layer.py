@@ -266,7 +266,5 @@ class TestRegistryScenarioConfig:
         """code_review's primary must stay source-pinned so it fails closed
         on machines without the intended pack installed."""
         config = load_scenario_config(REPO_ROOT / "core" / "registry.yaml")
-        code_review = next(
-            s for s in config["strategies"] if s.get("scenario") == "code_review"
-        )
+        code_review = next(s for s in config["strategies"] if s.get("scenario") == "code_review")
         assert code_review.get("primary_source") == "gstack"

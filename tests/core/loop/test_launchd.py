@@ -129,7 +129,9 @@ def _spec(**overrides: object) -> LoopSpec:
 class TestRenderPlist:
     def test_label_and_filename_match(self) -> None:
         assert plist_label("instinct-assemble") == f"{LAUNCHD_LABEL_PREFIX}.instinct-assemble"
-        assert plist_filename("instinct-assemble") == f"{LAUNCHD_LABEL_PREFIX}.instinct-assemble.plist"
+        assert (
+            plist_filename("instinct-assemble") == f"{LAUNCHD_LABEL_PREFIX}.instinct-assemble.plist"
+        )
 
     def test_default_plist_path_in_home_launchagents(self) -> None:
         p = default_plist_path("foo")
@@ -248,9 +250,7 @@ class TestRenderPlist:
         spec = _spec()
         out = tmp_path / "out.log"
         err = tmp_path / "err.log"
-        plist_bytes = render_plist(
-            spec, project_root=tmp_path, stdout_path=out, stderr_path=err
-        )
+        plist_bytes = render_plist(spec, project_root=tmp_path, stdout_path=out, stderr_path=err)
         parsed = plistlib.loads(plist_bytes)
         assert parsed["StandardOutPath"] == str(out)
         assert parsed["StandardErrorPath"] == str(err)

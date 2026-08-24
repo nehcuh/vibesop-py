@@ -66,11 +66,7 @@ def _is_hit(top1: str | None, expect: list[str]) -> bool:
 
 
 def _load_eval_entries() -> tuple[list[dict], list[dict]]:
-    main = [
-        e
-        for e in yaml.safe_load(MAIN_EVAL.read_text(encoding="utf-8"))
-        if e.get("expect")
-    ]
+    main = [e for e in yaml.safe_load(MAIN_EVAL.read_text(encoding="utf-8")) if e.get("expect")]
     # Extended set was human-audited 2026-08-19 (see file header /
     # .omx/artifacts/tier3-eval-label-audit.md): labels are confirmed, no
     # longer weak — select confirmed positives (expect non-empty).
@@ -114,7 +110,11 @@ def _precision_table(title: str, rows_by_scheme: dict[str, list]) -> None:
     raw accuracy ignores.
     """
     print(f"\n## {title} — accepted-coverage / wrong-accepts / precision")
-    print("| threshold | " + " | ".join(f"{n}: cov | {n}: wrong | {n}: prec" for n in rows_by_scheme) + " |")
+    print(
+        "| threshold | "
+        + " | ".join(f"{n}: cov | {n}: wrong | {n}: prec" for n in rows_by_scheme)
+        + " |"
+    )
     print("|" + "---|" * (1 + 3 * len(rows_by_scheme)))
     for thr in THRESHOLDS:
         cells: list[str] = []
@@ -145,7 +145,9 @@ def main() -> int:
     print(f"profiles: {len(index)}")
 
     main_entries, extended_entries = _load_eval_entries()
-    print(f"main eval entries: {len(main_entries)}  extended (audited) entries: {len(extended_entries)}")
+    print(
+        f"main eval entries: {len(main_entries)}  extended (audited) entries: {len(extended_entries)}"
+    )
 
     schemes = {"bigram": _tokenize_query, "unigram": _tokenize_unigram}
     results: dict[str, dict[str, list]] = {}

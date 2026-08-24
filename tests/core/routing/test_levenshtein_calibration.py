@@ -57,7 +57,7 @@ class TestLevenshteinLastResort:
     """Levenshtein is only consulted when the calibrated matchers miss."""
 
     def test_suppressed_when_calibrated_matchers_hit(self, tmp_path: Path) -> None:
-        """"使用 review": keyword/tfidf match code-review; levenshtein's fuzzy
+        """ "使用 review": keyword/tfidf match code-review; levenshtein's fuzzy
         score must not override them."""
         router = _router(tmp_path)
         primary, _alts, _detail = router._run_matcher_pipeline_levenshtein_last(
@@ -141,9 +141,7 @@ class TestLevenshteinLastResort:
         # Pass-2 coverage: "systmatic" only matches via Levenshtein, so every
         # run proves the full pass really contained it (no transient miss).
         assert len(primaries) == 80
-        assert all(
-            p is not None and p.skill_id == "systematic-debugging" for p in primaries
-        )
+        assert all(p is not None and p.skill_id == "systematic-debugging" for p in primaries)
 
 
 class TestSlashExplicitRouting:
@@ -281,7 +279,7 @@ class TestIncidentRegressions:
     """Regression set from .vibe/instincts/routing_pending.jsonl."""
 
     def test_shiyong_review_not_inflated_levenshtein(self, tmp_path: Path) -> None:
-        """"使用 review" used to route to kimi-gated-fix @1.0 via levenshtein."""
+        """ "使用 review" used to route to kimi-gated-fix @1.0 via levenshtein."""
         result = _router(tmp_path).route("使用 review", candidates=INCIDENT_CANDIDATES)
         assert result.primary is not None
         assert result.primary.skill_id == "builtin/code-review"
@@ -299,7 +297,7 @@ class TestIncidentRegressions:
         assert "debug" in result.primary.skill_id
 
     def test_keyi_no_garbage_match(self, tmp_path: Path) -> None:
-        """"可以" is conversational noise — no skill may claim it, least of
+        """ "可以" is conversational noise — no skill may claim it, least of
         all at an inflated 1.0."""
         result = _router(tmp_path).route("可以", candidates=INCIDENT_CANDIDATES)
         assert result.primary is None or result.primary.layer in (
@@ -318,7 +316,7 @@ class TestIncidentRegressions:
         )
 
     def test_xiu_bug_no_inflated_levenshtein(self, tmp_path: Path) -> None:
-        """"修 bug" may match or miss, but never via a 1.0 levenshtein hit."""
+        """ "修 bug" may match or miss, but never via a 1.0 levenshtein hit."""
         result = _router(tmp_path).route("修 bug", candidates=INCIDENT_CANDIDATES)
         assert not (
             result.primary is not None

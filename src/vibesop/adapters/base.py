@@ -623,9 +623,7 @@ class PlatformAdapter(ABC):
                 try:
                     # Ownership marker for orphan cleanup; keeps the source
                     # marker if copytree already carried one over.
-                    write_skill_marker(
-                        skill_dir, skill_id, "pack-copy", str(resolved_installed)
-                    )
+                    write_skill_marker(skill_dir, skill_id, "pack-copy", str(resolved_installed))
                 except OSError as marker_err:
                     logger.warning(
                         "copy succeeded but ownership marker write failed for %s: %s",

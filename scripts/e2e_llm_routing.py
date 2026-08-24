@@ -177,7 +177,10 @@ def main() -> int:
         )
         r = router.route(args.t4_query)
         for d in r.layer_details:
-            print(f"T4_DEBUG layer={d.layer.value} matched={d.matched} reason={d.reason}", file=sys.stderr)
+            print(
+                f"T4_DEBUG layer={d.layer.value} matched={d.matched} reason={d.reason}",
+                file=sys.stderr,
+            )
         payload = {
             "skill": r.primary.skill_id if r.primary else None,
             "layer": r.primary.layer.value if r.primary else None,
@@ -284,7 +287,14 @@ def main() -> int:
             # LLM provider config is read at process start, so the blackhole
             # endpoint only takes effect in a fresh process (true CLI semantics).
             proc = subprocess.run(
-                [sys.executable, __file__, "--project-root", str(root), "--t4-query", SCENARIO_QUERY],
+                [
+                    sys.executable,
+                    __file__,
+                    "--project-root",
+                    str(root),
+                    "--t4-query",
+                    SCENARIO_QUERY,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=180,
@@ -302,7 +312,7 @@ def main() -> int:
                     f"no T4_RESULT (rc={proc.returncode}): {proc.stdout[-300:]} {proc.stderr[-300:]}",
                 )
             else:
-                payload = json.loads(result_line[len("T4_RESULT "):])
+                payload = json.loads(result_line[len("T4_RESULT ") :])
                 meta4 = payload["meta"]
                 expected = {e.get("skill_id") for e in cache.values()}
                 # M4a semantics: last-good fires at triage level with a 0.7
@@ -313,9 +323,8 @@ def main() -> int:
                     (d for d in payload["details"] if d["layer"] == "ai_triage"),
                     {},
                 )
-                last_good_fired = (
-                    triage_detail.get("matched") is True
-                    and any(s in triage_detail.get("reason", "") for s in expected)
+                last_good_fired = triage_detail.get("matched") is True and any(
+                    s in triage_detail.get("reason", "") for s in expected
                 )
                 final_is_scenario_fallback = meta4.get("scenario_fallback") is True
                 record(

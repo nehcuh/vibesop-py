@@ -372,9 +372,7 @@ class TestLevenshteinMatcher:
     def test_score_typo_still_high(self):
         """A genuine typo (all meaningful tokens near-match) keeps a high score."""
         m = LevenshteinMatcher()
-        c = _make_candidate(
-            "code-review", name="code review", keywords=["review", "code"]
-        )
+        c = _make_candidate("code-review", name="code review", keywords=["review", "code"])
         score = m.score("reivew my code", c)
         # "my" is too short to be meaningful; "reivew"≈"review", "code"=="code"
         assert score >= 0.9
@@ -410,7 +408,7 @@ class TestLevenshteinMatcher:
         assert m.score("form", c) < 0.7
 
     def test_cjk_transposition_reverts_to_plain_levenshtein(self):
-        """"配置禁门"↔"配置门禁" (4 chars): no discount, distance 2 → sim 0.5,
+        """ "配置禁门"↔"配置门禁" (4 chars): no discount, distance 2 → sim 0.5,
         identical to pre-OSA behavior — a CJK transposition typo at this
         length no longer matches, same as before OSA was introduced."""
         m = LevenshteinMatcher()

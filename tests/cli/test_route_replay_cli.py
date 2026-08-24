@@ -102,16 +102,16 @@ def _fake_learner_no_instinct() -> MagicMock:
 
 
 class TestNoReplayFlag:
-    def test_no_replay_skips_prompt(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_no_replay_skips_prompt(self, cli_runner: CliRunner, span_file: Path) -> None:
         """--no-replay should suppress the prompt even with gold match + TTY."""
         _write_spans(span_file, _gold_spans())
         with (
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
         ):
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
@@ -136,16 +136,16 @@ class TestNoReplayFlag:
 
 
 class TestJsonSuppressesPrompt:
-    def test_json_mode_skips_prompt(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_json_mode_skips_prompt(self, cli_runner: CliRunner, span_file: Path) -> None:
         """--json should suppress the prompt (programmatic consumers)."""
         _write_spans(span_file, _gold_spans())
         with (
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
         ):
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
@@ -169,16 +169,17 @@ class TestJsonSuppressesPrompt:
 
 
 class TestNonGoldNoPrompt:
-    def test_non_gold_match_no_prompt(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_non_gold_match_no_prompt(self, cli_runner: CliRunner, span_file: Path) -> None:
         """Match found but learner has no instinct → no prompt (even with TTY)."""
         _write_spans(span_file, _gold_spans())
         with (
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_no_instinct()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner",
+                return_value=_fake_learner_no_instinct(),
+            ),
         ):
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
@@ -202,15 +203,15 @@ class TestNonGoldNoPrompt:
 
 
 class TestNoSpansNoPrompt:
-    def test_empty_spans_no_prompt(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_empty_spans_no_prompt(self, cli_runner: CliRunner, span_file: Path) -> None:
         """No spans at all → no prompt (even with TTY + gold learner)."""
         with (
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
         ):
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
@@ -232,9 +233,7 @@ class TestNoSpansNoPrompt:
 class TestYPathEmitsReplaySpan:
     """W3 Fix-7 (P1-4): Y confirm writes replay span to span file."""
 
-    def test_y_confirm_writes_replay_span(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_y_confirm_writes_replay_span(self, cli_runner: CliRunner, span_file: Path) -> None:
         """Y on the replay prompt → emit_replay_span called → replay:* span in file."""
         _write_spans(span_file, _gold_spans())
 
@@ -247,7 +246,9 @@ class TestYPathEmitsReplaySpan:
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
             patch("vibesop.core.observability.get_tracer", return_value=real_tracer),
         ):
             cache = MagicMock()
@@ -270,13 +271,9 @@ class TestYPathEmitsReplaySpan:
         with span_file.open() as f:
             captured_spans = [json.loads(line) for line in f if line.strip()]
         replay_spans = [s for s in captured_spans if s.get("name", "").startswith("replay:")]
-        assert len(replay_spans) >= 1, (
-            f"Y confirm should emit replay span; got {captured_spans}"
-        )
+        assert len(replay_spans) >= 1, f"Y confirm should emit replay span; got {captured_spans}"
 
-    def test_y_confirm_prints_step_sequence(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_y_confirm_prints_step_sequence(self, cli_runner: CliRunner, span_file: Path) -> None:
         """Y confirm should also print the prior step_sequence to console."""
         _write_spans(span_file, _gold_spans())
 
@@ -288,7 +285,9 @@ class TestYPathEmitsReplaySpan:
             patch("vibesop.cli.main._is_interactive_stdio", return_value=True),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
             patch("vibesop.core.observability.get_tracer", return_value=real_tracer),
         ):
             cache = MagicMock()
@@ -333,7 +332,9 @@ class TestNonTTYSkipsPrompt:
             patch("vibesop.cli.main._is_interactive_stdio", return_value=False),
             patch("vibesop.core.observability.recall.get_embedding_cache") as mock_cache,
             patch("vibesop.core.observability.span_writer.SpanWriter") as mock_sw,
-            patch("vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()),
+            patch(
+                "vibesop.core.instinct.learner.InstinctLearner", return_value=_fake_learner_gold()
+            ),
         ):
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
@@ -355,4 +356,3 @@ class TestNonTTYSkipsPrompt:
             "non-TTY must skip prompt entirely without blocking on input"
         )
         assert "Replay" not in r.output, "no Y/n prompt in non-TTY"
-

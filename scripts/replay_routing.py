@@ -130,8 +130,7 @@ def _print_summary(report: dict) -> None:
     ag = report["agreement"]
     print("\n=== Routing Replay ===")
     print(
-        f"replayed: {report['total']} | skipped: {report['skipped']} | "
-        f"no_llm: {report['no_llm']}"
+        f"replayed: {report['total']} | skipped: {report['skipped']} | no_llm: {report['no_llm']}"
     )
     print(
         f"agreement: {ag['matches']}/{report['total']} ({ag['rate']:.1%}) | "
@@ -191,8 +190,7 @@ def main() -> int:
         "--project-root",
         type=Path,
         default=None,
-        help="project to route against (default: derived from --log, "
-        "falling back to this repo)",
+        help="project to route against (default: derived from --log, falling back to this repo)",
     )
     parser.add_argument("--limit", type=int, default=None, help="max records to replay")
     parser.add_argument("--output", type=Path, default=None, help="write JSON report here")

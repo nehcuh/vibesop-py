@@ -562,9 +562,7 @@ class TestInstinctLearnerCrossProcessLock:
         assert storage_path.exists()
         assert not storage_path.with_suffix(".jsonl.bak").exists()
 
-    def test_cross_process_merge_preserves_disk_only_ids(
-        self, storage_path: Path
-    ) -> None:
+    def test_cross_process_merge_preserves_disk_only_ids(self, storage_path: Path) -> None:
         """When two InstinctLearner instances share storage, a save from one
         must not clobber disk-only IDs the other wrote.
 
@@ -610,9 +608,7 @@ class TestInstinctLearnerCrossProcessLock:
         # We can't easily assert the lock state from the same process, but the
         # file existence is the contract — a subsequent save can re-acquire.
 
-    def test_concurrent_saves_from_two_instances_do_not_lose_data(
-        self, storage_path: Path
-    ) -> None:
+    def test_concurrent_saves_from_two_instances_do_not_lose_data(self, storage_path: Path) -> None:
         """Stress: two learners, each learning a different pattern, then both
         saving. After reload, both patterns must be present.
 
@@ -639,9 +635,7 @@ class TestInstinctLearnerCrossProcessLock:
         assert reloaded.has_instinct(a_id)
         assert reloaded.has_instinct(b_id)
 
-    def test_clear_epoch_guard_prevents_resurrection(
-        self, storage_path: Path
-    ) -> None:
+    def test_clear_epoch_guard_prevents_resurrection(self, storage_path: Path) -> None:
         """FLAW #1 regression test: a concurrent in-memory learner must NOT
         resurrect purged data on its next save after another process cleared.
 
@@ -657,7 +651,7 @@ class TestInstinctLearnerCrossProcessLock:
             pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
 
         learner_a = InstinctLearner(storage_path=storage_path)
-        secret_id = learner_a.learn(pattern="secret pattern", action="leak") .id
+        secret_id = learner_a.learn(pattern="secret pattern", action="leak").id
         assert learner_a.has_instinct(secret_id)
 
         # Another process clears while A still holds the secret in memory.
@@ -676,9 +670,7 @@ class TestInstinctLearnerCrossProcessLock:
         assert epoch_path.exists()
         assert int(epoch_path.read_text().strip()) >= 1
 
-    def test_record_sequence_uses_cross_process_lock(
-        self, storage_path: Path
-    ) -> None:
+    def test_record_sequence_uses_cross_process_lock(self, storage_path: Path) -> None:
         """FLAW #3 regression test: record_sequence must hold the cross-process
         lock on sequences.jsonl so a launchd tick can't lose updates.
 
@@ -713,9 +705,7 @@ class TestInstinctLearnerCrossProcessLock:
         assert s_hash in reloaded._sequences
         assert t_hash in reloaded._sequences
 
-    def test_record_sequence_clear_does_not_resurrect_sequences(
-        self, storage_path: Path
-    ) -> None:
+    def test_record_sequence_clear_does_not_resurrect_sequences(self, storage_path: Path) -> None:
         """Kimi Phase B milestone P1 regression test: record_sequence must
         share the SAME lock file as clear()/_save, otherwise a sequence
         purged by clear() can be resurrected by a stale in-memory

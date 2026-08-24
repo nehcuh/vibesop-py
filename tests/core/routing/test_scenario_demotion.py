@@ -132,9 +132,7 @@ class TestScenarioDemotionKeywordBranch:
         """Index winning the best-of still short-circuits; triage never runs."""
         router = self._make_router(tmp_path)
         index_match = _route("builtin/review", 0.95, RoutingLayer.SEMANTIC_INDEX)
-        triage_mock = MagicMock(
-            return_value=(None, _detail(RoutingLayer.AI_TRIAGE, False))
-        )
+        triage_mock = MagicMock(return_value=(None, _detail(RoutingLayer.AI_TRIAGE, False)))
 
         with (
             patch(_SCEN_LAYER, return_value=_scenario_hit()),
@@ -161,9 +159,7 @@ class TestScenarioDemotionKeywordBranch:
         """
         router = self._make_router(tmp_path)
         triage_match = _route("builtin/review", 0.85, RoutingLayer.AI_TRIAGE)
-        triage_mock = MagicMock(
-            return_value=(triage_match, _detail(RoutingLayer.AI_TRIAGE, True))
-        )
+        triage_mock = MagicMock(return_value=(triage_match, _detail(RoutingLayer.AI_TRIAGE, True)))
 
         with (
             patch(_SCEN_LAYER, return_value=_scenario_hit()),
@@ -178,9 +174,7 @@ class TestScenarioDemotionKeywordBranch:
         assert result.primary.layer == RoutingLayer.AI_TRIAGE
         assert "scenario_fallback" not in result.primary.metadata
 
-    def test_forced_triage_no_result_still_falls_back_to_scenario(
-        self, tmp_path: Path
-    ) -> None:
+    def test_forced_triage_no_result_still_falls_back_to_scenario(self, tmp_path: Path) -> None:
         """Forced triage producing nothing → scenario fallback path unchanged."""
         router = self._make_router(tmp_path)
         triage_mock = MagicMock(
@@ -256,9 +250,7 @@ class TestScenarioDemotionLLMBranch:
     def test_index_short_circuit_unchanged_in_llm_branch(self, tmp_path: Path) -> None:
         router = self._make_router(tmp_path)
         index_match = _route("builtin/review", 0.95, RoutingLayer.SEMANTIC_INDEX)
-        triage_mock = MagicMock(
-            return_value=(None, _detail(RoutingLayer.AI_TRIAGE, False))
-        )
+        triage_mock = MagicMock(return_value=(None, _detail(RoutingLayer.AI_TRIAGE, False)))
 
         with (
             patch(
@@ -325,9 +317,7 @@ class TestScenarioParticipationCounting:
         assert dist[RoutingLayer.SCENARIO.value] == 1
         assert RoutingLayer.AI_TRIAGE.value not in dist
 
-    def test_triage_win_without_scenario_hit_no_scenario_count(
-        self, tmp_path: Path
-    ) -> None:
+    def test_triage_win_without_scenario_hit_no_scenario_count(self, tmp_path: Path) -> None:
         router = self._make_router(tmp_path)
         triage_match = _route("builtin/review", 0.85, RoutingLayer.AI_TRIAGE)
 
@@ -419,9 +409,7 @@ class TestSystemReminderFilter:
         assert len(result.layer_details) == 1
         assert result.layer_details[0].layer == RoutingLayer.NO_MATCH
 
-    def test_orchestrate_path_junk_query_skips_matching_layers(
-        self, tmp_path: Path
-    ) -> None:
+    def test_orchestrate_path_junk_query_skips_matching_layers(self, tmp_path: Path) -> None:
         """orchestrate() calls _single_skill_route directly — junk queries
         must not enter the matching layers on that path either."""
         config = RoutingConfig(enable_ai_triage=True)
@@ -482,9 +470,7 @@ class TestSystemReminderFilter:
             # Flowed through the layer cascade instead of the junk no-match shape
             assert result.routing_path != [], query
 
-    def test_orchestrate_path_long_junk_query_never_decomposes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_orchestrate_path_long_junk_query_never_decomposes(self, tmp_path: Path) -> None:
         """Regression: _single_skill_route returns no-match for junk, but the
         detector's primary=None branch treated any long no-match query as a
         possible multi-part request and decomposed the garbage text. Junk must

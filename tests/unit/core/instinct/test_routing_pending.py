@@ -17,15 +17,11 @@ def test_should_enqueue_policy() -> None:
     assert should_enqueue_from_route(has_match=True, confidence=0.9) is None
     # cmspark dogfood: last-resort levenshtein often reports conf=1.0
     assert (
-        should_enqueue_from_route(
-            has_match=True, confidence=1.0, layer="levenshtein"
-        )
+        should_enqueue_from_route(has_match=True, confidence=1.0, layer="levenshtein")
         == "low_confidence"
     )
-    assert (
-        should_enqueue_from_route(has_match=True, confidence=0.95, layer="ai_triage")
-        is None
-    )
+    assert should_enqueue_from_route(has_match=True, confidence=0.95, layer="ai_triage") is None
+
 
 def test_reason_zh_chinese() -> None:
     r = build_reason_zh("low_confidence", skill_id="superpowers/debug", confidence=0.4)
@@ -281,6 +277,7 @@ def test_cross_instance_writes_do_not_lose_entries(tmp_path: Path) -> None:
     original_cap = rp._MAX_NEW_PER_DAY
     rp._MAX_NEW_PER_DAY = 1000
     try:
+
         def write_batch(store: RoutingPendingStore, tag: str) -> None:
             for i in range(n_per_store):
                 item = _enqueue(store, f"{tag} query number {i}", f"s-{tag}-{i}", f"h-{tag}-{i}")
@@ -295,9 +292,7 @@ def test_cross_instance_writes_do_not_lose_entries(tmp_path: Path) -> None:
         rp._MAX_NEW_PER_DAY = original_cap
 
     rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
     assert len(rows) == 2 * n_per_store
     assert len({row["id"] for row in rows}) == 2 * n_per_store

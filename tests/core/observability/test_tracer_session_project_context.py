@@ -108,6 +108,7 @@ class TestTracePullsProcessDefaults:
         This preserves pre-W5.0 behavior for non-CLI callers (library use,
         unit tests that don't mint a session).
         """
+
         # Force Path.cwd() to fail so project_id also falls back.
         def _raise():
             raise OSError("cwd unavailable")

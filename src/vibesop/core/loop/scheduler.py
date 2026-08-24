@@ -148,9 +148,7 @@ class CronExpr:
         if len(fields) != 5:
             from vibesop.core.exceptions import CronParseError
 
-            raise CronParseError(
-                expr, f"必须为 5 段（分 时 日 月 周），收到 {len(fields)} 段"
-            )
+            raise CronParseError(expr, f"必须为 5 段（分 时 日 月 周），收到 {len(fields)} 段")
 
         self.minutes = _parse_field(fields[0], 0, 59)
         self.hours = _parse_field(fields[1], 0, 23)

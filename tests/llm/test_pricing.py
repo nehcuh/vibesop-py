@@ -251,9 +251,7 @@ class TestSpanWrappedCostApplication:
         meta = span["metadata"]
         assert meta["cost_estimation"] == "measured"
 
-    def test_unknown_model_keeps_zero_cost(
-        self, fresh_tracer: Path
-    ) -> None:
+    def test_unknown_model_keeps_zero_cost(self, fresh_tracer: Path) -> None:
         """SpanWrappedProvider with an unknown model keeps cost_usd=0
         and uses ``cost_estimation="unavailable"``."""
         provider = SpanWrappedProvider(
@@ -269,14 +267,10 @@ class TestSpanWrappedCostApplication:
         meta = span["metadata"]
         assert meta["cost_estimation"] == "unavailable"
 
-    def test_free_model_has_zero_cost_with_measured_marker(
-        self, fresh_tracer: Path
-    ) -> None:
+    def test_free_model_has_zero_cost_with_measured_marker(self, fresh_tracer: Path) -> None:
         """GLM-4-Flash is free (rate=0) — cost_usd=0 but marker="measured"
         so aggregator knows the cost is genuinely zero, not unknown."""
-        provider = SpanWrappedProvider(
-            _FakeProvider(model="glm-4-flash", provider_name="Zhipu")
-        )
+        provider = SpanWrappedProvider(_FakeProvider(model="glm-4-flash", provider_name="Zhipu"))
         provider.call("hello")
 
         spans = _read_spans(fresh_tracer)

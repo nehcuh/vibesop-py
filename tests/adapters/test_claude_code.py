@@ -602,24 +602,18 @@ class TestDeployStripSkippedCopyGuard:
         source = project / ".vibe" / "dist" / "claude-code"
         source.mkdir(parents=True)
         (source / "settings.json").write_text(
-            json.dumps(
-                {"hooks": {"UserPromptSubmit": [_hook_entry("bash x/vibesop-route.sh")]}}
-            ),
+            json.dumps({"hooks": {"UserPromptSubmit": [_hook_entry("bash x/vibesop-route.sh")]}}),
             encoding="utf-8",
         )
         # User layer settings.json already exists WITHOUT the route hook —
         # the copy loop skips it (no --force).
         user_dir = home / ".claude"
         user_dir.mkdir(parents=True)
-        (user_dir / "settings.json").write_text(
-            json.dumps({"model": "opus"}), encoding="utf-8"
-        )
+        (user_dir / "settings.json").write_text(json.dumps({"model": "opus"}), encoding="utf-8")
         project_layer = project / ".claude"
         (project_layer / "hooks").mkdir(parents=True)
         (project_layer / "settings.json").write_text(
-            json.dumps(
-                {"hooks": {"UserPromptSubmit": [_hook_entry("bash y/vibesop-route.sh")]}}
-            ),
+            json.dumps({"hooks": {"UserPromptSubmit": [_hook_entry("bash y/vibesop-route.sh")]}}),
             encoding="utf-8",
         )
         before = (project_layer / "settings.json").read_bytes()

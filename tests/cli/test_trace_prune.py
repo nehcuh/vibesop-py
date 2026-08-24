@@ -72,25 +72,24 @@ class TestPruneBasic:
         old = now - timedelta(days=60)
         recent = now - timedelta(days=5)
 
-        _write_spans(span_file, [
-            _make_span("old-1", started_at=old.isoformat()),
-            _make_span("old-2", started_at=old.isoformat()),
-            _make_span("recent-1", started_at=recent.isoformat()),
-            _make_span("recent-2", started_at=recent.isoformat()),
-        ])
-
-        result = runner.invoke(
-            app, ["prune", "--days", "30", "--span-file", str(span_file)]
+        _write_spans(
+            span_file,
+            [
+                _make_span("old-1", started_at=old.isoformat()),
+                _make_span("old-2", started_at=old.isoformat()),
+                _make_span("recent-1", started_at=recent.isoformat()),
+                _make_span("recent-2", started_at=recent.isoformat()),
+            ],
         )
+
+        result = runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
         assert result.exit_code == 0
         assert "Pruned 2 span(s)" in result.output
 
         remaining = _read_span_ids(span_file)
         assert remaining == ["recent-1", "recent-2"]
 
-    def test_dry_run_makes_no_changes(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_dry_run_makes_no_changes(self, runner: CliRunner, tmp_path: Path) -> None:
         """--dry-run reports what would happen but writes nothing."""
         span_file = tmp_path / "spans.jsonl"
         now = datetime.now(UTC)
@@ -114,14 +113,10 @@ class TestPruneBasic:
         # File unchanged
         assert span_file.read_text() == original_content
 
-    def test_missing_span_file_graceful(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_missing_span_file_graceful(self, runner: CliRunner, tmp_path: Path) -> None:
         """No span file → graceful message, no crash."""
         missing = tmp_path / "does-not-exist.jsonl"
-        result = runner.invoke(
-            app, ["prune", "--span-file", str(missing)]
-        )
+        result = runner.invoke(app, ["prune", "--span-file", str(missing)])
         assert result.exit_code == 0
         assert "not found" in result.output
 
@@ -129,13 +124,14 @@ class TestPruneBasic:
         """All spans recent → no-op message."""
         span_file = tmp_path / "spans.jsonl"
         now = datetime.now(UTC)
-        _write_spans(span_file, [
-            _make_span("recent-1", started_at=now.isoformat()),
-        ])
-
-        result = runner.invoke(
-            app, ["prune", "--days", "30", "--span-file", str(span_file)]
+        _write_spans(
+            span_file,
+            [
+                _make_span("recent-1", started_at=now.isoformat()),
+            ],
         )
+
+        result = runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
         assert result.exit_code == 0
         assert "Nothing to prune" in result.output
 
@@ -148,9 +144,7 @@ class TestPruneBasic:
         span_file = tmp_path / "spans.jsonl"
         span_file.write_text("")  # truly empty
 
-        result = runner.invoke(
-            app, ["prune", "--days", "30", "--span-file", str(span_file)]
-        )
+        result = runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
         assert result.exit_code == 0
         assert "Nothing to prune" in result.output
         # File remains empty
@@ -158,9 +152,7 @@ class TestPruneBasic:
 
 
 class TestPruneAtomicity:
-    def test_no_tmp_file_left_on_success(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_no_tmp_file_left_on_success(self, runner: CliRunner, tmp_path: Path) -> None:
         """After a successful prune, no .tmp file should be left behind.
 
         Updated for mkstemp: temp file name is randomised (prefix + suffix),
@@ -174,9 +166,7 @@ class TestPruneAtomicity:
 
         assert not list(tmp_path.glob("*.tmp"))
 
-    def test_keeps_unparseable_started_at(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_keeps_unparseable_started_at(self, runner: CliRunner, tmp_path: Path) -> None:
         """Spans with missing/garbled started_at are kept, not dropped."""
         span_file = tmp_path / "spans.jsonl"
         old = (datetime.now(UTC) - timedelta(days=60)).isoformat()
@@ -191,9 +181,7 @@ class TestPruneAtomicity:
             bad2 = _make_span("bad-2", started_at="not-a-date")
             f.write(json.dumps(bad2) + "\n")
 
-        result = runner.invoke(
-            app, ["prune", "--days", "30", "--span-file", str(span_file)]
-        )
+        result = runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
         assert result.exit_code == 0
         # "old-1" pruned (valid timestamp, old); "bad-1" and "bad-2" kept
         remaining = _read_span_ids(span_file)
@@ -207,12 +195,15 @@ class TestPruneAtomicity:
         now = datetime.now(UTC)
         old = (now - timedelta(days=60)).isoformat()
 
-        _write_spans(span_file, [
-            _make_span("s1", started_at=old),
-            _make_span("s2", started_at=now.isoformat()),
-            _make_span("s3", started_at=old),
-            _make_span("s4", started_at=now.isoformat()),
-        ])
+        _write_spans(
+            span_file,
+            [
+                _make_span("s1", started_at=old),
+                _make_span("s2", started_at=now.isoformat()),
+                _make_span("s3", started_at=old),
+                _make_span("s4", started_at=now.isoformat()),
+            ],
+        )
 
         runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
 

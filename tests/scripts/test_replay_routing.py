@@ -177,9 +177,7 @@ class TestReplayAndReport:
             {"query": f"q{i}", "old_primary": "old-skill", "old_layer": "keyword"}
             for i in range(25)
         ]
-        mapping = {
-            f"q{i}": (f"new-skill-{i}", "keyword", i / 100.0) for i in range(25)
-        }
+        mapping = {f"q{i}": (f"new-skill-{i}", "keyword", i / 100.0) for i in range(25)}
         replay_routing.replay(_StubRouter(mapping), records)
         report = replay_routing.build_report(records, skipped=0, no_llm=False)
 

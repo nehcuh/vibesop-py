@@ -158,21 +158,25 @@ class TestCrossProjectBasic:
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="how to test clustering algorithm",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="how to test clustering algorithm",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
         _write_spans_jsonl(
             b,
-            [_make_span(
-                name="route",
-                query="how to test clustering algorithm",
-                project_id=str(b.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="how to test clustering algorithm",
+                    project_id=str(b.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
         result = runner.invoke(
@@ -190,21 +194,25 @@ class TestCrossProjectBasic:
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="setup python project",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="setup python project",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
         _write_spans_jsonl(
             b,
-            [_make_span(
-                name="route",
-                query="setup python project",
-                project_id=str(b.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="setup python project",
+                    project_id=str(b.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
         result = runner.invoke(recall_app, ["setup python project", "--cross-project"])
@@ -213,33 +221,33 @@ class TestCrossProjectBasic:
 
 
 class TestCrossProjectJson:
-    def test_cross_project_json_output_shape(
-        self, tmp_path: Path, recall_app: typer.Typer
-    ) -> None:
+    def test_cross_project_json_output_shape(self, tmp_path: Path, recall_app: typer.Typer) -> None:
         a, b = _register_two_projects(tmp_path)
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="debug pytest failure",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="debug pytest failure",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
         _write_spans_jsonl(
             b,
-            [_make_span(
-                name="route",
-                query="debug pytest failure",
-                project_id=str(b.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="debug pytest failure",
+                    project_id=str(b.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
-        result = runner.invoke(
-            recall_app, ["debug pytest failure", "--cross-project", "--json"]
-        )
+        result = runner.invoke(recall_app, ["debug pytest failure", "--cross-project", "--json"])
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         assert payload["cross_project"] is True
@@ -257,17 +265,17 @@ class TestCrossProjectEdgeCases:
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="cross-project merge test",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="cross-project merge test",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
-        result = runner.invoke(
-            recall_app, ["cross-project merge test", "--cross-project"]
-        )
+        result = runner.invoke(recall_app, ["cross-project merge test", "--cross-project"])
         assert result.exit_code == 0, result.output
         assert "alpha" in result.output
 
@@ -278,21 +286,25 @@ class TestCrossProjectEdgeCases:
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="cooking recipes italian pasta",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="cooking recipes italian pasta",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
         _write_spans_jsonl(
             b,
-            [_make_span(
-                name="route",
-                query="gardening tips for tomatoes",
-                project_id=str(b.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="gardening tips for tomatoes",
+                    project_id=str(b.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
         result = runner.invoke(
@@ -313,21 +325,25 @@ class TestCrossProjectEdgeCases:
         now = datetime.now(UTC)
         _write_spans_jsonl(
             a,
-            [_make_span(
-                name="route",
-                query="cooking recipes italian pasta",
-                project_id=str(a.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="cooking recipes italian pasta",
+                    project_id=str(a.resolve()),
+                    started_at=now,
+                )
+            ],
         )
         _write_spans_jsonl(
             b,
-            [_make_span(
-                name="route",
-                query="gardening tips for tomatoes",
-                project_id=str(b.resolve()),
-                started_at=now,
-            )],
+            [
+                _make_span(
+                    name="route",
+                    query="gardening tips for tomatoes",
+                    project_id=str(b.resolve()),
+                    started_at=now,
+                )
+            ],
         )
 
         result = runner.invoke(

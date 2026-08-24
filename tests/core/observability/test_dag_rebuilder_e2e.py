@@ -41,9 +41,7 @@ def _write_plan_with_trace(
                 step_number=i + 1,
                 skill_id=s.get("skill_id", "skill-x"),
                 intent=s.get("intent", "intent-x"),
-                dependencies=dependencies.get(s["step_id"], [])
-                if dependencies
-                else [],
+                dependencies=dependencies.get(s["step_id"], []) if dependencies else [],
             )
             for i, s in enumerate(steps)
         ],
@@ -236,21 +234,18 @@ def test_full_pipeline_with_fixtures_zero_llm(tmp_path: Path) -> None:
 
     # Phases present (4 emitted by orchestrator)
     phase_names = {p["phase"] for p in dag.phases}
-    assert {"routing", "detection", "plan_building", "complete"}.issubset(
-        phase_names
-    ), f"missing phases, got {phase_names}"
+    assert {"routing", "detection", "plan_building", "complete"}.issubset(phase_names), (
+        f"missing phases, got {phase_names}"
+    )
 
     # Phase spans attached as orchestrator children
     for phase in ("routing", "detection", "plan_building", "complete"):
         assert f"span-phase-{phase}" in orch.children, (
-            f"phase {phase} not attached to orchestrator, "
-            f"children={orch.children}"
+            f"phase {phase} not attached to orchestrator, children={orch.children}"
         )
 
     # Plan + 3 step nodes (plan-scoped ids)
-    plan_node = next(
-        (n for n in dag.nodes if n.id == "plan:plan-e2e"), None
-    )
+    plan_node = next((n for n in dag.nodes if n.id == "plan:plan-e2e"), None)
     assert plan_node is not None, "plan node missing"
 
     step_ids = {n.id for n in dag.nodes if n.kind == "step"}
@@ -259,9 +254,7 @@ def test_full_pipeline_with_fixtures_zero_llm(tmp_path: Path) -> None:
         "step:plan-e2e:s2",
         "step:plan-e2e:s3",
     }
-    assert step_ids == expected_steps, (
-        f"step node ids must be plan-scoped; got {step_ids}"
-    )
+    assert step_ids == expected_steps, f"step node ids must be plan-scoped; got {step_ids}"
 
     # Dependency edges (s1→s2, s1→s3, s2→s3)
     dep_edges = {(e.src, e.dst) for e in dag.edges if e.kind == "dependency"}
@@ -271,9 +264,7 @@ def test_full_pipeline_with_fixtures_zero_llm(tmp_path: Path) -> None:
 
     # llm spans attached to steps via task_id == step_id (P0-1 contract)
     for step_id in ("s1", "s2", "s3"):
-        step_node = next(
-            n for n in dag.nodes if n.id == f"step:plan-e2e:{step_id}"
-        )
+        step_node = next(n for n in dag.nodes if n.id == f"step:plan-e2e:{step_id}")
         assert f"span-llm-{step_id}" in step_node.children, (
             f"llm span for {step_id} not attached to step "
             f"(JOIN via task_id == step_id), children={step_node.children}"
@@ -282,32 +273,26 @@ def test_full_pipeline_with_fixtures_zero_llm(tmp_path: Path) -> None:
     # 2 sub_agent nodes attached to PLAN (step-level deferred to Phase B)
     sub_nodes = [n for n in dag.nodes if n.kind == "sub_agent"]
     assert len(sub_nodes) == 2, (
-        f"expected 2 sub_agent nodes, got {len(sub_nodes)}: "
-        f"{[n.id for n in sub_nodes]}"
+        f"expected 2 sub_agent nodes, got {len(sub_nodes)}: {[n.id for n in sub_nodes]}"
     )
     sub_descriptions = {n.metadata.get("description") for n in sub_nodes}
     assert sub_descriptions == {"investigator", "reviewer"}
     for sub in sub_nodes:
         assert sub.metadata.get("plan_id") == "plan-e2e", (
-            f"sub-agent must attach to plan-e2e, "
-            f"got plan_id={sub.metadata.get('plan_id')}"
+            f"sub-agent must attach to plan-e2e, got plan_id={sub.metadata.get('plan_id')}"
         )
         assert sub.id in plan_node.children, (
-            f"sub-agent {sub.id} must be child of plan node, "
-            f"got children={plan_node.children}"
+            f"sub-agent {sub.id} must be child of plan node, got children={plan_node.children}"
         )
 
     # iterations == 1 (single plan, no reorchestration history)
     assert dag.iterations == 1, (
-        f"single plan with no reorchestration history → iterations=1, "
-        f"got {dag.iterations}"
+        f"single plan with no reorchestration history → iterations=1, got {dag.iterations}"
     )
 
     # No duplicate node ids anywhere (multi-plan shared step_id regression)
     node_ids = [n.id for n in dag.nodes]
-    assert len(node_ids) == len(set(node_ids)), (
-        f"duplicate node ids: {node_ids}"
-    )
+    assert len(node_ids) == len(set(node_ids)), f"duplicate node ids: {node_ids}"
 
 
 def test_pipeline_resilience_when_orchestrator_crashed_before_plan_building(
@@ -389,9 +374,7 @@ def test_pipeline_resilience_when_tracing_off_but_plan_persisted(
     assert dag.phases == []
 
     # Plan + steps present
-    plan_node = next(
-        (n for n in dag.nodes if n.id == "plan:plan-only"), None
-    )
+    plan_node = next((n for n in dag.nodes if n.id == "plan:plan-only"), None)
     assert plan_node is not None, "plan node missing even without spans"
     step_ids = {n.id for n in dag.nodes if n.kind == "step"}
     assert step_ids == {"step:plan-only:s1", "step:plan-only:s2"}
@@ -450,12 +433,8 @@ def test_pipeline_filters_by_trace_id(tmp_path: Path) -> None:
     assert a_plan_ids == {"plan:plan-a"}
     assert b_plan_ids == {"plan:plan-b"}
 
-    a_span_ids = {
-        n.id for n in dag_a.nodes if n.kind in ("orchestrator", "user_intent")
-    }
-    b_span_ids = {
-        n.id for n in dag_b.nodes if n.kind in ("orchestrator", "user_intent")
-    }
+    a_span_ids = {n.id for n in dag_a.nodes if n.kind in ("orchestrator", "user_intent")}
+    b_span_ids = {n.id for n in dag_b.nodes if n.kind in ("orchestrator", "user_intent")}
     assert "span-root-a" in a_span_ids
     assert "span-root-b" not in a_span_ids
     assert "span-root-b" in b_span_ids

@@ -265,10 +265,7 @@ class TestShouldReplayCarriesTraceId:
 
     def test_top_match_carries_trace_id(self, cache: EmbeddingCache) -> None:
         learner = _fake_learner(success_count=3)
-        spans = [
-            _span("t1", "hello", trace_id=f"T-{i}")
-            for i in range(5)
-        ]
+        spans = [_span("t1", "hello", trace_id=f"T-{i}") for i in range(5)]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
             d = should_replay("hello", spans, cache=cache, learner=learner)
         assert d.top_match is not None

@@ -125,9 +125,7 @@ class TestFeaturedRegistry:
         # At least 2 dependencies should be discoverable via the
         # wayfinder-dependency / wayfinder-output tags.
         deps = result_ids - {"mattpocock/wayfinder"}
-        assert len(deps) >= 2, (
-            f"expected ≥2 wayfinder dependencies in search results; got {deps}"
-        )
+        assert len(deps) >= 2, f"expected ≥2 wayfinder dependencies in search results; got {deps}"
 
     def test_get_by_id(self):
         reg = FeaturedRegistry()

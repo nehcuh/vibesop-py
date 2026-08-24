@@ -395,7 +395,10 @@ def test_capture_depth_unknown_falls_back_to_standard(tmp_path: Path) -> None:
                 "type": "assistant",
                 "message": {
                     "role": "assistant",
-                    "content": [{"type": "thinking", "thinking": "t"}, {"type": "text", "text": "x"}],
+                    "content": [
+                        {"type": "thinking", "thinking": "t"},
+                        {"type": "text", "text": "x"},
+                    ],
                 },
                 "timestamp": "2026-07-23T15:20:00.000Z",
             },
@@ -587,9 +590,13 @@ def test_parse_malformed_json_line_skipped(tmp_path: Path) -> None:
     """Broken JSON lines don't raise — they're skipped."""
     path = tmp_path / "s.jsonl"
     with path.open("w", encoding="utf-8") as f:
-        f.write('{"type": "user", "message": {"role": "user", "content": "a"}, "timestamp": "2026-07-23T15:20:00.000Z"}\n')
+        f.write(
+            '{"type": "user", "message": {"role": "user", "content": "a"}, "timestamp": "2026-07-23T15:20:00.000Z"}\n'
+        )
         f.write("not valid json\n")
-        f.write('{"type": "user", "message": {"role": "user", "content": "b"}, "timestamp": "2026-07-23T15:20:01.000Z"}\n')
+        f.write(
+            '{"type": "user", "message": {"role": "user", "content": "b"}, "timestamp": "2026-07-23T15:20:01.000Z"}\n'
+        )
     turns = parse_claude_jsonl(path)
     assert len(turns) == 2
     assert [t.query for t in turns] == ["a", "b"]
@@ -838,7 +845,17 @@ def _write_subagent_tree(
     project_dir = tmp_path / "proj"
     project_dir.mkdir()
     main_path = project_dir / f"{session_id}.jsonl"
-    _write_jsonl(main_path, main_lines or [{"type": "user", "message": {"role": "user", "content": "hi"}, "timestamp": "2026-07-23T15:20:00.000Z"}])
+    _write_jsonl(
+        main_path,
+        main_lines
+        or [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "hi"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
+    )
 
     if subagents:
         sub_dir = project_dir / session_id / "subagents"
@@ -846,9 +863,7 @@ def _write_subagent_tree(
         for idx, (agent_id, meta, lines) in enumerate(subagents):
             sub_jsonl = sub_dir / f"agent-{agent_id}.jsonl"
             _write_jsonl(sub_jsonl, lines)
-            (sub_dir / f"agent-{agent_id}.meta.json").write_text(
-                json.dumps(meta), encoding="utf-8"
-            )
+            (sub_dir / f"agent-{agent_id}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
             # Force ascending mtimes so discover_subagents returns spawn order.
             import os
 
@@ -861,7 +876,16 @@ def test_discover_subagents_empty_when_no_dir(tmp_path: Path) -> None:
     from vibesop.core.conversation_import import discover_subagents
 
     main = tmp_path / "sess.jsonl"
-    _write_jsonl(main, [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}])
+    _write_jsonl(
+        main,
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "x"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
+    )
     assert discover_subagents(main) == []
 
 
@@ -875,12 +899,24 @@ def test_discover_subagents_pairs_jsonl_with_meta(tmp_path: Path) -> None:
             (
                 "a007cb9a1cdae69c4",
                 {"agentType": "Explore", "description": "Map server", "toolUseId": "call_1"},
-                [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+                [
+                    {
+                        "type": "user",
+                        "message": {"role": "user", "content": "go"},
+                        "timestamp": "2026-07-23T15:20:00.000Z",
+                    }
+                ],
             ),
             (
                 "b0522f2c200b3bc06",
                 {"agentType": "general-purpose", "description": "Adversary", "toolUseId": "call_2"},
-                [{"type": "user", "message": {"role": "user", "content": "attack"}, "timestamp": "2026-07-23T15:21:00.000Z"}],
+                [
+                    {
+                        "type": "user",
+                        "message": {"role": "user", "content": "attack"},
+                        "timestamp": "2026-07-23T15:21:00.000Z",
+                    }
+                ],
             ),
         ],
     )
@@ -1020,7 +1056,13 @@ def test_import_subagent_parent_conversation_id_optional(tmp_path: Path) -> None
             (
                 "b0522f2c200b3bc06",
                 {"agentType": "general-purpose"},
-                [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+                [
+                    {
+                        "type": "user",
+                        "message": {"role": "user", "content": "x"},
+                        "timestamp": "2026-07-23T15:20:00.000Z",
+                    }
+                ],
             ),
         ],
     )
@@ -1129,7 +1171,11 @@ def test_import_subagent_writes_metadata_and_turns(tmp_path: Path) -> None:
     _write_jsonl(
         sub_jsonl,
         [
-            {"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"},
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "go"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            },
             {
                 "type": "assistant",
                 "message": {
@@ -1137,7 +1183,12 @@ def test_import_subagent_writes_metadata_and_turns(tmp_path: Path) -> None:
                     "model": "claude-sonnet-4-6",
                     "content": [
                         {"type": "thinking", "thinking": "planning"},
-                        {"type": "tool_use", "id": "t1", "name": "Read", "input": {"file_path": "/x"}},
+                        {
+                            "type": "tool_use",
+                            "id": "t1",
+                            "name": "Read",
+                            "input": {"file_path": "/x"},
+                        },
                         {"type": "text", "text": "done"},
                     ],
                 },
@@ -1188,7 +1239,13 @@ def test_import_subagent_idempotent_on_rerun(tmp_path: Path) -> None:
     sub_jsonl = tmp_path / "agent.jsonl"
     _write_jsonl(
         sub_jsonl,
-        [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "go"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
     )
     record = SubagentRecord(
         jsonl_path=sub_jsonl,
@@ -1262,7 +1319,13 @@ def test_import_subagent_persists_metadata_on_zero_new_turns(tmp_path: Path) -> 
     sub_jsonl = tmp_path / "agent.jsonl"
     _write_jsonl(
         sub_jsonl,
-        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "x"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
     )
 
     # First import with empty description
@@ -1341,7 +1404,13 @@ def test_discover_subagents_does_not_raise_on_unreadable_dir(
             (
                 "abc123",
                 {"agentType": "Explore"},
-                [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+                [
+                    {
+                        "type": "user",
+                        "message": {"role": "user", "content": "go"},
+                        "timestamp": "2026-07-23T15:20:00.000Z",
+                    }
+                ],
             ),
         ],
     )
@@ -1400,7 +1469,13 @@ def test_subagent_id_scheme_dropped_old_format_orphans(
     sub_jsonl = tmp_path / "agent.jsonl"
     _write_jsonl(
         sub_jsonl,
-        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "x"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
     )
     record = SubagentRecord(
         jsonl_path=sub_jsonl,
@@ -1440,7 +1515,13 @@ def test_path_traversal_safe_agent_id_cannot_escape_storage(
     sub_jsonl = tmp_path / "agent.jsonl"
     _write_jsonl(
         sub_jsonl,
-        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+        [
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "x"},
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            }
+        ],
     )
     malicious = SubagentRecord(
         jsonl_path=sub_jsonl,

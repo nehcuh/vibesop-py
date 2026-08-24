@@ -76,9 +76,7 @@ class TestTaskIdPropagation:
         assert all(tid is not None for tid in task_ids), (
             f"some route spans missing task_id: {task_ids}"
         )
-        assert len(set(task_ids)) == 1, (
-            f"expected same task_id across calls, got: {task_ids}"
-        )
+        assert len(set(task_ids)) == 1, f"expected same task_id across calls, got: {task_ids}"
 
     def test_different_queries_different_task_ids(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -107,9 +105,7 @@ class TestTaskIdPropagation:
             f"expected 2 distinct task_ids for different queries, got: {task_ids}"
         )
 
-    def test_task_id_is_16_hex_chars(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_task_id_is_16_hex_chars(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("VIBESOP_OBSERVABILITY_MODE", "prod")
         monkeypatch.chdir(tmp_path)
 
@@ -127,9 +123,7 @@ class TestTaskIdPropagation:
                     tid = r.get("task_id")
                     assert tid is not None
                     assert len(tid) == 16, f"task_id not 16 chars: {tid!r}"
-                    assert all(c in "0123456789abcdef" for c in tid), (
-                        f"task_id not hex: {tid!r}"
-                    )
+                    assert all(c in "0123456789abcdef" for c in tid), f"task_id not hex: {tid!r}"
                     return
 
         pytest.fail("no route span found in output")

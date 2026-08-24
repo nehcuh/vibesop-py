@@ -54,18 +54,12 @@ def _fake_embedding(query: str):
 
 
 class TestRecallCli:
-    def test_no_spans_returns_empty_message(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
-        r = cli_runner.invoke(
-            app, ["recall", "anything", "--span-file", str(span_file)]
-        )
+    def test_no_spans_returns_empty_message(self, cli_runner: CliRunner, span_file: Path) -> None:
+        r = cli_runner.invoke(app, ["recall", "anything", "--span-file", str(span_file)])
         assert r.exit_code == 0
         assert "No spans recorded" in r.output or "matches" in r.output.lower()
 
-    def test_json_output_empty(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_json_output_empty(self, cli_runner: CliRunner, span_file: Path) -> None:
         r = cli_runner.invoke(
             app,
             ["recall", "anything", "--json", "--span-file", str(span_file)],
@@ -74,9 +68,7 @@ class TestRecallCli:
         data = json.loads(r.output)
         assert data["matches"] == []
 
-    def test_json_output_with_matches(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_json_output_with_matches(self, cli_runner: CliRunner, span_file: Path) -> None:
         _write_spans(
             span_file,
             [
@@ -89,9 +81,7 @@ class TestRecallCli:
                 }
             ],
         )
-        with patch(
-            "vibesop.core.observability.recall.get_embedding_cache"
-        ) as mock_get_cache:
+        with patch("vibesop.core.observability.recall.get_embedding_cache") as mock_get_cache:
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
             cache.embed_batch = MagicMock(
@@ -113,9 +103,7 @@ class TestRecallCli:
         assert len(data["matches"]) >= 1
         assert data["matches"][0]["task_id"] == "t1"
 
-    def test_text_output_shows_table(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_text_output_shows_table(self, cli_runner: CliRunner, span_file: Path) -> None:
         _write_spans(
             span_file,
             [
@@ -128,14 +116,10 @@ class TestRecallCli:
                 }
             ],
         )
-        with patch(
-            "vibesop.core.observability.recall.get_embedding_cache"
-        ) as mock_get_cache:
+        with patch("vibesop.core.observability.recall.get_embedding_cache") as mock_get_cache:
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_fake_embedding)
-            cache.embed_batch = MagicMock(
-                return_value=[_fake_embedding("screenshot permission")]
-            )
+            cache.embed_batch = MagicMock(return_value=[_fake_embedding("screenshot permission")])
             mock_get_cache.return_value = cache
             r = cli_runner.invoke(
                 app,
@@ -145,9 +129,7 @@ class TestRecallCli:
         assert "t1" in r.output
         assert "Recall" in r.output
 
-    def test_threshold_filter_via_cli(
-        self, cli_runner: CliRunner, span_file: Path
-    ) -> None:
+    def test_threshold_filter_via_cli(self, cli_runner: CliRunner, span_file: Path) -> None:
         """High threshold via CLI flag filters out weak matches."""
         _write_spans(
             span_file,
@@ -169,9 +151,7 @@ class TestRecallCli:
             v[1] = 1.0 if query != "different" else 0.0
             return v
 
-        with patch(
-            "vibesop.core.observability.recall.get_embedding_cache"
-        ) as mock_get_cache:
+        with patch("vibesop.core.observability.recall.get_embedding_cache") as mock_get_cache:
             cache = MagicMock()
             cache.embed = MagicMock(side_effect=_zero_sim)
             cache.embed_batch = MagicMock(return_value=[_zero_sim("alpha")])

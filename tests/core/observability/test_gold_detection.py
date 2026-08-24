@@ -54,7 +54,9 @@ def cache(tmp_path: Path) -> EmbeddingCache:
 
 
 class TestGoldDetection:
-    def test_cluster_with_success_becomes_gold(self, fresh_learner: InstinctLearner, cache: EmbeddingCache) -> None:
+    def test_cluster_with_success_becomes_gold(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache
+    ) -> None:
         """Cluster with >=5 spans AND success outcome → is_gold=True."""
         fresh_learner.learn(
             pattern="screenshot permission popup",
@@ -147,7 +149,9 @@ class TestGoldRate:
 
 
 class TestMinClusterSizeConfig:
-    def test_custom_min_cluster_size(self, fresh_learner: InstinctLearner, cache: EmbeddingCache) -> None:
+    def test_custom_min_cluster_size(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache
+    ) -> None:
         fresh_learner.learn(pattern="hello", action="greet")
         fresh_learner.record_outcome_for_query("hello", success=True)
 

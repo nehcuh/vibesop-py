@@ -126,10 +126,7 @@ class DAG:
                 }
                 for n in self.nodes
             ],
-            "edges": [
-                {"src": e.src, "dst": e.dst, "kind": e.kind}
-                for e in self.edges
-            ],
+            "edges": [{"src": e.src, "dst": e.dst, "kind": e.kind} for e in self.edges],
             "phases": self.phases,
             "iterations": self.iterations,
         }
@@ -349,9 +346,9 @@ def rebuild_dag(
 
         # Phase children of orchestrator
         phase_spans = [
-            s for s in spans
-            if s.get("span_kind") == "workflow_node"
-            and s.get("parent_span_id") == orch_id
+            s
+            for s in spans
+            if s.get("span_kind") == "workflow_node" and s.get("parent_span_id") == orch_id
         ]
         for ps in phase_spans:
             phase_meta = ps.get("metadata") or {}
@@ -366,9 +363,7 @@ def rebuild_dag(
             )
             dag.nodes.append(phase_node)
             if orch_id:
-                dag.edges.append(
-                    DAGEdge(src=orch_id, dst=phase_node.id, kind="parent_child")
-                )
+                dag.edges.append(DAGEdge(src=orch_id, dst=phase_node.id, kind="parent_child"))
                 _attach_child(dag, orch_id, phase_node.id)
 
     # ------------------------------------------------------------------
@@ -403,9 +398,7 @@ def rebuild_dag(
         )
         dag.nodes.append(plan_node)
         if orch_id:
-            dag.edges.append(
-                DAGEdge(src=orch_id, dst=plan_node_id, kind="parent_child")
-            )
+            dag.edges.append(DAGEdge(src=orch_id, dst=plan_node_id, kind="parent_child"))
             _attach_child(dag, orch_id, plan_node_id)
 
         # Step nodes (plan-scoped ids)
@@ -423,9 +416,7 @@ def rebuild_dag(
                 },
             )
             dag.nodes.append(step_node)
-            dag.edges.append(
-                DAGEdge(src=plan_node_id, dst=step_node_id, kind="parent_child")
-            )
+            dag.edges.append(DAGEdge(src=plan_node_id, dst=step_node_id, kind="parent_child"))
             plan_node.children.append(step_node_id)
 
         # Dependency edges (intra-plan, plan-scoped ids)
@@ -508,9 +499,7 @@ def rebuild_dag(
         )
         dag.nodes.append(sub_node)
         plan_node_id = f"plan:{attach['plan_id']}"
-        dag.edges.append(
-            DAGEdge(src=plan_node_id, dst=sub_node.id, kind="parent_child")
-        )
+        dag.edges.append(DAGEdge(src=plan_node_id, dst=sub_node.id, kind="parent_child"))
         _attach_child(dag, plan_node_id, sub_node.id)
 
     # ------------------------------------------------------------------
@@ -559,10 +548,7 @@ def _derive_iterations(plans: list[Any]) -> int:
     """
     if not plans:
         return 0
-    rounds_per_plan = [
-        len(getattr(p, "reorchestration_history", None) or [])
-        for p in plans
-    ]
+    rounds_per_plan = [len(getattr(p, "reorchestration_history", None) or []) for p in plans]
     max_rounds = max(rounds_per_plan) if rounds_per_plan else 0
     if max_rounds > 0:
         return max(len(plans), max_rounds + 1)
@@ -572,11 +558,7 @@ def _derive_iterations(plans: list[Any]) -> int:
 def _find_root_span(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Find the root orchestrate span: prefer the 'orchestrate' task span
     with no parent_span_id. Fall back to any root if name differs."""
-    roots = [
-        s for s in spans
-        if not s.get("parent_span_id")
-        and s.get("span_kind") == "task"
-    ]
+    roots = [s for s in spans if not s.get("parent_span_id") and s.get("span_kind") == "task"]
     if not roots:
         return None
     named = [s for s in roots if s.get("name") == "orchestrate"]

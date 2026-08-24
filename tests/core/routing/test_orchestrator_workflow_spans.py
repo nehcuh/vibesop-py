@@ -33,9 +33,7 @@ from vibesop.core.routing import UnifiedRouter
 
 
 @pytest.fixture
-def fresh_tracer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> ObservabilityTracer:
+def fresh_tracer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ObservabilityTracer:
     """Reset the module-level observability tracer singleton to write into tmp_path."""
     import vibesop.core.observability.tracer as tracer_mod
 
@@ -64,25 +62,19 @@ def _read_spans(path: Path) -> list[dict]:
 
 
 class _StubDetector:
-    def should_decompose(
-        self, query: str, single_result: Any, llm_client: Any = None
-    ) -> bool:
+    def should_decompose(self, query: str, single_result: Any, llm_client: Any = None) -> bool:
         return True
 
 
 class _StubDecomposer:
-    def decompose(
-        self, query: str, skills: Any = None
-    ) -> list[dict[str, Any]]:
+    def decompose(self, query: str, skills: Any = None) -> list[dict[str, Any]]:
         return [
             {"intent": "task-a", "query_segment": "do task a"},
             {"intent": "task-b", "query_segment": "do task b"},
         ]
 
 
-def _stub_classify(
-    self: Any, query: str, sub_tasks: Any
-) -> ClassifierResult:
+def _stub_classify(self: Any, query: str, sub_tasks: Any) -> ClassifierResult:
     return ClassifierResult(
         pattern=WorkflowPattern.SEQUENTIAL,
         confidence=0.9,
@@ -122,9 +114,7 @@ class _StubBuilder:
 
 
 @pytest.fixture
-def stubbed_router(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> UnifiedRouter:
+def stubbed_router(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> UnifiedRouter:
     """Router with multi-intent components stubbed to avoid real LLM calls."""
     router = UnifiedRouter(project_root=tmp_path)
     # The router's _get_* methods are factories (return a new instance each call),
@@ -139,13 +129,15 @@ def stubbed_router(
     return router
 
 
-_EXPECTED_PHASES: frozenset[str] = frozenset({
-    "orchestrate:routing",
-    "orchestrate:detection",
-    "orchestrate:decomposition",
-    "orchestrate:plan_building",
-    "orchestrate:complete",
-})
+_EXPECTED_PHASES: frozenset[str] = frozenset(
+    {
+        "orchestrate:routing",
+        "orchestrate:detection",
+        "orchestrate:decomposition",
+        "orchestrate:plan_building",
+        "orchestrate:complete",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -168,9 +160,7 @@ class TestOrchestratorTraceContext:
         spans = _read_spans(tmp_path / "observability" / "spans.jsonl")
         assert spans, "orchestrate() must emit at least the root span"
         trace_ids = {s["trace_id"] for s in spans}
-        assert len(trace_ids) == 1, (
-            f"all spans must share one trace_id, got {trace_ids}"
-        )
+        assert len(trace_ids) == 1, f"all spans must share one trace_id, got {trace_ids}"
         root_spans = [s for s in spans if s["name"] == "orchestrate"]
         assert root_spans, "must emit a root 'orchestrate' task span"
         assert root_spans[0]["span_kind"] == "task"
@@ -221,13 +211,9 @@ class TestOrchestratorPhaseSpans:
         stubbed_router.orchestrate("do task a then task b")
 
         spans = _read_spans(tmp_path / "observability" / "spans.jsonl")
-        phase_names = {
-            s["name"] for s in spans if s["name"].startswith("orchestrate:")
-        }
+        phase_names = {s["name"] for s in spans if s["name"].startswith("orchestrate:")}
         missing = _EXPECTED_PHASES - phase_names
-        assert not missing, (
-            f"missing phase workflow_node spans: {missing} (got {phase_names})"
-        )
+        assert not missing, f"missing phase workflow_node spans: {missing} (got {phase_names})"
 
     def test_phase_spans_are_workflow_node_kind(
         self,
@@ -262,12 +248,9 @@ class TestOrchestratorPhaseSpans:
         phase_spans = [s for s in spans if s["name"].startswith("orchestrate:")]
         assert phase_spans, "no phase spans emitted — see test_multi_intent_emits_all_phase_spans"
         for ps in phase_spans:
-            assert ps["trace_id"] == root["trace_id"], (
-                f"{ps['name']} trace_id differs from root"
-            )
+            assert ps["trace_id"] == root["trace_id"], f"{ps['name']} trace_id differs from root"
             assert ps["parent_span_id"] == root["id"], (
-                f"{ps['name']} parent_span_id={ps['parent_span_id']} "
-                f"expected root id={root['id']}"
+                f"{ps['name']} parent_span_id={ps['parent_span_id']} expected root id={root['id']}"
             )
 
     def test_phase_span_metadata_has_phase_and_query(
@@ -288,9 +271,7 @@ class TestOrchestratorPhaseSpans:
             # so parse it back into a dict for assertions.
             meta = json.loads(s["metadata"]) if isinstance(s["metadata"], str) else s["metadata"]
             phase = s["name"].split(":", 1)[1]
-            assert meta.get("phase") == phase, (
-                f"{s['name']} metadata.phase={meta.get('phase')}"
-            )
+            assert meta.get("phase") == phase, f"{s['name']} metadata.phase={meta.get('phase')}"
             assert "query" in meta, f"{s['name']} missing metadata.query"
 
     def test_single_intent_path_emits_only_routing_and_no_plan_spans(

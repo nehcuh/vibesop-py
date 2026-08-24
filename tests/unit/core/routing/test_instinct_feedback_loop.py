@@ -73,6 +73,7 @@ def _match(skill_id: str, confidence: float) -> MatchResult:
         score_breakdown={},
     )
 
+
 # NOTE: sentence_transformers is stubbed to None suite-wide by the autouse
 # ``_no_real_embedding_model`` fixture in tests/conftest.py (embedding paths
 # fail open to lexical scoring), so these tests never download the 458MB

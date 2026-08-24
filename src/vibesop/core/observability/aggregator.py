@@ -80,7 +80,9 @@ class SpanAggregator:
     """Aggregates raw span data into structured metrics for downstream consumers."""
 
     def __init__(self, spans_path: Path | str | None = None) -> None:
-        self._spans_path = Path(spans_path) if spans_path else Path(".vibe/observability/spans.jsonl")
+        self._spans_path = (
+            Path(spans_path) if spans_path else Path(".vibe/observability/spans.jsonl")
+        )
         self._all_skills: set[str] | None = None
 
     # ------------------------------------------------------------------
@@ -115,14 +117,9 @@ class SpanAggregator:
         # Primary: spans from agent-internal observability
         spans = self._read_spans_in_window(window_hours)
         if project_id is not None:
-            spans = [
-                s for s in spans
-                if s.get("project_id", "default") == project_id
-            ]
+            spans = [s for s in spans if s.get("project_id", "default") == project_id]
         attribution = self._build_attribution_map(spans)
-        skill_spans = [
-            s for s in spans if self._span_belongs_to_skill(s, skill_id, attribution)
-        ]
+        skill_spans = [s for s in spans if self._span_belongs_to_skill(s, skill_id, attribution)]
         tasks = [s for s in skill_spans if s.get("span_kind") == "task"]
 
         if tasks:
@@ -142,7 +139,8 @@ class SpanAggregator:
                 # (they carry real token counts; task-spans have tokens_input=0
                 # pre-M2). Filter out estimated tokens to avoid polluting the mean.
                 measured = [
-                    s for s in llm_spans
+                    s
+                    for s in llm_spans
                     if (s.get("metadata", {}) or {}).get("token_accounting") == "measured"
                 ]
                 token_source = measured or llm_spans
@@ -150,9 +148,7 @@ class SpanAggregator:
                     sum(s.get("tokens_input", 0) + s.get("tokens_output", 0) for s in token_source)
                     / len(token_source)
                 )
-                metrics.total_cost_usd = round(
-                    sum(s.get("cost_usd", 0) or 0 for s in llm_spans), 6
-                )
+                metrics.total_cost_usd = round(sum(s.get("cost_usd", 0) or 0 for s in llm_spans), 6)
                 metrics.avg_cost_usd = (
                     round(metrics.total_cost_usd / len(tasks), 6) if tasks else 0.0
                 )
@@ -162,9 +158,7 @@ class SpanAggregator:
                     sum(t.get("tokens_input", 0) + t.get("tokens_output", 0) for t in tasks)
                     / len(tasks)
                 )
-                metrics.total_cost_usd = round(
-                    sum(t.get("cost_usd", 0) or 0 for t in tasks), 6
-                )
+                metrics.total_cost_usd = round(sum(t.get("cost_usd", 0) or 0 for t in tasks), 6)
                 metrics.avg_cost_usd = (
                     round(metrics.total_cost_usd / len(tasks), 6) if tasks else 0.0
                 )
@@ -183,7 +177,9 @@ class SpanAggregator:
             for t in error_tasks:
                 err = t.get("error_message", "unknown")[:80]
                 error_counts[err] = error_counts.get(err, 0) + 1
-            metrics.top_errors = [e for e, _ in sorted(error_counts.items(), key=lambda x: -x[1])[:5]]
+            metrics.top_errors = [
+                e for e, _ in sorted(error_counts.items(), key=lambda x: -x[1])[:5]
+            ]
 
             return metrics
 
@@ -237,33 +233,47 @@ class SpanAggregator:
         anomalies: list[AnomalyEvent] = []
 
         # Success rate drop
-        if baseline.success_rate > 0.5 and recent.success_rate < baseline.success_rate * 0.5 and recent.total_executions >= 3:
-            anomalies.append(AnomalyEvent(
-                skill_id=skill_id,
-                event_type="success_rate_drop",
-                description=(
-                    f"Success rate dropped from {baseline.success_rate:.0%} to "
-                    f"{recent.success_rate:.0%} (n={recent.total_executions})"
-                ),
-            ))
+        if (
+            baseline.success_rate > 0.5
+            and recent.success_rate < baseline.success_rate * 0.5
+            and recent.total_executions >= 3
+        ):
+            anomalies.append(
+                AnomalyEvent(
+                    skill_id=skill_id,
+                    event_type="success_rate_drop",
+                    description=(
+                        f"Success rate dropped from {baseline.success_rate:.0%} to "
+                        f"{recent.success_rate:.0%} (n={recent.total_executions})"
+                    ),
+                )
+            )
 
         # Duration spike
-        if baseline.avg_duration_ms > 0 and recent.avg_duration_ms > baseline.avg_duration_ms * 3 and recent.total_executions >= 3:
-            anomalies.append(AnomalyEvent(
-                skill_id=skill_id,
-                event_type="duration_spike",
-                description=(
-                    f"Avg duration spiked from {baseline.avg_duration_ms:.0f}ms to "
-                    f"{recent.avg_duration_ms:.0f}ms"
-                ),
-            ))
+        if (
+            baseline.avg_duration_ms > 0
+            and recent.avg_duration_ms > baseline.avg_duration_ms * 3
+            and recent.total_executions >= 3
+        ):
+            anomalies.append(
+                AnomalyEvent(
+                    skill_id=skill_id,
+                    event_type="duration_spike",
+                    description=(
+                        f"Avg duration spiked from {baseline.avg_duration_ms:.0f}ms to "
+                        f"{recent.avg_duration_ms:.0f}ms"
+                    ),
+                )
+            )
 
         if not anomalies and recent.source == "none":
-            anomalies.append(AnomalyEvent(
-                skill_id=skill_id,
-                event_type="no_data",
-                description=f"No span data available for skill '{skill_id}'",
-            ))
+            anomalies.append(
+                AnomalyEvent(
+                    skill_id=skill_id,
+                    event_type="no_data",
+                    description=f"No span data available for skill '{skill_id}'",
+                )
+            )
 
         return anomalies
 
@@ -323,9 +333,7 @@ class SpanAggregator:
         return mapping
 
     @staticmethod
-    def _skill_of(
-        span: dict[str, Any], attribution: dict[str, str]
-    ) -> str | None:
+    def _skill_of(span: dict[str, Any], attribution: dict[str, str]) -> str | None:
         """Resolve the skill_id for a span: own metadata first, then trace_id map."""
         meta = span.get("metadata") or {}
         own = meta.get("skill_id") if isinstance(meta, dict) else None

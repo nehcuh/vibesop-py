@@ -190,8 +190,7 @@ def _maybe_print_privacy_notice(pool_path: Path) -> None:
     if notice_marker.exists():
         return
     console.print(
-        "[dim]Privacy: project paths are stored locally at "
-        f"{pool_path} and never synced.[/dim]"
+        f"[dim]Privacy: project paths are stored locally at {pool_path} and never synced.[/dim]"
     )
     try:
         notice_marker.parent.mkdir(parents=True, exist_ok=True)
@@ -200,9 +199,7 @@ def _maybe_print_privacy_notice(pool_path: Path) -> None:
         pass
 
 
-def _find_entry(
-    data: dict[str, Any], alias_or_path: str
-) -> tuple[int, dict[str, Any]] | None:
+def _find_entry(data: dict[str, Any], alias_or_path: str) -> tuple[int, dict[str, Any]] | None:
     """Find pool entry by alias OR path; return (index, entry) or None."""
     projects = data.get("projects") or []
     # Skip path resolution for pure-alias inputs (typical case) to avoid
@@ -306,9 +303,7 @@ def add(
     try:
         _save_pool_locked(pool_path, _mutate)
     except _AliasCollision as exc:
-        console.print(
-            f"[red]✗ Alias '{exc.alias}' already in use by {exc.existing_path}[/red]"
-        )
+        console.print(f"[red]✗ Alias '{exc.alias}' already in use by {exc.existing_path}[/red]")
         raise typer.Exit(1) from exc
 
     if not outcome:
@@ -316,9 +311,7 @@ def add(
         outcome.append("added")
     kind = outcome[0]
     if kind == "idempotent":
-        console.print(
-            f"[dim]Already registered: {resolved} (alias: {chosen_alias})[/dim]"
-        )
+        console.print(f"[dim]Already registered: {resolved} (alias: {chosen_alias})[/dim]")
     elif kind == "updated":
         console.print(f"[green]✓ Updated alias:[/green] {chosen_alias} → {resolved}")
     else:

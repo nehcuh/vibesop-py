@@ -26,9 +26,7 @@ class _FakeModel:
         self.vectors = vectors
         self.encoded_texts: list[str] = []
 
-    def encode(
-        self, texts: list[str], show_progress_bar: bool = False
-    ) -> list[list[float]]:
+    def encode(self, texts: list[str], show_progress_bar: bool = False) -> list[list[float]]:
         self.encoded_texts.extend(texts)
         return [self.vectors[t] for t in texts]
 

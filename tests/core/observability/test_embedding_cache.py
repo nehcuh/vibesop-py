@@ -123,9 +123,7 @@ class TestModelIdInvalidation:
         mock_compute = MagicMock(side_effect=_fake_embedding)
         with patch.object(cache2, "_compute", mock_compute):
             cache2.embed("hello")
-            assert mock_compute.call_count == 1, (
-                "model_id bump should invalidate cache"
-            )
+            assert mock_compute.call_count == 1, "model_id bump should invalidate cache"
 
     def test_cache_file_records_model_id(self, tmp_path: Path) -> None:
         cache_path = tmp_path / "emb.npz"
@@ -200,9 +198,7 @@ class TestGapCoverage:
         mock_compute = MagicMock(side_effect=_fake_embedding)
         with patch.object(cache, "_compute", mock_compute):
             results = cache.embed_batch(["cached", "fresh"])
-        assert mock_compute.call_count == 1, (
-            "only the miss should trigger compute"
-        )
+        assert mock_compute.call_count == 1, "only the miss should trigger compute"
         assert results[0] is not None
         assert results[1] is not None
         # Same key behaviour as single embed
@@ -222,9 +218,7 @@ class TestGapCoverage:
         assert v is not None
         assert v.shape == (384,)
 
-    def test_merge_external_picks_up_keys_added_by_another_process(
-        self, tmp_path: Path
-    ) -> None:
+    def test_merge_external_picks_up_keys_added_by_another_process(self, tmp_path: Path) -> None:
         """Simulate process B adding keys to the cache file while process A holds lock.
 
         Writes the cache file with one entry from "another process", then
@@ -276,9 +270,7 @@ class TestGapCoverage:
         def _raising_lock(_path):
             raise OSError("simulated read-only filesystem")
 
-        monkeypatch.setattr(
-            "vibesop.utils.file_lock.cross_process_lock", _raising_lock
-        )
+        monkeypatch.setattr("vibesop.utils.file_lock.cross_process_lock", _raising_lock)
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
             v = cache.embed("hello")  # should not raise
         assert v is not None, "embed should still return a vector"

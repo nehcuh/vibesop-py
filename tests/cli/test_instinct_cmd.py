@@ -169,7 +169,9 @@ class TestAutoPromote:
 
     def test_custom_min_confidence(self, isolated_cwd, learner):
         learner._sequences["abc"] = _make_candidate(
-            ["plan", "execute", "verify"], success_count=8, total_count=10  # 80%
+            ["plan", "execute", "verify"],
+            success_count=8,
+            total_count=10,  # 80%
         )
         learner._save_sequences()
 
@@ -248,9 +250,7 @@ class TestFeedbackCollect:
         assert ins is not None
         assert ins.failure_count == 2  # was 1, +1 from decay
 
-    def test_no_auto_boost_for_high_success_few_apps(
-        self, isolated_cwd, learner, miss_counter
-    ):
+    def test_no_auto_boost_for_high_success_few_apps(self, isolated_cwd, learner, miss_counter):
         """Boost 分支已拆除：success_rate ≥ 0.8 且应用次数少的 instinct 不再
         被自动 record_outcome(success=True) —— 正信号只能来自显式人确认。
         feedback-collect 跑完后其 success_count 必须不变。"""
@@ -349,9 +349,7 @@ class TestFeedbackCollect:
         assert result.exit_code == 0
         assert not (isolated_cwd / ".vibe" / "instincts" / "feedback_watermark.json").exists()
 
-    def test_decay_frequent_only_touches_decayed_pattern(
-        self, isolated_cwd, learner, miss_counter
-    ):
+    def test_decay_frequent_only_touches_decayed_pattern(self, isolated_cwd, learner, miss_counter):
         """pi Phase D P2-D regression: ``decay_frequent`` must NOT halve
         counts for clusters whose instinct was early-stopped or otherwise
         not decayed this run. Only hashes feedback-collect actually acted
@@ -449,9 +447,7 @@ class TestPruneAutoExtracted:
         assert "已删除 2 条" in result.stdout
 
         reloaded = InstinctLearner(isolated_cwd / ".vibe" / "instincts.jsonl")
-        assert {i.pattern for i in reloaded.instincts.values()} == {
-            "debug this routing error now"
-        }
+        assert {i.pattern for i in reloaded.instincts.values()} == {"debug this routing error now"}
 
     def test_nothing_to_prune(self, isolated_cwd, learner):
         self._learn_auto(learner, "debug this routing error now")

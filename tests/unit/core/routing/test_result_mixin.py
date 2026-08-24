@@ -289,8 +289,8 @@ class TestBuildFallbackResult:
         mixin._config = MagicMock()
         mixin._config.fallback_mode = "silent"
         mixin._triage_service = MagicMock()
-        mixin._triage_service.has_explicit_guard_signal = (
-            lambda query, candidates, skill_id: skill_id != "builtin/riper-workflow"
+        mixin._triage_service.has_explicit_guard_signal = lambda query, candidates, skill_id: (
+            skill_id != "builtin/riper-workflow"
         )
         result = mixin._build_fallback_result(
             query="使用合适的 workflow 开发",

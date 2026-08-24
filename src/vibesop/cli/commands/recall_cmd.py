@@ -44,12 +44,8 @@ def recall_command(
     ),
     days: int = typer.Option(30, "--days", "-d", help="Look-back window in days"),
     json_output: bool = typer.Option(False, "--json", "-j", help="JSON output"),
-    span_file: Path | None = typer.Option(
-        None, "--span-file", help="Override span file location"
-    ),
-    limit: int = typer.Option(
-        5000, "--limit", help="Max spans to scan (newest first)"
-    ),
+    span_file: Path | None = typer.Option(None, "--span-file", help="Override span file location"),
+    limit: int = typer.Option(5000, "--limit", help="Max spans to scan (newest first)"),
     cross_project: bool = typer.Option(
         False,
         "--cross-project",
@@ -138,8 +134,7 @@ def _run_cross_project(
     projects = pool_data.get("projects") or []
     if not projects:
         console.print(
-            "[red]✗ No projects in pool.[/red] "
-            "Add with: [cyan]vibe pool add <path>[/cyan]"
+            "[red]✗ No projects in pool.[/red] Add with: [cyan]vibe pool add <path>[/cyan]"
         )
         raise typer.Exit(1)
 
@@ -258,9 +253,7 @@ def _render_cross_project_results(
         table.add_column("Gold", justify="center")
 
     for alias, _project_id, r in tagged:
-        sim_color = (
-            "green" if r.similarity >= 0.85 else "yellow" if r.similarity >= 0.75 else "red"
-        )
+        sim_color = "green" if r.similarity >= 0.85 else "yellow" if r.similarity >= 0.75 else "red"
         row = [
             f"[{sim_color}]{r.similarity:.3f}[/{sim_color}]",
             alias,
@@ -366,10 +359,6 @@ def _render_results(query: str, results: list) -> None:
         )
         if r.step_sequence:
             preview = " → ".join(r.step_sequence[:6])
-            suffix = (
-                f" (+{len(r.step_sequence) - 6} more)"
-                if len(r.step_sequence) > 6
-                else ""
-            )
+            suffix = f" (+{len(r.step_sequence) - 6} more)" if len(r.step_sequence) > 6 else ""
             console.print(f"  [dim]steps:[/dim] {preview}{suffix}")
     console.print()

@@ -105,7 +105,9 @@ def test_import_claude_conversation_id_derived_from_filename(tmp_path: Path) -> 
     assert (storage / "mirror-claude-88e80ab9-a1609072a787.json").exists()
 
 
-def test_import_claude_auto_discover_via_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_claude_auto_discover_via_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Empty --source → newest jsonl from ~/.claude/projects/<escaped-cwd>/."""
     home = tmp_path / "home"
     # cwd-based escaped name = tmp_path with / → -
@@ -225,7 +227,9 @@ def test_import_claude_idempotent_re_run(tmp_path: Path) -> None:
 # ----------------------------------------------------------------------
 
 
-def _assistant_with_thinking(thinking: str, text: str, ts: str = "2026-07-23T15:20:00.000Z") -> dict:
+def _assistant_with_thinking(
+    thinking: str, text: str, ts: str = "2026-07-23T15:20:00.000Z"
+) -> dict:
     return {
         "type": "assistant",
         "message": {
@@ -392,15 +396,17 @@ def _write_thin_mirror_file(storage: Path, cid: str = "s") -> None:
     """Simulate a pre-Path-1 mirror file: turns lack thinking/tool_calls keys."""
     storage.mkdir(parents=True, exist_ok=True)
     (storage / f"mirror-claude-{cid}.json").write_text(
-        json.dumps({
-            "conversation_id": f"mirror-claude-{cid}",
-            "turns": [
-                # Pre-Path-1 shape: only query/skill_id/timestamp/role/content.
-                # No thinking, tool_calls, tool_results, model, usage, stop_reason.
-                {"query": "old q", "skill_id": None, "timestamp": 1.0, "role": "user"}
-            ],
-            "last_activity": 1.0,
-        }),
+        json.dumps(
+            {
+                "conversation_id": f"mirror-claude-{cid}",
+                "turns": [
+                    # Pre-Path-1 shape: only query/skill_id/timestamp/role/content.
+                    # No thinking, tool_calls, tool_results, model, usage, stop_reason.
+                    {"query": "old q", "skill_id": None, "timestamp": 1.0, "role": "user"}
+                ],
+                "last_activity": 1.0,
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -466,21 +472,23 @@ def test_import_claude_no_warning_when_file_has_path1_fields(tmp_path: Path) -> 
     storage.mkdir(parents=True)
     # File already has Path-1 keys (even though values are None) — not thin.
     (storage / "mirror-claude-s.json").write_text(
-        json.dumps({
-            "conversation_id": "mirror-claude-s",
-            "turns": [
-                {
-                    "query": "q1",
-                    "skill_id": None,
-                    "timestamp": 1.0,
-                    "role": "user",
-                    "thinking": None,  # key present → not thin
-                    "tool_calls": None,
-                    "tool_results": None,
-                    "model": None,
-                }
-            ],
-        }),
+        json.dumps(
+            {
+                "conversation_id": "mirror-claude-s",
+                "turns": [
+                    {
+                        "query": "q1",
+                        "skill_id": None,
+                        "timestamp": 1.0,
+                        "role": "user",
+                        "thinking": None,  # key present → not thin
+                        "tool_calls": None,
+                        "tool_results": None,
+                        "model": None,
+                    }
+                ],
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -676,7 +684,9 @@ class TestAppendTurnConversationId:
         expected = "mirror-claude-deadbeef-cafe-babe"[: len("mirror-claude-") + 20]
         assert (tmp_path / ".vibe" / "conversations" / f"{expected}.json").exists()
 
-    def test_conversation_id_falls_back_to_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_conversation_id_falls_back_to_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("CLAUDE_SESSION_ID", "env-session-99")
         payload = {
             "hook_event_name": "UserPromptSubmit",
@@ -688,11 +698,11 @@ class TestAppendTurnConversationId:
             input=json.dumps(payload),
         )
         assert result.exit_code == 0, result.output
-        assert (
-            tmp_path / ".vibe" / "conversations" / "mirror-claude-env-session-99.json"
-        ).exists()
+        assert (tmp_path / ".vibe" / "conversations" / "mirror-claude-env-session-99.json").exists()
 
-    def test_conversation_id_falls_back_to_timestamp(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_conversation_id_falls_back_to_timestamp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         # No session_id, no env → mirror-<unix-ts>
         monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
         payload = {
@@ -713,9 +723,7 @@ class TestAppendTurnConversationId:
 
 
 class TestAppendTurnStorageDefault:
-    def test_storage_lands_in_vibe_conversations_under_project_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_storage_lands_in_vibe_conversations_under_project_root(self, tmp_path: Path) -> None:
         # --project-root controls where .vibe/ lives; without it, cwd is used.
         payload = {
             "hook_event_name": "UserPromptSubmit",
@@ -759,12 +767,14 @@ class TestAppendTurnMaxHistory:
         assert queries[0] == "turn-0"
         assert queries[-1] == "turn-14"
 
-    def test_max_history_config_respected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_max_history_config_respected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """conversation_mirror.max_history=5 → only last 5 kept."""
         vibe_dir = tmp_path / ".vibe"
         vibe_dir.mkdir()
         (vibe_dir / "config.toml").write_text(
-            '[conversation_mirror]\nmax_history = 5\n',
+            "[conversation_mirror]\nmax_history = 5\n",
             encoding="utf-8",
         )
         for i in range(10):
@@ -814,9 +824,7 @@ def _make_subagent_tree(
     for idx, (agent_id, meta, lines) in enumerate(subagents):
         sub_jsonl = sub_dir / f"agent-{agent_id}.jsonl"
         _make_jsonl(sub_jsonl, lines)
-        (sub_dir / f"agent-{agent_id}.meta.json").write_text(
-            json.dumps(meta), encoding="utf-8"
-        )
+        (sub_dir / f"agent-{agent_id}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
         os.utime(sub_jsonl, (10.0 + idx, 10.0 + idx))
     return main
 
@@ -913,7 +921,9 @@ def test_import_claude_subagent_purge_wipes_subagent_files(tmp_path: Path) -> No
     # First import creates the files
     first = runner.invoke(app, args)
     assert first.exit_code == 0, first.output
-    sub_file = storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16-sub-a007cb9a1cdae69c4.json"
+    sub_file = (
+        storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16-sub-a007cb9a1cdae69c4.json"
+    )
     assert sub_file.exists()
     # Manually add a stale turn to verify purge actually wipes (not just idempotent skip)
     sub_data = json.loads(sub_file.read_text(encoding="utf-8"))
@@ -944,4 +954,3 @@ def test_import_claude_subagent_no_subagents_dir_is_noop(tmp_path: Path) -> None
     output = _strip_ansi(result.output)
     assert "sub-agent" not in output
     assert "0 sub-agent turn(s)" not in output  # the summary line is suppressed entirely
-

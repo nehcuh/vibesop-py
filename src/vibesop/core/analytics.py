@@ -112,9 +112,7 @@ class LastRouteTracker:
 
             now = now or datetime.now(UTC)
             normalized = " ".join(redact_sensitive(query).split()).lower()
-            token_hashes = sorted(
-                {_hash_token(t) for t in normalized.split() if t}
-            )
+            token_hashes = sorted({_hash_token(t) for t in normalized.split() if t})
             # Non-blocking: a contended lock must never stall routing (M1d);
             # the critical section is a tiny RMW so contention is rare.
             with cross_process_lock(self.lock_path, blocking=False):
@@ -214,11 +212,7 @@ class AnalyticsStore:
         try:
             data = record.to_dict()
             data["query"] = redact_sensitive(data["query"])
-            data.update(
-                self._last_route.compute_and_update(
-                    record.query, record.primary_skill
-                )
-            )
+            data.update(self._last_route.compute_and_update(record.query, record.primary_skill))
             with self.storage_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False) + "\n")
         except OSError as e:

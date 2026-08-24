@@ -72,9 +72,7 @@ class TestStepFrequency:
 
     def test_zero_total_span_count_returns_empty(self) -> None:
         """Zero denominator → empty (avoids divide-by-zero)."""
-        freq, labels, core_steps = label_step_frequency(
-            [_span("x")], total_span_count=0
-        )
+        freq, labels, core_steps = label_step_frequency([_span("x")], total_span_count=0)
         assert freq == {}
         assert labels == {}
         assert core_steps == []

@@ -384,12 +384,8 @@ class TestPlatformAdapterEdgeCases:
 
         skill_dir = skills_dir / "pack-skill"
         monkeypatch.setattr(adapter, "_find_skill_content", lambda _: None)
-        monkeypatch.setattr(
-            "vibesop.adapters._shared.is_pack_installed", lambda _: installed
-        )
-        monkeypatch.setattr(
-            "vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False
-        )
+        monkeypatch.setattr("vibesop.adapters._shared.is_pack_installed", lambda _: installed)
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
 
         adapter._render_skill_content(
             SimpleNamespace(id="pack-skill"), skill_dir, RenderResult(success=True)
@@ -422,12 +418,8 @@ class TestPlatformAdapterEdgeCases:
 
         skill_dir = skills_dir / "pack-skill"
         monkeypatch.setattr(adapter, "_find_skill_content", lambda _: None)
-        monkeypatch.setattr(
-            "vibesop.adapters._shared.is_pack_installed", lambda _: installed
-        )
-        monkeypatch.setattr(
-            "vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False
-        )
+        monkeypatch.setattr("vibesop.adapters._shared.is_pack_installed", lambda _: installed)
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
 
         adapter._render_skill_content(
             SimpleNamespace(id="pack-skill"), skill_dir, RenderResult(success=True)

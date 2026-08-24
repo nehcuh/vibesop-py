@@ -45,9 +45,7 @@ class ModelPrice(NamedTuple):
 
     def cost_usd(self, tokens_in: int, tokens_out: int) -> float:
         """Cost in USD for the given token counts."""
-        return (
-            tokens_in * self.input_per_mtok + tokens_out * self.output_per_mtok
-        ) / 1_000_000
+        return (tokens_in * self.input_per_mtok + tokens_out * self.output_per_mtok) / 1_000_000
 
 
 # Per-provider pricing tables.

@@ -253,9 +253,7 @@ class TestLastRouteTracker:
         assert signals == {}  # no crash, no implicit fields
 
         # State was rewritten → next route gets signals again.
-        signals = tracker.compute_and_update(
-            "fix the bug", "s1", now=t0 + timedelta(seconds=3)
-        )
+        signals = tracker.compute_and_update("fix the bug", "s1", now=t0 + timedelta(seconds=3))
         assert signals["is_rapid_reroute"] is True
 
     def test_lock_contention_yields_no_signals(self, tmp_path: Path) -> None:
@@ -282,13 +280,13 @@ class TestLastRouteTracker:
         t0 = datetime(2026, 1, 1, tzinfo=UTC)
         tracker.compute_and_update("fix the bug", "s1", now=t0)
 
-        signals = tracker.compute_and_update(
-            "fix the bug", "s1", now=t0 - timedelta(seconds=30)
-        )
+        signals = tracker.compute_and_update("fix the bug", "s1", now=t0 - timedelta(seconds=30))
         assert signals["seconds_since_last_route"] == 0.0
         assert signals["is_rapid_reroute"] is True
 
-    def test_steady_state_skips_file_read(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_steady_state_skips_file_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Hot path: after the first write, the in-memory cache serves the
         state and ``_read`` is never called again."""
         tracker = LastRouteTracker(storage_dir=tmp_path)
@@ -311,7 +309,9 @@ class TestLastRouteTracker:
         assert reads == 1  # steady state: cache served, no file read
         assert signals["is_rapid_reroute"] is True
 
-    def test_failed_write_does_not_poison_cache(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_failed_write_does_not_poison_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """If ``_write`` raises, the cache must stay empty so the next call
         re-reads from disk instead of trusting unwritten state."""
         tracker = LastRouteTracker(storage_dir=tmp_path)
@@ -327,9 +327,7 @@ class TestLastRouteTracker:
         monkeypatch.undo()
         t0 = datetime(2026, 1, 1, tzinfo=UTC)
         tracker.compute_and_update("fix the bug", "s1", now=t0)
-        signals = tracker.compute_and_update(
-            "fix the bug", "s1", now=t0 + timedelta(seconds=3)
-        )
+        signals = tracker.compute_and_update("fix the bug", "s1", now=t0 + timedelta(seconds=3))
         assert signals["is_rapid_reroute"] is True
 
     def test_cache_degrades_to_per_process_signals(self, tmp_path: Path) -> None:

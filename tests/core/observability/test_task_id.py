@@ -60,10 +60,7 @@ class TestNormalizeQuery:
     def test_strip_xml_wrapper(self) -> None:
         assert normalize_query("<user_query>hello</user_query>") == "hello"
         # Multi-line content preserved
-        assert (
-            normalize_query("<user_query>\n我先离开了\n</user_query>")
-            == "我先离开了"
-        )
+        assert normalize_query("<user_query>\n我先离开了\n</user_query>") == "我先离开了"
 
     def test_xml_wrapper_with_attrs(self) -> None:
         assert normalize_query('<tag attr="x">content</tag>') == "content"
@@ -158,6 +155,5 @@ class TestNormalizeFixture:
                     f"  [{p.get('note', '?')}] {p['a']!r} → {ta}  vs  {p['b']!r} → {tb}"
                 )
         assert not failures, (
-            "task_id drift detected — pairs that no longer derive equally:\n"
-            + "\n".join(failures)
+            "task_id drift detected — pairs that no longer derive equally:\n" + "\n".join(failures)
         )

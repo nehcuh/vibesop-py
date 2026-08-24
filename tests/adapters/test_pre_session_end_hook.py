@@ -68,7 +68,8 @@ class TestInstallHooksContent:
 
         # Count actual vibe invocations (not strings inside echo).
         real_calls = [
-            line for line in content.splitlines()
+            line
+            for line in content.splitlines()
             if ("vibe analyze" in line or "vibe instinct" in line)
             and not line.lstrip().startswith("#")
             and not line.lstrip().startswith('echo "')
@@ -77,9 +78,7 @@ class TestInstallHooksContent:
             f"Expected ≥2 real vibe invocations, got {len(real_calls)}:\n{content}"
         )
 
-    def test_hook_syntax_valid(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_hook_syntax_valid(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Hook must be syntactically valid bash (sh -n)."""
         _hermetic_config(monkeypatch, tmp_path)
         adapter = ClaudeCodeAdapter(project_root=tmp_path)

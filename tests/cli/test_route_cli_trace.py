@@ -126,7 +126,7 @@ class TestRouteCliTraceWrap:
         assert task["agent_id"] == "vibe-cli"
         meta = json.loads(task.get("metadata") or "{}")
         assert meta.get("skill_id") == "test-skill", (
-            f'skill_id should be set after dispatch, got {meta.get("skill_id")!r}'
+            f"skill_id should be set after dispatch, got {meta.get('skill_id')!r}"
         )
         assert meta.get("source") == "cli"
         assert meta.get("mode") == "single"
@@ -224,6 +224,4 @@ class TestRouteCliTraceWrap:
 
         assert result.exit_code == 0
         spans = _read_spans(fresh_tracer)
-        assert spans == [], (
-            f"no task span expected when should_route=False, got {len(spans)} spans"
-        )
+        assert spans == [], f"no task span expected when should_route=False, got {len(spans)} spans"

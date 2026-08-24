@@ -284,9 +284,7 @@ class ReflectionStore:
         with self._lock:
             self._locked_update_status(reflection_id, new_status)
 
-    def _locked_update_status(
-        self, reflection_id: str, new_status: ReflectionStatus
-    ) -> None:
+    def _locked_update_status(self, reflection_id: str, new_status: ReflectionStatus) -> None:
         """Read → mutate one row → atomic rewrite. MUST be called under
         ``self._lock`` AND the cross-process lock to be safe.
 
@@ -341,9 +339,7 @@ class ReflectionStore:
         current = self.list_all()
         if not current:
             raise KeyError(reflection_id)
-        target_idx = next(
-            (i for i, r in enumerate(current) if r.id == reflection_id), None
-        )
+        target_idx = next((i for i, r in enumerate(current) if r.id == reflection_id), None)
         if target_idx is None:
             raise KeyError(reflection_id)
 
@@ -353,9 +349,7 @@ class ReflectionStore:
 
         self._atomic_write_all(current, writer)
 
-    def _atomic_write_all(
-        self, reflections: list[Reflection], writer: Any
-    ) -> None:
+    def _atomic_write_all(self, reflections: list[Reflection], writer: Any) -> None:
         """Rewrite the entire JSONL file atomically.
 
         ``AtomicWriter`` writes to ``<path>.tmp`` and renames into place —
@@ -365,4 +359,3 @@ class ReflectionStore:
         with writer.atomic_open(self._path, "w") as f:
             for r in reflections:
                 f.write(json.dumps(r.to_dict(), ensure_ascii=False) + "\n")
-

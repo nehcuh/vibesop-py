@@ -115,11 +115,7 @@ def pair_stats(gold: np.ndarray, distractor: np.ndarray) -> dict:
         distractor_hits = float((cross_pairs >= thresh).mean())
         # Precision: of all pairs >= thresh, how many are within-gold?
         total_hits = (within_pairs >= thresh).sum() + (cross_pairs >= thresh).sum()
-        precision = (
-            float((within_pairs >= thresh).sum() / total_hits)
-            if total_hits > 0
-            else 0.0
-        )
+        precision = float((within_pairs >= thresh).sum() / total_hits) if total_hits > 0 else 0.0
         out[f"recall_at_{thresh}"] = round(gold_hits, 3)
         out[f"precision_at_{thresh}"] = round(precision, 3)
         out[f"false_positive_rate_at_{thresh}"] = round(distractor_hits, 3)
@@ -152,11 +148,17 @@ def run() -> None:
         near_miss_to_gold = cosine(g, nm).flatten()
         stats["near_miss_to_gold_mean"] = float(near_miss_to_gold.mean())
         stats["near_miss_to_gold_p90"] = float(np.percentile(near_miss_to_gold, 90))
-        print(f"  within-gold: mean={stats['within_mean']:.3f} p50={stats['within_p50']:.3f} p10={stats['within_p10']:.3f}")
+        print(
+            f"  within-gold: mean={stats['within_mean']:.3f} p50={stats['within_p50']:.3f} p10={stats['within_p10']:.3f}"
+        )
         print(f"  cross:       mean={stats['cross_mean']:.3f} p90={stats['cross_p90']:.3f}")
-        print(f"  near-miss:   mean={stats['near_miss_to_gold_mean']:.3f} p90={stats['near_miss_to_gold_p90']:.3f}")
+        print(
+            f"  near-miss:   mean={stats['near_miss_to_gold_mean']:.3f} p90={stats['near_miss_to_gold_p90']:.3f}"
+        )
         print(f"  separation:  {stats['separation']:+.3f}")
-        print(f"  recall@0.80: {stats['recall_at_0.8']}  precision@0.80: {stats['precision_at_0.8']}")
+        print(
+            f"  recall@0.80: {stats['recall_at_0.8']}  precision@0.80: {stats['precision_at_0.8']}"
+        )
         out.append(
             {
                 "model": model_id,

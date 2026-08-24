@@ -302,9 +302,7 @@ def _group_by_trace(spans: list[dict]) -> dict[str, list[dict]]:
     for _tid, tlist in traces.items():
         tlist.sort(key=lambda s: (s.get("started_at", ""), s.get("id", "")))
     if orphan_count:
-        console.print(
-            f"[yellow]Skipped {orphan_count} span(s) with no trace_id (cannot group).[/]"
-        )
+        console.print(f"[yellow]Skipped {orphan_count} span(s) with no trace_id (cannot group).[/]")
     return traces
 
 
@@ -369,9 +367,7 @@ def _render_trace_tree(trace_id: str, spans: list[dict]) -> None:
         dur_str = f"{dur}ms" if dur is not None else "-"
         tokens_in = span.get("tokens_input", 0)
         tokens_out = span.get("tokens_output", 0)
-        token_str = (
-            f" [{tokens_in}+{tokens_out} tok]" if (tokens_in or tokens_out) else ""
-        )
+        token_str = f" [{tokens_in}+{tokens_out} tok]" if (tokens_in or tokens_out) else ""
         cost = _format_cost(span.get("cost_usd"))
         meta = span.get("metadata") or {}
         skill = meta.get("skill_id") if isinstance(meta, dict) else None
@@ -421,9 +417,7 @@ def replay(
         "-f",
         help="Span JSONL file (default: .vibe/observability/spans.jsonl)",
     ),
-    limit: int = typer.Option(
-        10, "--limit", "-n", help="Max traces to display"
-    ),
+    limit: int = typer.Option(10, "--limit", "-n", help="Max traces to display"),
     json_output: bool = typer.Option(
         False, "--json", "-j", help="Output as JSON (one object per trace)"
     ),
@@ -457,10 +451,7 @@ def replay(
 
     # Filter by trace_id prefix if provided
     if trace_id:
-        traces = {
-            tid: tlist for tid, tlist in traces.items()
-            if tid.startswith(trace_id)
-        }
+        traces = {tid: tlist for tid, tlist in traces.items() if tid.startswith(trace_id)}
         if not traces:
             console.print(f"[red]No trace found matching: {trace_id}[/red]")
             raise typer.Exit(1)
@@ -474,10 +465,7 @@ def replay(
     sorted_traces = sorted_traces[:limit]
 
     if json_output:
-        out = [
-            {"trace_id": tid, "spans": tlist}
-            for tid, tlist in sorted_traces
-        ]
+        out = [{"trace_id": tid, "spans": tlist} for tid, tlist in sorted_traces]
         console.print(json.dumps(out, indent=2, ensure_ascii=False, default=str))
         return
 
@@ -496,9 +484,7 @@ def replay(
 @app.command()
 def metrics(
     skill_id: str = typer.Argument(..., help="Skill ID to aggregate metrics for"),
-    window_hours: int = typer.Option(
-        24, "--window", "-w", help="Lookback window in hours"
-    ),
+    window_hours: int = typer.Option(24, "--window", "-w", help="Lookback window in hours"),
     span_file: Path = typer.Option(
         None,
         "--span-file",
@@ -508,9 +494,7 @@ def metrics(
     project_id: str = typer.Option(
         None, "--project-id", help="Filter spans by project_id (default: any)"
     ),
-    json_output: bool = typer.Option(
-        False, "--json", "-j", help="Output as JSON"
-    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
     """Show aggregated metrics for a skill from agent-internal spans.
 
@@ -541,23 +525,29 @@ def metrics(
     )
 
     if json_output:
-        console.print(json.dumps({
-            "skill_id": m.skill_id,
-            "source": m.source,
-            "window_hours": m.window_hours,
-            "total_executions": m.total_executions,
-            "success_count": m.success_count,
-            "success_rate": m.success_rate,
-            "avg_duration_ms": m.avg_duration_ms,
-            "avg_tokens": m.avg_tokens,
-            "llm_call_count": m.llm_call_count,
-            "llm_success_rate": m.llm_success_rate,
-            "total_cost_usd": m.total_cost_usd,
-            "avg_cost_usd": m.avg_cost_usd,
-            "cost_usd_per_execution": m.cost_usd_per_execution,
-            "tool_call_distribution": m.tool_call_distribution,
-            "top_errors": m.top_errors,
-        }, indent=2, ensure_ascii=False))
+        console.print(
+            json.dumps(
+                {
+                    "skill_id": m.skill_id,
+                    "source": m.source,
+                    "window_hours": m.window_hours,
+                    "total_executions": m.total_executions,
+                    "success_count": m.success_count,
+                    "success_rate": m.success_rate,
+                    "avg_duration_ms": m.avg_duration_ms,
+                    "avg_tokens": m.avg_tokens,
+                    "llm_call_count": m.llm_call_count,
+                    "llm_success_rate": m.llm_success_rate,
+                    "total_cost_usd": m.total_cost_usd,
+                    "avg_cost_usd": m.avg_cost_usd,
+                    "cost_usd_per_execution": m.cost_usd_per_execution,
+                    "tool_call_distribution": m.tool_call_distribution,
+                    "top_errors": m.top_errors,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
         return
 
     if m.source == "none":
@@ -570,11 +560,17 @@ def metrics(
     console.print()
     console.rule(f"[bold cyan]Metrics: {skill_id}[/bold cyan]")
     console.print(f"  [bold]Source:[/bold] {m.source} | [bold]Window:[/bold] {m.window_hours}h")
-    console.print(f"  [bold]Executions:[/bold] {m.total_executions} (success: {m.success_count}, rate: {m.success_rate:.0%})")
+    console.print(
+        f"  [bold]Executions:[/bold] {m.total_executions} (success: {m.success_count}, rate: {m.success_rate:.0%})"
+    )
     console.print(f"  [bold]Avg duration:[/bold] {m.avg_duration_ms:.0f}ms")
-    console.print(f"  [bold]LLM calls:[/bold] {m.llm_call_count} (success rate: {m.llm_success_rate:.0%})")
+    console.print(
+        f"  [bold]LLM calls:[/bold] {m.llm_call_count} (success rate: {m.llm_success_rate:.0%})"
+    )
     console.print(f"  [bold]Avg tokens:[/bold] {m.avg_tokens}")
-    console.print(f"  [bold]Cost:[/bold] total ${m.total_cost_usd:.4f} | avg/exec ${m.avg_cost_usd:.4f}")
+    console.print(
+        f"  [bold]Cost:[/bold] total ${m.total_cost_usd:.4f} | avg/exec ${m.avg_cost_usd:.4f}"
+    )
 
     if m.tool_call_distribution:
         console.print()

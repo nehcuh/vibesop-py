@@ -100,8 +100,10 @@ class TestDualStoreMerge:
         with (
             patch.object(skill_commands, "_get_candidate_store") as mock_get,
         ):
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return global_store if scope == "global" else project_store
+
             mock_get.side_effect = fake_get
 
             result = cli_runner.invoke(app, ["skill", "candidates", "--json"])
@@ -138,8 +140,10 @@ class TestDualStoreMerge:
         )
 
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return global_store if scope == "global" else project_store
+
             mock_get.side_effect = fake_get
 
             result = cli_runner.invoke(app, ["skill", "candidates", "--json"])
@@ -181,8 +185,10 @@ class TestProjectsColumnAndTag:
         )
 
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return project_store
+
             mock_get.side_effect = fake_get
 
             result = cli_runner.invoke(app, ["skill", "candidates"])
@@ -207,8 +213,10 @@ class TestProjectsColumnAndTag:
         )
 
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return global_store
+
             mock_get.side_effect = fake_get
 
             result = cli_runner.invoke(app, ["skill", "candidates"])
@@ -232,8 +240,10 @@ class TestProjectsColumnAndTag:
         )
 
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return global_store
+
             mock_get.side_effect = fake_get
 
             result = cli_runner.invoke(app, ["skill", "candidates", "--json"])
@@ -271,11 +281,15 @@ class TestCrossProjectOnlyFilter:
         )
 
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+
             def fake_get(scope: str = "project") -> ClusterCandidateStore:
                 return global_store if scope == "global" else project_store
+
             mock_get.side_effect = fake_get
 
-            result = cli_runner.invoke(app, ["skill", "candidates", "--cross-project-only", "--json"])
+            result = cli_runner.invoke(
+                app, ["skill", "candidates", "--cross-project-only", "--json"]
+            )
 
         assert result.exit_code == 0, result.stdout
         payload = json.loads(result.stdout)

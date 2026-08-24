@@ -35,9 +35,7 @@ class TestGetLlmConfigVisibility:
             result = VibeSOPConfigManager.get_llm_config()
 
         assert result is None
-        assert any(
-            r.levelno == logging.WARNING and str(bad) in r.message for r in caplog.records
-        )
+        assert any(r.levelno == logging.WARNING and str(bad) in r.message for r in caplog.records)
 
     def test_home_fallback_logs_actual_path(
         self,
@@ -66,8 +64,7 @@ class TestGetLlmConfigVisibility:
         assert result is not None
         assert result.provider == "deepseek"
         assert any(
-            r.levelno == logging.INFO and str(home_config) in r.message
-            for r in caplog.records
+            r.levelno == logging.INFO and str(home_config) in r.message for r in caplog.records
         )
 
     def test_project_config_used_without_fallback_log(

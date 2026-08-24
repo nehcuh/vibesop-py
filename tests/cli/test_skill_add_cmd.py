@@ -27,9 +27,7 @@ class TestIncrementalIndexing:
         mock_resolver = Mock()
         mock_resolver.get_llm_for_understanding.return_value = None
 
-        with patch(
-            "vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver
-        ):
+        with patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver):
             assert _index_newly_added_skill("test-skill", "project") is False
 
     def test_returns_false_when_provider_missing(self) -> None:
@@ -39,9 +37,7 @@ class TestIncrementalIndexing:
         mock_resolver = Mock()
         mock_resolver.get_llm_for_understanding.return_value = mock_cfg
 
-        with patch(
-            "vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver
-        ):
+        with patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver):
             assert _index_newly_added_skill("test-skill", "project") is False
 
     def test_success_merges_single_profile_into_project_layer(self, tmp_path) -> None:
@@ -74,7 +70,7 @@ class TestIncrementalIndexing:
         mock_indexer._analyze_skill.assert_called_once()
         mock_loader.get_skill.assert_called_once_with("test-skill")
         # Merged into the project layer, preserving existing entries.
-        saved_profiles, = mock_indexer._save_index.call_args.args[:1]
+        (saved_profiles,) = mock_indexer._save_index.call_args.args[:1]
         assert "test-skill" in saved_profiles
         assert "existing/skill" in saved_profiles
         assert mock_indexer._save_index.call_args.kwargs["scope"] == "project"
@@ -236,9 +232,7 @@ class TestIncrementalIndexing:
         ):
             threads = [
                 threading.Thread(
-                    target=lambda sid: results.append(
-                        _index_newly_added_skill(sid, "project")
-                    ),
+                    target=lambda sid: results.append(_index_newly_added_skill(sid, "project")),
                     args=(f"skill-{i}",),
                 )
                 for i in range(2)
@@ -806,9 +800,7 @@ class TestMigrateLegacyGlobalSkills:
     def _make_skill(self, parent: Path, skill_id: str) -> Path:
         skill_dir = parent / skill_id
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(
-            f"---\nid: {skill_id}\n---\n", encoding="utf-8"
-        )
+        (skill_dir / "SKILL.md").write_text(f"---\nid: {skill_id}\n---\n", encoding="utf-8")
         return skill_dir
 
     def test_noop_when_no_legacy_dir(self, tmp_path) -> None:

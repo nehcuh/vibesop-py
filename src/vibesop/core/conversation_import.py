@@ -311,9 +311,7 @@ def _turn_hash(turn: ConversationTurn) -> str:
     the turn, not its identity (re-running the same prompt under a
     different model is still the "same" conversation turn for dedup).
     """
-    tc_repr = (
-        "|".join(f"{tc.id}:{tc.name}" for tc in turn.tool_calls) if turn.tool_calls else ""
-    )
+    tc_repr = "|".join(f"{tc.id}:{tc.name}" for tc in turn.tool_calls) if turn.tool_calls else ""
     tr_repr = (
         "|".join(f"{tr.tool_use_id}:{tr.is_error}" for tr in turn.tool_results)
         if turn.tool_results

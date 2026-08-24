@@ -83,8 +83,9 @@ class TestReflectionStoreAppend:
             store.append(_make_reflection(content=f"r{i}", target_id=f"t{i}"))
         loaded = store.list_all()
         assert len(loaded) == 5
-        assert [r.content for r in loaded] == [f"r{i}" for i in range(4, -1, -1)] or \
-               [r.content for r in loaded] == [f"r{i}" for i in range(5)]
+        assert [r.content for r in loaded] == [f"r{i}" for i in range(4, -1, -1)] or [
+            r.content for r in loaded
+        ] == [f"r{i}" for i in range(5)]
 
     def test_list_all_empty_when_no_file(self, tmp_path: Path) -> None:
         """Fresh storage_dir with no reflections.jsonl → empty list, not raise."""
@@ -339,9 +340,7 @@ class TestReflectionStoreUpdateStatus:
         with pytest.raises((ValueError, TypeError)):
             store.update_status(r.id, "wontfix")  # type: ignore[arg-type]
 
-    def test_update_status_atomic_rewrite_preserves_other_reflections(
-        self, tmp_path: Path
-    ) -> None:
+    def test_update_status_atomic_rewrite_preserves_other_reflections(self, tmp_path: Path) -> None:
         """Mutating one reflection's status must NOT alter any other
         reflection in the file — the atomic rewrite path reads → mutates
         one → writes all back. Regression guard for off-by-one / wrong-row
@@ -408,9 +407,7 @@ class TestReflectionStoreUpdateStatus:
         loaded = store.list_all()
         assert len(loaded) == n, "some reflections were lost in concurrent rewrites"
         addressed = sum(1 for r in loaded if r.status == "addressed")
-        assert addressed == n, (
-            f"expected all {n} reflections addressed, only {addressed} made it"
-        )
+        assert addressed == n, f"expected all {n} reflections addressed, only {addressed} made it"
 
     def test_update_status_list_all_runs_inside_cross_process_lock(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -456,25 +453,17 @@ class TestReflectionStoreUpdateStatus:
         # (append's flock is also tracked, so we look for the last EX/UN
         # pair which is update_status's.)
         lock_ex_idx = max(
-            i for i, (name, op) in enumerate(events)
-            if name == "flock" and op == fcntl_mod.LOCK_EX
+            i for i, (name, op) in enumerate(events) if name == "flock" and op == fcntl_mod.LOCK_EX
         )
         lock_un_idx = max(
-            i for i, (name, op) in enumerate(events)
-            if name == "flock" and op == fcntl_mod.LOCK_UN
+            i for i, (name, op) in enumerate(events) if name == "flock" and op == fcntl_mod.LOCK_UN
         )
-        list_all_indices = [
-            i for i, (name, _) in enumerate(events) if name == "list_all"
-        ]
+        list_all_indices = [i for i, (name, _) in enumerate(events) if name == "list_all"]
 
-        assert lock_ex_idx < lock_un_idx, (
-            f"LOCK_EX must precede LOCK_UN; events: {events}"
-        )
+        assert lock_ex_idx < lock_un_idx, f"LOCK_EX must precede LOCK_UN; events: {events}"
         # At least one list_all call (from _do_locked_update) must be BETWEEN
         # LOCK_EX and LOCK_UN — that's the regression fix.
-        locked_list_alls = [
-            i for i in list_all_indices if lock_ex_idx < i < lock_un_idx
-        ]
+        locked_list_alls = [i for i in list_all_indices if lock_ex_idx < i < lock_un_idx]
         assert locked_list_alls, (
             "list_all() must run INSIDE fcntl.flock(LOCK_EX/LOCK_UN) — "
             "lost-update race window. Pre-fix it ran outside the lock. "

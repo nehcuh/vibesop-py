@@ -46,18 +46,14 @@ def _rendered_session_end_hook(project_root: str | None = None) -> str:
     return _rendered_template("hooks/vibesop-mirror-session-end.sh.j2", project_root)
 
 
-def _hermetic_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bool
-) -> None:
+def _hermetic_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bool) -> None:
     """Isolate from real ~/.vibe and set the env-backed switch.
 
     The ConfigManager honors ``VIBE_<SECTION>_<KEY>`` env overrides, so we
     don't have to write a config file to tmp_path.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv(
-        "VIBE_CONVERSATION_MIRROR_ENABLED", "true" if enabled else "false"
-    )
+    monkeypatch.setenv("VIBE_CONVERSATION_MIRROR_ENABLED", "true" if enabled else "false")
 
 
 class TestMirrorPromptHookTemplate:
@@ -82,9 +78,7 @@ class TestMirrorPromptHookTemplate:
             pytest.skip("sh not available")
         script = tmp_path / "vibesop-mirror-prompt.sh"
         script.write_text(_rendered_prompt_hook(), encoding="utf-8")
-        result = subprocess.run(
-            [sh, "-n", str(script)], capture_output=True, check=False
-        )
+        result = subprocess.run([sh, "-n", str(script)], capture_output=True, check=False)
         assert result.returncode == 0, result.stderr.decode()
 
     def test_injected_project_root_deterministic(self) -> None:
@@ -124,7 +118,7 @@ class TestMirrorSessionEndHookTemplate:
         # Claude Code stores transcripts at ~/.claude/projects/<escaped>/<sid>.jsonl
         # where <escaped> is the absolute project dir with / -> -.
         content = _rendered_session_end_hook()
-        assert '.claude/projects/' in content
+        assert ".claude/projects/" in content
         assert "sed 's#/#-#g'" in content
         assert "$_SESSION_ID.jsonl" in content
 
@@ -141,9 +135,7 @@ class TestMirrorSessionEndHookTemplate:
             pytest.skip("sh not available")
         script = tmp_path / "vibesop-mirror-session-end.sh"
         script.write_text(_rendered_session_end_hook(), encoding="utf-8")
-        result = subprocess.run(
-            [sh, "-n", str(script)], capture_output=True, check=False
-        )
+        result = subprocess.run([sh, "-n", str(script)], capture_output=True, check=False)
         assert result.returncode == 0, result.stderr.decode()
 
 
@@ -169,16 +161,11 @@ class TestAdapterRegistration:
         settings = json.loads((output_dir / "settings.json").read_text(encoding="utf-8"))
         hooks = settings["hooks"]
         # UserPromptSubmit now has BOTH the route hook and the mirror hook.
-        prompt_commands = [
-            entry["hooks"][0]["command"]
-            for entry in hooks["UserPromptSubmit"]
-        ]
+        prompt_commands = [entry["hooks"][0]["command"] for entry in hooks["UserPromptSubmit"]]
         assert any("vibesop-route.sh" in c for c in prompt_commands)
         assert any("vibesop-mirror-prompt.sh" in c for c in prompt_commands)
         # SessionEnd is newly registered.
-        session_end_commands = [
-            entry["hooks"][0]["command"] for entry in hooks["SessionEnd"]
-        ]
+        session_end_commands = [entry["hooks"][0]["command"] for entry in hooks["SessionEnd"]]
         assert any("vibesop-mirror-session-end.sh" in c for c in session_end_commands)
 
     def test_render_config_omits_hooks_when_disabled(
@@ -193,14 +180,11 @@ class TestAdapterRegistration:
 
         assert result.success, result.errors
         assert not (output_dir / "hooks" / "vibesop-mirror-prompt.sh").exists()
-        assert not (
-            output_dir / "hooks" / "vibesop-mirror-session-end.sh"
-        ).exists()
+        assert not (output_dir / "hooks" / "vibesop-mirror-session-end.sh").exists()
         settings = json.loads((output_dir / "settings.json").read_text(encoding="utf-8"))
         # Route hook remains on UserPromptSubmit; mirror additions absent.
         prompt_commands = [
-            entry["hooks"][0]["command"]
-            for entry in settings["hooks"]["UserPromptSubmit"]
+            entry["hooks"][0]["command"] for entry in settings["hooks"]["UserPromptSubmit"]
         ]
         assert any("vibesop-route.sh" in c for c in prompt_commands)
         assert not any("vibesop-mirror-prompt.sh" in c for c in prompt_commands)
@@ -230,12 +214,10 @@ class TestAdapterRegistration:
         adapter.render_config(_manifest(), output_dir)
 
         expected_root = shlex.quote(str(output_dir.resolve().parent))
-        prompt = (output_dir / "hooks" / "vibesop-mirror-prompt.sh").read_text(
+        prompt = (output_dir / "hooks" / "vibesop-mirror-prompt.sh").read_text(encoding="utf-8")
+        session_end = (output_dir / "hooks" / "vibesop-mirror-session-end.sh").read_text(
             encoding="utf-8"
         )
-        session_end = (
-            output_dir / "hooks" / "vibesop-mirror-session-end.sh"
-        ).read_text(encoding="utf-8")
         assert f"_MIRROR_ROOT={expected_root}" in prompt
         assert f"_MIRROR_ROOT={expected_root}" in session_end
 
@@ -259,9 +241,7 @@ class TestInstallHooks:
             assert (config_dir / "hooks" / "vibesop-mirror-session-end.sh").stat().st_mode & 0o111
         # Deterministic project root injection matches the render path.
         expected_root = shlex.quote(str(config_dir.resolve().parent))
-        prompt = (config_dir / "hooks" / "vibesop-mirror-prompt.sh").read_text(
-            encoding="utf-8"
-        )
+        prompt = (config_dir / "hooks" / "vibesop-mirror-prompt.sh").read_text(encoding="utf-8")
         assert f"_MIRROR_ROOT={expected_root}" in prompt
 
     def test_install_hooks_disabled_skips_mirror(

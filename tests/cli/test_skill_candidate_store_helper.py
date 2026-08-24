@@ -32,7 +32,9 @@ class TestGetCandidateStoreScope:
     ) -> None:
         """scope='global' → storage dir under ~/.vibe/observability."""
         monkeypatch.setattr(
-            skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "fake_home" / ".vibe" / "observability"
+            skill_commands,
+            "_GLOBAL_OBSERVABILITY_DIR",
+            tmp_path / "fake_home" / ".vibe" / "observability",
         )
         store = skill_commands._get_candidate_store(scope="global")
         assert store._dir == tmp_path / "fake_home" / ".vibe" / "observability"

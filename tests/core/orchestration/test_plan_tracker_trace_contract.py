@@ -40,25 +40,19 @@ from vibesop.core.routing import UnifiedRouter
 
 
 class _StubDetector:
-    def should_decompose(
-        self, query: str, single_result: Any, llm_client: Any = None
-    ) -> bool:
+    def should_decompose(self, query: str, single_result: Any, llm_client: Any = None) -> bool:
         return True
 
 
 class _StubDecomposer:
-    def decompose(
-        self, query: str, skills: Any = None
-    ) -> list[dict[str, Any]]:
+    def decompose(self, query: str, skills: Any = None) -> list[dict[str, Any]]:
         return [
             {"intent": "task-a", "query_segment": "do task a"},
             {"intent": "task-b", "query_segment": "do task b"},
         ]
 
 
-def _stub_classify(
-    self: Any, query: str, sub_tasks: Any
-) -> ClassifierResult:
+def _stub_classify(self: Any, query: str, sub_tasks: Any) -> ClassifierResult:
     return ClassifierResult(
         pattern=WorkflowPattern.SEQUENTIAL,
         confidence=0.9,
@@ -103,9 +97,7 @@ class _StubBuilder:
 
 
 @pytest.fixture
-def fresh_tracer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> ObservabilityTracer:
+def fresh_tracer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ObservabilityTracer:
     """Reset the module-level tracer singleton to write into tmp_path."""
     import vibesop.core.observability.tracer as tracer_mod
 
@@ -117,9 +109,7 @@ def fresh_tracer(
 
 
 @pytest.fixture
-def stubbed_router(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> UnifiedRouter:
+def stubbed_router(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> UnifiedRouter:
     router = UnifiedRouter(project_root=tmp_path)
     monkeypatch.setattr(router, "_get_multi_intent_detector", _StubDetector)
     monkeypatch.setattr(router, "_get_task_decomposer", _StubDecomposer)
@@ -219,9 +209,7 @@ class TestOrchestratePersistsPlanWithTraceId:
         router.orchestrate("help")  # short → single-skill path
 
         plans = _read_plans(tmp_path / ".vibe" / "execution_plans.jsonl")
-        assert not plans, (
-            f"single-intent path leaked a plan entry: {plans}"
-        )
+        assert not plans, f"single-intent path leaked a plan entry: {plans}"
 
     def test_plan_persistence_failure_does_not_break_orchestration(
         self,
@@ -298,9 +286,7 @@ class TestLoadPlansForTrace:
 
         result = load_plans_for_trace("trace-1", storage_dir=storage)
         ids = {p.plan_id for p in result}
-        assert ids == {"plan-A", "plan-C"}, (
-            f"expected plan-A + plan-C (both trace-1), got {ids}"
-        )
+        assert ids == {"plan-A", "plan-C"}, f"expected plan-A + plan-C (both trace-1), got {ids}"
 
     def test_returns_empty_when_no_match(self, tmp_path: Path) -> None:
         from vibesop.core.orchestration.plan_tracker import load_plans_for_trace
@@ -328,9 +314,7 @@ class TestLoadPlansForTrace:
 
         result = load_plans_for_trace("trace-1", storage_dir=storage)
         ids = {p.plan_id for p in result}
-        assert ids == {"plan-A"}, (
-            "legacy plan without metadata.trace_id leaked into result"
-        )
+        assert ids == {"plan-A"}, "legacy plan without metadata.trace_id leaked into result"
 
     def test_dedupes_plan_id_keeping_latest(self, tmp_path: Path) -> None:
         """Plans are append-only; latest entry for a plan_id wins (matches
@@ -343,9 +327,7 @@ class TestLoadPlansForTrace:
         self._write_plan(storage, "plan-A", "trace-1")
 
         result = load_plans_for_trace("trace-1", storage_dir=storage)
-        assert len(result) == 1, (
-            f"expected dedup to 1 entry, got {len(result)}"
-        )
+        assert len(result) == 1, f"expected dedup to 1 entry, got {len(result)}"
 
     def test_update_step_status_preserves_trace_id(self, tmp_path: Path) -> None:
         """``PlanTracker.update_step_status`` re-appends the full plan dict;

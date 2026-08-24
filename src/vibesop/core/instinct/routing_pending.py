@@ -333,9 +333,7 @@ class RoutingPendingStore:
             for item in self._items:
                 if item.status != "pending":
                     continue
-                if item.query_hash == query_hash and (item.skill_id or None) == (
-                    skill_id or None
-                ):
+                if item.query_hash == query_hash and (item.skill_id or None) == (skill_id or None):
                     return True
         return False
 
@@ -463,9 +461,7 @@ class RoutingPendingStore:
     def dismiss(self, item_id: str) -> RoutingPendingItem | None:
         return self._resolve(item_id, "dismissed")
 
-    def _resolve(
-        self, item_id: str, status: PendingStatus
-    ) -> RoutingPendingItem | None:
+    def _resolve(self, item_id: str, status: PendingStatus) -> RoutingPendingItem | None:
         with self._lock:
             try:
                 with cross_process_lock(self._lock_path):
@@ -524,10 +520,7 @@ def build_reason_zh(
                 f"末层弱匹配（{layer_norm}）到 {skill}（报告置信 {confidence:.0%}，"
                 f"可能虚高）。若正确请 accept，错误请 dismiss。"
             )
-        return (
-            f"低置信路由到 {skill}（{confidence:.0%}）。"
-            f"若正确请 accept，错误请 dismiss。"
-        )
+        return f"低置信路由到 {skill}（{confidence:.0%}）。若正确请 accept，错误请 dismiss。"
     return f"用户纠正候选：{skill_id or '（无技能）'}。"
 
 

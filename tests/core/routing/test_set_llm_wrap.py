@@ -113,9 +113,7 @@ class TestSetLlmAutoWrap:
         monkeypatch.setattr(tracer_mod, "_tracer", fresh)
         return span_file
 
-    def test_set_llm_with_full_provider_wraps(
-        self, fresh_tracer: Path
-    ) -> None:
+    def test_set_llm_with_full_provider_wraps(self, fresh_tracer: Path) -> None:
         """Injecting an LLMProvider-shaped object auto-wraps for span emission."""
         router = UnifiedRouter()
         provider = _FullProvider()
@@ -127,9 +125,7 @@ class TestSetLlmAutoWrap:
         # And the inner is the original provider
         assert router._llm._inner is provider
 
-    def test_set_llm_with_minimal_agent_llm_passes_through(
-        self, fresh_tracer: Path
-    ) -> None:
+    def test_set_llm_with_minimal_agent_llm_passes_through(self, fresh_tracer: Path) -> None:
         """Injecting a duck-typed LLM passes through without wrap."""
         router = UnifiedRouter()
         provider = _MinimalAgentLLM()
@@ -138,9 +134,7 @@ class TestSetLlmAutoWrap:
         assert router._llm is provider
         assert not isinstance(router._llm, SpanWrappedProvider)
 
-    def test_wrapped_provider_emits_span_on_call(
-        self, fresh_tracer: Path
-    ) -> None:
+    def test_wrapped_provider_emits_span_on_call(self, fresh_tracer: Path) -> None:
         """The whole point: injecting a full provider and calling it
         produces a span, even though set_llm was used (not the factory)."""
         router = UnifiedRouter()

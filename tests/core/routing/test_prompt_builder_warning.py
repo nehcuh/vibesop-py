@@ -29,8 +29,7 @@ class TestPromptBuilderWarning:
             UnifiedRouter(project_root=tmp_path)
 
         assert any(
-            r.levelno == logging.WARNING and "prompt_builder" in r.message
-            for r in caplog.records
+            r.levelno == logging.WARNING and "prompt_builder" in r.message for r in caplog.records
         )
 
     def test_provided_prompt_builder_no_warning(

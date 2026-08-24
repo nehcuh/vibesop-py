@@ -80,8 +80,13 @@ def cross_process_lock(
     # its inode + flock/locking state matters.
     f = lock_path.open("a+", encoding="utf-8")
     try:
-        _acquire(f.fileno(), shared=shared, blocking=blocking,
-                 spin_interval_s=spin_interval_s, max_spin_attempts=max_spin_attempts)
+        _acquire(
+            f.fileno(),
+            shared=shared,
+            blocking=blocking,
+            spin_interval_s=spin_interval_s,
+            max_spin_attempts=max_spin_attempts,
+        )
         try:
             yield
         finally:
@@ -183,7 +188,9 @@ def _acquire_msvcrt(
             if e.errno not in (errno.EACCES, errno.EDEADLK):
                 raise
             time.sleep(spin_interval_s)
-    raise OSError(f"timed out acquiring Windows lock after {max_spin_attempts} attempts: {last_err}")
+    raise OSError(
+        f"timed out acquiring Windows lock after {max_spin_attempts} attempts: {last_err}"
+    )
 
 
 __all__ = ["CouldNotLock", "cross_process_lock"]

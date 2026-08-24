@@ -76,9 +76,7 @@ class TestBuildLlmFactory:
         )
         assert not caplog.records
 
-    def test_no_config_falls_back_without_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_no_config_falls_back_without_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         factory = _build_llm_factory()
 
         with (

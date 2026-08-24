@@ -97,9 +97,7 @@ class TestBindTaskContext:
         assert mid["task_id"] == "step-1"
         assert mid["role_id"] == "reviewer"
 
-    def test_outside_trace_is_noop(
-        self, fresh_tracer: ObservabilityTracer, tmp_path: Path
-    ) -> None:
+    def test_outside_trace_is_noop(self, fresh_tracer: ObservabilityTracer, tmp_path: Path) -> None:
         """Calling bind_task_context with no active trace must not raise.
         Spans emitted inside will be standalone (no task_id)."""
         with bind_task_context(task_id="orphan-task", role_id="orphan-role"):

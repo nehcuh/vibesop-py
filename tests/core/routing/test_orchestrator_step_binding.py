@@ -85,16 +85,12 @@ class _StubLLMProvider(LLMProvider):
 
 
 class _StubDetector:
-    def should_decompose(
-        self, query: str, single_result: Any, llm_client: Any = None
-    ) -> bool:
+    def should_decompose(self, query: str, single_result: Any, llm_client: Any = None) -> bool:
         return True
 
 
 class _StubDecomposer:
-    def decompose(
-        self, query: str, skills: Any = None
-    ) -> list[dict[str, Any]]:
+    def decompose(self, query: str, skills: Any = None) -> list[dict[str, Any]]:
         return [
             {"intent": "task-a", "query_segment": "do task a"},
             {"intent": "task-b", "query_segment": "do task b"},
@@ -154,9 +150,7 @@ class _StubBuilder:
 
 
 @pytest.fixture
-def fresh_tracer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> ObservabilityTracer:
+def fresh_tracer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ObservabilityTracer:
     import vibesop.core.observability.tracer as tracer_mod
 
     span_file = tmp_path / "observability" / "spans.jsonl"
@@ -230,8 +224,7 @@ class TestOrchestratorStepTaskIdBinding:
         bound_llm_spans = [s for s in llm_spans if s.get("task_id")]
 
         assert llm_spans, (
-            "no llm spans emitted — SpanWrappedProvider not wired or "
-            "classify_step not called"
+            "no llm spans emitted — SpanWrappedProvider not wired or classify_step not called"
         )
         assert bound_llm_spans, (
             f"none of the {len(llm_spans)} llm spans have task_id — "
@@ -291,8 +284,7 @@ class TestOrchestratorStepTaskIdBinding:
 
         empty_steps = [sid for sid, n in bound_per_step.items() if n == 0]
         assert not empty_steps, (
-            f"steps {empty_steps} have no bound llm spans — "
-            f"distribution: {bound_per_step}"
+            f"steps {empty_steps} have no bound llm spans — distribution: {bound_per_step}"
         )
 
     def test_classify_step_emits_llm_span_via_span_wrapped_provider(
@@ -308,6 +300,5 @@ class TestOrchestratorStepTaskIdBinding:
 
         # 2 steps → at least 2 calls (one per step)
         assert len(stub_llm.calls) >= 2, (
-            f"expected ≥2 stub LLM calls (1 per step), got {len(stub_llm.calls)}: "
-            f"{stub_llm.calls}"
+            f"expected ≥2 stub LLM calls (1 per step), got {len(stub_llm.calls)}: {stub_llm.calls}"
         )

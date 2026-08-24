@@ -76,9 +76,7 @@ class TestPruneAutoExtracted:
         assert len(victims) == 1
         assert learner.instincts == {}
 
-    def test_human_confirmed_instincts_survive_even_with_junk_pattern(
-        self, tmp_path: Path
-    ) -> None:
+    def test_human_confirmed_instincts_survive_even_with_junk_pattern(self, tmp_path: Path) -> None:
         """Only auto_extracted rows are eligible — manual/pending-accept
         instincts with a low-info pattern are the user's explicit choice."""
         learner = _learner(tmp_path)

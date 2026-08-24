@@ -23,9 +23,7 @@ from vibesop.core.routing import UnifiedRouter
 
 
 @pytest.fixture
-def fresh_tracer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> ObservabilityTracer:
+def fresh_tracer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ObservabilityTracer:
     """Reset the module-level observability tracer singleton to write into tmp_path."""
     import vibesop.core.observability.tracer as tracer_mod
 
@@ -67,12 +65,8 @@ class TestOrchestrationIdWriteback:
         conv = _read_conversation(tmp_path / "conversations" / "conv-abc-123.json")
         assert "metadata" in conv, "conversation file must have metadata section"
         meta = conv["metadata"]
-        assert "orchestration_trace_id" in meta, (
-            f"orchestration_trace_id missing from {meta}"
-        )
-        assert meta["orchestration_trace_id"], (
-            f"orchestration_trace_id must be non-None: {meta}"
-        )
+        assert "orchestration_trace_id" in meta, f"orchestration_trace_id missing from {meta}"
+        assert meta["orchestration_trace_id"], f"orchestration_trace_id must be non-None: {meta}"
 
         # orchestration_id is only set when a plan was built (multi-intent path)
         if result.execution_plan is not None:
@@ -98,11 +92,7 @@ class TestOrchestrationIdWriteback:
 
         # Read spans + conversation
         spans_path = tmp_path / "observability" / "spans.jsonl"
-        spans = [
-            json.loads(line)
-            for line in spans_path.read_text().splitlines()
-            if line.strip()
-        ]
+        spans = [json.loads(line) for line in spans_path.read_text().splitlines() if line.strip()]
         root_spans = [s for s in spans if s["name"] == "orchestrate"]
         assert root_spans, "root 'orchestrate' span must be emitted"
         root_trace_id = root_spans[0]["trace_id"]
@@ -126,9 +116,7 @@ class TestOrchestrationIdWriteback:
         conv_dir = tmp_path / "conversations"
         if conv_dir.exists():
             files = list(conv_dir.iterdir())
-            assert not files, (
-                f"unexpected conversation files written: {files}"
-            )
+            assert not files, f"unexpected conversation files written: {files}"
 
     def test_writeback_failure_does_not_break_orchestrate(
         self,

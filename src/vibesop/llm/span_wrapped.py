@@ -139,9 +139,7 @@ class SpanWrappedProvider(LLMProvider):
             )
 
         span_name = f"llm:{self.provider_name}:{model or self.default_model()}"
-        metadata = self._build_metadata(
-            model, max_tokens, temperature, len(prompt)
-        )
+        metadata = self._build_metadata(model, max_tokens, temperature, len(prompt))
         # Use start_span/finish_span rather than the ``with tracer.span(...)``
         # context manager because the latter only catches ``Exception``. We
         # need to also handle BaseException (KeyboardInterrupt /
@@ -188,9 +186,7 @@ class SpanWrappedProvider(LLMProvider):
             )
 
         span_name = f"llm:{self.provider_name}:{model or self.default_model()}"
-        metadata = self._build_metadata(
-            model, max_tokens, temperature, len(prompt)
-        )
+        metadata = self._build_metadata(model, max_tokens, temperature, len(prompt))
         # Same rationale as sync path: ``except BaseException`` covers
         # asyncio.CancelledError (a BaseException subclass since 3.8) so
         # cancellation doesn't leak the span in 'running' state.

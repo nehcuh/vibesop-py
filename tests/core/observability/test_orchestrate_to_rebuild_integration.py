@@ -75,16 +75,12 @@ class _StubLLMProvider(LLMProvider):
 
 
 class _StubDetector:
-    def should_decompose(
-        self, query: str, single_result: Any, llm_client: Any = None
-    ) -> bool:
+    def should_decompose(self, query: str, single_result: Any, llm_client: Any = None) -> bool:
         return True
 
 
 class _StubDecomposer:
-    def decompose(
-        self, query: str, skills: Any = None
-    ) -> list[dict[str, Any]]:
+    def decompose(self, query: str, skills: Any = None) -> list[dict[str, Any]]:
         return [
             {"intent": "task-a", "query_segment": "do task a"},
             {"intent": "task-b", "query_segment": "do task b"},
@@ -156,9 +152,7 @@ def production_layout_tracer(
 
 
 @pytest.fixture
-def stubbed_router(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> UnifiedRouter:
+def stubbed_router(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> UnifiedRouter:
     """UnifiedRouter with project_root=tmp_path + stubbed multi-intent
     components + SpanWrappedProvider(stub_llm) — full producer-side pipeline
     with zero LLM cost."""
@@ -210,12 +204,8 @@ def test_orchestrate_to_rebuild_dag_full_pipeline_zero_llm(
     # Sanity: artefact files exist on disk in the production layout
     spans_file = storage / "observability" / "spans.jsonl"
     plans_file = storage / "execution_plans.jsonl"
-    assert spans_file.exists(), (
-        f"SpanWriter did not write to production path {spans_file}"
-    )
-    assert plans_file.exists(), (
-        f"PlanTracker did not write to production path {plans_file}"
-    )
+    assert spans_file.exists(), f"SpanWriter did not write to production path {spans_file}"
+    assert plans_file.exists(), f"PlanTracker did not write to production path {plans_file}"
 
     # Consumer: rebuild_dag reads the same .vibe dir
     dag = rebuild_dag(trace_id=trace_id, storage_dir=storage)
@@ -245,9 +235,7 @@ def test_orchestrate_to_rebuild_dag_full_pipeline_zero_llm(
         f"step:{plan.plan_id}:step-1",
         f"step:{plan.plan_id}:step-2",
     )
-    assert expected_dep in dep_edges, (
-        f"dependency edge {expected_dep} not in {dep_edges}"
-    )
+    assert expected_dep in dep_edges, f"dependency edge {expected_dep} not in {dep_edges}"
 
     # ≥1 llm span attached to a step via task_id == step_id (P0-1 contract)
     llm_nodes = [n for n in dag.nodes if n.kind == "llm"]
@@ -258,10 +246,7 @@ def test_orchestrate_to_rebuild_dag_full_pipeline_zero_llm(
     # Each llm node's parent must be a step (not a plan, not the orchestrator)
     step_node_ids = step_ids
     for llm in llm_nodes:
-        parent_edges = [
-            e for e in dag.edges
-            if e.dst == llm.id and e.kind == "parent_child"
-        ]
+        parent_edges = [e for e in dag.edges if e.dst == llm.id and e.kind == "parent_child"]
         assert parent_edges, f"llm node {llm.id} has no parent edge"
         parent_id = parent_edges[0].src
         assert parent_id in step_node_ids, (
@@ -271,8 +256,7 @@ def test_orchestrate_to_rebuild_dag_full_pipeline_zero_llm(
 
     # iterations: single plan, no reorchestration history → 1
     assert dag.iterations == 1, (
-        f"single-plan no-history case should yield iterations=1, "
-        f"got {dag.iterations}"
+        f"single-plan no-history case should yield iterations=1, got {dag.iterations}"
     )
 
 
@@ -298,8 +282,7 @@ def test_orchestrate_persists_trace_id_for_cross_process_join(
 
     assert persisted_plans, "no plans persisted to disk"
     matching = [
-        p for p in persisted_plans
-        if (p.get("metadata") or {}).get("trace_id") == expected_trace_id
+        p for p in persisted_plans if (p.get("metadata") or {}).get("trace_id") == expected_trace_id
     ]
     assert matching, (
         f"no persisted plan carries trace_id={expected_trace_id} — "

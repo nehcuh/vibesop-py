@@ -206,9 +206,7 @@ def _apply_accept_writeback(query: str, skill_id: str | None) -> None:
         try:
             from vibesop.core.optimization import PreferenceBooster
 
-            PreferenceBooster().get_learner().record_selection(
-                skill_id, pattern, was_helpful=True
-            )
+            PreferenceBooster().get_learner().record_selection(skill_id, pattern, was_helpful=True)
         except Exception as exc:
             logger.debug("preference writeback failed: %s", exc)
     else:
@@ -234,9 +232,7 @@ def _apply_dismiss_writeback(query: str, skill_id: str | None) -> None:
         try:
             from vibesop.core.optimization import PreferenceBooster
 
-            PreferenceBooster().get_learner().record_selection(
-                skill_id, pattern, was_helpful=False
-            )
+            PreferenceBooster().get_learner().record_selection(skill_id, pattern, was_helpful=False)
         except Exception as exc:
             logger.debug("preference dismiss writeback failed: %s", exc)
     learner.record_outcome_for_query(pattern, success=False)
@@ -324,9 +320,7 @@ def accept_cmd(
 
     skill_id = skill or item.skill_id
     if not skill_id and item.kind == "no_match":
-        console.print(
-            "[red]no_match 项需要 --skill <id> 才能 accept（否则不知道该强化谁）。[/red]"
-        )
+        console.print("[red]no_match 项需要 --skill <id> 才能 accept（否则不知道该强化谁）。[/red]")
         raise typer.Exit(1)
 
     resolved = store.accept(item_id)
@@ -406,9 +400,7 @@ def stats_cmd(
 
     console.print("[bold]Instinct / 路由闭环统计[/bold]")
     console.print(f"  instincts: {payload['instincts_total']} (有 outcome: {with_outcome})")
-    console.print(
-        f"  outcomes: {outcomes}  (✓ {successes} / ✗ {failures})"
-    )
+    console.print(f"  outcomes: {outcomes}  (✓ {successes} / ✗ {failures})")
     console.print(
         f"  routing pending: open={pstats['pending']}  "
         f"accept={pstats['accepted']} dismiss={pstats['dismissed']}  "
@@ -680,9 +672,7 @@ def prune_cmd(
         "--auto-extracted",
         help="清理 auto_extracted instinct（路由自动 mint）中质量不达标的条目",
     ),
-    apply: bool = typer.Option(
-        False, "--apply", help="真正删除（默认 dry-run，只打印）"
-    ),
+    apply: bool = typer.Option(False, "--apply", help="真正删除（默认 dry-run，只打印）"),
 ) -> None:
     """清理质量门控不达标的 auto_extracted instinct（Tier2 存量数据卫生）。
 
@@ -712,8 +702,7 @@ def prune_cmd(
         console.print(f"[bold]已删除 {len(victims)} 条[/bold]")
     else:
         console.print(
-            f"[bold]将被删除 {len(victims)} 条[/bold] "
-            "[dim](dry-run：加 --apply 执行)[/dim]"
+            f"[bold]将被删除 {len(victims)} 条[/bold] [dim](dry-run：加 --apply 执行)[/dim]"
         )
 
 
@@ -812,9 +801,7 @@ def auto_promote(
     min_confidence: float = typer.Option(
         0.85, "--min-confidence", help="候选 success_rate 下限（默认 0.85）"
     ),
-    min_count: int = typer.Option(
-        5, "--min-count", help="候选 total_count 下限（默认 5）"
-    ),
+    min_count: int = typer.Option(5, "--min-count", help="候选 total_count 下限（默认 5）"),
     growth_cap_pct: int = typer.Option(
         20,
         "--growth-cap-pct",
@@ -865,9 +852,7 @@ def auto_promote(
         f"(eligible={len(candidates)}, before={before}, cap={allowed})"
     )
     if capped:
-        console.print(
-            f"[yellow]⚠️  growth cap {allowed} hit — 剩余候选延后到下次 promote[/yellow]"
-        )
+        console.print(f"[yellow]⚠️  growth cap {allowed} hit — 剩余候选延后到下次 promote[/yellow]")
     if not dry_run and promoted:
         console.print(f"[dim]saved to {_get_storage_path()}[/dim]")
 
@@ -898,9 +883,7 @@ def feedback_collect(
     miss = MissCounter(Path.cwd())
     processed_watermark = _load_watermark()
     frequent_clusters = miss.frequent(min_count=min_miss_count)
-    frequent_hashes = {
-        c.hash for c in frequent_clusters if c.hash not in processed_watermark
-    }
+    frequent_hashes = {c.hash for c in frequent_clusters if c.hash not in processed_watermark}
 
     learner = InstinctLearner(_get_storage_path())
     decayed = 0
@@ -911,9 +894,7 @@ def feedback_collect(
     # keeps accumulating frequent misses should decay too, not get a free
     # pass just because it hasn't been applied often. Early-stop guards both
     # ends of the confidence range.
-    all_instincts = sorted(
-        learner.instincts.values(), key=lambda i: i.confidence, reverse=True
-    )
+    all_instincts = sorted(learner.instincts.values(), key=lambda i: i.confidence, reverse=True)
     for ins in all_instincts:
         # Early-stop: 置信度已饱和或已死亡，不再调整
         if ins.confidence >= 0.95 or ins.confidence <= 0.1:
@@ -923,7 +904,9 @@ def feedback_collect(
         h = miss.hash_for(ins.pattern)
         if h in frequent_hashes:
             if dry_run:
-                console.print(f"[dim]would decay:[/dim] {ins.pattern} (confidence={ins.confidence:.0%})")
+                console.print(
+                    f"[dim]would decay:[/dim] {ins.pattern} (confidence={ins.confidence:.0%})"
+                )
             else:
                 learner.record_outcome(ins.id, success=False)
             decayed += 1

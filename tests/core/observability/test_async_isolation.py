@@ -110,8 +110,7 @@ class TestAsyncTaskIsolation:
             task = task_spans[0]
             llm = llm_spans[0]
             assert llm["parent_span_id"] == task["id"], (
-                f"trace {trace_id}: llm parent {llm['parent_span_id']!r} "
-                f"!= task id {task['id']!r}"
+                f"trace {trace_id}: llm parent {llm['parent_span_id']!r} != task id {task['id']!r}"
             )
 
     def test_high_concurrency_eight_tasks(
@@ -138,9 +137,7 @@ class TestAsyncTaskIsolation:
         for s in spans:
             by_trace.setdefault(s["trace_id"], []).append(s)
 
-        assert len(by_trace) == 8, (
-            f"expected 8 distinct trace_ids, got {len(by_trace)}"
-        )
+        assert len(by_trace) == 8, f"expected 8 distinct trace_ids, got {len(by_trace)}"
 
         # Each trace must have exactly 1 task + 1 llm with correct parentage
         for trace_spans in by_trace.values():
@@ -168,9 +165,7 @@ class TestAsyncTaskIsolation:
         assert inner_span["parent_span_id"] == outer_span["id"]
         assert inner_span["trace_id"] == outer_span["trace_id"]
 
-    def test_mixed_sync_and_async(
-        self, fresh_tracer: ObservabilityTracer, tmp_path: Path
-    ) -> None:
+    def test_mixed_sync_and_async(self, fresh_tracer: ObservabilityTracer, tmp_path: Path) -> None:
         """A trace opened in sync code, then awaited async work inside it,
         should still see the trace context in the async task.
 

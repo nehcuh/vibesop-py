@@ -75,9 +75,7 @@ def dual_store(tmp_path: Path) -> tuple[ClusterCandidateStore, ClusterCandidateS
     return project_store, global_store
 
 
-def _patch_dual(
-    project_store: ClusterCandidateStore, global_store: ClusterCandidateStore
-):
+def _patch_dual(project_store: ClusterCandidateStore, global_store: ClusterCandidateStore):
     """Patch _get_candidate_store so scope='project'/'global' return paired stores."""
     cm = patch.object(skill_commands, "_get_candidate_store")
 
@@ -313,9 +311,7 @@ class TestScopeAuthoritativeStoreSelection:
         cm, fake_get = _patch_dual(*dual_store)
         with cm as mock_get:
             mock_get.side_effect = fake_get
-            result = cli_runner.invoke(
-                app, ["skill", "promote", "dup-1", "--scope", "project"]
-            )
+            result = cli_runner.invoke(app, ["skill", "promote", "dup-1", "--scope", "project"])
 
         assert result.exit_code == 0, result.stdout
         # Project store's row should be promoted (status=promoted).

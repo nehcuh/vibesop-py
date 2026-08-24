@@ -288,7 +288,9 @@ class Orchestrator:
 
                 if "workflow_pattern" in hint_tokens:
                     override = hint_tokens["workflow_pattern"]
-                    with contextlib.suppress(ValueError):  # Invalid override, keep classifier result
+                    with contextlib.suppress(
+                        ValueError
+                    ):  # Invalid override, keep classifier result
                         classification = ClassifierResult(
                             pattern=WorkflowPattern(override),
                             confidence=1.0,

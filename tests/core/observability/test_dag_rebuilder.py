@@ -110,9 +110,7 @@ class TestDAGDataclasses:
                     "children": ["n2", "n3"],
                 }
             ],
-            "edges": [
-                {"src": "n1", "dst": "n2", "kind": "parent_child"}
-            ],
+            "edges": [{"src": "n1", "dst": "n2", "kind": "parent_child"}],
             "phases": [{"phase": "routing", "span_id": "phase-1"}],
             "iterations": 2,
         }
@@ -290,9 +288,7 @@ class TestLoadPlansForTraceReExport:
 
         assert callable(load_plans_for_trace)
 
-    def test_load_plans_for_trace_returns_empty_for_missing_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_plans_for_trace_returns_empty_for_missing_file(self, tmp_path: Path) -> None:
         from vibesop.core.observability.dag_rebuilder import load_plans_for_trace
 
         result = load_plans_for_trace("any-trace", storage_dir=tmp_path / ".vibe")
@@ -428,9 +424,7 @@ class TestRebuildDagJoin:
         assert dag.phases == []
         assert dag.iterations == 0
 
-    def test_rebuild_dag_joins_plan_step_to_llm_span_via_task_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_rebuild_dag_joins_plan_step_to_llm_span_via_task_id(self, tmp_path: Path) -> None:
         """Plan with step_id='s1' + llm span with task_id='s1' → step node
         has the llm span as a child. JOIN key is task_id == step_id (NOT
         plan_id — grok+pi P0-1 contract)."""
@@ -463,18 +457,14 @@ class TestRebuildDagJoin:
 
         dag = rebuild_dag(trace_id="T1", storage_dir=storage)
 
-        step_node = next(
-            (n for n in dag.nodes if n.id == "step:plan-1:s1"), None
-        )
+        step_node = next((n for n in dag.nodes if n.id == "step:plan-1:s1"), None)
         assert step_node is not None, "step node plan-1:s1 must exist"
         assert "llm-1" in step_node.children, (
             f"llm-1 must be a child of step:plan-1:s1 (JOIN via task_id), "
             f"got children={step_node.children}"
         )
 
-    def test_rebuild_dag_creates_dependency_edges_between_steps(
-        self, tmp_path: Path
-    ) -> None:
+    def test_rebuild_dag_creates_dependency_edges_between_steps(self, tmp_path: Path) -> None:
         """Steps with `depends_on` produce ``dependency`` kind edges."""
         from vibesop.core.observability.dag_rebuilder import rebuild_dag
 
@@ -555,17 +545,13 @@ class TestRebuildDagJoin:
         assert sub_node.metadata.get("plan_id") == "plan-sub-test"
 
         # plan node has sub_node as child
-        plan_node = next(
-            (n for n in dag.nodes if n.id == "plan:plan-sub-test"), None
-        )
+        plan_node = next((n for n in dag.nodes if n.id == "plan:plan-sub-test"), None)
         assert plan_node is not None
         assert sub_node.id in plan_node.children, (
             f"sub_agent must be attached to plan node, got children={plan_node.children}"
         )
 
-    def test_rebuild_dag_user_intent_node_uses_query_from_root_span(
-        self, tmp_path: Path
-    ) -> None:
+    def test_rebuild_dag_user_intent_node_uses_query_from_root_span(self, tmp_path: Path) -> None:
         """Root 'orchestrate' span metadata.query becomes the user_intent
         node label — preserves the original user request in the map."""
         from vibesop.core.observability.dag_rebuilder import rebuild_dag
@@ -586,9 +572,7 @@ class TestRebuildDagJoin:
         assert ui_nodes, "user_intent node must exist when root span present"
         assert "analyse my code" in ui_nodes[0].label
 
-    def test_rebuild_dag_emits_orchestrator_and_phase_nodes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_rebuild_dag_emits_orchestrator_and_phase_nodes(self, tmp_path: Path) -> None:
         """Root 'orchestrate' span becomes orchestrator node; workflow_node
         phase spans become its children. dag.phases carries the phase list."""
         from vibesop.core.observability.dag_rebuilder import rebuild_dag
@@ -622,14 +606,11 @@ class TestRebuildDagJoin:
         for phase in ("routing", "detection", "plan_building", "complete"):
             phase_id = f"phase-{phase}"
             assert phase_id in orch.children, (
-                f"phase {phase} must be child of orchestrator, "
-                f"got children={orch.children}"
+                f"phase {phase} must be child of orchestrator, got children={orch.children}"
             )
 
         phase_names = {p["phase"] for p in dag.phases}
-        assert {"routing", "detection", "plan_building", "complete"}.issubset(
-            phase_names
-        )
+        assert {"routing", "detection", "plan_building", "complete"}.issubset(phase_names)
 
     def test_rebuild_dag_iterations_falls_back_to_plan_count_without_history(
         self, tmp_path: Path
@@ -718,13 +699,10 @@ class TestRebuildDagJoin:
 
         dag = rebuild_dag(trace_id="T-loop", storage_dir=storage)
         assert dag.iterations == 3, (
-            f"1 plan + 2 reorchestration rounds = 3 iterations; "
-            f"got {dag.iterations}"
+            f"1 plan + 2 reorchestration rounds = 3 iterations; got {dag.iterations}"
         )
 
-    def test_rebuild_dag_multi_plan_shared_step_id_attaches_span_once(
-        self, tmp_path: Path
-    ) -> None:
+    def test_rebuild_dag_multi_plan_shared_step_id_attaches_span_once(self, tmp_path: Path) -> None:
         """Multi-plan trace where two plans share the same ``step_id``
         must produce **distinct** plan-scoped step node ids, and a single
         matching span must attach to AT MOST ONE step.
@@ -769,9 +747,7 @@ class TestRebuildDagJoin:
 
         node_ids = [n.id for n in dag.nodes]
         # No duplicate node ids anywhere in the DAG
-        assert len(node_ids) == len(set(node_ids)), (
-            f"duplicate node ids detected: {node_ids}"
-        )
+        assert len(node_ids) == len(set(node_ids)), f"duplicate node ids detected: {node_ids}"
         # Both plan-scoped step ids exist
         assert "step:plan-A:s1" in node_ids
         assert "step:plan-B:s1" in node_ids
@@ -781,14 +757,11 @@ class TestRebuildDagJoin:
         a_has = "llm-shared" in step_a.children
         b_has = "llm-shared" in step_b.children
         assert a_has != b_has, (
-            f"span must attach to exactly one step, "
-            f"plan-A={a_has} plan-B={b_has}"
+            f"span must attach to exactly one step, plan-A={a_has} plan-B={b_has}"
         )
         # Exactly one llm span node exists
         llm_nodes = [n for n in dag.nodes if n.id == "llm-shared"]
-        assert len(llm_nodes) == 1, (
-            f"span should not be duplicated in DAG, found {len(llm_nodes)}"
-        )
+        assert len(llm_nodes) == 1, f"span should not be duplicated in DAG, found {len(llm_nodes)}"
 
     def test_rebuild_dag_load_span_trace_id_filter(self, tmp_path: Path) -> None:
         """``load_spans_for_trace`` filters by trace_id — spans from other
