@@ -151,6 +151,11 @@ class HookBasedAdapter(PlatformAdapter):
         """Render settings.json with hook registration.
 
         Subclasses should override to register platform-specific hooks.
+
+        gate41 note: dual-layer (user vs project) route-hook mutual exclusion
+        is implemented in ClaudeCodeAdapter._render_settings_json, the only
+        production override of this method — no subclass relies on this base
+        implementation, so it cannot double-register the route hook.
         """
         hooks_dir = output_dir / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)

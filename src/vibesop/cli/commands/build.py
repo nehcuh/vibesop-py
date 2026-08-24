@@ -131,6 +131,12 @@ def execute_build(
                 except ValueError:
                     console.print(f"  🗑️  {file_path}")
 
+        # gate41 pi M1: surface render warnings (e.g. route-hook layer dedup)
+        # — previously dropped silently, hiding the strip from the user.
+        if result.has_warnings():
+            for warning in result.warnings:
+                console.print(f"[yellow]⚠ {warning}[/yellow]")
+
         # Suggest deployment based on output location
         if str(output_dir) == str(Path.home() / ".claude"):
             console.print(

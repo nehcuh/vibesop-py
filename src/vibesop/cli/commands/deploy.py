@@ -93,3 +93,52 @@ def execute_deploy(
             shutil.copy2(item, dest_item)
 
     logger.info("Deployed %s configuration to %s", target, destination)
+
+    # gate41 MAJOR-2 (claude+pi impl-review): the user-level writer must hold
+    # the same single-registration invariant as `vibe build`. After deploying
+    # claude-code config into ~/.claude, strip the project layer's route-hook
+    # registration so Claude Code stops firing the hook twice per prompt.
+    if target == "claude-code" and destination == (Path.home() / ".claude").resolve():
+        import json as _json
+
+        from vibesop.adapters.claude_code import (
+            _ROUTE_HOOK_MARKER,
+            _hook_entry_matches,
+            strip_route_hook_from_layer,
+        )
+
+        # gate41 pi confirm NIT: only strip the project layer when THIS layer
+        # actually ended up with the route hook. The copy loop above skips an
+        # existing destination settings.json without --force; stripping the
+        # project layer then would leave BOTH layers unregistered (hook
+        # silently dead — the MAJOR-1 failure class via the deploy path).
+        deployed_settings = destination / "settings.json"
+        has_route_hook = False
+        try:
+            deployed = _json.loads(deployed_settings.read_text(encoding="utf-8"))
+            prompt_hooks = deployed.get("hooks", {}).get("UserPromptSubmit", [])
+            has_route_hook = any(
+                _hook_entry_matches(e, _ROUTE_HOOK_MARKER)
+                for e in (prompt_hooks if isinstance(prompt_hooks, list) else [])
+            )
+        except (OSError, ValueError):
+            has_route_hook = False
+        if not has_route_hook:
+            logger.warning(
+                "Deployed %s has no vibesop-route.sh registration (copy skipped?); "
+                "leaving the project-layer registration untouched",
+                deployed_settings,
+            )
+            return
+
+        def _write_atomic(path: Path, content: str) -> None:
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(content, encoding="utf-8")
+            tmp.replace(path)
+
+        strip_route_hook_from_layer(
+            current_settings=deployed_settings,
+            other_dir=Path.cwd() / ".claude",
+            write_atomic=_write_atomic,
+            warn=lambda msg: logger.warning("%s", msg),
+        )

@@ -13,6 +13,92 @@ from vibesop.adapters.models import Manifest, RenderResult
 
 logger = logging.getLogger(__name__)
 
+_ROUTE_HOOK_MARKER = "vibesop-route.sh"
+_MIRROR_PROMPT_HOOK_MARKER = "vibesop-mirror-prompt.sh"
+
+
+def _hook_entry_matches(entry: Any, marker: str) -> bool:
+    """Return True if any hook command in a settings.json entry contains marker."""
+    if not isinstance(entry, dict):
+        return False
+    hooks = entry.get("hooks")
+    if not isinstance(hooks, list):
+        return False
+    return any(isinstance(hook, dict) and marker in str(hook.get("command", "")) for hook in hooks)
+
+
+def strip_route_hook_from_layer(
+    *,
+    current_settings: Path,
+    other_dir: Path,
+    write_atomic: Any,
+    warn: Any,
+) -> None:
+    """Remove vibesop-route.sh UserPromptSubmit entries from ``other_dir``.
+
+    Shared by the adapter (post-render) and the deploy command (post-copy) so
+    both writers converge to a single registration layer (gate41 MAJOR-2).
+    ``write_atomic(path, content)`` persists the rewritten settings;
+    ``warn(message)`` surfaces what happened. No-op when the other layer has
+    no route-hook entries (or the file is missing / unparsable / same file).
+    """
+    import json
+
+    other_settings = other_dir / "settings.json"
+    if other_settings.resolve() == current_settings.resolve() or not other_settings.exists():
+        return
+
+    try:
+        other = json.loads(other_settings.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        warn(f"Could not parse {other_settings} ({e}); skipping route-hook dedup across layers")
+        return
+    if not isinstance(other, dict):
+        return
+
+    other_hooks = other.get("hooks")
+    if not isinstance(other_hooks, dict):
+        return
+    prompt_hooks = other_hooks.get("UserPromptSubmit")
+    if not isinstance(prompt_hooks, list):
+        return
+
+    kept = [entry for entry in prompt_hooks if not _hook_entry_matches(entry, _ROUTE_HOOK_MARKER)]
+    removed = len(prompt_hooks) - len(kept)
+    if removed == 0:
+        return
+
+    if kept:
+        other_hooks["UserPromptSubmit"] = kept
+    else:
+        other_hooks.pop("UserPromptSubmit", None)
+    if not other_hooks:
+        other.pop("hooks", None)
+    write_atomic(other_settings, json.dumps(other, indent=2))
+
+    # Report whether the other layer's (now unregistered) route script
+    # forwards SESSION_ID — stale templates produce session-less spans.
+    script_path = other_dir / "hooks" / _ROUTE_HOOK_MARKER
+    try:
+        script_text = script_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        script_note = "not found"
+    except OSError:
+        script_note = "unreadable"
+    else:
+        script_note = (
+            "forwards SESSION_ID"
+            if "SESSION_ID" in script_text
+            else "does NOT forward SESSION_ID (stale template)"
+        )
+
+    warn(
+        "Duplicate route-hook registration resolved: wrote "
+        f"{current_settings}; removed {removed} vibesop-route.sh "
+        f"UserPromptSubmit {'entry' if removed == 1 else 'entries'} from "
+        f"{other_settings}. Other-layer script {script_path}: {script_note}."
+    )
+
 
 def _tool_seq_project_root(output_dir: Path) -> str:
     """Derive the project root a tool-seq hook should capture against.
@@ -354,8 +440,12 @@ class ClaudeCodeAdapter(HookBasedAdapter):
 
         settings: dict[str, Any] = {}
 
-        # Preserve existing env if already configured
+        # Preserve existing env/model, and keep existing non-route
+        # UserPromptSubmit entries (e.g. conversation mirror) — merge
+        # semantics instead of overwriting the hooks key wholesale; the
+        # route hook entry itself is refreshed below.
         existing_path = output_dir / "settings.json"
+        preserved_prompt_hooks: list[Any] = []
         if existing_path.exists():
             try:
                 existing = json.loads(existing_path.read_text(encoding="utf-8"))
@@ -363,6 +453,16 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                     settings["env"] = existing["env"]
                 if isinstance(existing, dict) and "model" in existing:
                     settings["model"] = existing["model"]
+                if isinstance(existing, dict):
+                    existing_hooks = existing.get("hooks")
+                    if isinstance(existing_hooks, dict):
+                        prompt_hooks = existing_hooks.get("UserPromptSubmit")
+                        if isinstance(prompt_hooks, list):
+                            preserved_prompt_hooks = [
+                                entry
+                                for entry in prompt_hooks
+                                if not _hook_entry_matches(entry, _ROUTE_HOOK_MARKER)
+                            ]
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -375,7 +475,8 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             ]
         }
 
-        # Register the VibeSOP routing hook
+        # Register the VibeSOP routing hook, merging with preserved non-route
+        # UserPromptSubmit entries (route entry refreshed in place).
         settings["hooks"] = {
             "UserPromptSubmit": [
                 {
@@ -386,7 +487,8 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                             "command": f"bash {hooks_dir}/vibesop-route.sh",
                         }
                     ],
-                }
+                },
+                *preserved_prompt_hooks,
             ]
         }
 
@@ -409,17 +511,23 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         # real-time prompt mirroring, SessionEnd for transcript import).
         # Opt-in — captures user prompts verbatim, which may contain secrets.
         if self._conversation_mirror_enabled():
-            settings["hooks"]["UserPromptSubmit"].append(
-                {
-                    "matcher": "",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": f"bash {hooks_dir}/vibesop-mirror-prompt.sh",
-                        }
-                    ],
-                }
-            )
+            # Skip if a mirror entry was preserved from an earlier build —
+            # repeated builds must not accumulate duplicate entries.
+            if not any(
+                _hook_entry_matches(entry, _MIRROR_PROMPT_HOOK_MARKER)
+                for entry in settings["hooks"]["UserPromptSubmit"]
+            ):
+                settings["hooks"]["UserPromptSubmit"].append(
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"bash {hooks_dir}/vibesop-mirror-prompt.sh",
+                            }
+                        ],
+                    }
+                )
             settings["hooks"]["SessionEnd"] = [
                 {
                     "matcher": "",
@@ -439,6 +547,49 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             validate_security=False,
         )
         result.add_file(settings_path)
+
+        # Enforce single-layer route-hook registration: strip vibesop-route.sh
+        # entries from the counterpart layer (user <-> project) so a prompt
+        # never fires the route hook twice.
+        self._strip_other_layer_route_hook(output_dir, result)
+
+    def _strip_other_layer_route_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Remove vibesop-route.sh UserPromptSubmit entries from the other layer.
+
+        Both ``~/.claude/settings.json`` (user level, deploy.py default) and
+        ``<project>/.claude/settings.json`` (project level, ``vibe build``)
+        registering the route hook makes Claude Code fire it twice per prompt
+        (double route spans + double context injection). After writing the
+        current layer, strip route-hook entries from the counterpart layer;
+        all other entries (env/model/mirror/PostToolUse) are left untouched.
+        """
+        # gate41 impl-review MAJOR-1 (claude+pi): strip ONLY when output_dir is
+        # one of the two real registration layers. ``vibe build`` without
+        # --output stages into .vibe/dist/<target> — treating that as "project
+        # layer" would strip the user's live ~/.claude registration and leave
+        # both layers unregistered (hook silently dead). Staging/foreign output
+        # dirs never trigger the strip.
+        user_config_dir = Path("~/.claude").expanduser()
+        project_config_dir = self._project_root / ".claude"
+        resolved_output = output_dir.resolve()
+        if resolved_output == user_config_dir.resolve():
+            other_dir = project_config_dir
+        elif resolved_output == project_config_dir.resolve():
+            other_dir = user_config_dir
+        else:
+            return
+
+        current_settings = (output_dir / "settings.json").resolve()
+        strip_route_hook_from_layer(
+            current_settings=current_settings,
+            other_dir=other_dir,
+            write_atomic=lambda p, c: self.write_file_atomic(p, c, validate_security=False),
+            warn=result.add_warning,
+        )
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {
