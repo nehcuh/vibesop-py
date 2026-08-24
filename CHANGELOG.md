@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.0] — 2026-08-24
+
 ### route outcome reask 触发面语义收窄（gate42, 2026-08-24）
 
 按 `.omx/artifacts/gate42-synthesis.md` v2 终稿实施（三路评审 + 确认轮
