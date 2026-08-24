@@ -42,6 +42,27 @@ _PROD_SPANS_FILE = "spans.jsonl"
 _DEV_SPANS_FILE = "spans.dev.jsonl"
 
 
+def _redact_structure(value: object) -> object:
+    """Recursively redact str leaves in a JSON-like structure.
+
+    Walks dicts and lists; redacts strings via ``redact_sensitive()``. Dict
+    keys are redacted too — a Windows path used as a key (e.g.
+    ``{"C:\\Users\\bob\\file": "v"}``) would otherwise survive all three
+    layers: layer (a) used to skip keys and layer (c) cannot match the
+    doubled-backslash serialised form (gate41 pi N1). Semantic keys
+    ("query"/"skill_id"/...) never match the redaction patterns, so this is
+    behaviour-neutral for well-formed metadata. Any other type
+    (int/float/bool/None/...) is returned unchanged.
+    """
+    if isinstance(value, str):
+        return redact_sensitive(value)
+    if isinstance(value, dict):
+        return {_redact_structure(k): _redact_structure(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_structure(item) for item in value]
+    return value
+
+
 class SpanWriter:
     """Persists spans to a JSONL file with redaction, truncation, and locking.
 
@@ -83,12 +104,20 @@ class SpanWriter:
         """
         record = span.to_dict()
 
-        # Serialise and redact input_data / output_data
+        # Three-layer redact, applied uniformly to all three payload fields:
+        # (a) walk the raw structure and redact str leaves (catches Windows
+        #     paths, whose backslashes are doubled by json.dumps and would
+        #     never match on the serialised text),
+        # (b) json.dumps the redacted structure,
+        # (c) redact the serialised text again — SECRET/KEY/EMAIL patterns
+        #     need the ``"api_key": "…"`` JSON context to match — then
+        #     truncate. The PATH regex is narrowed so it cannot swallow the
+        #     closing quote of a JSON string value.
         for key in ("input_data", "output_data"):
             val = record.get(key)
             if val is not None:
                 try:
-                    serialised = json.dumps(val, ensure_ascii=False)
+                    serialised = json.dumps(_redact_structure(val), ensure_ascii=False)
                 except (TypeError, ValueError):
                     serialised = str(val)
                 safe = self._truncate(redact_sensitive(serialised))
@@ -97,7 +126,7 @@ class SpanWriter:
         # Redact metadata fields (stored as string after serialisation)
         if record.get("metadata"):
             try:
-                meta_str = json.dumps(record["metadata"], ensure_ascii=False)
+                meta_str = json.dumps(_redact_structure(record["metadata"]), ensure_ascii=False)
                 safe = self._truncate(redact_sensitive(meta_str))
                 record["metadata"] = safe
             except (TypeError, ValueError):

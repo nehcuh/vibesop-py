@@ -43,9 +43,22 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
     # Email addresses.
     ("EMAIL", re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
-    # Home-directory paths (contain the OS username). The entire path segment
-    # is redacted — not just the user component — so no tail filenames leak.
-    ("PATH", re.compile(r"(?:/Users/|/home/)\S*|C:\\Users\\\S*")),
+    # Home-directory paths (contain the OS username). The path prefix plus as
+    # much of the tail as safely matchable is redacted (see residue note below).
+    # The continuation classes stop at quotes (and backslashes for POSIX) so a
+    # path inside JSON-serialised text cannot swallow the closing quote / an
+    # escaped-quote pair (\"), which previously corrupted the JSON structure.
+    # The Windows segment keeps backslash matchable so raw-text paths like
+    # ``C:\Users\bob\Desktop`` are still fully redacted.
+    # Known residue (gate41 pi N2): a POSIX path containing a literal
+    # backslash (e.g. ``/Users/bob/dir\file``) is only redacted up to the
+    # backslash — the tail segment survives. The PII core (the
+    # ``/Users/<user>`` prefix) is always covered; accepting the tail leak is
+    # the price of not corrupting JSON escape pairs.
+    (
+        "PATH",
+        re.compile(r"(?:/Users/|/home/)[^\s\"'\\]*|C:\\Users\\[^\s\"']*"),
+    ),
 ]
 
 

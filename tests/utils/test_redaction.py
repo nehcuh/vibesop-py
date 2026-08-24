@@ -1,5 +1,7 @@
 """Tests for utils/redaction.py — PII / secret redaction before persistence."""
 
+import json
+
 from vibesop.utils.redaction import contains_sensitive, redact_sensitive
 
 
@@ -102,3 +104,64 @@ def test_does_not_false_positive_on_short_hex() -> None:
     # 12-char hex is not an sk-/gh-/email/path — should be left alone.
     short = "commit abc123def456"
     assert redact_sensitive(short) == short
+
+
+# --- gate41 项 2: narrowed PATH regex must not corrupt JSON-serialised text ---
+
+
+def test_json_path_at_value_end_does_not_swallow_closing_quote() -> None:
+    """Path as the last chars of a JSON string value: the closing quote survives."""
+    text = json.dumps({"cmd": "cd /home/bob/project"}, ensure_ascii=False)
+    out = redact_sensitive(text)
+    assert "/home/bob" not in out
+    assert json.loads(out) == {"cmd": "cd [REDACTED_PATH]"}
+
+
+def test_json_path_mid_value_does_not_swallow_quote_or_comma() -> None:
+    """Path mid-string with following keys: quote, comma and next key survive."""
+    text = json.dumps({"a": "/Users/alice/x", "k": 1}, ensure_ascii=False)
+    out = redact_sensitive(text)
+    assert "/Users/alice" not in out
+    assert json.loads(out) == {"a": "[REDACTED_PATH]", "k": 1}
+
+
+def test_cmspark_escaped_quote_pair_after_path_stays_parseable() -> None:
+    """cmspark live shape: path followed by a \\" escaped-quote pair inside JSON."""
+    text = json.dumps({"query": 'WF="/Users/huchen/Projects/x" done'}, ensure_ascii=False)
+    assert '\\"' in text  # the escaped-quote pair the old \\S* used to swallow
+    out = redact_sensitive(text)
+    assert "/Users/huchen" not in out
+    assert json.loads(out) == {"query": 'WF="[REDACTED_PATH]" done'}
+
+
+def test_windows_raw_text_path_still_redacted() -> None:
+    """Narrowing must not regress raw-text Windows paths."""
+    out = redact_sensitive(r"open C:\Users\bob\Desktop now")
+    assert r"C:\Users\bob" not in out
+    assert "Desktop" not in out
+    assert "[REDACTED_PATH]" in out
+    assert " now" in out
+
+
+def test_secret_key_in_serialised_json_still_matched() -> None:
+    """`"api_key": "sk-…16+"` inside serialised JSON is redacted, JSON stays valid."""
+    key = "sk-" + "a" * 20
+    text = json.dumps({"api_key": key}, ensure_ascii=False)
+    out = redact_sensitive(text)
+    assert key not in out
+    assert "[REDACTED_KEY]" in out
+    parsed = json.loads(out)
+    assert parsed["api_key"] == "[REDACTED_KEY]"
+
+
+def test_secret_non_prefixed_value_needs_json_context() -> None:
+    """gate41 pi N3: a SECRET value WITHOUT the sk- prefix only matches via the
+    `"api_key": "…"` JSON context — this is the case the post-serialisation
+    pass (layer c) uniquely covers; the KEY pattern cannot see it."""
+    value = "some16charvaluenotsk"
+    text = json.dumps({"api_key": value}, ensure_ascii=False)
+    out = redact_sensitive(text)
+    assert value not in out
+    assert "[REDACTED_SECRET]" in out
+    parsed = json.loads(out)
+    assert parsed["api_key"] == "[REDACTED_SECRET]"
