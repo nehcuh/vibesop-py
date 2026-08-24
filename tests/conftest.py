@@ -255,7 +255,8 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Isolate every test from the real user home directory (M4, three layers).
 
     1. Env vars: ``HOME``/``USERPROFILE`` → tmp; ``HOMEDRIVE``/``HOMEPATH``
-       removed (ntpath.expanduser precedence: HOME > USERPROFILE > HOMEDRIVE/PATH).
+       removed (ntpath.expanduser ignores ``HOME`` since 3.8; precedence:
+       ``USERPROFILE`` → ``HOMEDRIVE``+``HOMEPATH``).
     2. ``Path.home()`` patched to tmp for call-time consumers.
     3. Import-time-frozen ClassVar/module-level paths redirected to tmp
        (see ``_redirect_frozen_home_paths``).

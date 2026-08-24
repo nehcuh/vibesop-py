@@ -304,6 +304,8 @@ class TestRouteHookLayerMutualExclusion:
         home = tmp_path / "fake_home"
         home.mkdir()
         monkeypatch.setenv("HOME", str(home))
+        # ntpath.expanduser ignores HOME — USERPROFILE wins on Windows
+        monkeypatch.setenv("USERPROFILE", str(home))
         return home
 
     @pytest.fixture
@@ -479,6 +481,8 @@ class TestRouteHookStripLayerGating:
         home = tmp_path / "fake_home"
         home.mkdir()
         monkeypatch.setenv("HOME", str(home))
+        # ntpath.expanduser ignores HOME — USERPROFILE wins on Windows
+        monkeypatch.setenv("USERPROFILE", str(home))
         return home
 
     @pytest.fixture

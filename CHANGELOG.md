@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### gate43：部署模板路由文案降级 + Windows 测试修复 + 发布流程 CI 盯梢（2026-08-24）
+
+按 `.omx/artifacts/gate43-synthesis.md` v2 终稿实施（三路评审 + 确认轮
+全 CONFIRM-PASS）。
+
+- **部署模板路由文案降级（零代码语义变更）**：8 个文案面的无条件强制
+  文案（"MANDATORY: Call vibe route before any non-trivial task"）改为
+  条件式——当前 prompt 已带 hook 注入指纹（`VibeSOP routed:` /
+  `[ACTIVE SKILL:` / `NEXT STEP (MANDATORY): read` /
+  `VibeSOP: No matching skill found`)时遵循注入结果、不重跑 CLI；
+  无指纹时才以 `vibe route` 兜底。`_generation.py` 的
+  `generate_slim_agents_index`/`generate_docs_routing`/`render_docs_files`
+  加 `hook_routing` 分流参数（默认 False，失败方向保留 CLI 通道）。
+  平台分类以**是否存在事件注册**为唯一判据：claude-code/pi/kimi/grok
+  为 True（pi 注入形态为 TS 扩展 prompt 变换，指纹单独调整为
+  `VibeSOP Routing Result`/`Matched skill:`;grok 措辞写"本轮 hook
+  注入")、cursor/opencode 为 False（祈使文案是唯一通道，保留不动）。
+  验收：cmspark(grok dogfood）减频观察，T+7 方向性下降。
+- **Windows claude_code 断言修复（纯测试）**:`test_claude_code.py`
+  两个 home fixture 各加 `USERPROFILE` 覆写（ntpath.expanduser 自
+  3.8 不看 HOME，优先级 USERPROFILE → HOMEDRIVE+HOMEPATH);
+  conftest.py 相关注释改正。
+- **发布流程**:`docs/dev/releasing.md` checklist 新增两条——创建
+  tag 前确认 main 最近一次 CI run 全绿；push 后 `gh run watch` 盯到
+  变绿才算收尾。
+
 ## [8.1.0] — 2026-08-24
 
 ### route outcome reask 触发面语义收窄（gate42, 2026-08-24）

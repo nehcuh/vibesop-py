@@ -36,7 +36,9 @@ git push origin v2.2.0
 - [ ] All tests passing
 - [ ] Coverage above 80%
 - [ ] CHANGELOG.md updated
+- [ ] Latest CI run on main is fully green (check before creating the tag)
 - [ ] Version tag created
 - [ ] PyPI package published
 - [ ] GitHub Release created
+- [ ] CI watched to green after push (`gh run watch`) — the release is not done until CI passes
 - [ ] Documentation updated
