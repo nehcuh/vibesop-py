@@ -36,8 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   再路由的路径不再记 reask；该路径的 CLI 一次性 session 证据本就
   hollow，历史窗口（217 条全部 <10min、p50≈18s，与真实重问 p50≈24h
   两个数量级分离）未见可分离的真人 CLI 重问类。
-- **抽样核对**：≥60s 的 CLI 触发样本（约 11 条）人工核对结论——
-  待 cmspark rebuild 验收后回填（设计稿 §4,pi F4）。
+- **抽样核对**（2026-08-24 rebuild 验收后回填）:≥60s 的 CLI 触发
+  样本恰 11 条——6 条长文逐字重投判为程序化回声；5 条短命令句
+  （如"帮我重新打包并替换"）无法排除真人复制粘贴重问，按最坏
+  情形全部计入信号损失亦仅 5/218（2.3%)，接受的取舍成立。
+  重建已执行（`--apply`)：投影双口径 1.08:1(pooled)/
+  0.28:1(hit-only)，硬闸 A(CLI 触发 reask==0，逐候选口径）
+  0 违反，40 条 claude→claude 真实重问全数保全。
 
 ### route span 写侧遥测可信性（gate41, 2026-08-24）
 
