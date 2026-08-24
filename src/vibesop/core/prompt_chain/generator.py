@@ -472,7 +472,7 @@ docker exec vibesop-e2e ls -la /root/.claude/hooks/  # 应有 vibesop-route.sh +
 docker exec vibesop-e2e cat /root/.claude/settings.json  # UserPromptSubmit hook 已注册
 
 # G2. CLAUDE.md 协议注入
-docker exec vibesop-e2e grep "MANDATORY.*vibe route" /root/.claude/CLAUDE.md
+docker exec vibesop-e2e grep "Routing is automatic" /root/.claude/CLAUDE.md
 
 # G3. Hook JSON envelope 解析（关键 — Round 2 修过 P1 bug）
 # 正确字段名是 .prompt（不是 .user_prompt）

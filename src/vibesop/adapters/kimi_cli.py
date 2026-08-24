@@ -73,6 +73,10 @@ class KimiCliAdapter(FileBasedAdapter):
         return str(readme_path)
 
     # ---- Hook configuration ----
+    # Kimi CLI registers a real UserPromptSubmit hook in config.toml
+    # ([[hooks]] event="UserPromptSubmit") — gate43 platform classification.
+    _route_hook_registered: bool = True
+
     def _get_hook_event_name(self) -> str:
         return "UserPromptSubmit"
 
@@ -326,7 +330,7 @@ class KimiCliAdapter(FileBasedAdapter):
             # Docs files
             from vibesop.adapters._shared import render_docs_files
 
-            docs_paths = render_docs_files(output_dir, manifest.skills)
+            docs_paths = render_docs_files(output_dir, manifest.skills, hook_routing=True)
             for doc_path in docs_paths:
                 result.add_file(doc_path)
 
@@ -350,12 +354,12 @@ class KimiCliAdapter(FileBasedAdapter):
             "",
             "## AI-Powered Skill Routing",
             "",
-            "**⚠️ MANDATORY: ALWAYS call vibe route before starting ANY non-trivial task**",
-            "This is NOT optional — routing ensures the correct skill is loaded for the task.",
+            "Routing is automatic when the VibeSOP hook is installed (安装 hook 后路由自动完成).",
+            "If the current user prompt arrives with a hook injection — look for `VibeSOP routed:`, `[ACTIVE SKILL:`, `NEXT STEP (MANDATORY): read`, or `VibeSOP: No matching skill found` — routing has already run for this prompt: follow that result and do NOT re-run `vibe route` (当前 prompt 若已带注入指纹,说明本轮路由已执行:遵循注入结果,不要再跑 vibe route).",
             "",
-            "### MANDATORY Workflow (必须遵循 - 无条件执行)",
+            "### Routing Workflow (路由流程)",
             "",
-            "**Step 1**: Call routing to get recommendations",
+            "**Step 1**: If no such injection is present on the current prompt (hook not installed or failed), call routing to get recommendations (无注入指纹时才调用路由兜底)",
             '```bash\nvibe route "<user_request>"\n```',
             "",
             "**Step 2**: Read the recommended skill file ⚠️ CRITICAL STEP",
@@ -529,6 +533,7 @@ class KimiCliAdapter(FileBasedAdapter):
             platform_name="Kimi Code CLI",
             config_dir_label="~/.kimi-code",
             include_skills_reference=True,
+            hook_routing=True,
         )
 
     # ---- No-op: Kimi CLI doesn't use env scripts ----

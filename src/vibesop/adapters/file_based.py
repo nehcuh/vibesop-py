@@ -57,6 +57,13 @@ class FileBasedAdapter(PlatformAdapter):
         return str(self.config_dir)
 
     # ---- Hook configuration (subclasses can override) ----
+    # Whether this platform registers a routing hook (event registration
+    # is the sole criterion — gate43). Drives the conditional vs
+    # imperative routing copy in generated docs. KimiCliAdapter overrides
+    # to True; Cursor/OpenCode keep the default False (no registration,
+    # the imperative CLI copy is their only routing channel).
+    _route_hook_registered: bool = False
+
     def _get_hook_event_name(self) -> str:
         return ""
 
@@ -179,6 +186,7 @@ class FileBasedAdapter(PlatformAdapter):
             platform_name=self.platform_label,
             config_dir_label=self.config_dir_label,
             include_skills_reference=bool(manifest.skills),
+            hook_routing=self._route_hook_registered,
         )
 
     def _render_env_script(self, output_dir: Path, result: RenderResult) -> None:
@@ -262,7 +270,9 @@ class FileBasedAdapter(PlatformAdapter):
             result.add_file(agents_path)
 
             # 5. Docs files
-            docs_paths = render_docs_files(output_dir, manifest.skills)
+            docs_paths = render_docs_files(
+                output_dir, manifest.skills, hook_routing=self._route_hook_registered
+            )
             for doc_path in docs_paths:
                 result.add_file(doc_path)
 
@@ -273,6 +283,7 @@ class FileBasedAdapter(PlatformAdapter):
                     platform_name=self.platform_label,
                     config_dir_label=self.config_dir_label,
                     include_skills_reference=False,
+                    hook_routing=self._route_hook_registered,
                 )
                 self.write_file_atomic(project_agents, slim_agents, validate_security=False)
 

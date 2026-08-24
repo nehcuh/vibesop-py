@@ -12,13 +12,21 @@
 
 ## Routing Protocol
 
-**MANDATORY: Call `vibe route` before any non-trivial task.**
+Routing is automatic when a VibeSOP hook is installed. If the current
+user prompt arrives with a hook injection — look for `VibeSOP routed:`,
+`[ACTIVE SKILL:`, `NEXT STEP (MANDATORY): read`, or
+`VibeSOP: No matching skill found` — routing has already run for this
+prompt: follow that result and do NOT re-run `vibe route`.
 
-```bash
-vibe route "<user_request>"
-```
+If no such injection is present on the current prompt (hook not
+installed or failed), run:
 
-Then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+    vibe route "<user_request>"
+
+then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+
+User-typed `/vibe-*` commands still go through `vibe route --slash`
+(see Quick Commands). Human-invoked CLI discovery is unchanged.
 
 For override protocol and disagreement handling: read `docs/routing-protocol.md`.
 

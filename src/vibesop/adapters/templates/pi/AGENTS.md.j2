@@ -12,13 +12,20 @@
 
 ## Routing Protocol
 
-**MANDATORY: Call `vibe route` before any non-trivial task.**
+Routing is automatic when the VibeSOP Pi extension is installed. If the
+current user prompt arrives with an extension injection — look for
+`VibeSOP Routing Result` or `Matched skill:` — routing has already run
+for this prompt: follow that result and do NOT re-run `vibe route`.
 
-```bash
-vibe route "<user_request>"
-```
+If no such injection is present on the current prompt (extension not
+installed or no skill matched), run:
 
-Then read `.pi/skills/<matched-skill>/SKILL.md` and follow its steps.
+    vibe route "<user_request>"
+
+then read `.pi/skills/<matched-skill>/SKILL.md` and follow its steps.
+
+User-typed `/vibe-*` commands still go through `vibe route --slash`
+(see Quick Commands). Human-invoked CLI discovery is unchanged.
 
 For routing details, override protocol, and multi-intent handling: read `docs/routing-protocol.md`.
 

@@ -97,6 +97,7 @@ def generate_slim_agents_index(
     platform_name: str = "OpenCode",  # noqa: ARG001  # public API kwarg
     config_dir_label: str = "~/.config/opencode",  # noqa: ARG001  # public API kwarg
     include_skills_reference: bool = True,
+    hook_routing: bool = False,
 ) -> str:
     """Generate a slim AGENTS.md index that references docs/ for details.
 
@@ -109,6 +110,11 @@ def generate_slim_agents_index(
         platform_name: Human-readable platform name.
         config_dir_label: Path label for the global config directory.
         include_skills_reference: Whether to include the skills catalog reference.
+        hook_routing: Whether the platform registers a routing hook
+            (event registration is the sole criterion). ``True`` renders
+            the conditional routing copy (hook injection first, CLI as
+            fallback); ``False`` (default) keeps the imperative CLI-first
+            copy so the CLI channel survives on hook-less platforms.
 
     Returns:
         Slim AGENTS.md content.
@@ -125,6 +131,33 @@ def generate_slim_agents_index(
 Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`.
 """
 
+    if hook_routing:
+        routing_protocol = """\
+Routing is automatic when a VibeSOP hook is installed. If the current
+user prompt arrives with a hook injection — look for `VibeSOP routed:`,
+`[ACTIVE SKILL:`, `NEXT STEP (MANDATORY): read`, or
+`VibeSOP: No matching skill found` — routing has already run for this
+prompt: follow that result and do NOT re-run `vibe route`.
+
+If no such injection is present on the current prompt (hook not
+installed or failed), run:
+
+    vibe route "<user_request>"
+
+then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+
+User-typed `/vibe-*` commands still go through `vibe route --slash`
+(see Quick Commands). Human-invoked CLI discovery is unchanged."""
+    else:
+        routing_protocol = """\
+**MANDATORY: Call `vibe route` before any non-trivial task.**
+
+```bash
+vibe route "<user_request>"
+```
+
+Then read `skills/<matched-skill>/SKILL.md` and follow its steps."""
+
     tool_env = detect_tool_environment()
     if tool_env:
         tool_env = tool_env + "\n---\n"
@@ -137,13 +170,7 @@ Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`
 {tool_env}
 ## Routing Protocol
 
-**MANDATORY: Call `vibe route` before any non-trivial task.**
-
-```bash
-vibe route "<user_request>"
-```
-
-Then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+{routing_protocol}
 
 For routing details, override protocol, and multi-intent handling: read `docs/routing.md`.
 {skills_ref}
@@ -173,20 +200,45 @@ Full list: `vibe route --slash "/vibe-help"`.
 """
 
 
-def generate_docs_routing() -> str:
+def generate_docs_routing(*, hook_routing: bool = False) -> str:
     """Generate docs/routing.md with detailed routing protocol.
 
     This content was previously inlined in the main AGENTS.md.
     Moved here to keep the index slim and reduce staleness risk.
-    """
-    return """# Routing Protocol
 
+    Args:
+        hook_routing: Whether the platform registers a routing hook.
+            ``True`` renders an injection-first Workflow (recognize the
+            hook fingerprints, CLI only as fallback); ``False`` (default)
+            keeps the CLI-first Workflow.
+    """
+    if hook_routing:
+        workflow = """\
+## Workflow (execute in order)
+
+1. **Check injection**: If the current user prompt arrives with a hook
+   injection — `VibeSOP routed:`, `[ACTIVE SKILL:`, or
+   `NEXT STEP (MANDATORY): read` (or
+   `VibeSOP: No matching skill found`) — routing has already run for
+   this prompt: follow that result and skip to step 3. Do NOT re-run
+   `vibe route`.
+2. **Route** (fallback, only when no injection is present):
+   `vibe route "<user_request>"` — use the user's EXACT words
+3. **Read**: `read skills/<matched-skill>/SKILL.md`
+4. **Execute**: Follow the skill's steps exactly
+5. **Verify**: Run checks the skill requires"""
+    else:
+        workflow = """\
 ## Workflow (execute in order)
 
 1. **Route**: `vibe route "<user_request>"` — use the user's EXACT words
 2. **Read**: `read skills/<matched-skill>/SKILL.md`
 3. **Execute**: Follow the skill's steps exactly
-4. **Verify**: Run checks the skill requires
+4. **Verify**: Run checks the skill requires"""
+
+    return f"""# Routing Protocol
+
+{workflow}
 
 ## Agent Override Protocol
 
@@ -389,7 +441,12 @@ vibe route --slash "/vibe-install superpowers"
 """
 
 
-def render_docs_files(output_dir: Path, skills: list[Any]) -> list[Path]:
+def render_docs_files(
+    output_dir: Path,
+    skills: list[Any],
+    *,
+    hook_routing: bool = False,
+) -> list[Path]:
     """Render all docs/ files for a platform adapter.
 
     Shared between OpenCode and Kimi CLI adapters. Creates:
@@ -401,6 +458,8 @@ def render_docs_files(output_dir: Path, skills: list[Any]) -> list[Path]:
     Args:
         output_dir: Platform output directory (docs/ will be created inside).
         skills: List of skill definitions from the manifest.
+        hook_routing: Forwarded to ``generate_docs_routing`` — ``True``
+            on platforms with a registered routing hook.
 
     Returns:
         List of created file paths.
@@ -411,7 +470,7 @@ def render_docs_files(output_dir: Path, skills: list[Any]) -> list[Path]:
     created: list[Path] = []
 
     docs = {
-        "routing.md": generate_docs_routing(),
+        "routing.md": generate_docs_routing(hook_routing=hook_routing),
         "session-lifecycle.md": generate_docs_session_lifecycle(),
         "skills-catalog.md": generate_docs_skills_catalog(skills),
         "quick-commands.md": generate_docs_quick_commands(),

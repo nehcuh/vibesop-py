@@ -339,7 +339,15 @@ class TestPlatformAdapterAgentRuntime:
         content = agents_md.read_text(encoding="utf-8")
         assert "vibe route" in content
         assert "SKILL.md" in content
-        assert "MANDATORY" in content or "必须" in content
+        # gate43: unconditional imperative copy is gone. The literal
+        # "NEXT STEP (MANDATORY): read" may still appear — it is an
+        # injection fingerprint to recognize, not an instruction to route.
+        assert "**MANDATORY" not in content
+        assert "必须" not in content
+        # Fallback CLI channel and hook fingerprints are present
+        assert 'vibe route "<user_request>"' in content
+        assert "Routing is automatic" in content
+        assert "VibeSOP routed:" in content
         # Slim AGENTS.md references docs/ for detailed routing info
         assert "docs/routing.md" in content
 
@@ -349,6 +357,10 @@ class TestPlatformAdapterAgentRuntime:
         routing_content = routing_md.read_text(encoding="utf-8")
         assert "override" in routing_content.lower()
         assert "orchestration" in routing_content.lower()
+        # gate43: kimi is a hook platform — its docs/routing.md must lead
+        # with the injection check (pins kimi_cli.py's render_docs_files
+        # hook_routing=True call site against silent arg drop).
+        assert "**Check injection**" in routing_content
 
     def test_kimi_cli_agents_md_lists_skills(self, tmp_path: Path) -> None:
         """E2E: skills are rendered to skills/ directory, AGENTS.md references catalog."""
@@ -502,7 +514,11 @@ class TestCrossPlatformConsistency:
 
         claude_md = (tmp_path / "claude" / "CLAUDE.md").read_text(encoding="utf-8")
         assert "vibe route" in claude_md
-        assert "MANDATORY" in claude_md
+        # gate43: unconditional imperative gone; fallback + fingerprints present
+        assert "**MANDATORY" not in claude_md
+        assert 'vibe route "<user_request>"' in claude_md
+        assert "Routing is automatic" in claude_md
+        assert "VibeSOP routed:" in claude_md
 
         # Kimi CLI
         kimi_adapter = KimiCliAdapter()
@@ -515,4 +531,98 @@ class TestCrossPlatformConsistency:
 
         readme = (tmp_path / "kimi" / "README.md").read_text(encoding="utf-8")
         assert "vibe route" in readme
-        assert "MANDATORY" in readme
+        # gate43: unconditional imperative gone (中英双轨同步); the
+        # fingerprint literal "NEXT STEP (MANDATORY): read" may remain.
+        assert "MANDATORY: ALWAYS call" not in readme
+        assert "MANDATORY Workflow" not in readme
+        assert "必须遵循" not in readme
+        assert "无条件执行" not in readme
+        assert 'vibe route "<user_request>"' in readme
+        assert "Routing is automatic" in readme
+        assert "VibeSOP routed:" in readme
+
+    def test_routing_copy_matches_hook_registration(self) -> None:
+        """gate43: every routing-copy face agrees with the platform's hook
+        registration (event registration is the sole criterion).
+
+        True platforms (claude-code/pi/kimi/grok) render the conditional
+        copy — semantic triple: automatic-routing statement, literal
+        injection fingerprint, CLI fallback command (semantics compared,
+        not strings: the pi faces use their own fingerprint form).
+        False platforms (cursor/opencode) keep the imperative CLI-first
+        copy — it is their only routing channel.
+        """
+        from vibesop.adapters._generation import (
+            generate_docs_routing,
+            generate_slim_agents_index,
+        )
+        from vibesop.adapters.cursor import CursorAdapter
+        from vibesop.adapters.grok_build import GrokBuildAdapter
+        from vibesop.adapters.opencode import OpenCodeAdapter
+        from vibesop.spec import SkillSpec
+
+        templates_dir = (
+            Path(__file__).parent.parent.parent / "src" / "vibesop" / "adapters" / "templates"
+        )
+        skill = SkillSpec(id="s", name="S", description="d", trigger_when="t")
+        kimi_manifest = Manifest(
+            metadata=ManifestMetadata(platform="kimi-cli", version="1.0.0"),
+            skills=[skill],
+        )
+
+        # Faces 1-4 + 5-7 (True): conditional copy
+        true_faces = {
+            "claude-code CLAUDE.md": (templates_dir / "claude-code" / "CLAUDE.md.j2").read_text(
+                encoding="utf-8"
+            ),
+            "pi AGENTS.md": (templates_dir / "pi" / "AGENTS.md.j2").read_text(encoding="utf-8"),
+            "pi project AGENTS.md": (templates_dir / "pi" / "AGENTS.md.project.j2").read_text(
+                encoding="utf-8"
+            ),
+            "kimi README": KimiCliAdapter()._generate_readme(kimi_manifest),
+            "slim AGENTS.md (hook)": generate_slim_agents_index(hook_routing=True),
+            "docs/routing.md (hook)": generate_docs_routing(hook_routing=True),
+            "grok routing rule": GrokBuildAdapter._render_routing_rule(),
+        }
+        fingerprints = (
+            "VibeSOP routed:",
+            "[ACTIVE SKILL:",
+            "NEXT STEP (MANDATORY): read",
+            "VibeSOP: No matching skill found",
+            # pi faces anchor on their TS-extension injection form instead
+            "VibeSOP Routing Result",
+            "Matched skill:",
+        )
+        for name, text in true_faces.items():
+            # automatic-routing statement (phrasing varies by face)
+            assert "Routing is automatic" in text or "routing has already run" in text, (
+                f"{name}: automatic-routing statement"
+            )
+            assert any(fp in text for fp in fingerprints), f"{name}: injection fingerprint"
+            assert 'vibe route "<user_request>"' in text, f"{name}: CLI fallback command"
+            assert "MANDATORY: Call `vibe route`" not in text, f"{name}: old imperative gone"
+            assert "Before every non-trivial task" not in text, f"{name}: old imperative gone"
+
+        # Faces 5-6 (False) + cursor/opencode READMEs: imperative preserved
+        cursor_manifest = Manifest(
+            metadata=ManifestMetadata(platform="cursor", version="1.0.0"),
+            skills=[skill],
+        )
+        opencode_manifest = Manifest(
+            metadata=ManifestMetadata(platform="opencode", version="1.0.0"),
+            skills=[skill],
+        )
+        false_faces = {
+            "cursor README": CursorAdapter()._generate_readme(cursor_manifest),
+            "opencode README": OpenCodeAdapter()._generate_readme(opencode_manifest),
+            "slim AGENTS.md (no hook)": generate_slim_agents_index(hook_routing=False),
+            "docs/routing.md (no hook)": generate_docs_routing(hook_routing=False),
+        }
+        for name, text in false_faces.items():
+            assert 'vibe route "<user_request>"' in text, f"{name}: imperative CLI kept"
+            assert "Routing is automatic" not in text, f"{name}: no hook copy leaked"
+
+        # Classification is driven by the adapter class attribute
+        assert KimiCliAdapter._route_hook_registered is True
+        assert CursorAdapter._route_hook_registered is False
+        assert OpenCodeAdapter._route_hook_registered is False
