@@ -504,8 +504,92 @@ class TestRouterMatchedSpanVerdict:
         assert "top_skills" not in metadata
         assert is_route_miss_span(span) is True
         # Result contract pin: result.skill_id is UNTOUCHED (steps[0]) —
-        # the injection gate (:653) and instinct bridge (:727) consume it.
+        # the injection gate (:653) and instinct bridge (:780) consume it.
         assert result.skill_id == "fallback-llm"
+
+    def test_orchestrate_all_fallback_plan_zeroes_confidence(self, fresh_tracer, tmp_path) -> None:
+        """gate41 项3: an all-fallback orchestrated plan must write
+        has_match=False ∧ confidence=0.0 on the span — the fixed 0.8 the
+        :562 branch stamps on the result no longer leaks into miss rows."""
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": True,
+                "plan": {
+                    "steps": [
+                        {"skill_id": "fallback-llm", "intent": "answer generally"},
+                        {"skill_id": "fallback-llm", "intent": "summarize"},
+                    ]
+                },
+            },
+        )
+        result = runtime.handle_query("orchestrate this")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is False
+        assert metadata.get("confidence") == 0.0
+        # Result contract pin: the result object itself still carries the
+        # branch-stamped 0.8 — only the SPAN confidence is zeroed.
+        assert result.confidence == 0.8
+
+    def test_match_preserves_router_confidence(self, fresh_tracer, tmp_path) -> None:
+        """gate41 项3: a REAL hit keeps has_match=True and the router's
+        confidence unchanged on the span (the unified predicate is a
+        no-op on genuine matches)."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = True
+        routing_result.primary = SimpleNamespace(
+            skill_id="some-skill", skill_name="Some Skill", confidence=0.9, layer=None
+        )
+        routing_result.alternatives = []
+        routing_result.plan = None
+
+        router = MagicMock()
+        router.route.return_value = routing_result
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = router
+        runtime.handle_query("review my code")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+        assert metadata.get("confidence") == 0.9
+        assert metadata.get("skill_id") == "some-skill"
+
+    def test_router_matched_without_real_skill_is_span_miss(self, fresh_tracer, tmp_path) -> None:
+        """gate41 项3 invariant pin: router_matched=True but NO real
+        skill in the span candidates (primary is the fallback-llm
+        sentinel, filtered out of _span_skill_ids) → the span writes
+        has_match=False ∧ confidence=0.0. The router's raw verdict on
+        the RESULT object (router_matched) stays True — only the span
+        verdict is narrowed by the unified predicate."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = True
+        routing_result.primary = SimpleNamespace(
+            skill_id="fallback-llm", skill_name="Fallback", confidence=0.8, layer=None
+        )
+        routing_result.alternatives = []
+        routing_result.plan = None
+
+        router = MagicMock()
+        router.route.return_value = routing_result
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = router
+        result = runtime.handle_query("review my code")
+
+        # Router's raw verdict is preserved on the result object…
+        assert result.router_matched is True
+        # …while the span verdict follows the unified matched predicate.
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is False
+        assert metadata.get("confidence") == 0.0
+        assert metadata.get("skill_id") == ""
+        assert "top_skills" not in metadata
 
     def test_orchestrate_mixed_plan_is_match(self, fresh_tracer, tmp_path) -> None:
         """A plan with at least one REAL skill step is a match even if

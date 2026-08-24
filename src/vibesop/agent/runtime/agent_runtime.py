@@ -672,7 +672,7 @@ class AgentRuntime:
                 # runs write skill_id="" and omit top_skills instead of
                 # leaking the sentinel. The RESULT object (skill_id /
                 # skill_name / alternatives — consumed by the :653
-                # injection gate and the :727 instinct bridge) is
+                # injection gate and the :780 instinct bridge) is
                 # deliberately UNTOUCHED (result contract).
                 _full_steps = (
                     result.plan.get("steps", []) if isinstance(result.plan, dict) else None
@@ -700,14 +700,39 @@ class AgentRuntime:
                 _span_skill_ids = [
                     s for s in _span_candidates if isinstance(s, str) and s and s != "fallback-llm"
                 ]
+                # gate41 项3: ONE unified match predicate, shared by
+                # metadata["has_match"] and metadata["confidence"] below.
+                # router_matched alone is not a sufficient SPAN verdict —
+                # it keeps the router's raw verdict (the :557/:585/:594
+                # assignments are deliberately UNTOUCHED), while the span
+                # must also require a REAL skill to attribute: an
+                # all-fallback orchestrated plan stamps confidence=0.8 on
+                # the result (:562) under router_matched=False, and the
+                # sentinel/empty steps are filtered out of _span_skill_ids
+                # above, so has_match=False rows must not carry that
+                # high-confidence noise. This is the SAME expression as
+                # the top_skills gate below and isomorphic to the CLI-path
+                # span verdict cli/main.py:934 (``bool(_span_skill_id)`` —
+                # the CLI path has no router_matched signal, so the
+                # filtered skill ids ARE the verdict there). On current
+                # main the AND is a no-op for router_matched=True (a true
+                # match always yields non-empty _span_skill_ids across all
+                # three assignment branches); it exists as a defensive
+                # invariant should a future branch break that coupling.
+                matched = result.router_matched and bool(_span_skill_ids)
                 _task_span.metadata["skill_id"] = _span_skill_ids[0] if _span_skill_ids else ""
                 _task_span.metadata["mode"] = result.mode
-                _task_span.metadata["confidence"] = result.confidence
+                # gate41 项3: miss rows write confidence=0.0 — the only
+                # behavior change vs. gate40 (was result.confidence, which
+                # leaked the fixed 0.8 from the :562 all-fallback branch).
+                _task_span.metadata["confidence"] = result.confidence if matched else 0.0
                 # Deliberate asymmetry (M12 miss blind-spot fix): the span
-                # carries the ROUTER's real verdict (router_matched), NOT
-                # the mode-derived has_match property — the property stays
-                # True on intercepted single-mode misses, which kept
-                # hook-path misses invisible to is_route_miss_span.
+                # carries the ROUTER's real verdict (router_matched, ANDed
+                # with the sentinel-filtered _span_skill_ids per gate41
+                # 项3), NOT the mode-derived has_match property — the
+                # property stays True on intercepted single-mode misses,
+                # which kept hook-path misses invisible to
+                # is_route_miss_span.
                 # mode on a genuine miss is "single" (set from the
                 # interception decision before routing), which the miss
                 # predicate accepts (only "not_intercepted" is excluded).
@@ -724,7 +749,7 @@ class AgentRuntime:
                 # guards (one-shot CLI sessions). The gate17
                 # cross-reference convention ("change one, re-read the
                 # other") was honored — both predicates re-checked.
-                _task_span.metadata["has_match"] = result.router_matched
+                _task_span.metadata["has_match"] = matched
                 # gate18 pi NIT-4: layer semantics — match → winning layer;
                 # miss → deepest cascade layer; omitted when unknown
                 # (ScanSummary.miss_share_by_layer buckets missing as
@@ -736,9 +761,10 @@ class AgentRuntime:
 
                 # gate38 L2a: ordered routing snapshot ("top_skills", ≤3,
                 # primary first) for future L2b analysis. Written ONLY on
-                # a real router hit — gated on ``result.router_matched``,
-                # the SAME expression as metadata["has_match"] above, NOT
-                # the mode-derived ``has_match`` property (which stays
+                # a real router hit — gated on ``result.router_matched and
+                # _span_skill_ids``, the SAME ``matched`` predicate as
+                # metadata["has_match"] above (gate41 项3), NOT the
+                # mode-derived ``has_match`` property (which stays
                 # True on intercepted misses, :671-675). On miss the key
                 # is omitted entirely. Duplication with
                 # metadata["skill_id"] is deliberate: this is the full
