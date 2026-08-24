@@ -45,7 +45,7 @@ def set_process_session_id(session_id: str) -> None:
     near entry; library callers may set it explicitly to correlate spans
     across library boundaries (e.g. in-process agent API).
     """
-    global _process_session_id
+    global _process_session_id  # noqa: PLW0603
     _process_session_id = session_id
 
 
@@ -61,7 +61,7 @@ def set_process_project_id(project_id: str) -> None:
     invoked from a different cwd than the target project). Clears the
     lazy cache — subsequent ``get_process_project_id()`` returns this value.
     """
-    global _process_project_id
+    global _process_project_id  # noqa: PLW0603
     _process_project_id = project_id
 
 
@@ -78,7 +78,7 @@ def get_process_project_id() -> str | None:
     ``/private/tmp/...``) would disagree with SpanWriter, breaking
     Phase 3 ``vibe pool`` membership matching.
     """
-    global _process_project_id
+    global _process_project_id  # noqa: PLW0603
     if _process_project_id is None:
         try:
             cwd = Path.cwd().resolve()

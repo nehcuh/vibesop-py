@@ -186,5 +186,8 @@ def test_cli_lint_findings_still_exit_zero(tmp_path: Path) -> None:
     _write_skill(tmp_path, content)
     result = runner.invoke(skill_app, ["lint", str(tmp_path)])
     assert result.exit_code == 0  # advisory only — never blocks
-    assert "advisory finding" in result.output
-    assert "block nothing" in result.output
+    # Whitespace-normalized: Rich wraps at 80 cols when COLUMNS is unset
+    # (CI runners have no tty), splitting phrases mid-line.
+    flat = " ".join(result.output.split())
+    assert "advisory finding" in flat
+    assert "block nothing" in flat

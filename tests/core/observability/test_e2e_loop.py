@@ -62,9 +62,7 @@ def e2e_tracer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Observability
     """Patch the global tracer singleton with a fresh enabled instance."""
     import vibesop.core.observability.tracer as tracer_mod
 
-    fresh = ObservabilityTracer(
-        storage_path=tmp_path / "spans.jsonl", enabled=True
-    )
+    fresh = ObservabilityTracer(storage_path=tmp_path / "spans.jsonl", enabled=True)
     monkeypatch.setattr(tracer_mod, "_tracer", fresh)
     return fresh
 
@@ -166,7 +164,8 @@ def test_e2e_orphan_llm_span_when_no_active_trace(
 def test_e2e_multiple_skills_one_session(
     e2e_tracer: ObservabilityTracer,
     tmp_path: Path,
-) -> """Two traces, two skills, no cross-contamination.""":
+) -> None:
+    """Two traces, two skills, no cross-contamination."""
     spans_path = tmp_path / "spans.jsonl"
     wrapped = SpanWrappedProvider(_StaticProvider())
 

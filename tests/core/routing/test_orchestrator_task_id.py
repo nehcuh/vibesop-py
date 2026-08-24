@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 
 from vibesop.core.observability import process_identity
-from vibesop.core.observability.tracer import ObservabilityTracer
 from vibesop.core.observability.task_id import derive_task_id
+from vibesop.core.observability.tracer import ObservabilityTracer
 from vibesop.core.routing import UnifiedRouter
 
 

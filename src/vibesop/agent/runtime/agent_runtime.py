@@ -35,7 +35,7 @@ def _get_obs_tracer() -> ObservabilityTracer:
     Creates it lazily so the observability module is only imported
     when tracing is actually needed (avoids import overhead on cold starts).
     """
-    global _obs_tracer
+    global _obs_tracer  # noqa: PLW0603
     if _obs_tracer is None:
         _obs_tracer = get_tracer(enabled=True)
     return _obs_tracer

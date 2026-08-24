@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -53,8 +53,8 @@ def fixture_spans() -> list[dict]:
     """Load spans from the W4 fixture file."""
     spans: list[dict] = []
     with FIXTURE.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for raw in f:
+            line = raw.strip()
             if not line:
                 continue
             spans.append(json.loads(line))
@@ -66,11 +66,21 @@ def fresh_learner(tmp_path: Path) -> InstinctLearner:
     """Real InstinctLearner with success recorded for every fixture task."""
     learner = InstinctLearner(storage_path=tmp_path / "instincts.json")
     queries = [
-        "auth login user", "auth signup new user", "auth logout session",
-        "file read contents", "file write bytes", "file delete path",
-        "image resize pixels", "image crop bounds", "image rotate degrees",
-        "git commit message", "git push remote", "git pull branch",
-        "test run unit", "test coverage report", "test fixture setup",
+        "auth login user",
+        "auth signup new user",
+        "auth logout session",
+        "file read contents",
+        "file write bytes",
+        "file delete path",
+        "image resize pixels",
+        "image crop bounds",
+        "image rotate degrees",
+        "git commit message",
+        "git push remote",
+        "git pull branch",
+        "test run unit",
+        "test coverage report",
+        "test fixture setup",
     ]
     for q in queries:
         learner.learn(pattern=q, action="gold-action")
@@ -104,9 +114,7 @@ class TestKillSwitchSmoke:
         for all, every cluster should classify as a stable candidate.
         """
         with patch.object(cache, "_compute", side_effect=_topic_embedding):
-            summary = scan_candidates(
-                fixture_spans, fresh_learner, store, cache=cache
-            )
+            summary = scan_candidates(fixture_spans, fresh_learner, store, cache=cache)
 
         assert summary.clusters_seen == 5, (
             f"expected 5 distinct clusters from fixture, got {summary.clusters_seen}"
@@ -160,6 +168,4 @@ class TestKillSwitchSmoke:
             scan_candidates(fixture_spans, fresh_learner, store, cache=cache)
 
         backlog = store.pending_count()
-        assert backlog < 10, (
-            f"idempotent rescan should keep backlog <10; got {backlog}"
-        )
+        assert backlog < 10, f"idempotent rescan should keep backlog <10; got {backlog}"

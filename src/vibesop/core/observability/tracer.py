@@ -20,7 +20,7 @@ import signal
 import sys
 import threading
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -54,7 +54,7 @@ def get_tracer(
     Call this once during initialisation. Subsequent calls return the
     same instance (ignoring arguments).
     """
-    global _tracer
+    global _tracer  # noqa: PLW0603
     if _tracer is None:
         with _lock:
             if _tracer is None:
@@ -72,7 +72,7 @@ def _reset_tracer_for_tests() -> None:
 
     Not exported via ``__all__`` — internal use only.
     """
-    global _tracer
+    global _tracer  # noqa: PLW0603
     with _lock:
         _tracer = None
 
@@ -260,11 +260,8 @@ class ObservabilityTracer:
             return
 
         ctx = self._get_context()
-        if ctx is None:
-            # No active trace — create a standalone span
-            trace_id = _Span.new_trace_id()
-        else:
-            trace_id = ctx.trace_id
+        # No active trace (ctx is None) — create a standalone span
+        trace_id = _Span.new_trace_id() if ctx is None else ctx.trace_id
 
         actual_parent = parent_span_id or (ctx.current_span_id if ctx else None)
         # ctx.current_project_id is None when the trace root was opened without
@@ -423,10 +420,8 @@ class ObservabilityTracer:
 
         # Best-effort: not all platforms support all signals.
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
+            with suppress(ValueError, OSError):
                 signal.signal(sig, _on_exit)
-            except (ValueError, OSError):
-                pass
 
         atexit.register(_on_exit)
         self._installed_handlers = True

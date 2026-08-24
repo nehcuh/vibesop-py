@@ -202,13 +202,12 @@ def import_claude(
         # Detect pre-Path-1 "thin" turns BEFORE import — warn user about
         # the duplicate-append failure mode (found by grok+pi review).
         target_file = storage_dir / f"{cid}.json"
-        if target_file.exists() and not purge:
-            if _file_has_thin_turns(target_file):
-                console.print(
-                    f"[yellow]Warning:[/yellow] {cid}.json contains pre-Path-1 turns "
-                    f"(no thinking/tool_calls fields). Re-importing will append duplicates. "
-                    f"Pass --purge to wipe + re-import cleanly."
-                )
+        if target_file.exists() and not purge and _file_has_thin_turns(target_file):
+            console.print(
+                f"[yellow]Warning:[/yellow] {cid}.json contains pre-Path-1 turns "
+                f"(no thinking/tool_calls fields). Re-importing will append duplicates. "
+                f"Pass --purge to wipe + re-import cleanly."
+            )
 
         if purge and target_file.exists():
             target_file.unlink()
@@ -217,9 +216,7 @@ def import_claude(
         # Single parse — append_parsed_turns consumes the list directly,
         # avoiding the previous double-parse (found by pi review).
         parsed = parse_claude_jsonl(path, capture_depth=depth)
-        new_count, skipped = append_parsed_turns(
-            parsed, cid, storage_dir, max_history=max_history
-        )
+        new_count, skipped = append_parsed_turns(parsed, cid, storage_dir, max_history=max_history)
         total_new += new_count
         total_skip += skipped
         console.print(

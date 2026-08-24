@@ -49,7 +49,7 @@ def _load_fixture() -> list[dict]:
     gaps (and thus distinct-trace / span-count semantics) are preserved.
     """
     spans: list[dict] = []
-    with FIXTURE.open() as f:
+    with FIXTURE.open(encoding="utf-8") as f:
         for raw in f:
             line = raw.strip()
             if line:

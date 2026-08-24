@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["ReplayDecision", "should_replay", "emit_replay_span"]
+__all__ = ["ReplayDecision", "emit_replay_span", "should_replay"]
 
 _DEFAULT_THRESHOLD = 0.70
 _DEFAULT_DAYS_WINDOW = 30
@@ -176,6 +176,6 @@ def emit_replay_span(
     try:
         with tracer.span(span_name, kind="workflow_node", metadata=metadata) as span:
             return span.trace_id
-    except Exception as exc:  # noqa: BLE001 — tracer failures must not break routing
+    except Exception as exc:
         logger.warning("emit_replay_span failed: %s", exc)
         return None

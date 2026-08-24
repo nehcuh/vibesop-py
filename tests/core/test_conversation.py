@@ -138,7 +138,7 @@ class TestConversationTurnMirrorExtension:
         assert turn.stop_reason is None
 
     def test_mirror_fields_roundtrip(self) -> None:
-        from vibesop.core.conversation import ToolCall, ToolResult
+        from vibesop.core.conversation import ToolCall
 
         original = ConversationTurn(
             query="",
@@ -173,9 +173,7 @@ class TestConversationTurnMirrorExtension:
             skill_id=None,
             timestamp=2.0,
             role="user",
-            tool_results=[
-                ToolResult(tool_use_id="toolu_01", is_error=False, content_preview=None)
-            ],
+            tool_results=[ToolResult(tool_use_id="toolu_01", is_error=False, content_preview=None)],
         )
         restored = ConversationTurn.from_dict(original.to_dict())
         assert restored.role == "user"

@@ -221,8 +221,7 @@ class EmbeddingCache:
                 self._write_file()
         except OSError as exc:
             logger.warning(
-                "embedding cache flush skipped (lock failed: %s); "
-                "entry remains in-memory",
+                "embedding cache flush skipped (lock failed: %s); entry remains in-memory",
                 exc,
             )
 
@@ -268,7 +267,7 @@ class EmbeddingCache:
 
 def get_embedding_cache() -> EmbeddingCache:
     """Return the module-level singleton. Created lazily on first call."""
-    global _embedding_cache
+    global _embedding_cache  # noqa: PLW0603
     if _embedding_cache is None:
         _embedding_cache = EmbeddingCache()
     return _embedding_cache

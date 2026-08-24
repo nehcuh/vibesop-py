@@ -64,8 +64,4 @@ def is_dev_environment() -> bool:
     # Adjacency check: `python -m pytest` has argv[i]=="-m" followed by
     # argv[i+1]=="pytest". Loose `"pytest" in argv` would match unrelated
     # args like `python script.py --name pytest_runner`.
-    for i, arg in enumerate(sys.argv[:-1]):
-        if arg == "-m" and sys.argv[i + 1] == "pytest":
-            return True
-
-    return False
+    return any(arg == "-m" and sys.argv[i + 1] == "pytest" for i, arg in enumerate(sys.argv[:-1]))

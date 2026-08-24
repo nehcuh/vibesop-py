@@ -39,9 +39,9 @@ FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "recall_g
 
 def _load_fixture() -> list[dict]:
     spans: list[dict] = []
-    with FIXTURE.open() as f:
-        for line in f:
-            line = line.strip()
+    with FIXTURE.open(encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
             if line:
                 spans.append(json.loads(line))
     # Date-aging guard: recall_similar() applies a 30-day look-back window
@@ -139,9 +139,7 @@ class TestClusterShape:
         with patch.object(cache, "_compute", side_effect=_keyword_embedding):
             clusters = cluster_queries(fixture_spans, cache=cache, threshold=0.30)
         non_trivial = [c for c in clusters if c.span_count >= 3]
-        assert len(non_trivial) >= 2, (
-            f"expected >= 2 non-trivial clusters, got {len(non_trivial)}"
-        )
+        assert len(non_trivial) >= 2, f"expected >= 2 non-trivial clusters, got {len(non_trivial)}"
 
     def test_distractors_dont_merge_into_gold(
         self, fixture_spans: list[dict], cache: EmbeddingCache
@@ -154,9 +152,8 @@ class TestClusterShape:
             if distract_count > 0:
                 # Distractors may form their own singleton clusters, but
                 # shouldn't merge with gold
-                gold_count = (
-                    sum(1 for t in cluster.task_ids if "cmspark" in t)
-                    + sum(1 for t in cluster.task_ids if "lidsleep" in t)
+                gold_count = sum(1 for t in cluster.task_ids if "cmspark" in t) + sum(
+                    1 for t in cluster.task_ids if "lidsleep" in t
                 )
                 assert gold_count == 0, (
                     f"distractors merged with {gold_count} gold task_ids in cluster "
@@ -213,8 +210,7 @@ class TestRecallRetrieval:
             )
         distract_results = [r for r in results if "distract" in r.task_id]
         assert distract_results == [], (
-            f"distractors returned for screenshot query: "
-            f"{[r.task_id for r in distract_results]}"
+            f"distractors returned for screenshot query: {[r.task_id for r in distract_results]}"
         )
 
     def test_recall_returns_step_sequence(

@@ -8,7 +8,6 @@ process_identity so descendant spans via TraceContext inherit it.
 
 from __future__ import annotations
 
-import json
 import uuid
 
 import pytest
@@ -16,7 +15,6 @@ import pytest
 from vibesop.agent.runtime.agent_runtime import AgentRuntime
 from vibesop.core.observability.process_identity import (
     get_process_session_id,
-    set_process_session_id,
 )
 
 

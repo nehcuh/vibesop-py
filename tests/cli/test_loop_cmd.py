@@ -605,8 +605,15 @@ def launchd_home(tmp_path, monkeypatch):
 
     install-launchd writes to ~/Library/LaunchAgents/. We isolate this to
     tmp_path so tests don't pollute the developer's real launchd state.
+
+    Also stubs the macOS platform gate: every launchd test below already
+    mocks the launchctl subprocess (and usually ``shutil.which``), so the
+    tests are hermetic simulations of macOS semantics and must run on any
+    host. This mirrors the per-test ``_is_macos`` monkeypatch convention
+    established in ``TestMigrateOwnership``.
     """
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
     return tmp_path
 
 

@@ -56,9 +56,7 @@ class TestPoolAdd:
         assert Path(entry["path"]).resolve() == a.resolve()
         assert "added_at" in entry
 
-    def test_pool_add_idempotent_on_path(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_add_idempotent_on_path(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         result = runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
@@ -67,18 +65,14 @@ class TestPoolAdd:
         data = pool_cmd.load_pool()
         assert len(data["projects"]) == 1
 
-    def test_pool_add_duplicate_alias_errors(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_add_duplicate_alias_errors(self, project_paths: tuple[Path, Path]) -> None:
         a, b = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         result = runner.invoke(pool_cmd.app, ["add", str(b), "--alias", "alpha"])
         assert result.exit_code != 0
         assert "already in use" in result.output
 
-    def test_pool_add_default_alias_is_dir_name(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_add_default_alias_is_dir_name(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         result = runner.invoke(pool_cmd.app, ["add", str(a)])
         assert result.exit_code == 0
@@ -91,9 +85,7 @@ class TestPoolAdd:
         assert result.exit_code != 0
         assert "does not exist" in result.output
 
-    def test_pool_add_alias_change_on_existing_path(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_add_alias_change_on_existing_path(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         result = runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "renamed"])
@@ -104,9 +96,7 @@ class TestPoolAdd:
 
 
 class TestPoolRemove:
-    def test_pool_remove_deletes_entry(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_remove_deletes_entry(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         result = runner.invoke(pool_cmd.app, ["remove", "alpha"])
@@ -120,9 +110,7 @@ class TestPoolRemove:
         assert result.exit_code == 0
         assert "Not in pool" in result.output
 
-    def test_pool_remove_by_path_works(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_remove_by_path_works(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         result = runner.invoke(pool_cmd.app, ["remove", str(a)])
@@ -131,9 +119,7 @@ class TestPoolRemove:
 
 
 class TestPoolList:
-    def test_pool_list_shows_table(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_list_shows_table(self, project_paths: tuple[Path, Path]) -> None:
         a, b = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         runner.invoke(pool_cmd.app, ["add", str(b), "--alias", "beta"])
@@ -148,9 +134,7 @@ class TestPoolList:
         assert result.exit_code == 0
         assert "empty" in result.output.lower() or "Pool is empty" in result.output
 
-    def test_pool_list_shows_span_count(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_list_shows_span_count(self, project_paths: tuple[Path, Path]) -> None:
         a, _ = project_paths
         # Create fake spans.jsonl in project a with 3 lines
         spans_dir = a / ".vibe" / "observability"
@@ -163,9 +147,7 @@ class TestPoolList:
 
 
 class TestPoolStatus:
-    def test_pool_status_shows_summary(
-        self, project_paths: tuple[Path, Path]
-    ) -> None:
+    def test_pool_status_shows_summary(self, project_paths: tuple[Path, Path]) -> None:
         a, b = project_paths
         runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         runner.invoke(pool_cmd.app, ["add", str(b), "--alias", "beta"])
@@ -189,7 +171,9 @@ class TestPrivacyNotice:
         a, _ = project_paths
         result = runner.invoke(pool_cmd.app, ["add", str(a), "--alias", "alpha"])
         assert "Privacy" in result.output
-        assert "never synced" in result.output
+        # Whitespace-normalized: Rich wraps at 80 cols when COLUMNS is unset
+        # (CI runners have no tty), splitting phrases mid-line.
+        assert "never synced" in " ".join(result.output.split())
 
     def test_second_add_skips_privacy_notice(
         self,

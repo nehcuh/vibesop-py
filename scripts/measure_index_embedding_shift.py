@@ -108,7 +108,6 @@ def main() -> int:
 
     report: dict = {"before": str(args.before), "after": str(args.after), "queries": len(vecs)}
     per_snapshot = {}
-    per_query = []
     for label, index in (("before", before), ("after", after)):
         top1s, margins = [], []
         for qv in vecs:
@@ -142,8 +141,16 @@ def main() -> int:
                 {
                     "query": entry["query"],
                     "expect": expect,
-                    "before": {"top1": b_top, "score": round(b_score, 4), "margin": round(b_margin, 4)},
-                    "after": {"top1": a_top, "score": round(a_score, 4), "margin": round(a_margin, 4)},
+                    "before": {
+                        "top1": b_top,
+                        "score": round(b_score, 4),
+                        "margin": round(b_margin, 4),
+                    },
+                    "after": {
+                        "top1": a_top,
+                        "score": round(a_score, 4),
+                        "margin": round(a_margin, 4),
+                    },
                 }
             )
     report["positives"] = positives

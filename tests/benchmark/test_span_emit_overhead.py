@@ -22,6 +22,13 @@ from vibesop.core.observability.tracer import ObservabilityTracer
 from vibesop.llm.base import LLMProvider, LLMResponse
 from vibesop.llm.span_wrapped import SpanWrappedProvider
 
+# Load-sensitive microbenchmark (p95 <100µs): runs only in the dedicated
+# benchmark job (``pytest -m benchmark``), never in the loaded default suite
+# (``-m "not benchmark and not slow"``). Same convention as
+# tests/benchmark/test_routing_performance.py's per-test markers, applied
+# module-wide.
+pytestmark = pytest.mark.benchmark
+
 
 class _NoOpProvider(LLMProvider):
     """Zero-cost provider — measures pure wrap overhead."""
@@ -79,9 +86,7 @@ class TestSpanEmitOverhead:
     ) -> ObservabilityTracer:
         import vibesop.core.observability.tracer as tracer_mod
 
-        fresh = ObservabilityTracer(
-            storage_path=tmp_path / "spans.jsonl", enabled=True
-        )
+        fresh = ObservabilityTracer(storage_path=tmp_path / "spans.jsonl", enabled=True)
         monkeypatch.setattr(tracer_mod, "_tracer", fresh)
         return fresh
 
@@ -91,9 +96,7 @@ class TestSpanEmitOverhead:
     ) -> ObservabilityTracer:
         import vibesop.core.observability.tracer as tracer_mod
 
-        fresh = ObservabilityTracer(
-            storage_path=tmp_path / "spans.jsonl", enabled=False
-        )
+        fresh = ObservabilityTracer(storage_path=tmp_path / "spans.jsonl", enabled=False)
         monkeypatch.setattr(tracer_mod, "_tracer", fresh)
         return fresh
 
@@ -110,9 +113,7 @@ class TestSpanEmitOverhead:
             f"Pass-through path should add near-zero overhead."
         )
 
-    def test_enabled_tracer_under_100us_p95(
-        self, enabled_tracer: ObservabilityTracer
-    ) -> None:
+    def test_enabled_tracer_under_100us_p95(self, enabled_tracer: ObservabilityTracer) -> None:
         """Enabled tracer + JSONL write should stay under 100µs P95.
 
         Budget history: 50µs stretch goal → 60µs actual shipped → 100µs CI

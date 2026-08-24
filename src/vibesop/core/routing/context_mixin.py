@@ -125,7 +125,11 @@ class RouterContextMixin:
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug("record_feedback_outcome failed: %s", e)
 
-    def record_instinct_matched(self, query: str, matched_skill: str) -> None:
+    def record_instinct_matched(
+        self,
+        query: str,
+        matched_skill: str,  # noqa: ARG002  # interface-conforming param
+    ) -> None:
         """Record a neutral signal: an instinct was matched by the router.
 
         This is called from the routing hot path (NOT from user feedback).
