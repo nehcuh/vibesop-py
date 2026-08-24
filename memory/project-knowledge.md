@@ -2,6 +2,22 @@
 
 ## Technical Pitfalls
 
+### Local-Green ≠ CI-Green — macOS 开发的三类验证盲区 (2026-08-24)
+
+**Issue**: main CI 自 gate37 起红了一个多月（7 个 gate 的 push 全部 failure），无人发现——本地 macOS 全量 pytest + orbstack e2e 的验证组合全绿，但 CI 上 Linux/Windows 三处全崩。
+
+**Root Cause**: 本地验证掩盖三类平台差异：① **Linux 平台语义**——launchd 测试 mock 了 `_is_macos` 平台门却没 mock `shutil.which("uv")`，CI runner 的 uv 在 `/opt/hostedtoolcache`（P1-5 白名单外）必炸；② **无 tty 环境**——CI runner 无 `COLUMNS`，Rich 按 80 列折行把断言短语从中截断（`never\nsynced`）；③ **工具版本漂移**——uv.lock 升级 ruff 0.15.21 后折行风格变化，`ruff format --check` 在 HEAD 即 74 文件红。
+
+**Solution**: 测试要 hermetic 到宿主二进制解析层（fixture 统一 mock `shutil.which`，逐测试 patch 覆盖生效）；Rich 输出断言一律空白归一化（`" ".join(output.split())`）；**流程补一条：push 后 `gh run watch` 盯 CI 变绿才算 gate 收尾**。
+
+### Absolute-µs Microbenchmark Budgets False-Alarm on Shared CI Runners (2026-08-24)
+
+**Issue**: `test_span_emit_overhead` 的 p95 <100µs 验收在 GitHub 共享 runner 上三连挂（131/162/163µs），`--reruns 2` 救不了——本地隔离 3 连绿，代码零变化。
+
+**Root Cause**: 共享 runner 是系统性慢（CPU steal + 噪声邻居），不是瞬时毛刺；重试只能吸收毛刺，吸收不了"这台机器就是慢 30-60%"。绝对时间预算本质依赖测量环境。
+
+**Solution**: 环境分级预算——`budget = 500µs if os.environ.get("CI") else 100µs`（docstring 记录实测依据）。CI 上仍抓 sync fsync/O(n²) 级灾难回归（5× 裕量），本地保留严格告警。不要为通过率直接抬全局阈值——那会同时杀死本地的回归灵敏度。
+
 ### Content-Derived Identity Hash Drifts with Membership Growth — Upsert Needs Overlap-Merge (2026-08-22)
 
 **Issue**: 候选池（`ClusterCandidateStore`）出现同一模式的重复行——cmspark 真实池 27 条 pending 里 8 对重复（61 任务行 vs 63 任务行同内容）。

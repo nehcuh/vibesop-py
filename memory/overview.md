@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-23 (S41 — gate34 路线图 + gate35/36 收官 push a59eb13；文档同步清零)
+**Last Updated**: 2026-08-24 (S42 — gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布 PyPI/GitHub)
 
 ---
 
@@ -11,10 +11,14 @@
 1. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
    - 三路对抗设计+三轮三路评审定稿；gate35 队列可读性+展示层去噪；gate36 shadow verifier（PASS/WARN 永不阻断）
    - 基线：pytest 6123 passed/14 skipped；e2e 68/68+7/7；文档同步清零（双 checker 0+0）
-2. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
-3. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
-4. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
-5. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
+2. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
+   - reask 触发面语义收窄（`not rs.is_cli` 两处）；三 lane 对抗+三路评审+确认轮；pytest 6324 passed；e2e 68/68+7/7
+   - CI 红灯清零（lint 24 + format 74 + launchd hermetic + p95 环境分级）；PyPI 8.1.0 + GitHub Release 落地
+3. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
+4. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
+5. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
+6. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
+7. **cmspark outcomes rebuild --apply**（窗口触发）：验收已预审全过，等 grok 空闲窗口执行 + T+24h 早期检查
 
 ### Previous Weeks (July 26 - August 16, 2026) — Completed
 

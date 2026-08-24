@@ -3,6 +3,24 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-24 S42 [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布
+
+**Session Summary**:
+- gate42：vibe-cli 自路由 span 被误判为用户重问（cmspark 残余 reask 75% 幻影）→ bridge `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权语义收窄）；三 lane 对抗完全收敛，in-flight 去重/S4 被数据证伪；三路评审+确认轮全 PASS，pi 红绿突变实验 6红2绿
+- CI 红灯清零：main 自 gate37 红了一个多月——三轮修（lint 24 + ruff format 74 文件 → launchd uv 路径 hermetic mock + benchmark 重试 → p95 环境分级预算 CI 500µs/本地 100µs）
+- v8.1.0 发布：PyPI + GitHub Release 落地（147 commits since v8.0.0；首轮 release 被 p95 假警阻断，tag 前移至 `18be788`）
+- cmspark rebuild dry-run 验收预审全过：硬闸 A CLI 触发=0 / 硬闸 B 0.93:1/0.23:1 / sanity 72.2% / 40 条真实重问保全 / ≥60s 样本 11 条已核（最坏损失 2.3%）
+
+**Key Decisions**:
+- 定性走 gate41 §6 授权链（语义收窄），不走"代码违背 docstring"叙事——三路评审一致打回后者
+- 执行顺序三段：合补丁 → 升级 live `~/.local/bin/vibe`（堵增量靠安装体不靠 checkout）→ 同一空闲窗口 rebuild --apply
+- 绝对 µs 微基准在共享 runner 必假警 → 环境分级预算；`--reruns` 救不了系统性减速
+
+**Next Steps**:
+1. cmspark rebuild --apply（等 grok 空闲窗口；验收已预审，一条命令）+ T+24h 早期检查（新增 outcome CLI 触发=0）+ CHANGELOG ≥60s 抽样回填
+2. gate43 候选：模板文案降级（带定价）/ Windows claude_code 路径断言 3 处 / 流程文档补"push 后盯 CI"
+3. 触发器：verdict ≥30 / M3 复检 / 留存池 2026-09-19 / P0-lite 观察期
+
 ### 2026-08-22/23 S41 [vibesop-py] gate33-36：grok hooks · 队列可读性 · shadow verifier → push 2359026
 
 **Session Summary**:
@@ -20,21 +38,4 @@
 1. 用户：grok 侧 `vibe build --platform grok-build` 部署后验证 UserPromptSubmit 注入与 PostToolUse 采集落盘
 2. 观察 shadow verifier 在真实 promote 流上的徽章分布（WARN 率、degraded 占比）
 3. 愿景条目命名冲突跟进：`vibe skill discover` 已被本地队列占用，社区搜索落地时改名 `vibe market search` 之类
-
-### 2026-08-22 S40 [vibesop-py + cmspark] 候选池 id 漂移去重（gate30）→ push f76dd61
-
-**Session Summary**:
-- M12（语义洞察→技能发现）全收官后的触发器检查发现真 bug：`cluster_id` 随簇增长漂移 → upsert 重复追加（cmspark 池 8 对重复）
-- 修复：upsert 同类 Jaccard>0.5 absorb-merge + 守卫全集化；三轮 claude+pi 复审收敛（2 轮真洞全修）
-- 验证：5964 passed / e2e 65/65+7/7；push `f76dd61`；cmspark 重扫池自愈（26 行，重复归零）
-
-**Key Decisions**:
-- 池层模式身份 = project-agnostic task 词汇集（跨项目同模式 = 一个候选）；W5.1 复合键只管 span 归因
-- 守卫阻断集 ⊇ 写路径破坏集；exact-id 例外仅对 unstable 行可达（同 id ⟹ 同成员）
-- 候选 ID 会漂移：`5bd44eee`→`64d301b8`，`6a6d554f` 并入 `af55cfff`
-
-**Next Steps**:
-1. 用户：cmspark `vibe skill discover` 处理 5 条 stable 候选；bd1bc217 草稿 `--activate`
-2. 新开 kimi 会话激活 hooks（M3 行为证据前提）；3 个 dead loop 可 reset 复活
-3. 数据触发：簇攒 ≥2 条工具序列 trace → M3 阈值复检；留存池 2026-09-19 前复挖再 purge
 <!-- handoff:end -->

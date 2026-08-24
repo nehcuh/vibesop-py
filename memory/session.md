@@ -1,4 +1,24 @@
 
+### S42 (2026-08-24) [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布
+
+- [x] **gate42 全流程**：vibe-cli 自路由 span 被 bridge 误判为"用户重问"（cmspark 残余 reask 75% 是幻影，Δt p50≈18s vs 真实重问 p50≈24h）→ `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权的语义收窄）；三 lane 对抗罕见完全收敛，in-flight 去重被数据证伪（0/601 session 共享、TTL 15s 只盖 38%）；三路评审+确认轮+双路实施复审（pi 红绿突变实验 6红2绿）；push `d5855ba`+`38b139b`
+- [x] **CI 红灯清零**：main 自 gate37 红了一个多月无人发现（本地 macOS 全绿掩盖）。三轮修复：lint 24 处 + ruff format 74 文件漂移（`fdbb148`/`3bf9c11`）→ launchd uv 路径 hermetic mock + benchmark job 重试（`1fd698a`）→ p95 微基准环境分级预算 CI 500µs/本地 100µs（`18be788`）
+- [x] **v8.1.0 发布**：PyPI + GitHub Release 落地（v8.0.0 以来 147 commit；release 首轮被 p95 假警阻断，tag 前移至 `18be788`）
+- [x] **cmspark dry-run 验收预审全过**：硬闸 A CLI 触发=0、硬闸 B 0.93:1/0.23:1、sanity 降 72.2%、40 条真实重问保全、≥60s 样本恰 11 条（6 回声/5 存疑，最坏损失 2.3%）
+
+**Key Discoveries**:
+1. 本地绿 ≠ CI 绿：macOS 开发掩盖三类平台差异——Linux 平台语义（launchd `_is_macos` 门 + uv 白名单）、无 tty 环境（Rich 80 列折行截断言）、工具版本漂移（ruff 0.15.21 折行风格 74 文件）
+2. 绝对 µs 微基准在共享 CI runner 上是假警发生器；`--reruns` 救不了系统性减速（131/163/163µs 三次全挂）；解法 = 环境分级预算（CI 500µs 抓灾难回归 / 本地 100µs 严格告警）
+3. mock 平台门不够，还要 mock 宿主二进制解析（`shutil.which("uv")`）——白名单校验在 CI runner 的真实路径上必炸
+4. 评审指令用 Write 工具写、多 CLAUDE 并行后台跑的模式已稳定；lane 对抗设计三份独立实测交叉验证（数字两峰分离）比单 lane 论证硬得多
+
+**Next Steps**:
+- cmspark rebuild --apply（验收已预审，等 grok 空闲窗口，一条命令的事）
+- T+24h 早期检查（新增 outcome CLI 触发形态=0，基线 55/55）+ CHANGELOG ≥60s 抽样结论回填
+- gate43 候选：模板文案降级（带定价 12-36 对/天×18s）/ Windows claude_code 路径断言 3 处 / 流程文档补"push 后盯 CI"
+
+**Recorded**: yes — 3 pitfalls + 1 pattern → project-knowledge.md
+
 ### S41 (2026-08-23) [vibesop-py] EvoTrace 学习落地：gate34 路线图 + gate35/36 实施收官 → push a59eb13
 
 - [x] **gate34**：EvoTrace 评估 4 吸收方向（D1 verifier/D2 去重/D3 分源阈值/D4 不可变记录）→ 三路独立对抗设计（产品/架构/质疑）+ claude+pi+grok 三轮评审定稿：D2 只做展示层（intake 过滤否决——gate32 A1 已裁决回声是合法池成员，bd1bc217 是唯一真实 promote 案例）；D1 shadow-only 徽章永不阻断；D3 只读统计列；D4 否决立项（决策记录落 docs/decisions/）
