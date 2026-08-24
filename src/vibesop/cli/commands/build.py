@@ -133,7 +133,7 @@ def execute_build(
 
         # gate41 pi M1: surface render warnings (e.g. route-hook layer dedup)
         # — previously dropped silently, hiding the strip from the user.
-        if result.has_warnings():
+        if result.has_warnings:
             for warning in result.warnings:
                 console.print(f"[yellow]⚠ {warning}[/yellow]")
 
