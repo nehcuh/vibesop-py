@@ -200,6 +200,35 @@ class TestSkillInjector:
         assert "Skill content not found" in content
         assert "nonexistent/skill" in content
 
+    def test_load_skill_project_vibe_skills_nested(self, tmp_path, monkeypatch) -> None:
+        """W4/W5 promote materializes custom skills at
+        ``<project>/.vibe/skills/{skill_id}/SKILL.md`` (nested layout).
+        Regression (cmspark ghost-route 2026-08-25): the router indexes this
+        dir, so the injector must resolve ids from it too — previously it
+        fell through to placeholder text."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "empty-home")
+
+        skill_dir = tmp_path / ".vibe" / "skills" / "custom" / "main-64d301b8"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Promoted wrap-up skill", encoding="utf-8")
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("custom/main-64d301b8")
+        assert "Promoted wrap-up skill" in content
+
+    def test_load_skill_global_vibe_skills_nested(self, tmp_path, monkeypatch) -> None:
+        """``skill promote --scope global`` lands in ``~/.vibe/skills/`` —
+        same nested layout, resolved from the home store."""
+        home = tmp_path / "home"
+        skill_dir = home / ".vibe" / "skills" / "custom" / "cross-proj-abc123"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Global promoted skill", encoding="utf-8")
+        monkeypatch.setattr(Path, "home", lambda: home)
+
+        injector = SkillInjector(project_root=tmp_path / "unrelated-project")
+        content = injector._load_skill_content("custom/cross-proj-abc123")
+        assert "Global promoted skill" in content
+
     def test_load_skill_pack_prefix_glob(self, tmp_path, monkeypatch) -> None:
         """v7.3.5: skill_id='diagnose' should resolve to 'mattpocock-diagnose'."""
         # Mock Path.home() to tmp_path

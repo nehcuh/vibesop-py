@@ -211,6 +211,17 @@ class AgentRuntimeResult:
                 )
             else:
                 hint_path = f"skills/{skill_flat}/SKILL.md"
+                # W4/W5 promote materializes custom skills under
+                # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
+                # skill_id) — never the platform skills dir. Point the agent
+                # at the real file so the "read SKILL.md" step succeeds.
+                for p in (
+                    user_root / ".vibe" / "skills" / self.skill_id / "SKILL.md",
+                    Path.home() / ".vibe" / "skills" / self.skill_id / "SKILL.md",
+                ):
+                    if p.exists():
+                        hint_path = p.resolve().as_posix()
+                        break
         else:
             hint_path = f"skills/{self.skill_id}/SKILL.md"
 

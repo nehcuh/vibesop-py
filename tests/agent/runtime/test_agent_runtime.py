@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from vibesop.agent.runtime.agent_runtime import AgentRuntime, AgentRuntimeResult
@@ -161,6 +163,44 @@ class TestAgentRuntimeHookResponseHintPath:
         result = self._make_result("gstack/review")
         response = result.to_hook_response(no_match_message=False)
         assert "skills/gstack-review/SKILL.md" in response
+
+    def test_hint_path_for_promoted_custom_skill_points_at_vibe_store(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """W4/W5-promoted custom skills live under <project>/.vibe/skills/
+        (nested by skill_id), never the platform skills dir. Regression
+        (cmspark ghost-route 2026-08-25): the old hint pointed agents at
+        ``skills/custom-xxx/SKILL.md``, which doesn't exist, so every
+        routed hit reported "no corresponding skill file"."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "empty-home")
+        skill_file = tmp_path / ".vibe" / "skills" / "custom" / "main-64d301b8" / "SKILL.md"
+        skill_file.parent.mkdir(parents=True)
+        skill_file.write_text("# wrap-up", encoding="utf-8")
+
+        from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
+
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="custom/main-64d301b8",
+            confidence=0.33,
+            project_root=tmp_path,
+        )
+        response = result.to_hook_response(no_match_message=False)
+        assert skill_file.resolve().as_posix() in response
+        assert "skills/custom-main-64d301b8/SKILL.md" not in response
+
+    def test_hint_path_for_promoted_custom_skill_falls_back_when_absent(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """No .vibe/skills copy (e.g. project run from elsewhere) → keep the
+        legacy flat hint rather than a guaranteed-dead path."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "empty-home")
+
+        result = self._make_result("custom/ghost-abc123")
+        result.project_root = tmp_path
+        response = result.to_hook_response(no_match_message=False)
+        assert "skills/custom-ghost-abc123/SKILL.md" in response
 
     def test_hint_path_for_bare_id(self) -> None:
         """Bare id (no namespace) → skills/{id}/SKILL.md."""

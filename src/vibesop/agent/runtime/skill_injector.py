@@ -191,15 +191,22 @@ class SkillInjector:
 
         Search order (each path is tried with 3 lookup strategies):
         1. ``core/skills/{skill_id}/SKILL.md`` — project-local builtin skills
-        2. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
-        3. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
-        4. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
-        5. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
+        2. ``.vibe/skills/{skill_id}/SKILL.md`` — project-local promoted custom
+           skills (W4/W5 promote materialization target; nested by skill_id)
+        3. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
+        4. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
+        5. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
+        6. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
+        7. ``~/.vibe/skills/{skill_id}/SKILL.md`` — global-scope promoted custom
+           skills (``skill promote --scope global`` target)
 
-        For each path, three lookup strategies are tried in order:
+        For each path, lookup strategies are tried in order:
+        - Exact nested id: ``{base}/{skill_id}/SKILL.md`` (namespaced ids only —
+          the on-disk layout of promoted custom skills)
         - Exact flat id: ``{skill_id.replace('/', '-')}`` (e.g. ``gstack-review``)
         - Pack-prefix glob: ``*-{flat_id}`` (e.g. ``mattpocock-diagnosing-bugs``)
-        - Nested glob: ``**/{flat_id}/SKILL.md`` (e.g. ``mattpocock/engineering/diagnosing-bugs``)
+        - Nested glob: ``**/{flat_id}/SKILL.md`` in central storage only
+          (e.g. ``mattpocock/engineering/diagnosing-bugs``)
         """
         flat_id = skill_id.replace("/", "-")
         home = Path.home()
@@ -207,10 +214,12 @@ class SkillInjector:
         # Candidate base directories in priority order
         candidate_dirs: list[Path] = [
             self.project_root / "core" / "skills",
+            self.project_root / ".vibe" / "skills",
             home / ".claude" / "skills",
             home / ".pi" / "agent" / "skills",
             home / ".kimi-code" / "skills",
             home / ".config" / "skills",
+            home / ".vibe" / "skills",
         ]
 
         # Strategy 0 (builtin skills only): strip namespace prefix.
@@ -256,7 +265,20 @@ class SkillInjector:
             if not base.exists():
                 continue
 
-            # Strategy 1: exact flat id (handles "gstack/review" → "gstack-review")
+            # Strategy 1 (namespaced ids only): exact nested layout — the
+            # promote flow materializes ``custom/<id>/SKILL.md`` verbatim
+            # under .vibe/skills (project) and ~/.vibe/skills (global).
+            # Without this the injector cannot load skills the router
+            # indexed from those dirs (cmspark ghost-route, 2026-08-25).
+            if "/" in skill_id:
+                nested = base / skill_id / "SKILL.md"
+                if nested.exists():
+                    try:
+                        return nested.read_text(encoding="utf-8")
+                    except OSError:
+                        pass
+
+            # Strategy 2: exact flat id (handles "gstack/review" → "gstack-review")
             direct = base / flat_id / "SKILL.md"
             if direct.exists():
                 try:
