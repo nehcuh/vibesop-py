@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from vibesop.cli.commands.conversation_cmd import app
+from vibesop.cli.commands.conversation_cmd import _escape_cwd_as_project_dir, app
 
 runner = CliRunner()
 
@@ -111,7 +111,7 @@ def test_import_claude_auto_discover_via_home(
     """Empty --source → newest jsonl from ~/.claude/projects/<escaped-cwd>/."""
     home = tmp_path / "home"
     # cwd-based escaped name = tmp_path with / → -
-    escaped = str(tmp_path).replace("/", "-")
+    escaped = _escape_cwd_as_project_dir(tmp_path)
     project_dir = home / ".claude" / "projects" / escaped
     project_dir.mkdir(parents=True)
     # Two jsonls — auto-discover picks the newest (by mtime)
@@ -144,7 +144,7 @@ def test_import_claude_auto_discover_nothing_found(
 ) -> None:
     """Auto-discover with empty project dir → exit 1."""
     home = tmp_path / "home"
-    escaped = str(tmp_path).replace("/", "-")
+    escaped = _escape_cwd_as_project_dir(tmp_path)
     project_dir = home / ".claude" / "projects" / escaped
     project_dir.mkdir(parents=True)
     monkeypatch.setattr(Path, "home", lambda: home)

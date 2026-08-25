@@ -179,7 +179,9 @@ class TestStatusCommand:
         sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
         sequences_path(tmp_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
         size = sequences_path(tmp_path).stat().st_size
-        rotated_path(tmp_path).write_text("{}\n", encoding="utf-8")
+        rotated = rotated_path(tmp_path)
+        rotated.write_text("{}\n", encoding="utf-8")
+        rotated_size = rotated.stat().st_size  # CRLF on Windows → not a fixed 3
         cursor_path(tmp_path).write_text(json.dumps({"offset": size}), encoding="utf-8")
         from datetime import UTC, datetime
 
@@ -191,7 +193,7 @@ class TestStatusCommand:
         assert "last-capture:" in result.output
         assert "5 分钟前" in result.output  # age rendered
         assert f"{size} B" in result.output  # capture size
-        assert "rotation:" in result.output and "3 B" in result.output
+        assert "rotation:" in result.output and f"{rotated_size} B" in result.output
         assert "已装配到最新" in result.output
 
     def test_pending_bytes_reported(self, runner: CliRunner, tmp_path: Path) -> None:

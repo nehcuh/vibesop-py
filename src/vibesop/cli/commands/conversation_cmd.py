@@ -31,8 +31,12 @@ def _escape_cwd_as_project_dir(cwd: Path) -> str:
     """Mirror Claude Code's project-dir escaping: ``/`` → ``-``.
 
     e.g. ``/Users/huchen/Projects/vibesop-py`` → ``-Users-huchen-Projects-vibesop-py``.
+
+    Windows paths (``C:\\Users\\x``) additionally drop the drive colon — a
+    mid-path ``C:`` component is re-rooted to the drive by Win32 path
+    resolution, which would point discovery at the wrong tree entirely.
     """
-    return str(cwd).replace("/", "-")
+    return str(cwd).replace("/", "-").replace("\\", "-").replace(":", "")
 
 
 def _discover_jsonl_files(project_dir: Path) -> list[Path]:

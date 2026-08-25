@@ -221,21 +221,32 @@ def render_plist(
     return plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=False)
 
 
+def _gui_domain() -> str:
+    """launchd gui domain target (``gui/<uid>``).
+
+    Self-defense (gate44 簇D): callers are expected to gate on macOS before
+    reaching here; if one forgets on a host without ``os.getuid`` (Windows),
+    raise a clear RuntimeError instead of a bare AttributeError.
+    """
+    import os
+
+    getuid = getattr(os, "getuid", None)
+    if getuid is None:
+        raise RuntimeError("launchd is macOS-only: no os.getuid on this host")
+    return f"gui/{getuid()}"
+
+
 def bootstrap_command(plist_path: Path) -> list[str]:
     """Return the modern launchctl bootstrap argv (E.3 must-fix).
 
     Caller runs this via subprocess; output goes to the user's terminal.
     """
-    import os
-
-    return ["launchctl", "bootstrap", f"gui/{os.getuid()}", str(plist_path)]
+    return ["launchctl", "bootstrap", _gui_domain(), str(plist_path)]
 
 
 def bootout_command(loop_name: str) -> list[str]:
     """Return the modern launchctl bootout argv for ``loop_name``."""
-    import os
-
-    return ["launchctl", "bootout", f"gui/{os.getuid()}/{plist_label(loop_name)}"]
+    return ["launchctl", "bootout", f"{_gui_domain()}/{plist_label(loop_name)}"]
 
 
 __all__ = [

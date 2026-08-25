@@ -16,6 +16,7 @@ real ``~/.vibe/loops/``.
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
@@ -622,6 +623,10 @@ def launchd_home(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
+    # gate44 簇D: the macOS simulation must also fake os.getuid —
+    # bootstrap/bootout command construction calls the real one, which does
+    # not exist on Windows (AttributeError before the mocked launchctl run).
+    monkeypatch.setattr("os.getuid", lambda: 501, raising=False)
     import shutil
 
     real_which = shutil.which
@@ -1062,6 +1067,32 @@ def test_uninstall_launchd_missing_launchctl_friendly_error(
     assert "找不到 launchctl" in result.stdout
 
 
+class TestLaunchdNonDarwinFriendlyError:
+    """gate44 簇D: install/uninstall-launchd on non-macOS must exit 1 with a
+    friendly message before touching launchctl/os.getuid.
+
+    On non-darwin hosts (Windows CI) the REAL platform gate fires — this is
+    the only place the real gate is exercised end-to-end. On darwin dev
+    machines the gate is simulated so the branch stays covered everywhere.
+    """
+
+    def _force_non_macos(self, monkeypatch) -> None:
+        if sys.platform == "darwin":
+            monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: False)
+
+    def test_install_rejected_with_friendly_error(self, monkeypatch) -> None:
+        self._force_non_macos(monkeypatch)
+        result = runner.invoke(app, ["install-launchd", "test", "--dry-run"])
+        assert result.exit_code == 1, result.stdout
+        assert "仅支持 macOS" in result.stdout
+
+    def test_uninstall_rejected_with_friendly_error(self, monkeypatch) -> None:
+        self._force_non_macos(monkeypatch)
+        result = runner.invoke(app, ["uninstall-launchd", "test"])
+        assert result.exit_code == 1, result.stdout
+        assert "仅支持 macOS" in result.stdout
+
+
 # ──────────────────────────────────────────────────────────────────
 # deep-diagnosis-2026-07-24 P1-4 / P1-5: install-launchd hardening
 # ──────────────────────────────────────────────────────────────────
@@ -1171,6 +1202,13 @@ from unittest.mock import MagicMock  # noqa: E402
 
 from vibesop.core.loop.models import LoopState  # noqa: E402
 
+# gate44 簇C: '/nonexistent/...' literals are not absolute on Windows (no
+# drive letter) and LoopSpec's absolute-path check rejects them. Anchor to
+# the current filesystem root so the path stays absolute everywhere; the
+# POSIX value is byte-identical to the previous literal.
+_ROOT_ANCHOR = Path.cwd().anchor
+OTHER_PROJECT_ROOT = str(Path(_ROOT_ANCHOR) / "nonexistent" / "other-project")
+
 
 def _save_spec(store: LoopStore, name: str, project_root: str | None, **overrides) -> LoopSpec:
     """Persist a minimal spec pinned to ``project_root`` (None = global/legacy)."""
@@ -1244,7 +1282,7 @@ class TestListOwnership:
     def test_list_default_hides_other_project_loops(self, isolated_store):
         cwd = str(Path.cwd())
         _save_spec(isolated_store, "mine", cwd)
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
         _save_spec(isolated_store, "legacy", None)
 
         result = runner.invoke(app, ["list"])
@@ -1257,7 +1295,7 @@ class TestListOwnership:
     def test_list_all_shows_project_column(self, isolated_store):
         cwd = str(Path.cwd())
         _save_spec(isolated_store, "mine", cwd)
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
         _save_spec(isolated_store, "legacy", None)
 
         result = runner.invoke(app, ["list", "--all"])
@@ -1297,7 +1335,7 @@ class TestListOwnership:
         the ownership filter as a possible cause — the bare '没有匹配状态'
         sent users chasing the wrong reason."""
         _save_spec(isolated_store, "mine", str(Path.cwd()))  # active, not paused
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         result = runner.invoke(app, ["list", "--status", "paused"])
         assert result.exit_code == 0
@@ -1318,7 +1356,7 @@ class TestTickOwnership:
     def test_bare_tick_skips_other_project_loops_loudly(self, isolated_store):
         """The skip line names the skipped loops and points at --all."""
         _save_spec(isolated_store, "mine", str(Path.cwd()))
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         with patch("vibesop.cli.commands.loop_cmd.execute_loop_tick") as mock_exec:
             result = runner.invoke(app, ["tick", "--dry-run"])
@@ -1334,7 +1372,7 @@ class TestTickOwnership:
     def test_skip_line_printed_even_when_nothing_eligible(self, isolated_store):
         """pi nit: the zero-eligible early-return branch must still print the
         ownership skip line — silence was the original bug's twin."""
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0
@@ -1347,7 +1385,7 @@ class TestTickOwnership:
         # Far-future-ish cron that cannot match the current minute: Feb 30
         # never exists, and CronExpr validation only checks field ranges.
         _save_spec(isolated_store, "mine", str(Path.cwd()), schedule="0 0 30 2 *")
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0
@@ -1360,7 +1398,7 @@ class TestTickOwnership:
         """gate27 pi#5: when EVERY loop was ownership-skipped, say so — the
         old '(0 eligible, 0 skipped)' read as 'nothing due' and masked the
         ownership filter as the real cause."""
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0
@@ -1372,7 +1410,7 @@ class TestTickOwnership:
         """gate27 pi#4a: with 6+ other-project loops, the skip line lists at
         most 5 names plus a total count."""
         for i in range(6):
-            _save_spec(isolated_store, f"other-{i}", f"/nonexistent/other-{i}")
+            _save_spec(isolated_store, f"other-{i}", str(Path(_ROOT_ANCHOR) / "nonexistent" / f"other-{i}"))
 
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0
@@ -1421,7 +1459,7 @@ class TestTickOwnership:
     def test_name_bypasses_ownership_filter(self, isolated_store):
         """--name is the launchd call shape — ownership filtering is off and
         no skip line is printed."""
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         result = runner.invoke(app, ["tick", "--name", "theirs", "--dry-run"])
         assert result.exit_code == 0
@@ -1433,7 +1471,7 @@ class TestTickOwnership:
         """--all enumerates every loop regardless of ownership (compat for
         system-cron-from-HOME users); no skip line."""
         _save_spec(isolated_store, "mine", str(Path.cwd()))
-        _save_spec(isolated_store, "theirs", "/nonexistent/other-project")
+        _save_spec(isolated_store, "theirs", OTHER_PROJECT_ROOT)
 
         with patch("vibesop.cli.commands.loop_cmd.execute_loop_tick") as mock_exec:
             result = runner.invoke(app, ["tick", "--all", "--dry-run"])
@@ -1532,6 +1570,12 @@ class TestAdopt:
 
 
 class TestMigrateOwnership:
+    # gate44 簇C: '/tmp/...' literals are not absolute on Windows. Anchor
+    # to the real temp dir; POSIX value stays a nonexistent absolute path.
+    MIG_PROJECT = str(Path(_ROOT_ANCHOR) / "tmp" / "mig-project")
+    ELSEWHERE = str(Path(_ROOT_ANCHOR) / "tmp" / "elsewhere")
+    ALREADY_PINNED = str(Path(_ROOT_ANCHOR) / "already" / "pinned")
+
     def _write_plist(self, home: Path, name: str, working_dir: str) -> None:
         import plistlib
 
@@ -1542,12 +1586,12 @@ class TestMigrateOwnership:
     def test_dry_run_reports_without_writing(self, isolated_store, launchd_home, monkeypatch):
         monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
         _save_spec(isolated_store, "mig", None)
-        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+        self._write_plist(launchd_home, "mig", self.MIG_PROJECT)
 
         result = runner.invoke(app, ["migrate-ownership", "--dry-run"])
         assert result.exit_code == 0, result.stdout
         assert "DRY RUN" in result.stdout
-        assert "/tmp/mig-project" in result.stdout
+        assert self.MIG_PROJECT in result.stdout
         # No side effects.
         assert isolated_store.load_spec("mig").project_root is None
 
@@ -1570,7 +1614,7 @@ class TestMigrateOwnership:
     def test_confirmation_no_skips_write(self, isolated_store, launchd_home, monkeypatch):
         monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
         _save_spec(isolated_store, "mig", None)
-        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+        self._write_plist(launchd_home, "mig", self.MIG_PROJECT)
 
         result = runner.invoke(app, ["migrate-ownership"], input="n\n")
         assert result.exit_code == 0
@@ -1579,11 +1623,11 @@ class TestMigrateOwnership:
     def test_yes_skips_confirmation(self, isolated_store, launchd_home, monkeypatch):
         monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
         _save_spec(isolated_store, "mig", None)
-        self._write_plist(launchd_home, "mig", "/tmp/mig-project")
+        self._write_plist(launchd_home, "mig", self.MIG_PROJECT)
 
         result = runner.invoke(app, ["migrate-ownership", "--yes"])
         assert result.exit_code == 0, result.stdout
-        assert isolated_store.load_spec("mig").project_root == "/tmp/mig-project"
+        assert isolated_store.load_spec("mig").project_root == self.MIG_PROJECT
 
     def test_no_plist_lists_and_suggests_adopt(self, isolated_store, launchd_home, monkeypatch):
         monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
@@ -1597,12 +1641,12 @@ class TestMigrateOwnership:
 
     def test_already_pinned_loops_are_skipped(self, isolated_store, launchd_home, monkeypatch):
         monkeypatch.setattr("vibesop.cli.commands.loop_cmd._is_macos", lambda: True)
-        _save_spec(isolated_store, "kept", "/already/pinned")
-        self._write_plist(launchd_home, "kept", "/tmp/elsewhere")
+        _save_spec(isolated_store, "kept", self.ALREADY_PINNED)
+        self._write_plist(launchd_home, "kept", self.ELSEWHERE)
 
         result = runner.invoke(app, ["migrate-ownership", "--yes"])
         assert result.exit_code == 0
-        assert isolated_store.load_spec("kept").project_root == "/already/pinned"
+        assert isolated_store.load_spec("kept").project_root == self.ALREADY_PINNED
 
     def test_non_macos_lists_adopt_suggestion_without_side_effects(
         self, isolated_store, launchd_home, monkeypatch

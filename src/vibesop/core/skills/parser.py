@@ -282,7 +282,10 @@ def infer_source(skill_path: Path) -> str:
     (``builtin/...``), not this value; the loader's external-pack path
     overrides namespace from pack metadata; no test pins the old mapping.
     """
-    path_str = str(skill_path)
+    # Normalise separators: on Windows str(Path) yields backslashes, which
+    # would miss every literal below and mis-classify user-home agent skills
+    # as "builtin" (a higher trust level than they deserve).
+    path_str = str(skill_path).replace("\\", "/")
     if (
         ".claude/skills" in path_str
         or ".config/skills" in path_str

@@ -70,14 +70,15 @@ def test_project_id_cached_after_first_resolution(monkeypatch):
 
     Guards against accidentally calling Path.cwd() on every span write.
     """
-    monkeypatch.setattr(Path, "cwd", lambda: Path("/first-cwd"))
+    fake1 = Path("/first-cwd")
+    monkeypatch.setattr(Path, "cwd", lambda: fake1)
     first = get_process_project_id()
-    assert first == "/first-cwd"
+    assert first == str(fake1.resolve())  # resolve(): Windows adds the drive
 
     # Simulate cwd changing after first resolution.
     monkeypatch.setattr(Path, "cwd", lambda: Path("/second-cwd"))
     second = get_process_project_id()
-    assert second == "/first-cwd"  # cached, not recomputed
+    assert second == str(fake1.resolve())  # cached, not recomputed
 
 
 def test_project_id_explicit_set_overrides_lazy(monkeypatch):

@@ -14,6 +14,8 @@ from __future__ import annotations
 import plistlib
 from pathlib import Path
 
+import pytest
+
 from vibesop.core.loop.launchd import (
     LAUNCHD_LABEL_PREFIX,
     bootout_command,
@@ -292,26 +294,39 @@ class TestRenderPlist:
 
 
 class TestLaunchctlCommands:
-    def test_bootstrap_uses_modern_gui_uid_form(self, tmp_path: Path) -> None:
-        import os
+    """Asserts command SHAPE against a fixed uid (501), not the host's real
+    ``os.getuid`` — the latter doesn't exist on Windows and would turn these
+    shape assertions into AttributeError (gate44 簇D)."""
 
+    def test_bootstrap_uses_modern_gui_uid_form(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.setattr("os.getuid", lambda: 501, raising=False)
         plist_path = tmp_path / "foo.plist"
         cmd = bootstrap_command(plist_path)
         assert cmd[0] == "launchctl"
         assert cmd[1] == "bootstrap"
-        assert cmd[2] == f"gui/{os.getuid()}"
+        assert cmd[2] == "gui/501"
         assert cmd[3] == str(plist_path)
 
-    def test_bootout_uses_modern_gui_uid_label_form(self) -> None:
-        import os
-
+    def test_bootout_uses_modern_gui_uid_label_form(self, monkeypatch) -> None:
+        monkeypatch.setattr("os.getuid", lambda: 501, raising=False)
         cmd = bootout_command("instinct-assemble")
         assert cmd[0] == "launchctl"
         assert cmd[1] == "bootout"
-        assert cmd[2] == f"gui/{os.getuid()}/com.vibesop.loop.instinct-assemble"
+        assert cmd[2] == "gui/501/com.vibesop.loop.instinct-assemble"
 
     def test_commands_do_not_use_deprecated_load_unload(self, tmp_path: Path) -> None:
         # macOS 10.10+ deprecated `launchctl load/unload`. Modern API is
         # `bootstrap/bootout`. (E.3 must-fix.)
         assert "load" not in bootstrap_command(tmp_path / "x.plist")
         assert "load" not in bootout_command("x")
+
+    def test_bootstrap_command_guards_non_posix(self, tmp_path: Path, monkeypatch) -> None:
+        """Self-defense (gate44 簇D): a caller that forgets the platform gate
+        gets a clear error, not a bare AttributeError on os.getuid-less hosts."""
+        import os as _os
+
+        monkeypatch.delattr(_os, "getuid", raising=False)
+        with pytest.raises(RuntimeError, match="launchd"):
+            bootstrap_command(tmp_path / "x.plist")
+        with pytest.raises(RuntimeError, match="launchd"):
+            bootout_command("x")

@@ -597,9 +597,6 @@ class TestInstinctLearnerCrossProcessLock:
     def test_lock_file_created_as_sibling(self, storage_path: Path) -> None:
         """The cross-process lock lives on a sibling .lock file (not the data
         file) so the atomic rename inside write_text does not release it."""
-        if sys.platform == "win32":
-            pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
-
         learner = InstinctLearner(storage_path=storage_path)
         learner.learn(pattern="trigger save", action="a")
         lock_path = storage_path.with_suffix(".jsonl.lock")
@@ -616,9 +613,6 @@ class TestInstinctLearnerCrossProcessLock:
         test does not actually fork — it simulates the race by interleaving
         saves, which is enough to exercise _merge_disk_into_memory_locked.
         """
-        if sys.platform == "win32":
-            pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
-
         learner_a = InstinctLearner(storage_path=storage_path)
         learner_b = InstinctLearner(storage_path=storage_path)
 
@@ -647,9 +641,6 @@ class TestInstinctLearnerCrossProcessLock:
         Without the epoch guard, A's save would merge (empty disk → nothing to
         merge) and write A's stale in-memory state back, undoing the purge.
         """
-        if sys.platform == "win32":
-            pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
-
         learner_a = InstinctLearner(storage_path=storage_path)
         secret_id = learner_a.learn(pattern="secret pattern", action="leak").id
         assert learner_a.has_instinct(secret_id)
@@ -678,9 +669,6 @@ class TestInstinctLearnerCrossProcessLock:
         disk). A records a different seq T — without the lock + merge, A's
         save would overwrite disk and lose B's S.
         """
-        if sys.platform == "win32":
-            pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
-
         learner_a = InstinctLearner(storage_path=storage_path)
         learner_b = InstinctLearner(storage_path=storage_path)
 
@@ -720,9 +708,6 @@ class TestInstinctLearnerCrossProcessLock:
         clear/_save on storage lock), the epoch check inside record_sequence
         was not serialised against clear()'s epoch bump.
         """
-        if sys.platform == "win32":
-            pytest.skip("fcntl.flock is POSIX-only; Windows path is a no-op")
-
         learner_a = InstinctLearner(storage_path=storage_path)
         learner_b = InstinctLearner(storage_path=storage_path)
 

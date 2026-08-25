@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -24,6 +25,11 @@ from vibesop.core.loop.models import (
     LoopStatus,
     LoopTrigger,
 )
+
+# Absolute-path fixture: anchor to the host root so it stays absolute
+# on Windows too (gate44 簇C — "/abs/path" is drive-relative there).
+_ABS = str(Path(Path.cwd().anchor) / "abs" / "path")
+
 
 # ──────────────────────────────────────────────────────────────────
 # Fixtures
@@ -275,10 +281,12 @@ def test_legacy_spec_without_project_root_loads_as_none():
 
 def test_project_root_round_trips_through_json():
     kwargs = _valid_spec_kwargs()
-    kwargs["project_root"] = "/Users/x/projects/foo"
+    kwargs["project_root"] = str(Path(Path.cwd().anchor) / "Users" / "x" / "projects" / "foo")
     spec = LoopSpec(**kwargs)
     restored = LoopSpec.model_validate_json(spec.model_dump_json())
-    assert restored.project_root == "/Users/x/projects/foo"
+    assert restored.project_root == str(
+        Path(Path.cwd().anchor) / "Users" / "x" / "projects" / "foo"
+    )
 
 
 def test_project_root_must_be_absolute():
@@ -290,8 +298,8 @@ def test_project_root_must_be_absolute():
     with pytest.raises(ValidationError, match="absolute"):
         LoopSpec(**kwargs)
     # Control: absolute path accepted.
-    kwargs["project_root"] = "/abs/path"
-    assert LoopSpec(**kwargs).project_root == "/abs/path"
+    kwargs["project_root"] = _ABS
+    assert LoopSpec(**kwargs).project_root == _ABS
 
 
 # ──────────────────────────────────────────────────────────────────
