@@ -277,7 +277,7 @@ def test_orchestrate_persists_trace_id_for_cross_process_join(
     plans_file = storage / "execution_plans.jsonl"
     assert plans_file.exists()
     # Read back the persisted plan as-is (no PlanTracker helpers)
-    with plans_file.open() as f:
+    with plans_file.open(encoding="utf-8") as f:
         persisted_plans = [json.loads(line) for line in f if line.strip()]
 
     assert persisted_plans, "no plans persisted to disk"

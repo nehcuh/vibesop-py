@@ -1523,11 +1523,12 @@ class TestTickOwnership:
 class TestShowOwnership:
     def test_show_displays_project_line(self, isolated_store):
         # Short path: Rich panels crop long lines in the 80-col test console.
-        _save_spec(isolated_store, "owned", "/tmp/x-owned")
+        owned = str(Path(_ROOT_ANCHOR) / "tmp" / "x-owned")
+        _save_spec(isolated_store, "owned", owned)
         result = runner.invoke(app, ["show", "owned"])
         assert result.exit_code == 0
         assert "Project:" in result.stdout
-        assert "/tmp/x-owned" in result.stdout
+        assert owned in result.stdout
 
     def test_show_global_loop_displays_global_marker(self, isolated_store):
         _save_spec(isolated_store, "g", None)

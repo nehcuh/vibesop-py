@@ -48,7 +48,7 @@ def _read_spans(path: Path) -> list[dict]:
     if not path.exists():
         return []
     spans: list[dict] = []
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for raw_line in f:
             stripped = raw_line.strip()
             if stripped:

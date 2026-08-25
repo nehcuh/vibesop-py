@@ -314,9 +314,10 @@ class TestLaunchctlCommands:
         assert cmd[1] == "bootout"
         assert cmd[2] == "gui/501/com.vibesop.loop.instinct-assemble"
 
-    def test_commands_do_not_use_deprecated_load_unload(self, tmp_path: Path) -> None:
+    def test_commands_do_not_use_deprecated_load_unload(self, tmp_path: Path, monkeypatch) -> None:
         # macOS 10.10+ deprecated `launchctl load/unload`. Modern API is
         # `bootstrap/bootout`. (E.3 must-fix.)
+        monkeypatch.setattr("os.getuid", lambda: 501, raising=False)
         assert "load" not in bootstrap_command(tmp_path / "x.plist")
         assert "load" not in bootout_command("x")
 

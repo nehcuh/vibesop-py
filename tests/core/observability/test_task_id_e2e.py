@@ -61,7 +61,7 @@ class TestTaskIdPropagation:
         assert spans_file.exists(), f"spans file not created at {spans_file}"
 
         records: list[dict] = []
-        with spans_file.open() as f:
+        with spans_file.open(encoding="utf-8") as f:
             for raw_line in f:
                 line = raw_line.strip()
                 if line:
@@ -91,7 +91,7 @@ class TestTaskIdPropagation:
 
         spans_file = tmp_path / ".vibe" / "observability" / "spans.jsonl"
         records: list[dict] = []
-        with spans_file.open() as f:
+        with spans_file.open(encoding="utf-8") as f:
             for raw_line in f:
                 line = raw_line.strip()
                 if line:
@@ -113,7 +113,7 @@ class TestTaskIdPropagation:
         runtime.handle_query("some test query for task_id format", platform="claude-code")
 
         spans_file = tmp_path / ".vibe" / "observability" / "spans.jsonl"
-        with spans_file.open() as f:
+        with spans_file.open(encoding="utf-8") as f:
             for raw_line in f:
                 line = raw_line.strip()
                 if not line:
