@@ -300,6 +300,33 @@ vibe market trending agent
 
 每次路由后自动推荐尚未使用但匹配当前工作流的技能，标记为 `[DISCOVER]`。让你持续发现生态中适合你的技能。
 
+### 🔁 任务记忆与本能学习 (v8.0+)
+
+VibeSOP 观测你的真实工作流，把重复模式沉淀为可复用资产：
+
+```bash
+# 语义检索过往任务轨迹（embedding 相似度，跨项目可信池可选）
+vibe recall "上次怎么修的 Windows 路径 bug"
+
+# 查看路由观测：span 追踪、回放与指标
+vibe trace metrics
+vibe trace replay <trace-id>
+
+# 本能学习：从会话工具序列中挖掘技能候选
+vibe analyze session
+vibe instinct eval
+
+# 技能蒸馏队列：重复任务 → 候选 → 人工 promote / dismiss
+vibe skill scan-candidates
+vibe skill promote <candidate-id>
+```
+
+- **Task-memory loop**：query → task_id 派生 → trace 聚类 → gold 判定 → `vibe recall` 语义召回
+- **Instinct learning**：工具序列模式挖掘 + launchd 后台采集，成熟候选经 `vibe instinct eval` 晋升
+- **Discovery 队列**：候选簇带评分/来源/行为标签（含 agent-echo 识别），promote 附 shadow verifier 徽章（PASS/WARN，永不阻断）
+- **跨项目池**：`vibe pool` 管理可信项目，`vibe recall --cross-project` 复用其他项目沉淀的经验
+- **Conversation mirror**：主会话与 sub-agent 内部过程（thinking/tool_calls/usage）全量镜像，供 dashboard 与回放
+
 ### 🧠 偏好学习
 
 VibeSOP 会记住你的选择：
@@ -321,11 +348,12 @@ $ vibe route "debug this"
 
 不绑定任何平台，支持所有 AI 工具：
 
-- ✅ Claude Code
-- ✅ Cursor
-- ✅ Continue.dev
-- ✅ Aider
-- ✅ Any tool that supports SKILL.md
+- ✅ Claude Code（hooks 自动注入）
+- ✅ Grok Build（hooks 自动注入）
+- ✅ Kimi CLI（config 自动注入）
+- ✅ Pi Agent（extensions 自动注入）
+- ✅ Cursor / OpenCode（配置生成）
+- ✅ Continue.dev / Aider / Any tool that supports SKILL.md
 
 ### 🛡️ 安全审计
 
@@ -498,6 +526,31 @@ vibe feedback record "<query>" "<skill>" --wrong "<actual-skill>"
 vibe feedback report
 ```
 
+### 任务记忆与观测 (v8.0+)
+
+```bash
+# 语义检索过往任务轨迹
+vibe recall "<query>"
+vibe recall "<query>" --cross-project   # 跨可信项目池召回
+
+# 路由观测：指标与回放
+vibe trace metrics
+vibe trace replay <trace-id>
+
+# 本能学习：工具序列挖掘与晋升
+vibe analyze session
+vibe instinct eval
+vibe instinct status
+
+# 技能蒸馏队列（候选 → 人工 promote/dismiss，附 shadow verifier 徽章）
+vibe skill scan-candidates
+vibe skill promote <candidate-id>
+vibe skill dismiss <candidate-id>
+
+# 跨项目可信池管理
+vibe pool add / list / remove
+```
+
 ### 会话智能路由
 
 > **⚠️ 默认开启**：会话智能追踪默认**开启**（`routing.session_aware: true`），自动记录会话状态并支持多轮对话重路由。
@@ -640,6 +693,14 @@ vibe build opencode --output ~/.config/opencode
 # Manual: source ~/.config/opencode/vibesop-env.sh && opencode
 ```
 
+### Grok Build
+
+```bash
+vibe build grok-build --output ~/.grok
+# Shell hooks auto-trigger routing on UserPromptSubmit
+# (also collects PostToolUse tool sequences)
+```
+
 ### Workflow Engine (v6.2.0+)
 
 VibeSOP 的动态工作流引擎支持 6 种编排模式，自动分类用户意图并选择最佳执行策略。
@@ -668,6 +729,7 @@ vibe route --verify "重构认证模块"
 | Platform | Workflow | Native Parallel | Trigger |
 |----------|----------|-----------------|---------|
 | Claude Code | ✅ | ✅ Sub-agents | Auto (hooks) |
+| Grok Build | ✅ | ⚠️ Serial only | Auto (hooks) |
 | Kimi CLI | ✅ | ⚠️ Serial only | Auto (config) |
 | Pi Agent | ✅ | ⚠️ Serial only | Auto (extensions) |
 | OpenCode | ✅ | ⚠️ Serial only | Manual |
