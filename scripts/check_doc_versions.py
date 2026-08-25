@@ -66,6 +66,9 @@ SKIP_DIRS = {
     ".venv",
     ".vibe",
     ".omx",  # review/gate artifacts are point-in-time records, not versioned docs
+    # Knowledge-base export snapshots for external tools (e.g. cmspark
+    # import) — point-in-time records, version-stamped at generation.
+    "knowledge",
     "core/skills",
     "examples",
     "scripts",
