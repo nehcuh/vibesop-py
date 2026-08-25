@@ -102,12 +102,12 @@ jobs:
   test-windows:
     name: Test Windows (Python ${{ matrix.python-version }})
     runs-on: windows-latest
-    # Observation period: the Windows gate is non-blocking (continue-on-error)
-    # for the first two weeks after landing (added 2026-07-19, P4 windows-compat
-    # batch). Once it has stayed green for two weeks, remove continue-on-error
-    # to make it a required gate. No coverage gate / codecov here — coverage
-    # stays the ubuntu `test` job's responsibility.
-    continue-on-error: true
+    # gate44 项5 graduation (2026-08-25): required gate, 红灯即 block.
+    # The 2026-07-19 observation period is over — 3 consecutive green
+    # Windows runs on independent commits (296c1ae → e875bc7 → a9df194,
+    # both pythons, 0 rerun consumed each) per the confirmed v2.1
+    # synthesis two-phase plan. No coverage gate / codecov here —
+    # coverage stays the ubuntu `test` job's responsibility.
     strategy:
       fail-fast: false
       matrix:
@@ -131,8 +131,11 @@ jobs:
 
       - name: Run tests
         # Same marker filter as the ubuntu job. --reruns 2 absorbs Windows
-        # flakes (Defender scans, transient file-lock races).
-        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2
+        # flakes (Defender scans, transient file-lock races);
+        # --reruns-delay 1 (gate44 pi NIT-5): Defender-style transient
+        # locks are time-sensitive — an immediate rerun re-hits the same
+        # window (the benchmark job already pairs these two flags).
+        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2 --reruns-delay 1
 
   security:
     name: Security Scan
