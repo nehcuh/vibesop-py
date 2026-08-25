@@ -2240,6 +2240,22 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
             f"[dim]Cross-project cluster → global drafts ({len(candidate.project_distribution)} projects).[/dim]"
         )
 
+    # gate35 D2 follow-up (cmspark dogfood 2026-08-25): the Discovery queue
+    # sinks agent-echo rows and offers batch-dismiss, but promote never
+    # surfaced the tag — cluster bd1bc217 was promoted with an echo-text
+    # slug id (custom/you-are-an-independent-…) before anyone noticed.
+    # Non-blocking by design (echo clusters are legitimate pool members
+    # for human review); this makes the override an informed one.
+    if candidate_agent_echo(candidate):
+        console.print(
+            "[yellow]⚠ shape: agent-echo cluster[/yellow] — the representative "
+            "query is machine-shaped (sub-agent prompt echo). Promoting is an "
+            "explicit human override; be aware: (1) the derived skill_id slug "
+            "comes from that echo query — consider a semantic rename after "
+            "activation, (2) trigger prefill will be hygiene-filtered to a "
+            "TODO placeholder — hand-write intent phrases before activating."
+        )
+
     # Derive skill_id with cluster_id prefix (pi P1: avoids collision
     # when two clusters share a first query — both would slug to the
     # same custom/<slug> and silently no-op on second promote).

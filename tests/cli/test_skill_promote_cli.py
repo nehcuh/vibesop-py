@@ -575,6 +575,48 @@ class TestPromote:
         assert r.exit_code == 1
         assert "sticky" in r.output or "dismissed" in r.output
 
+    def test_promote_warns_on_agent_echo_cluster(self, cli_runner: CliRunner, tmp_store) -> None:
+        """gate35 D2 follow-up (cmspark bd1bc217 dogfood): promoting a
+        cluster whose representative query is machine-shaped prints the
+        agent-echo warning. Non-blocking — the promote still succeeds
+        (echo clusters are legitimate pool members for human review)."""
+        c = ClusterCandidate(
+            cluster_id="abc123def456",
+            task_ids=["t1"],
+            queries=["You are an independent ARCHITECTURE adversarial reviewer"],
+            span_count=31,
+            gold_rate=0.0,
+            gold_task_ids=[],
+        )
+        tmp_store.upsert(c)
+
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "shape: agent-echo" in r.output
+        assert "hand-write intent phrases" in r.output
+        # non-blocking: status flipped despite the warning
+        stored = tmp_store.get("abc123def456")
+        assert stored is not None
+        assert stored.status == "promoted"
+
+    def test_promote_no_echo_warning_for_human_queries(
+        self, cli_runner: CliRunner, tmp_store
+    ) -> None:
+        """A human-phrased representative query must NOT trip the warning."""
+        c = ClusterCandidate(
+            cluster_id="def456abc123",
+            task_ids=["t1"],
+            queries=["帮我合并到 main 吧"],
+            span_count=5,
+            gold_rate=0.8,
+            gold_task_ids=["t1"],
+        )
+        tmp_store.upsert(c)
+
+        r = cli_runner.invoke(app, ["skill", "promote", "def456abc123"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "agent-echo" not in r.output
+
 
 class TestDismiss:
     def test_dismiss_with_reason(self, cli_runner: CliRunner, tmp_store) -> None:
