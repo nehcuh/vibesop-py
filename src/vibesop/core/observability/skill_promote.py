@@ -587,6 +587,16 @@ class ClusterCandidateStore:
         self._path = self._dir / self.FILENAME
         self._lock = threading.Lock()
 
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock').
+
+        All three critical sections (upsert / prune / transition) are
+        AtomicWriter full rewrites — locking the data file itself would
+        block the rename on Windows. Single derivation shared by all
+        lock points in this class.
+        """
+        return self._path.with_name(self._path.name + ".lock")
+
     def upsert(self, candidate: ClusterCandidate) -> ClusterCandidate:
         """Insert or refresh a candidate.
 
@@ -613,7 +623,7 @@ class ClusterCandidateStore:
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path):
+            with cross_process_lock(self._lock_path()):
                 return self._do_locked_upsert(candidate)
 
         with self._path.open("a", encoding="utf-8") as f:
@@ -881,7 +891,7 @@ class ClusterCandidateStore:
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path):
+            with cross_process_lock(self._lock_path()):
                 return self._do_locked_prune(now)
 
         with self._path.open("a", encoding="utf-8") as f:
@@ -988,7 +998,7 @@ class ClusterCandidateStore:
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path):
+            with cross_process_lock(self._lock_path()):
                 return self._do_locked_transition(cluster_id, apply, allow_if_terminal)
 
         with self._path.open("a", encoding="utf-8") as f:

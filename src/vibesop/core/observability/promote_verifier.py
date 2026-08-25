@@ -259,7 +259,7 @@ class PromoteVerdictStore:
             except ImportError:
                 from vibesop.utils.file_lock import cross_process_lock
 
-                with cross_process_lock(self._path):
+                with cross_process_lock(self._lock_path()):
                     self._do_append(verdict, now)
                 return verdict
             with self._path.open("a", encoding="utf-8") as f:
@@ -269,6 +269,14 @@ class PromoteVerdictStore:
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         return verdict
+
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock').
+
+        The critical section is an AtomicWriter full rewrite — locking the
+        data file itself would block the rename on Windows.
+        """
+        return self._path.with_name(self._path.name + ".lock")
 
     def _do_append(self, verdict: PromoteVerdict, now: datetime) -> None:
         """Caller MUST hold threading.Lock + cross-process lock."""

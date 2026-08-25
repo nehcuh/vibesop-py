@@ -6,8 +6,11 @@ Synthetic fixtures only — no eval-set data, no real spans.
 from __future__ import annotations
 
 import json
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from vibesop.core.observability.discovery import (
     COOLING_DAYS,
@@ -293,6 +296,7 @@ class TestCountSkillRouteHitsSince:
         assert count_skill_route_hits("custom/x", path, since=since) == 0
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="asserts the POSIX fcntl branch; Windows takes the msvcrt sibling-lock path")
 class TestCrossProcessLocking:
     """gate17 claude nit 2: writes go through fcntl.flock (POSIX path of
     the repo's double-lock convention)."""

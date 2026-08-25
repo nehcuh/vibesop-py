@@ -13,9 +13,29 @@ from racing each other on the same JSONL / JSON state file.
 
 Lock semantics:
     - Exclusive (default) — blocks other exclusive AND shared acquirers.
-    - Shared (``shared=True``) — blocks exclusive, allows concurrent shared.
+    - Shared (``shared=True``) — blocks exclusive, allows concurrent shared
+      on POSIX. **Best-effort on Windows**: ``msvcrt`` has no shared lock,
+      so ``shared=True`` degenerates to exclusive there (conservative but
+      safe — do not write tests asserting two shared acquirers coexist
+      under the msvcrt branch).
     - Blocking (default) — waits until acquired.
     - Non-blocking (``blocking=False``) — raises ``CouldNotLock`` if held.
+
+Lock-file naming contract (gate44):
+    - ALWAYS pass a sibling lock file, never the data file itself. Locking
+      the data file breaks on Windows (msvcrt byte-range lock vs a second
+      append handle; ``os.replace`` onto a held handle) and on POSIX an
+      atomic rename inside the critical section swaps the inode out from
+      under the lock.
+    - New code derives the lock path as ``path.with_name(path.name + ".lock")``
+      (``x.jsonl`` → ``x.jsonl.lock``). Do NOT use ``with_suffix(".lock")``
+      (``x.jsonl``/``x.json`` in one dir would collide on ``x.lock``).
+    - Existing call sites using other shapes (``with_suffix(".lock")``,
+      explicit stem names) MUST NOT be renamed without a migration: the
+      on-disk lock file is the lock's identity — renaming it lets two
+      processes hold "the" lock simultaneously during a rolling upgrade.
+    - Lock files are opened ``a+`` and never unlinked by this helper. Do
+      not "clean up" ``*.lock`` files while the app may be running.
 
 Usage::
 
@@ -177,9 +197,12 @@ def _acquire_msvcrt(
             raise
 
     # Blocking path: spin on the non-blocking mode ourselves so we have a
-    # bounded retry budget.
+    # bounded retry budget. Re-lseek each iteration: a failed _locking call
+    # may leave the file position moved, and locking from the wrong offset
+    # would silently lock (and later unlock) a different byte.
     last_err: OSError | None = None
     for _ in range(max_spin_attempts):
+        os.lseek(fd, _LOCK_BYTE, 0)  # SEEK_SET
         try:
             msvcrt.locking(fd, mode_nonblocking, _LOCK_NBYTES)
             return

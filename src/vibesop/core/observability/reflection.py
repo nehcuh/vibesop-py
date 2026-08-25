@@ -187,15 +187,18 @@ class ReflectionStore:
         """Append with cross-process lock (pattern from SpanWriter._locked_append).
 
         Inline fcntl on POSIX — the import is cheap and flock is the right
-        primitive. Windows falls back to ``cross_process_lock`` (which
-        dispatches to ``msvcrt.locking``).
+        primitive. Windows falls back to ``cross_process_lock`` on a sibling
+        lock file (locking the data file breaks msvcrt + AtomicWriter
+        renames, gate44).
         """
         try:
             import fcntl
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path), self._path.open("a", encoding="utf-8") as f:
+            with cross_process_lock(self._lock_path()), self._path.open(
+                "a", encoding="utf-8"
+            ) as f:
                 f.write(line)
             return
 
@@ -205,6 +208,10 @@ class ReflectionStore:
                 f.write(line)
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock')."""
+        return self._path.with_name(self._path.name + ".lock")
 
     def list_all(self) -> list[Reflection]:
         """Read all reflections from the log.
@@ -317,7 +324,7 @@ class ReflectionStore:
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path):
+            with cross_process_lock(self._lock_path()):
                 self._do_locked_update(reflection_id, new_status, AtomicWriter())
             return
 

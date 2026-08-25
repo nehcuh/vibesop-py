@@ -318,8 +318,8 @@ class DiscoverySignalStore:
 
         POSIX: ``fcntl.flock`` on the data file (same as
         ``ClusterCandidateStore._locked_upsert``). No-fcntl platforms fall
-        back to ``cross_process_lock`` (msvcrt) — prior version left those
-        platforms unlocked, risking torn JSONL lines (gate17 claude nit 2).
+        back to ``cross_process_lock`` (msvcrt) on a sibling lock file —
+        locking the data file breaks msvcrt append writes (gate44).
         """
         line = json.dumps(signal.to_dict(), ensure_ascii=False) + "\n"
         with self._lock:
@@ -330,7 +330,7 @@ class DiscoverySignalStore:
                 from vibesop.utils.file_lock import cross_process_lock
 
                 with (
-                    cross_process_lock(self._path),
+                    cross_process_lock(self._lock_path()),
                     self._path.open("a", encoding="utf-8") as f,
                 ):
                     f.write(line)
@@ -342,6 +342,10 @@ class DiscoverySignalStore:
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         return signal
+
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock')."""
+        return self._path.with_name(self._path.name + ".lock")
 
     def list_all(self) -> list[DiscoverySignal]:
         """Every well-formed record in file order (bad lines skipped)."""
@@ -434,9 +438,10 @@ class DiscoveryObservationStore:
         alone (a rescan that shrinks the cluster must not fake activity).
 
         Read-modify-write runs under threading.Lock + cross-process lock
-        (fcntl on POSIX, ``cross_process_lock`` fallback — same convention
-        as ``ClusterCandidateStore``), so a concurrent ``discover`` in
-        another process can't lose a growth refresh (gate17 claude nit 2).
+        (fcntl on POSIX, ``cross_process_lock`` fallback on a sibling lock
+        file — same convention as ``ClusterCandidateStore``), so a
+        concurrent ``discover`` in another process can't lose a growth
+        refresh (gate17 claude nit 2).
         """
         now = now or _now_utc()
         with self._lock:
@@ -445,7 +450,7 @@ class DiscoveryObservationStore:
             except ImportError:
                 from vibesop.utils.file_lock import cross_process_lock
 
-                with cross_process_lock(self._path):
+                with cross_process_lock(self._lock_path()):
                     return self._do_observe(fingerprint, span_count, now)
             with self._path.open("a", encoding="utf-8") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
@@ -453,6 +458,14 @@ class DiscoveryObservationStore:
                     return self._do_observe(fingerprint, span_count, now)
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock').
+
+        Separate class from ``DiscoverySignalStore`` — each store derives
+        its own lock; they do not share one.
+        """
+        return self._path.with_name(self._path.name + ".lock")
 
     def _do_observe(self, fingerprint: str, span_count: int, now: datetime) -> bool:
         """Caller MUST hold threading.Lock + cross-process lock."""

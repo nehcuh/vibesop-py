@@ -162,10 +162,14 @@ class SpanWriter:
         try:
             import fcntl
         except ImportError:
-            # Windows: use the helper so msvcrt.locking actually takes the lock.
+            # Windows: sibling lock file. Locking the data file itself breaks
+            # here — msvcrt byte-0 region lock clashes with the second append
+            # handle on an empty file (gate44). POSIX path below is unchanged
+            # (inline fcntl is p95-benchmark-gated).
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path), self._path.open("a", encoding="utf-8") as f:
+            lock = self._lock_path()
+            with cross_process_lock(lock), self._path.open("a", encoding="utf-8") as f:
                 f.write(line)
             return
 
@@ -175,6 +179,10 @@ class SpanWriter:
                 f.write(line)
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def _lock_path(self) -> Path:
+        """Sibling lock file (gate44 contract: name + '.lock')."""
+        return self._path.with_name(self._path.name + ".lock")
 
     @staticmethod
     def _truncate(s: str, max_chars: int = _MAX_PAYLOAD_CHARS) -> str:

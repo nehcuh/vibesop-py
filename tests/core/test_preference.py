@@ -1,5 +1,6 @@
 """Tests for preference learning system."""
 
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -258,6 +259,7 @@ class TestPreferenceStorage:
         assert storage.ngram_associations == {}
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="asserts fcntl.flock blocking semantics via an external fd; POSIX-only")
 class TestPreferenceLockfileConsistency:
     """deep-diagnosis-2026-07-24 P1-8 regression: SH (read) and EX (write)
     locks must be on the SAME ``.lock`` file. Previously the SH lock was on
