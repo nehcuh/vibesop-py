@@ -122,7 +122,9 @@ class TestCrossProcessLock:
         t.join()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX flock semantics (external blocker, shared composition)")
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX flock semantics (external blocker, shared composition)"
+)
 class TestPosixFlockSemantics:
     def test_external_ex_blocks_second_acquirer(self, tmp_path: Path) -> None:
         """Two threads contending for EX on the same path serialise."""
@@ -229,7 +231,9 @@ class TestSiblingLockRegressions:
         assert data.read_text(encoding="utf-8") == '{"v": 2}'
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="fakes the Windows path; pointless on real Windows")
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="fakes the Windows path; pointless on real Windows"
+)
 class TestMsvcrtDispatch:
     """Exercise the msvcrt dispatch branch on POSIX with a fake module.
 
@@ -244,7 +248,9 @@ class TestMsvcrtDispatch:
         monkeypatch.setitem(sys.modules, "msvcrt", msvcrt_fake)
         monkeypatch.setitem(sys.modules, "fcntl", None)
 
-    def test_exclusive_uses_nblk_mode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclusive_uses_nblk_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         calls: list[tuple[int, int, int]] = []
 
         fake = SimpleNamespace(

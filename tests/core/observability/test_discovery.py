@@ -296,7 +296,10 @@ class TestCountSkillRouteHitsSince:
         assert count_skill_route_hits("custom/x", path, since=since) == 0
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="asserts the POSIX fcntl branch; Windows takes the msvcrt sibling-lock path")
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="asserts the POSIX fcntl branch; Windows takes the msvcrt sibling-lock path",
+)
 class TestCrossProcessLocking:
     """gate17 claude nit 2: writes go through fcntl.flock (POSIX path of
     the repo's double-lock convention)."""

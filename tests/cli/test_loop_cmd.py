@@ -1410,7 +1410,9 @@ class TestTickOwnership:
         """gate27 pi#4a: with 6+ other-project loops, the skip line lists at
         most 5 names plus a total count."""
         for i in range(6):
-            _save_spec(isolated_store, f"other-{i}", str(Path(_ROOT_ANCHOR) / "nonexistent" / f"other-{i}"))
+            _save_spec(
+                isolated_store, f"other-{i}", str(Path(_ROOT_ANCHOR) / "nonexistent" / f"other-{i}")
+            )
 
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0

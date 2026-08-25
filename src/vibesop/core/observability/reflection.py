@@ -196,9 +196,7 @@ class ReflectionStore:
         except ImportError:
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._lock_path()), self._path.open(
-                "a", encoding="utf-8"
-            ) as f:
+            with cross_process_lock(self._lock_path()), self._path.open("a", encoding="utf-8") as f:
                 f.write(line)
             return
 
