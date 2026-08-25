@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### gate44：Windows 兼容存量清零（409F→0）+ Windows job 转正（2026-08-25）
+
+按 `.omx/artifacts/gate44-synthesis.md` v2.1 终稿实施（三路评审 +
+确认轮全 CONFIRMED-WITH-NITS，nit 全数修入）。
+
+- **sibling-lock 反模式清零（簇A，~350 失败）**：9 处
+  `cross_process_lock(数据文件)` 全部改为 sibling 锁文件
+  （`name + ".lock"`）；存量 `with_suffix` 形状按锁身份契约不改名
+  （滚动升级期间锁 identity 不变）。Windows 两机制：RMW 的
+  `os.replace` 撞被锁句柄 EACCES；msvcrt byte-0 区锁阻塞第二个
+  append 句柄。CI 实证 409 → 5（假说一次成立）。
+- **残余 5 失败全清**：12 处无 encoding 读 jsonl（cp1252 撞 CRLF/
+  中文）→ 显式 `encoding="utf-8"`；launchd shape 测试补 getuid
+  mock + `_gui_domain()` 自卫 guard（非 POSIX 抛明确 RuntimeError）；
+  `/tmp` 字面量改 `Path.cwd().anchor` 锚定。
+- **产品级 bug 顺带修 2 个**：`infer_source` 正斜杠子串匹配在
+  Windows 全漏（home agent skill 错归 builtin 信任级）→ 反斜杠
+  归一；`import-claude` 转义不去盘符冒号（中置 `C:` 被 Win32
+  重锚盘根）。
+- **项5 两段式转正**：观察期连续 3 绿 run（296c1ae → e875bc7 →
+  a9df194，双 python 全绿、每个 0 rerun 消耗）后独立 commit 摘除
+  test-windows 的 `continue-on-error`——现为 required gate，红灯
+  即 block（ci.yml 被 release.yml 复用为 ci-gate，Windows 红从此
+  也堵发布链）。`--reruns 2` 保留 + 新增 `--reruns-delay 1`
+  （pi NIT-5：Defender 类瞬时锁时间敏感，立即重跑易撞同一窗口）。
+  benchmark job 的 continue-on-error 为 gate38 永久 report-only，
+  不在本次范围。计数教训：continue-on-error 期间 run 级 success
+  会吞 Windows 红灯（3325200 实例），转正计数必须查 job 级结论。
+
+### gate35（D2-followup）：promote 对 agent-echo 簇打非阻断警告（2026-08-25）
+
+cmspark dogfood：簇 bd1bc217 的代表 query 是子代理 prompt 回声，
+Discovery 队列沉底 + 批量否决都有标记，但 promote 路径从未呈现——
+该簇以回声文本 slug（`custom/you-are-an-independent-…`）被提升激活
+后才暴露。现在 promote 命中对 `candidate_agent_echo` 命中的簇打黄色
+警告，点明两个后果：skill_id slug 派生自回声 query（激活后考虑语义
+改名）、trigger 预填会被 hygiene 过滤成 TODO（必须手写意图短语）。
+非阻断——回声簇仍是合法的人工评审对象（skill_promote
+`_AGENT_PROMPT_PREFIXES` 注释在案）。
+
 ### gate43：部署模板路由文案降级 + Windows 测试修复 + 发布流程 CI 盯梢（2026-08-24）
 
 按 `.omx/artifacts/gate43-synthesis.md` v2 终稿实施（三路评审 + 确认轮
