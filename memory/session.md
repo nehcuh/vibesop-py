@@ -1,4 +1,25 @@
 
+### S43 (2026-08-25) [vibesop-py + cmspark] gate44 Windows 409→0 + job 转正 · cmspark 幽灵/回声技能治理 · 后续验收排程
+
+- [x] **gate44 全流程**（synthesis v2.1 三路确认后实施）：项1 sibling 锁反模式清零（9 处 `cross_process_lock(数据文件)` → `X.lock`，`with_suffix` 形状按锁身份契约不改名）→ Windows 失败 409→5（假说一次成立）；项3 残余 5 清零（12 处 jsonl 读加 encoding / launchd shape 测试 getuid mock + `_gui_domain` guard / `/tmp` 字面量锚定）；项2/4 平台门控 + 四头防御；顺带修 2 个产品 bug（`infer_source` 反斜杠归一 / `import-claude` 盘符冒号）
+- [x] **gate44 项5 两段式转正**：观察期连续 3 绿（296c1ae → e875bc7 → a9df194，双 python、各 0 rerun）→ 独立 commit 摘 `continue-on-error` + `--reruns-delay 1`（`775639c`）；首个 required-gate run 全绿。CHANGELOG 回填（`7af8959`）
+- [x] **cmspark 幽灵技能修复**（`e875bc7`）：W4 promote 物化目录 router 可见、injector 不可见 → injector 候选目录加 `.vibe/skills`（项目+home）+ per-base nested 精确匹配（全局前置会压 flat 命中，priority inversion）；hint 路径对 custom/ id 指向真实物化位置；部署坑 `uv tool install --force` 复用缓存 wheel 必须 `--no-cache`
+- [x] **cmspark 回声技能 bd1bc217 处理**：判定保留（gate32 A1 已记录的刻意 override，手写 triggers + 与 357c40d1 显式区分）；id 从回声 slug 改名 `adversarial-reviewer-dispatch-bd1bc217`（五处同步）；删 auto-config 死条目；产品加固 promote agent-echo 非阻断警告（`a9df194`，+2 测试）
+- [x] **遗留验收全部排程**（durable cron）：8-25 17:43 gate42 T+24h / 8-31 gate42 一周+gate43 T+7 / 9-7 gate43 T+14；T0 钉死（gate42 rebuild cutover=span_ts 8-24T09:31Z；gate43 重部署=8-24 18:42 CST，文案面在全局 `~/.grok/rules/` 非 cmspark 项目文件）
+
+**Key Discoveries**:
+1. continue-on-error 下 run 级 success 会吞 job 级红灯——3325200 run 级 success 但 Windows 双 job 实为 failure；"连续绿"计数必须 `gh run view --json jobs` 查 job 级
+2. auto-config.yaml 的 `routing.patterns` 是无消费者死配置（全 routing/matching 链路零访问；priority 也被 candidate_manager 硬编码）——真实路由输入是 skill-index.json 的 query_patterns；347 次调用是 triggers 匹配回声 prompt 自身的回灌，不是黑洞正则吸的
+3. route_outcomes.jsonl 的 recorded_at 不能判"新增行"——rebuild 重写簇（8-24T09:31Z）和 bridge 存量补录簇（8-25T00:48Z 2092 行）recorded_at 都"新"但 span_ts 是历史；必须 span_ts > cutover
+4. skill_id slug 派生自 queries[0]（`custom/{_slugify(queries[0])}-{cluster_id[:8]}`）——代表 query 是回声时 id 就是回声文本
+
+**Next Steps**:
+- 三个 durable cron 到期自动跑（8-25/8-31/9-7）；产物链 .omx/artifacts/gate4*-t*-measure.md
+- gate43 T+7 FAIL 时的回滚条款已写进 cron 提示词（revert + 重 build，勿自行执行）
+- cmspark `.vibe` 不在 git——本次改名前备份在 /tmp/cmspark-echo-skill-bak-105511
+
+**Recorded**: yes — 3 pitfalls → project-knowledge.md；auto-memory 4 条（gate44 全闭环 / ghost-fix / echo-handled / followup-schedule）
+
 ### S42 (2026-08-24) [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布
 
 - [x] **gate42 全流程**：vibe-cli 自路由 span 被 bridge 误判为"用户重问"（cmspark 残余 reask 75% 是幻影，Δt p50≈18s vs 真实重问 p50≈24h）→ `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权的语义收窄）；三 lane 对抗罕见完全收敛，in-flight 去重被数据证伪（0/601 session 共享、TTL 15s 只盖 38%）；三路评审+确认轮+双路实施复审（pi 红绿突变实验 6红2绿）；push `d5855ba`+`38b139b`

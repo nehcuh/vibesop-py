@@ -14,11 +14,15 @@
 2. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
    - reask 触发面语义收窄（`not rs.is_cli` 两处）；三 lane 对抗+三路评审+确认轮；pytest 6324 passed；e2e 68/68+7/7
    - CI 红灯清零（lint 24 + format 74 + launchd hermetic + p95 环境分级）；PyPI 8.1.0 + GitHub Release 落地
-3. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
-4. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
-5. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
-6. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
-7. **cmspark outcomes rebuild --apply**（窗口触发）：验收已预审全过，等 grok 空闲窗口执行 + T+24h 早期检查
+3. **gate44 Windows 存量清零 + job 转正** ✅ (Completed - Aug 25, push `675a786`→`7af8959`)
+   - sibling 锁反模式 9 处清零 → Windows 409→0（CI 实证）；顺带修 infer_source 反斜杠 + 盘符冒号 2 产品 bug
+   - 项5 两段式转正：3 连绿后摘 continue-on-error + reruns-delay 1，Windows 现为 required gate（红灯堵发布链）
+   - cmspark 幽灵技能（injector 学 .vibe/skills）+ 回声技能（保留+改名+promote 警告）同日治理
+4. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
+5. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
+6. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
+7. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
+8. **gate42/43 后续验收**（cron 触发，2026-08-25 已排程）：8-25 T+24h / 8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
 
 ### Previous Weeks (July 26 - August 16, 2026) — Completed
 

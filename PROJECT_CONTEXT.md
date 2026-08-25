@@ -3,39 +3,39 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-25 S43 [vibesop-py + cmspark] gate44 Windows 409→0 + job 转正 · cmspark 幽灵/回声技能治理 · 验收排程
+
+**Session Summary**:
+- gate44（synthesis v2.1 实施）：项1 sibling 锁反模式 9 处清零（`cross_process_lock(数据文件)` → `X.lock`，`with_suffix` 形状按锁身份契约不改名）→ Windows 失败 409→5→0；项2/3/4 平台门控 + 残余清零 + 四头防御；顺带修 `infer_source` 反斜杠归一 + `import-claude` 盘符冒号 2 个产品 bug
+- gate44 项5 两段式转正（`775639c`）：连续 3 绿（296c1ae → e875bc7 → a9df194，双 python、各 0 rerun）后摘 `continue-on-error` + 加 `--reruns-delay 1`；**Windows job 现为 required gate，红灯堵发布链**（ci.yml 被 release.yml 复用）；首个 required-gate run 全绿；CHANGELOG 回填（`7af8959`）
+- cmspark 幽灵技能修复（`e875bc7`）：W4 promote 物化目录可路由不可注入 → injector 候选目录加 `.vibe/skills`（项目+home）+ per-base nested 匹配；hint 指向真实物化路径；`uv tool install --force` 复用缓存 wheel 必须 `--no-cache`
+- cmspark 回声技能 bd1bc217：判定保留（gate32 A1 记录在案的刻意 override）；id 改名 `adversarial-reviewer-dispatch-bd1bc217`（五处同步，备份 /tmp/cmspark-echo-skill-bak-105511）；删 auto-config 死条目；promote 加 agent-echo 非阻断警告（`a9df194`）
+- 遗留验收排程：3 个 durable one-shot cron——8-25 17:43 gate42 T+24h / 8-31 18:47 gate42 一周+gate43 T+7 / 9-7 18:47 gate43 T+14
+
+**Key Decisions**:
+- 回声簇可提升是设计允许（人工评审对象），处理取"保留+改名+警告"而非 dismiss——bd1bc217 是 gate32 A1 注释点名的合法先例
+- 转正计数教训：continue-on-error 下 run 级 success 吞 job 级红灯（3325200 实例）——"连续绿"必须 `gh run view --json jobs` 查 job 级
+- auto-config `routing.patterns` 是无消费者死配置（真实路由输入 = skill-index.json query_patterns）；understander 的 `.*关键词.*` 无锚生成问题因修死代码无收益而挂账不修
+- gate43 T0 = 8-24 18:42 CST（`~/.grok/rules/routing.md` 重部署 mtime——grok 文案面在全局 ~/.grok/ 非 cmspark 项目文件）；gate42 cutover = span_ts 8-24T09:31Z（outcomes 批簇实测）
+
+**Next Steps**:
+1. 三个 durable cron 到期自动跑验收（新增行判定必须 span_ts > cutover，勿用 recorded_at）；产物链 `.omx/artifacts/gate4*-t*-measure.md`
+2. gate43 T+7 FAIL 时按 synthesis 回滚条款（revert + 重 build）——cron 提示词已含，勿自行执行
+3. 挂账：cursor 死 `_render_route_hook`（gate43 §1.2，独立工作）；understander 黑洞正则生成器（死配置，若未来接通消费者须先修）
+
 ### 2026-08-24 S42 [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布
 
 **Session Summary**:
-- gate42：vibe-cli 自路由 span 被误判为用户重问（cmspark 残余 reask 75% 幻影）→ bridge `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权语义收窄）；三 lane 对抗完全收敛，in-flight 去重/S4 被数据证伪；三路评审+确认轮全 PASS，pi 红绿突变实验 6红2绿
-- CI 红灯清零：main 自 gate37 红了一个多月——三轮修（lint 24 + ruff format 74 文件 → launchd uv 路径 hermetic mock + benchmark 重试 → p95 环境分级预算 CI 500µs/本地 100µs）
-- v8.1.0 发布：PyPI + GitHub Release 落地（147 commits since v8.0.0；首轮 release 被 p95 假警阻断，tag 前移至 `18be788`）
-- cmspark rebuild dry-run 验收预审全过：硬闸 A CLI 触发=0 / 硬闸 B 0.93:1/0.23:1 / sanity 72.2% / 40 条真实重问保全 / ≥60s 样本 11 条已核（最坏损失 2.3%）
+- gate42：vibe-cli 自路由 span 被误判为用户重问（cmspark 残余 reask 75% 幻影）→ bridge `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权语义收窄）；三 lane 对抗完全收敛；三路评审+确认轮全 PASS
+- CI 红灯清零：lint 24 + ruff format 74 文件 → launchd uv 路径 hermetic mock + benchmark 重试 → p95 环境分级预算 CI 500µs/本地 100µs
+- v8.1.0 发布：PyPI + GitHub Release（147 commits；tag `18be788`）；cmspark rebuild dry-run 验收预审全过（硬闸 A CLI 触发=0 / 硬闸 B 0.93:1、0.23:1 / sanity 72.2%）
 
 **Key Decisions**:
 - 定性走 gate41 §6 授权链（语义收窄），不走"代码违背 docstring"叙事——三路评审一致打回后者
-- 执行顺序三段：合补丁 → 升级 live `~/.local/bin/vibe`（堵增量靠安装体不靠 checkout）→ 同一空闲窗口 rebuild --apply
 - 绝对 µs 微基准在共享 runner 必假警 → 环境分级预算；`--reruns` 救不了系统性减速
 
 **Next Steps**:
-1. cmspark rebuild --apply（等 grok 空闲窗口；验收已预审，一条命令）+ T+24h 早期检查（新增 outcome CLI 触发=0）+ CHANGELOG ≥60s 抽样回填
-2. gate43 候选：模板文案降级（带定价）/ Windows claude_code 路径断言 3 处 / 流程文档补"push 后盯 CI"
+1. cmspark rebuild --apply（已完成于 8-24 晚）+ T+24h 早期检查（→ S43 已排程 cron）
+2. gate43：模板文案降级 + Windows fixture 修复（→ S43 已随 gate44 全部落地）
 3. 触发器：verdict ≥30 / M3 复检 / 留存池 2026-09-19 / P0-lite 观察期
-
-### 2026-08-22/23 S41 [vibesop-py] gate33-36：grok hooks · 队列可读性 · shadow verifier → push 2359026
-
-**Session Summary**:
-- gate33：Grok Build 平台 hooks 落地——`vibe route --hook`（stdin 事件 JSON 模式）+ PostToolUse `vibesop-tool-seq.json` 工具序列采集；adapter `src/vibesop/adapters/grok_build.py`
-- gate34：路线图梳理；gate35：Discovery 队列可读性——自解释列头（评分/模式/来源/行为/为什么在）、`为什么在` 只从实存字段直译、agent-echo 打 `shape: agent-echo` 标沉底、`dismiss --shape agent-echo --yes` 批量否决（池翻转/镜像同翻/`dismiss_reason=shape-batch`/豁免 threshold_suggestion）
-- gate36：promote shadow verifier——`verify_draft` 输出 PASS/WARN 徽章（无 FAIL、永不阻断、degraded 至多 WARN），verdict 存 `promote_verdicts.jsonl`（global 只存计数+query 哈希，RULESET_VERSION=gate36-r1）
-- 验证：pytest 6123 passed / 14 skipped；e2e smoke 68/68 + routing 7/7；最新 push `a59eb13`（文档同步）
-
-**Key Decisions**:
-- 批量否决选择去重后的队列视图、翻转在 project+global 双 scope 都执行（只翻一边会复活）；确认文案点名 bd1bc217 先例（回声簇也曾 promote 成功）
-- shadow verifier 是提示灯不是门：异常时跳过不阻断；PASS 分母排除 agent-echo 行；activate 时草稿未变复用 verdict、已变以 activate-rerun 重跑
-- 看板 ✨ Discoveries tab 与 CLI 共用同一沉底规则/打标/why_here 口径
-
-**Next Steps**:
-1. 用户：grok 侧 `vibe build --platform grok-build` 部署后验证 UserPromptSubmit 注入与 PostToolUse 采集落盘
-2. 观察 shadow verifier 在真实 promote 流上的徽章分布（WARN 率、degraded 占比）
-3. 愿景条目命名冲突跟进：`vibe skill discover` 已被本地队列占用，社区搜索落地时改名 `vibe market search` 之类
 <!-- handoff:end -->

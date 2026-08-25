@@ -2,6 +2,33 @@
 
 ## Technical Pitfalls
 
+### Run-level CI success swallows job-level failures under `continue-on-error` (2026-08-25)
+
+gate44 转正计数踩坑：run 32798482327（commit 3325200）run 级 conclusion=success，但
+`gh run view --json jobs` 显示 Windows 双 job 实为 failure——被 `continue-on-error: true`
+吞掉。任何"连续 N 绿"计数、或观察期内判断 job 健康时，**必须查 job 级结论**：
+`gh run view <id> --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'`。
+转正后（required gate）run 级才恢复可信。
+
+### auto-config.yaml `routing.patterns` 是无消费者死配置；路由真实输入 = skill-index.json (2026-08-25)
+
+追踪 cmspark 347 次调用时发现：understander `_generate_routing_patterns` 生成的
+`.*reviewer.*` / `.*prompt.*` 等无锚正则写入 auto-config.yaml 后，**全 routing/matching
+链路零消费者**（无任何 `["patterns"]` 访问；priority 也被 candidate_manager 硬编码
+P0/P2）。auto-config 真正被消费的字段只有 enabled/scope/lifecycle/usage_stats。
+路由层真实输入是 skill-index.json 的 query_patterns/confidence_boosters
+（`routing/_layers.py`）。教训：判断某配置字段是否生效，先 grep 消费点再下结论；
+同理 skill_id slug 派生自 `queries[0]`（`custom/{_slugify(queries[0])}-{cluster_id[:8]}`），
+代表 query 是回声时 id 直接是回声文本。
+
+### route_outcomes.jsonl 的 recorded_at 不能判"新增行"——用 span_ts > cutover (2026-08-25)
+
+cmspark outcomes 文件里有两类 recorded_at 很新但 span_ts 是历史的批簇：rebuild
+`--apply` 重写行（recorded_at = rebuild 时刻）、bridge 存量补录行（2026-08-25T00:48Z
+一次性 2092 行，state 重置/丢失后按 span_id 去重补推导）。gate42/43 的 T+24h / 一周
+检查若用 recorded_at 过滤会把存量行当新增行，验收数字完全失真。**新增行判定 =
+span_ts > rebuild cutover**（本仓 cmspark cutover = 2026-08-24T09:31Z）。
+
 ### Local-Green ≠ CI-Green — macOS 开发的三类验证盲区 (2026-08-24)
 
 **Issue**: main CI 自 gate37 起红了一个多月（7 个 gate 的 push 全部 failure），无人发现——本地 macOS 全量 pytest + orbstack e2e 的验证组合全绿，但 CI 上 Linux/Windows 三处全崩。
