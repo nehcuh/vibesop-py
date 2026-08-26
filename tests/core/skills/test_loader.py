@@ -724,9 +724,7 @@ description: A duplicate
         loader._load_yaml_skill(yaml_file)
         assert loader._skill_cache == {}
 
-    def test_malformed_yaml_logs_debug_without_traceback(
-        self, tmp_path: Path, caplog
-    ) -> None:
+    def test_malformed_yaml_logs_debug_without_traceback(self, tmp_path: Path, caplog) -> None:
         """YAML syntax errors are expected for nested pack files.
 
         They must not dump a traceback to the user's terminal (quickstart /
