@@ -54,6 +54,26 @@ vibe doctor
 
 见 `docs/dev/platform-invariants.md`。
 
+### Claude Code hook：`Python was not found` / Microsoft Store（Windows）
+
+路径已经对（`bash -c` 能跑脚本）之后，route hook 若仍报商店占位符，是
+**找错了 Python**：默认 `python3` 指向 `WindowsApps`，而 `uv tool`
+的解释器在 `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`。
+
+```powershell
+# 确认 uv-tool 解释器能 import vibesop
+uv tool dir
+& "$(uv tool dir)\vibesop\Scripts\python.exe" -c "import vibesop; print('ok')"
+
+# 重新部署 hook 脚本（v8.1.1+ 的模板会搜 uv tool dir / Scripts/python.exe）
+uv run vibe build claude-code --output "$env:USERPROFILE\.claude"
+```
+
+然后**完全退出并重启 Claude Code**。不要禁用商店别名当主修复——hook
+应当用 uv-tool Python，不依赖系统 `python3`。
+
+见 `docs/dev/platform-invariants.md` 不变量 6。
+
 ---
 
 ## 1. 路由不准确 / 找不到技能

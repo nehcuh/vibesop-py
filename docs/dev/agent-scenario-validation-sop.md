@@ -29,7 +29,7 @@
 
 **通用约束（踩坑沉淀）**：
 - 建非 root 用户 `val` 跑 Agent（claude skip-permissions 拒绝 root；二进制注意 `/root` 700 不可穿越——用 `cp -L` 拷实体文件到 `/usr/local/bin`）
-- vibesop 必须以 `uv tool install` 装到 Agent 用户环境（`~/.local/share/uv/tools/vibesop/`），否则 route hook **静默失败**（`ModuleNotFoundError`，Agent 无感知）
+- vibesop 必须以 `uv tool install` 装到 Agent 用户环境，否则 route hook **静默失败**（`ModuleNotFoundError` / Windows 商店 `python3` stub）。解释器布局：Unix `~/.local/share/uv/tools/vibesop/bin/python`；Windows `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`（以 `uv tool dir` 为准）
 - prompt 一律走文件传递（`"$(cat /tmp/prompt.txt)"`），内联引号会被 shell 截断
 - 演示项目必须 `git init`（grok/codex 依赖 .git 发现项目根）
 

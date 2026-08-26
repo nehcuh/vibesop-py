@@ -61,6 +61,16 @@ and Grok JSON hooks could not find `vibe` on PATH.
    File-existence checks do not catch this. `vibe verify claude-code`
    must inspect `settings.json` commands.
 
+6. **Route-hook Python is the uv-tool interpreter, never Store
+   `python3`.** On Windows, `python`/`python3` on PATH is often
+   `WindowsApps\python3.exe` (Microsoft Store stub: *"Python was not
+   found…"*). `uv tool install` puts the real env at
+   `%APPDATA%\uv\tools\vibesop\Scripts\python.exe` (`uv tool dir`),
+   **not** `~/.local/share/uv/tools/vibesop/bin/python` (Unix layout).
+   The hook must search both layouts, skip `WindowsApps`, and must not
+   `uv run` from a random cwd (ephemeral env stall). Smoke from `/tmp`
+   (no vibesop project) with the deployed script.
+
 ## Host smoke (not optional for adapter changes)
 
 After changing any adapter or installer:
@@ -70,6 +80,7 @@ uv tool install --reinstall --force --no-cache .
 vibe build <platform> --output <that platform's real config dir>
 vibe verify <platform> -v
 # For hooks that exec vibe: feed a UserPromptSubmit JSON on stdin.
+# For Claude Code .sh: bash -c <settings.json command>, once from /tmp.
 ```
 
 Docker e2e remains required. It does **not** replace this smoke.

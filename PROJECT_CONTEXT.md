@@ -3,20 +3,21 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-08-26 S48 [vibesop-py] Claude Code Windows hook — POSIX command
+### 2026-08-26 S48 [vibesop-py] Claude Code Windows hook — POSIX command + uv-tool Python
 
 **Session Summary**:
-- 续中断：`efcd0cf` 把 hook 包进 `"C:/Program Files/Git/bin/bash.exe"` 仍 127（`bash -c` 空格拆开 → `C:/Program:`）
-- Windows command 改为 quoted POSIX 路径；verify 加 `route_hook_command`（禁 `\` / `bash.exe`）
-- rebuild `~/.claude`；`bash -c` + stdin JSON exit 0；`vibe verify claude-code` 8/8；push `e467519`
+- `efcd0cf` 包 `"C:/Program Files/Git/bin/bash.exe"` 仍 127（`bash -c` 空格拆开）→ quoted POSIX path；verify 禁 `\` / `bash.exe`；push `e467519`
+- 脚本跑通后报商店 `python3` stub：uv-tool 在 `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`，模板只查 Unix `bin/python`。跳过 WindowsApps；`/tmp` 烟雾 exit 0；push `2c72fd7`
+- rebuild `~/.claude`；`vibe verify claude-code` 8/8
 
 **Key Decisions**:
 - 宿主已提供 Git Bash，不要再包 `Program Files/Git/bin/bash.exe`
-- 烟雾测试必须是 `bash -c <settings.json 原样 command>`，不是 `bash script.sh`
+- 烟雾 = `bash -c <settings.json 原样 command>` + stdin；Python 烟雾要从无项目根的 cwd 跑
+- 不要 `uv run` 于随机 cwd（会拉临时环境卡住）
 
 **Next Steps**:
-1. 重启 Claude Code，确认 UserPromptSubmit 不再报 `C:Users...` / `C:/Program:`
-2. Grok JSON hook：本会话 shell PATH 无 `~\.local\bin`（User PATH 已有），考虑绝对路径
+1. 重启 Claude Code，确认不再报 `C:Users...` / `C:/Program:` / Microsoft Store
+2. Grok JSON hook：本会话 shell PATH 无 `~\.local\bin`，考虑绝对路径
 3. 未打 `v8.1.1` tag / 未发 PyPI；Kimi 真目录 `vibe build` 仍可选
 
 ### 2026-08-26 S44–S47 [vibesop-py] v8.1.1 Windows grok-build 宿主部署 + 平台不变量

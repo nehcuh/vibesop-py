@@ -1,13 +1,13 @@
 
 ## Current Session
 
-### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook — POSIX command 落地
+### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook — POSIX command + uv-tool Python
 
-- 中断续作：`efcd0cf` 的 Git-bash.exe 包装仍 127（`Program Files` 被 `bash -c` 拆开）。改为 quoted POSIX path；`vibe verify claude-code` 加 `route_hook_command`
-- 本机 rebuild `~/.claude`；4 条 hook command 无反斜杠/无 bash.exe；`bash -c` + stdin JSON exit 0；verify 8/8 PASS
-- push `e467519`
-- Next: 用户必须重启 Claude Code 才能吃到新 command；Grok 本会话 shell PATH 仍缺 `~\.local\bin`（User PATH 已有），JSON hook 可能 fail-open
-- Recorded: yes — pitfall + smoke-the-exact-argv pattern → project-knowledge.md
+- 中断续作：`efcd0cf` 的 Git-bash.exe 包装仍 127（`Program Files` 被 `bash -c` 拆开）。改为 quoted POSIX path；`vibe verify claude-code` 加 `route_hook_command`。push `e467519`
+- 第二刀：脚本跑通后报商店 `python3` stub。uv-tool 解释器在 `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`，模板只查了 Unix `bin/python`。跳过 WindowsApps；`/tmp` 烟雾 exit 0。push `2c72fd7`
+- 本机 rebuild `~/.claude`；verify 8/8 PASS
+- Next: 用户重启 Claude Code，确认不再报 `C:Users...` / `C:/Program:` / Microsoft Store
+- Recorded: yes — bash.exe 包装 + Store python3 两条 pitfall → project-knowledge.md
 
 ### S47 (2026-08-26) [vibesop-py] session-end — v8.1.1 收工
 - Windows 上修完 quickstart/YAML/hooks 假阳性，实测配置 Grok Build（PATH + JSON hook + verify），教训写入 `docs/dev/platform-invariants.md`，版本 8.1.1 已 push `8af7546`
@@ -17,7 +17,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **Claude Code Windows hook**（active）— 代码+宿主 rebuild 已落地 `e467519`。next_action: 用户重启 Claude Code，确认 UserPromptSubmit 不再报 `C:Users...` / `C:/Program:`。updated: 2026-08-26
+- **Claude Code Windows hook**（active）— POSIX command `e467519` + uv-tool Python `2c72fd7` 已部署 `~/.claude`。next_action: 用户重启 Claude Code，确认不再报路径 127 或商店 python3。updated: 2026-08-26
 - **Grok 真实会话 probe**（active）— hooks 在 `~/.grok`；本会话 Grok PowerShell PATH 无 `~\.local\bin`（注册表 User PATH 有），`vibe route --hook` 可能没注入。next_action: 查 Grok 进程 PATH / 考虑 JSON hook 写绝对路径。updated: 2026-08-26
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 

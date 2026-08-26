@@ -16,6 +16,24 @@
 
 **Files**: `adapters/claude_code.py` (`bash_hook_command`)、`cli/commands/verify.py` (`route_hook_command`)
 
+### Route hook defaulted to Microsoft Store `python3` despite `uv` (2026-08-26)
+
+**Issue**: POSIX command 修好后 UserPromptSubmit 报
+`Python was not found; ... Microsoft Store`。用户环境有 `uv` 和 `vibe.exe`。
+
+**Root Cause**:
+1. 模板默认 `_VIBESOP_PYTHON=python3`。Windows 上这是 `WindowsApps` 占位符。
+2. uv-tool 回退只查 Unix 布局 `$HOME/.local/share/uv/tools/vibesop/bin/python`。
+   Windows 实际是 `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`（`uv tool dir`）。
+3. 无 vibesop 项目根时 `uv run python` 会在随机 cwd 拉临时环境，可能卡住。
+
+**Solution**: 先 `uv run`（仅当找到 vibesop 项目根），再扫 `uv tool dir` /
+XDG / `%APPDATA%` 的 `bin/python` 与 `Scripts/python.exe`，跳过
+`WindowsApps`。都没有则 `echo '{}'` fail-open，绝不调商店 stub。
+烟雾：从 `/tmp` 跑已部署的 `vibesop-route.sh`。
+
+**Files**: `adapters/templates/shared/vibesop-route.sh.j2`
+
 ### Run-level CI success swallows job-level failures under `continue-on-error` (2026-08-25)
 
 gate44 转正计数踩坑：run 32798482327（commit 3325200）run 级 conclusion=success，但
@@ -213,7 +231,7 @@ Bash hook templates already prepend `$HOME/.local/bin`. Any **new** hook that is
 
 ### Smoke the host's exact hook argv, not a cousin invocation (2026-08-26)
 
-Adapter 写出 `command` 之后，用**宿主会用的那一种 spawn** 复现：Claude Code = Git Bash `bash -c <command 字符串>`。`bash script.sh`、PowerShell 直接跑、或包一层自发现的 `bash.exe`，都可能绿而宿主红。verify 要读 settings.json 的 command 文本（禁 `\`、禁 `Program Files/Git/bin/bash.exe`），不要只查 hook 文件在不在。
+Adapter 写出 `command` 之后，用**宿主会用的那一种 spawn** 复现：Claude Code = Git Bash `bash -c <command 字符串>`。`bash script.sh`、PowerShell 直接跑、或包一层自发现的 `bash.exe`，都可能绿而宿主红。verify 要读 settings.json 的 command 文本（禁 `\`、禁 `Program Files/Git/bin/bash.exe`），不要只查 hook 文件在不在。Python 发现要在**无 vibesop 项目根**的 cwd（`/tmp`）再跑一遍，否则 `uv run` 从仓库里绿、宿主目录红。
 
 ### Cross-process JSONL store pattern (append + atomic update) (2026-07-27)
 

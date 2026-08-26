@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-26 (S48 — Claude Code Windows hook POSIX command push `e467519`)
+**Last Updated**: 2026-08-26 (S48 — Claude Code Windows hook POSIX + uv-tool Python `e467519`/`2c72fd7`)
 
 ---
 
@@ -14,7 +14,7 @@
 2. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
 3. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
 4. **gate44 Windows 存量清零 + job 转正** ✅ (Completed - Aug 25, push `675a786`→`7af8959`)
-5. **Claude Code Windows hook**（代码已 push `e467519`，等用户重启 Claude Code 验证 UserPromptSubmit）
+5. **Claude Code Windows hook**（POSIX command `e467519` + uv-tool Python `2c72fd7` 已部署，等用户重启 Claude Code 验证 UserPromptSubmit）
 5. **grok 真实会话 probe**（hooks 已部署；本会话 Grok shell PATH 仍无 `~\.local\bin`，JSON hook 可能没注入）
 5. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
 6. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py

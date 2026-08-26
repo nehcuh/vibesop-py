@@ -174,9 +174,14 @@ def get_tracker(platform: str = "auto") -> SessionTracker:
 
 **Usage**:
 ```bash
-vibe build claude-code
-vibe session enable-tracking  # Enable automatic tracking
+vibe build claude-code --output ~/.claude
 ```
+
+On Windows, `settings.json` hook `command` must be a quoted POSIX path
+(not `bash C:\...`, not `Git/bin/bash.exe`). The `.sh` then uses
+`uv tool dir` / `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`, never
+the Microsoft Store `python3` alias. Restart Claude Code after rebuild.
+See [platform-invariants.md](../dev/platform-invariants.md).
 
 ### Kimi Code CLI
 
