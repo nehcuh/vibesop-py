@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from vibesop.core.skills import parser as skill_parser
 from vibesop.core.skills.base import (
@@ -33,6 +34,16 @@ logger = logging.getLogger(__name__)
 # the exact filename at any rglob depth (a nested ``sub/dir/auto-config.yaml``
 # is excluded too).
 NON_SKILL_YAML_FILENAMES = frozenset({"auto-config.yaml", "registry.yaml"})
+
+# Nested pack files that are never skill definitions. ``rglob("*.yaml")``
+# otherwise tries to parse agent prompts (datayes ``agents/openai.yaml``),
+# scripts, and templates — dumping ScannerError tracebacks into quickstart.
+# SKILL.yaml / SKILL.yml at any depth is still loaded (a skill folder named
+# ``agents`` remains a valid YAML skill).
+NON_SKILL_YAML_PARENT_DIRS = frozenset(
+    {"agents", "scripts", "templates", "tests", "__pycache__", "node_modules", ".git"}
+)
+_SKILL_YAML_FILENAMES = frozenset({"skill.yaml", "skill.yml"})
 
 
 @dataclass
@@ -346,10 +357,18 @@ class SkillLoader:
         except Exception as e:
             logger.debug(f"Failed to load skill from {file_path}: {e}")
 
+    def _is_non_skill_yaml_path(self, file_path: Path) -> bool:
+        """Return True if this YAML file cannot be a skill definition."""
+        if file_path.name in NON_SKILL_YAML_FILENAMES:
+            return True
+        if file_path.name.lower() in _SKILL_YAML_FILENAMES:
+            return False
+        return any(part.lower() in NON_SKILL_YAML_PARENT_DIRS for part in file_path.parent.parts)
+
     def _load_yaml_skill(self, file_path: Path) -> None:
         """Load a skill from a YAML file."""
-        if file_path.name in NON_SKILL_YAML_FILENAMES:
-            logger.debug("Skipping non-skill state file: %s", file_path)
+        if self._is_non_skill_yaml_path(file_path):
+            logger.debug("Skipping non-skill YAML file: %s", file_path)
             return
         try:
             yaml_parser = YAML()
@@ -386,10 +405,13 @@ class SkillLoader:
 
         except OSError as e:
             logger.warning("Failed to load YAML skill %s: %s", file_path, e)
+        except YAMLError as e:
+            # Nested pack YAML is frequently not a skill (agent prompts, eval
+            # fixtures). Syntax errors here are skip-and-continue, not a
+            # user-facing failure — never dump a traceback via lastResort.
+            logger.debug("Skipping unparseable YAML %s: %s", file_path, e)
         except Exception as e:
-            logger.warning(
-                "Unexpected error loading YAML skill %s: %s", file_path, e, exc_info=True
-            )
+            logger.warning("Unexpected error loading YAML skill %s: %s", file_path, e)
 
     def _validate_algorithms(self, metadata: SkillSpec) -> None:
         if not metadata.algorithms:

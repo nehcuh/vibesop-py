@@ -153,6 +153,11 @@ def execute_build(
                 "\n[dim]✓ Deployed to OpenCode config directory[/dim]\n"
                 "[dim]Restart OpenCode to apply changes.[/dim]\n"
             )
+        elif str(output_dir) == str(Path.home() / ".grok"):
+            console.print(
+                "\n[dim]✓ Deployed to Grok Build config directory[/dim]\n"
+                "[dim]Restart Grok Build to apply changes.[/dim]\n"
+            )
         else:
             platform_deploy_dirs = {
                 "claude-code": "~/.claude",
@@ -185,7 +190,7 @@ def execute_build(
 def build(
     target: str | None = typer.Argument(
         None,
-        help="Target platform (claude-code, kimi-cli, opencode, superpowers, cursor, pi). "
+        help="Target platform (claude-code, grok-build, kimi-cli, opencode, cursor, pi). "
         "Defaults to platform from config.yaml or claude-code",
     ),
     profile: str = typer.Option(

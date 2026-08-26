@@ -1,4 +1,34 @@
 
+### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
+
+- [x] 版本 8.1.0 → 8.1.1；CHANGELOG；`docs/dev/platform-invariants.md`
+- [x] `_is_configured` 按平台只认 VibeSOP 标记（Kimi/Pi 假阳性一并收口）
+- [x] `tests/cli/test_platform_registry_sync.py`：禁止 `len >= 2` 漏平台
+- [ ] push origin main
+
+### S45 (2026-08-26) [vibesop-py] 实际配置 Grok Build 并跟踪
+
+- [x] `vibe build grok-build --output ~/.grok` 写出 `rules/routing.md` + `hooks/vibesop-route.json` + `vibesop-tool-seq.json`
+- [x] **P0 PATH**：`uv tool` 的 `vibe.exe` 在 `~/.local/bin`，用户 PATH 没有 → grok hook 会 command-not-found。已写入 User PATH
+- [x] **P0 `vibe verify grok-build`**：PLATFORM_CONFIGS 漏平台。已加 JSON hook / routing.md / PATH 检查，现 5/5 PASS
+- [x] **P0 `_is_configured`**：Grok 自带 `config.toml` 被当成 VibeSOP 已安装，会跳过部署。改为 grok 只认 routing.md / vibesop-route.json
+- [x] hook 实测 stdin JSON → 6810ms EXIT 0，timeout 从 10s 提到 30s（10s 会卡边 fail-open）
+- [x] `uv tool install --reinstall --force --no-cache .`；doctor `grok-build: 2/2`
+
+**用户必须重启 Grok Build**（并最好新开终端）才能吃到 PATH + hooks。
+
+### S44 (2026-08-26) [vibesop-py] Windows `vibe quickstart` 适配
+
+- [x] **grok-build 进入向导**：`QuickstartRunner._supported_platforms` 从 `VibeSOPInstaller.list_platforms()` 派生；`--platform grok-build` 生效；next steps 指向 `~/.grok`
+- [x] **YAML traceback**：loader 跳过 `agents/` 等非技能目录；`YAMLError` 记 debug、去掉 `exc_info=True`。真实 datayes `openai.yaml` 复现：不再 dump ScannerError
+- [x] **假 "No hooks available"**：去掉二次 `install()`；grok-build JSON hooks 从 adapter 写出的 `hooks/` 计入 `hooks_installed`；`_is_configured` 识别 `rules/routing.md`
+- [x] **sentence-transformers**：缺 `semantic` extra 时 ImportError 走 debug，不再 WARNING 吓用户
+- [x] 定向测试 37 passed；真实 openai.yaml skip + grok-build 安装写出 vibesop-route.json / tool-seq.json [executed]
+
+**Root cause**: Docker e2e 是 Linux，盖不住 Windows 向导漏平台、贪婪 rglob YAML、双重 install 短路。
+
+**Next**: 用户可 `uv run vibe quickstart --platform grok-build`；语义索引仍需 `uv sync --extra semantic`
+
 ### S43 (2026-08-25) [vibesop-py + cmspark] gate44 Windows 409→0 + job 转正 · cmspark 幽灵/回声技能治理 · 后续验收排程
 
 - [x] **gate44 全流程**（synthesis v2.1 三路确认后实施）：项1 sibling 锁反模式清零（9 处 `cross_process_lock(数据文件)` → `X.lock`，`with_suffix` 形状按锁身份契约不改名）→ Windows 失败 409→5（假说一次成立）；项3 残余 5 清零（12 处 jsonl 读加 encoding / launchd shape 测试 getuid mock + `_gui_domain` guard / `/tmp` 字面量锚定）；项2/4 平台门控 + 四头防御；顺带修 2 个产品 bug（`infer_source` 反斜杠归一 / `import-claude` 盘符冒号）

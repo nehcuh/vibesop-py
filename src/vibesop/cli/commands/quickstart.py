@@ -34,11 +34,11 @@ def quickstart(
         "-f",
         help="Skip confirmations and use defaults",
     ),
-    platform: str = typer.Option(
-        "claude-code",
+    platform: str | None = typer.Option(
+        None,
         "--platform",
         "-p",
-        help="Target platform (claude-code, kimi-cli, opencode, pi)",
+        help="Target platform (claude-code, grok-build, kimi-cli, opencode, pi)",
     ),
     _global_install: bool = typer.Option(
         False,
@@ -58,7 +58,7 @@ def quickstart(
         vibe quickstart
 
         # Run with specific platform
-        vibe quickstart --platform claude-code
+        vibe quickstart --platform grok-build
 
         # Run without confirmations
         vibe quickstart --force
@@ -74,6 +74,7 @@ def quickstart(
         # Non-interactive mode
         result = runner.run(
             project_path=Path(),
+            platform=platform,
         )
 
         if result.get("success"):
@@ -92,7 +93,7 @@ def quickstart(
                 "[bold]Welcome to VibeSOP![/bold]\n\n"
                 "This wizard will guide you through setup.\n"
                 "Press Ctrl+C to cancel at any time.\n\n"
-                "[dim]Platform: " + platform + "[/dim]",
+                "[dim]Platform: " + (platform or "ask") + "[/dim]",
                 title="[bold]Quickstart[/bold]",
                 border_style="cyan",
             )
@@ -100,6 +101,7 @@ def quickstart(
 
         result = runner.run(
             project_path=Path(),
+            platform=platform,
         )
 
         if result.get("success"):

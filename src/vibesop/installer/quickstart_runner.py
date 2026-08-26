@@ -27,10 +27,7 @@ class QuickstartRunner:
 
     def __init__(self) -> None:
         self._supported_platforms = {
-            "claude-code": "Claude Code CLI",
-            "kimi-cli": "Kimi Code CLI",
-            "opencode": "OpenCode CLI",
-            "pi": "Pi Coding Agent",
+            p["name"]: p["description"] for p in VibeSOPInstaller().list_platforms()
         }
 
         from vibesop.core.skills.external_loader import ExternalSkillLoader
@@ -45,7 +42,11 @@ class QuickstartRunner:
             if name in ExternalSkillLoader.TRUSTED_PACKS
         }
 
-    def run(self, project_path: Path | None = None) -> dict[str, Any]:
+    def run(
+        self,
+        project_path: Path | None = None,
+        platform: str | None = None,
+    ) -> dict[str, Any]:
         result: dict[str, Any] = {
             "success": False,
             "config": None,
@@ -70,7 +71,17 @@ class QuickstartRunner:
             config = self._ask_install_type(project_path)
             result["config"] = config
 
-            if config.platform == "ask":
+            if platform:
+                if platform not in self._supported_platforms:
+                    msg = (
+                        f"Unknown platform: {platform}. "
+                        f"Supported: {', '.join(self._supported_platforms)}"
+                    )
+                    console.print(f"❌ {msg}")
+                    result["errors"].append(msg)
+                    return result
+                config.platform = platform
+            elif config.platform == "ask":
                 config.platform = self._ask_platform()
             console.print()
 
@@ -115,7 +126,7 @@ class QuickstartRunner:
 
     def _ask_install_type(self, project_path: Path) -> QuickstartConfig:
         console.print("What would you like to set up?")
-        console.print("1. Global configuration for Claude Code/Kimi CLI/OpenCode/Pi")
+        console.print("1. Global configuration for Claude Code/Grok Build/Kimi CLI/OpenCode/Pi")
         console.print("2. Project-specific configuration")
         console.print()
 
@@ -219,13 +230,12 @@ class QuickstartRunner:
             else:
                 console.print("⊘ Integrations skipped")
 
+            # installer.install() already deploys hooks (shell via HookInstaller,
+            # JSON via the platform adapter). A second install() hits
+            # _is_configured and reports zero hooks — "No hooks available"
+            # even when claude-code/grok-build hooks were just written.
             if config.install_hooks:
-                if config.global_install:
-                    hooks_install_target = installer._platforms[config.platform]["config_dir"]
-                else:
-                    hooks_install_target = install_target
-                hooks_result = installer.install(config.platform, hooks_install_target)
-                hooks_installed_list = hooks_result.get("hooks_installed", [])
+                hooks_installed_list = install_result.get("hooks_installed") or []
                 hooks_installed = (
                     len(hooks_installed_list)
                     if isinstance(hooks_installed_list, list)
@@ -314,6 +324,7 @@ class QuickstartRunner:
             "kimi-cli": "~/.kimi-code",
             "opencode": "~/.config/opencode",
             "pi": "~/.pi/agent",
+            "grok-build": "~/.grok",
         }
 
         if config.global_install:

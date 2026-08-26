@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -706,6 +707,60 @@ description: A duplicate
             )
             loader._load_yaml_skill(yaml_file)
         assert len(loader._skill_cache) == 0
+
+    def test_skips_malformed_yaml_without_raising(self, tmp_path: Path) -> None:
+        """Nested pack YAML with unescaped quotes must not crash discovery.
+
+        Repro: datayes ``agents/openai.yaml`` — a double-quoted scalar that
+        contains inner ``"status + main reason"`` quotes, which ruamel
+        rejects with ScannerError at column ~4581.
+        """
+        yaml_file = tmp_path / "openai.yaml"
+        yaml_file.write_text(
+            'interface:\n  default_prompt: "must write "status + reason" here"\n',
+            encoding="utf-8",
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        loader._load_yaml_skill(yaml_file)
+        assert loader._skill_cache == {}
+
+    def test_malformed_yaml_logs_debug_without_traceback(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """YAML syntax errors are expected for nested pack files.
+
+        They must not dump a traceback to the user's terminal (quickstart /
+        index build previously logged WARNING with exc_info=True).
+        """
+        yaml_file = tmp_path / "broken.yaml"
+        yaml_file.write_text(
+            'name: "foo "bar": baz"\n',
+            encoding="utf-8",
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        with caplog.at_level(logging.DEBUG, logger="vibesop.core.skills.loader"):
+            loader._load_yaml_skill(yaml_file)
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings == []
+        assert all(r.exc_info is None for r in caplog.records)
+
+    def test_skips_yaml_under_agents_directory(self, tmp_path: Path) -> None:
+        """Agent config YAML under ``agents/`` is not a skill definition."""
+        agents = tmp_path / "skills" / "my-skill" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "openai.yaml").write_text(
+            "id: agent-config\nname: Should Not Load\ndescription: agent yaml\n",
+            encoding="utf-8",
+        )
+        skill_dir = tmp_path / "skills" / "my-skill"
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: my-skill\nname: My Skill\ndescription: Real skill\n---\n# Body\n",
+            encoding="utf-8",
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        skills = loader.discover_all()
+        assert "my-skill" in skills
+        assert "agent-config" not in skills
 
 
 class TestMetadataKeys:

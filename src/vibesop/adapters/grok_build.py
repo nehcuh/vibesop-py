@@ -185,16 +185,17 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
 
     @staticmethod
     def _render_hook_json() -> str:
+        # No ``matcher`` on UserPromptSubmit — Grok ignores it with a warning
+        # (those events always fire). Empty matcher is the Claude-style form.
         hook_config = {
             "hooks": {
                 "UserPromptSubmit": [
                     {
-                        "matcher": "",
                         "hooks": [
                             {
                                 "type": "command",
                                 "command": "vibe route --hook",
-                                "timeout": 10,
+                                "timeout": 30,
                             }
                         ],
                     }

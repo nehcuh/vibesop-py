@@ -475,6 +475,11 @@ class SkillIndexer:
 
         try:
             model = load_sentence_transformer("paraphrase-multilingual-MiniLM-L12-v2")
+        except ImportError as e:
+            # Optional ``semantic`` extra — expected on a default install.
+            # WARNING here dumps through logging lastResort during quickstart.
+            logger.debug("sentence-transformers not installed; skipping embeddings: %s", e)
+            return
         except Exception as e:
             logger.warning("Failed to load sentence-transformers model: %s", e)
             return

@@ -1,7 +1,7 @@
 # VibeSOP 故障排查手册
 
-> **适用版本**: v8.1.0+  
-> **最后更新**: 2026-07-21
+> **适用版本**: v8.1.1+  
+> **最后更新**: 2026-08-26
 
 ---
 
@@ -24,6 +24,35 @@ uv run pytest --no-header -q
 ```
 
 如果以上命令全部通过，说明核心系统正常，问题可能出在配置或技能包上。
+
+### Hook 不触发 / `vibe` 找不到（Windows + Grok/Pi）
+
+JSON hook 和 Pi/OpenCode 插件直接执行 `vibe`，**不会**走 bash 模板里的
+`$HOME/.local/bin` PATH 修补。`uv tool install` 把 `vibe.exe` 放到
+`%USERPROFILE%\.local\bin`。
+
+```powershell
+# 1. 确认二进制在哪
+Get-Command vibe -ErrorAction SilentlyContinue
+# 应类似 C:\Users\<you>\.local\bin\vibe.exe
+
+# 2. 若找不到：把该目录加入用户 PATH，然后重启 Grok / 终端
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  ([Environment]::GetEnvironmentVariable("Path", "User") + ";$env:USERPROFILE\.local\bin"),
+  "User"
+)
+
+# 3. 确认平台真的部署了 VibeSOP 标记（不是宿主自己的 config.toml）
+vibe verify grok-build -v
+vibe doctor
+```
+
+`inspect` 显示「已安装」但 `verify` 缺 hook：多半是宿主原生 `config.toml`
+（Kimi/Grok）或 `settings.json`（Pi）被当成了 VibeSOP。重新
+`vibe build <platform> --output <config dir>`，不要相信文件名存在。
+
+见 `docs/dev/platform-invariants.md`。
 
 ---
 

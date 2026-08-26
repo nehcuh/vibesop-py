@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.1.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.1.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -981,7 +981,7 @@ vibe skills add code-reviewer
 
 ---
 
-**Version**: 8.1.0
+**Version**: 8.1.1
 **Last Updated**: 2026-06-14
 **Status**: ✅ Production Ready (with Multi-Agent Squad + Hook Hardening + prompt-chain-validator)
 

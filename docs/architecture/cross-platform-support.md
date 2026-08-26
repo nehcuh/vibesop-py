@@ -1,7 +1,7 @@
 # Cross-Platform Support
 
-> **Version**: 8.1.0
-> **Updated**: 2026-06-05
+> **Version**: 8.1.1
+> **Updated**: 2026-08-26
 
 ## Overview
 
@@ -237,9 +237,15 @@ from `~/.kimi-code/skills/` at startup.
 
 **Usage**:
 ```bash
-vibe build --platform grok-build
-vibe switch grok-build
+vibe build grok-build --output ~/.grok
+vibe verify grok-build -v
 ```
+
+JSON hooks call `vibe` directly (no bash PATH prefix). On Windows, add
+`%USERPROFILE%\.local\bin` to the **user** PATH (`uv tool install` puts
+`vibe.exe` there) and **restart Grok Build**. See
+[platform-invariants.md](../dev/platform-invariants.md) and
+[troubleshooting.md](../user/troubleshooting.md).
 
 Adapter: `src/vibesop/adapters/grok_build.py`. The `vibesop-tool-seq.json`
 hook is deployed when `sequences.enabled` (default true) and feeds the

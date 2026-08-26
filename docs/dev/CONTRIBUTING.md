@@ -86,6 +86,10 @@ uv run pytest tests/benchmark/ -v
 - Minimum coverage: 75% (current: ~74%)
 - All tests must pass
 - New features need tests
+- Platform lists: assert **set membership / equality**, never `len >= 2`.
+  See [platform-invariants.md](platform-invariants.md). Docker e2e does
+  **not** replace a host smoke (`vibe build` + `vibe verify` + hook stdin)
+  when you change adapters or installers.
 
 ## Code Style
 

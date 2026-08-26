@@ -1640,6 +1640,27 @@ class TestEmbeddingSupport:
             indexer._compute_embeddings({"a/b": prof})
         assert prof.embedding is None
 
+    def test_compute_embeddings_missing_library_is_debug_not_warning(
+        self, indexer: SkillIndexer, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Missing optional extra must not scare users with a WARNING.
+
+        Repro: ``vibe quickstart`` printed
+        ``Failed to load sentence-transformers model: No module named ...``
+        because ImportError was logged at WARNING via the lastResort handler.
+        """
+        import logging
+        import sys
+
+        prof = _make_profile("a/b")
+        with (
+            patch.dict(sys.modules, {"sentence_transformers": None}),
+            caplog.at_level(logging.DEBUG, logger="vibesop.core.skills.indexer"),
+        ):
+            indexer._compute_embeddings({"a/b": prof})
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings == []
+
     def test_compute_embeddings_uses_fake_module(self, indexer: SkillIndexer) -> None:
         """When a fake sentence_transformers module is present, embeddings are computed."""
         import sys

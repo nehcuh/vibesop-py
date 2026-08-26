@@ -23,12 +23,12 @@
 2. gate43 T+7 FAIL 时按 synthesis 回滚条款（revert + 重 build）——cron 提示词已含，勿自行执行
 3. 挂账：cursor 死 `_render_route_hook`（gate43 §1.2，独立工作）；understander 黑洞正则生成器（死配置，若未来接通消费者须先修）
 
-### 2026-08-24 S42 [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布
+### 2026-08-24 S42 [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + 8.1.0 发布
 
 **Session Summary**:
 - gate42：vibe-cli 自路由 span 被误判为用户重问（cmspark 残余 reask 75% 幻影）→ bridge `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权语义收窄）；三 lane 对抗完全收敛；三路评审+确认轮全 PASS
 - CI 红灯清零：lint 24 + ruff format 74 文件 → launchd uv 路径 hermetic mock + benchmark 重试 → p95 环境分级预算 CI 500µs/本地 100µs
-- v8.1.0 发布：PyPI + GitHub Release（147 commits；tag `18be788`）；cmspark rebuild dry-run 验收预审全过（硬闸 A CLI 触发=0 / 硬闸 B 0.93:1、0.23:1 / sanity 72.2%）
+- 8.1.0 发布：PyPI + GitHub Release（147 commits；tag `18be788`）；cmspark rebuild dry-run 验收预审全过（硬闸 A CLI 触发=0 / 硬闸 B 0.93:1、0.23:1 / sanity 72.2%）
 
 **Key Decisions**:
 - 定性走 gate41 §6 授权链（语义收窄），不走"代码违背 docstring"叙事——三路评审一致打回后者

@@ -1,6 +1,6 @@
 # VibeSOP
 
-> **Version**: 8.1.0
+> **Version**: 8.1.1
 > **同步说明**：README.md 本身即为中文主线（README.en.md 为英文版）。本文件保留为中文镜像副本，内容与 [README.md](README.md) 全量一致；更新时请以 README.md 为事实源修改并同步本文件。
 
 ---
@@ -11,7 +11,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.1.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.1.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

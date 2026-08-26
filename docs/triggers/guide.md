@@ -1,6 +1,6 @@
 # VibeSOP Intelligent Trigger System - User Guide
 
-> **Version**: 8.1.0
+> **Version**: 8.1.1
 > **Last Updated**: 2026-04-04
 > **Phase**: 2 - Intelligent Keyword Trigger System
 

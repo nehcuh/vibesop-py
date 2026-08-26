@@ -22,6 +22,7 @@ class TestVibeSOPInstaller:
         assert len(platforms) >= 2
         assert any(p["name"] == "claude-code" for p in platforms)
         assert any(p["name"] == "opencode" for p in platforms)
+        assert any(p["name"] == "grok-build" for p in platforms)
 
         # Check structure
         for platform in platforms:
@@ -54,6 +55,23 @@ class TestVibeSOPInstaller:
             # Check files exist
             config_dir = Path(tmpdir)
             assert (config_dir / "config.yaml").exists()
+
+    def test_install_grok_build(self) -> None:
+        """Grok Build install must write native JSON hooks and routing rules."""
+        installer = VibeSOPInstaller()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = installer.install("grok-build", Path(tmpdir), force=True)
+
+            assert result["success"], result.get("errors")
+            assert result["platform"] == "grok-build"
+            config_dir = Path(tmpdir)
+            assert (config_dir / "rules" / "routing.md").exists()
+            assert (config_dir / "hooks" / "vibesop-route.json").exists()
+            hooks = result.get("hooks_installed", [])
+            assert hooks, "adapter-rendered grok-build hooks must be reported"
+            assert any("vibesop-route" in str(h) for h in hooks)
+            assert installer._is_configured(config_dir)
 
     def test_install_unknown_platform(self) -> None:
         """Test installing for unknown platform."""
@@ -167,6 +185,26 @@ class TestVibeSOPInstaller:
 
             # Now configured
             assert installer._is_configured(config_dir)
+
+    def test_host_native_config_is_not_vibesop_configured(self) -> None:
+        """Stock host configs must not skip VibeSOP hook deploy.
+
+        Kimi/Grok ship config.toml; Pi ships settings.json. Those files
+        are not VibeSOP markers (docs/dev/platform-invariants.md).
+        """
+        installer = VibeSOPInstaller()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir)
+            (config_dir / "config.toml").write_text('[cli]\ninstaller = "npm"\n', encoding="utf-8")
+            (config_dir / "settings.json").write_text("{}", encoding="utf-8")
+            assert not installer._is_configured(config_dir, "grok-build")
+            assert not installer._is_configured(config_dir, "kimi-cli")
+            assert not installer._is_configured(config_dir, "pi")
+            (config_dir / "hooks").mkdir()
+            (config_dir / "hooks" / "vibesop-route.json").write_text("{}", encoding="utf-8")
+            assert installer._is_configured(config_dir, "grok-build")
+            (config_dir / "hooks" / "vibesop-route.sh").write_text("# hook\n", encoding="utf-8")
+            assert installer._is_configured(config_dir, "kimi-cli")
 
     def test_verify_config_files(self) -> None:
         """Test _verify_config_files method."""

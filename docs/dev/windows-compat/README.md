@@ -25,3 +25,9 @@ Design → adversarial review → implementation (P0 production bugs → P1 enco
 - `.vibe-copy-source` marker — pack discovery under copy-fallback
 - `tests/conftest.py` — `_isolated_home` autouse fixture (3-layer), `symlink_supported` probe fixture
 - `.github/workflows/ci.yml` — `test-windows` job (observation period, then required)
+
+## 2026-08-26 follow-up (v8.1.1)
+
+CI Windows green still does not prove host hooks work. Grok JSON hooks
+need `vibe` on the **user** PATH (`%USERPROFILE%\.local\bin`). See
+[platform-invariants.md](../platform-invariants.md).

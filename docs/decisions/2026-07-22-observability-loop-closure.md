@@ -2,7 +2,7 @@
 
 > **Status**: Draft (Phase A — Design)
 > **Author**: Claude (dynamic workflow: design → adversarial → external review → grill-me)
-> **Predecessor**: v8.1.0 "Observability closed-loop" (2026-07-21) — built all parts, did not wire them
+> **Predecessor**: 8.1.0 "Observability closed-loop" (2026-07-21) — built all parts, did not wire them
 > **Supersedes**: None (clarifies & completes v8.1)
 
 ---

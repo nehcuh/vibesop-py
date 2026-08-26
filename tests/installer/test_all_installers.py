@@ -89,6 +89,7 @@ class TestQuickstartRunner:
 
         assert "claude-code" in runner._supported_platforms  # type: ignore[attr-defined]
         assert "opencode" in runner._supported_platforms  # type: ignore[attr-defined]
+        assert "grok-build" in runner._supported_platforms  # type: ignore[attr-defined]
 
 
 class TestInstallerIntegration:

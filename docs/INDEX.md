@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.1.0
+> **Version**: 8.1.1
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 

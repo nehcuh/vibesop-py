@@ -278,6 +278,34 @@ Full write-up: `docs/decisions/2026-07-31-positioning-vs-llm-space.md`.
 
 **Files**: `src/vibesop/core/instinct/routing_pending.py`, `unified.py` `_maybe_enqueue_routing_pending`
 
+### Platform Registry Drift + Host-Native False Positives (2026-08-26)
+
+**Issue**: Grok quickstart/build looked installed but hooks could not run. Same class hits other platforms.
+
+**Root Cause** (not "forgot grok"):
+1. Platform identity is copied into 6+ registries (`SUPPORTED_PLATFORMS`, installer, renderer, `HOOK_DEFINITIONS`, `verify.PLATFORM_CONFIGS`, CLI help). They drift; tests assert `len >= 2` not set-equality.
+2. `_is_configured` is "any of these filenames exist" — host-native `config.toml` (Kimi, Grok) and `settings.json` (Pi) count as VibeSOP. Stock install → skip deploy.
+3. Docker e2e is Linux + `vibe` on PATH + empty tmp dirs. It cannot see Windows PATH, Git-Bash vs JSON-hook, or a real `~/.kimi-code/config.toml`.
+4. Shell hooks already prepend `$HOME/.local/bin` (Unix). Grok/Pi/OpenCode-plugin call bare `vibe` and inherited none of that lesson.
+
+**Invariant to test**: `installer == renderer == verify == HOOK_DEFINITIONS == SUPPORTED_PLATFORMS`. `_is_configured(platform)` must require a VibeSOP marker, not the host's own config file. One smoke: `vibe build X -o <tmpdir>` then `shutil.which("vibe")` + hook subprocess.
+
+**Files**: `installer.py`, `verify.py`, `hooks/points.py`, `builder/renderer.py`, `adapters/grok_build.py`
+
+### Docker e2e Green ≠ Windows Quickstart (2026-08-26)
+
+**Issue**: Project claimed container e2e coverage, but `vibe quickstart` on Windows (1) had no grok-build option, (2) dumped ruamel ScannerError tracebacks for datayes `agents/openai.yaml`, (3) printed "No hooks available" after a successful install, (4) WARNING-logged missing `sentence-transformers`.
+
+**Root Cause**:
+1. Quickstart hardcoded 4 platforms while installer/adapters already had grok-build.
+2. SkillLoader `rglob("*.yaml")` treated nested pack agent YAML as skills; `logger.warning(..., exc_info=True)` dumped through logging lastResort.
+3. Wizard called `installer.install()` twice; second hit `_is_configured` (which also didn't recognize grok `rules/routing.md`) and reported empty hooks.
+4. Optional `semantic` extra's ImportError was logged at WARNING.
+
+**Solution**: Derive wizard platforms from installer; skip `agents/` YAML + YAMLError at debug; report hooks from the first install (including adapter JSON files); ImportError → debug.
+
+**Files**: `quickstart_runner.py`, `quickstart.py`, `installer.py`, `loader.py`, `indexer.py`
+
 ### Dogfood Checklist: Reinstall CLI + Rebuild Platform Hooks
 
 After shipping vibe features that change CLI surface or hooks: (1) `uv tool install --reinstall --force .` from vibesop-py; (2) `vibe build claude-code -o <project>/.claude` and `vibe build grok-build -o <project>/.grok` (+ user homes if used); (3) restart agents; (4) verify in dogfood project (`cmspark`) with `vibe instinct stats/pending`. Version string may still say 8.1.0 while code is newer — trust command surface, not the banner.

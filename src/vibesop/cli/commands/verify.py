@@ -90,6 +90,17 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
             "prompts_dir": ".pi/prompts/ directory exists",
         },
     },
+    "grok-build": {
+        "name": "Grok Build",
+        "config_dir": Path.home() / ".grok",
+        "checks": {
+            "config_dir": "Configuration directory exists",
+            "rules_routing": "rules/routing.md exists",
+            "route_hook_json": "hooks/vibesop-route.json exists",
+            "tool_seq_hook_json": "hooks/vibesop-tool-seq.json exists",
+            "vibe_on_path": "vibe executable is on PATH",
+        },
+    },
 }
 
 console = Console()
@@ -97,7 +108,8 @@ console = Console()
 
 def verify(
     platform: str | None = typer.Argument(
-        None, help="Platform to verify (claude-code, kimi-cli, opencode, cursor, pi, all)"
+        None,
+        help="Platform to verify (claude-code, grok-build, kimi-cli, opencode, cursor, pi, all)",
     ),
     verbose: bool = typer.Option(
         False,
@@ -273,6 +285,32 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
                     result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
             else:
                 result["detail"] = "Script not found"
+
+        elif check_id == "rules_routing":
+            path = config_dir / "rules" / "routing.md"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "route_hook_json":
+            path = config_dir / "hooks" / "vibesop-route.json"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "tool_seq_hook_json":
+            path = config_dir / "hooks" / "vibesop-tool-seq.json"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "vibe_on_path":
+            vibe = shutil.which("vibe")
+            result["pass"] = vibe is not None
+            result["detail"] = vibe if vibe else "vibe not on PATH (uv tool bin missing from PATH)"
 
         results.append(result)
 

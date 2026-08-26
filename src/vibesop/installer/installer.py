@@ -2,7 +2,7 @@
 
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 
 class VibeSOPInstaller:
@@ -57,7 +57,7 @@ class VibeSOPInstaller:
             ).expanduser()
             result["config_dir"] = str(target_dir)
 
-            if not force and self._is_configured(target_dir):
+            if not force and self._is_configured(target_dir, platform):
                 result["warnings"].append(
                     f"Configuration already exists in {target_dir}. Use --force to overwrite."
                 )
@@ -94,6 +94,13 @@ class VibeSOPInstaller:
 
             installed_hooks = [name for name, status in hook_results.items() if status]
             failed_hooks = [name for name, status in hook_results.items() if not status]
+
+            # Adapter-rendered JSON hooks (grok-build) are not in HOOK_DEFINITIONS.
+            # Count files the renderer already wrote under hooks/.
+            if not installed_hooks:
+                installed_hooks = [
+                    Path(f).name for f in result["files_created"] if Path(f).parent.name == "hooks"
+                ]
 
             if installed_hooks:
                 result["hooks_installed"] = installed_hooks
@@ -188,7 +195,7 @@ class VibeSOPInstaller:
 
             target_dir = target_dir.expanduser()
 
-            if not self._is_configured(target_dir):
+            if not self._is_configured(target_dir, platform):
                 result["issues"].append(f"Not configured in {target_dir}")
                 return result
 
@@ -201,6 +208,12 @@ class VibeSOPInstaller:
 
             hook_installer = HookInstaller()
             result["hooks_installed"] = hook_installer.verify_hooks(platform, target_dir)
+            if not result["hooks_installed"] and platform == "grok-build":
+                hooks_dir = target_dir / "hooks"
+                result["hooks_installed"] = {
+                    name: (hooks_dir / name).is_file()
+                    for name in ("vibesop-route.json", "vibesop-tool-seq.json")
+                }
 
         except Exception as e:
             result["issues"].append(f"Verification failed: {e}")
@@ -220,9 +233,22 @@ class VibeSOPInstaller:
                 return path.resolve()
         return Path().resolve()
 
-    def _is_configured(self, config_dir: Path) -> bool:
+    # Host-native files (Kimi/Grok config.toml, Pi settings.json) are NOT
+    # VibeSOP. ``install()`` skips when this returns True — a false positive
+    # leaves hooks undeployed. See docs/dev/platform-invariants.md.
+    _VIBESOP_MARKERS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "claude-code": ("hooks/vibesop-route.sh",),
+        "kimi-cli": ("hooks/vibesop-route.sh",),
+        "opencode": ("hooks/vibesop-route.sh",),
+        "pi": ("extensions/vibesop-route.ts",),
+        "grok-build": ("hooks/vibesop-route.json", "rules/routing.md"),
+    }
+
+    def _is_configured(self, config_dir: Path, platform: str | None = None) -> bool:
         if not config_dir.exists():
             return False
+        if platform in self._VIBESOP_MARKERS:
+            return any((config_dir / marker).exists() for marker in self._VIBESOP_MARKERS[platform])
         return any(
             f.exists()
             for f in [
@@ -230,6 +256,9 @@ class VibeSOPInstaller:
                 config_dir / "config.yaml",
                 config_dir / "settings.json",
                 config_dir / "config.toml",
+                config_dir / "AGENTS.md",
+                config_dir / "rules" / "routing.md",
+                config_dir / "hooks" / "vibesop-route.json",
             ]
         )
 
@@ -253,5 +282,10 @@ class VibeSOPInstaller:
         elif platform == "pi":
             if not (config_dir / "AGENTS.md").exists():
                 issues.append("AGENTS.md not found")
+        elif platform == "grok-build":
+            if not (config_dir / "rules" / "routing.md").exists():
+                issues.append("rules/routing.md not found")
+            if not (config_dir / "hooks" / "vibesop-route.json").exists():
+                issues.append("hooks/vibesop-route.json not found")
 
         return issues

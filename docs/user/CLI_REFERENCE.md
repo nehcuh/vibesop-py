@@ -1025,7 +1025,7 @@ vibe skills distill <suggestion-id>
 
 ---
 
-#### `vibe skill scan-candidates` (v8.1.0)
+#### `vibe skill scan-candidates` (v8.1.0+)
 
 Cluster recent route spans → populate the skill-candidate pool. Clusters with
 `span_count >= --min-cluster-size` AND `gold_rate >= --min-gold-rate` become
@@ -1064,7 +1064,7 @@ vibe skill scan-candidates --dry-run
 
 ---
 
-#### `vibe skill candidates` (v8.1.0)
+#### `vibe skill candidates` (v8.1.0+)
 
 List pending skill candidates from the pool. Default: stable candidates sorted
 by `gold_rate` descending. Reads from BOTH the project store
@@ -1086,7 +1086,7 @@ vibe skill candidates [options]
 
 ---
 
-#### `vibe skill discover` (v8.1.0)
+#### `vibe skill discover` (v8.1.0+)
 
 Unified Discovery queue — one view over all skill candidates. The table shows
 each candidate's cluster ID (8-char prefix), evidence, and two M12 additions:
@@ -1129,7 +1129,7 @@ vibe skill discover [options] [command]
 
 ---
 
-#### `vibe skill discover dismiss` (v8.1.0)
+#### `vibe skill discover dismiss` (v8.1.0+)
 
 Dismiss a candidate into the sticky negative list
 (`discovery_dismissals.jsonl`: cluster fingerprint + reason + time). The
@@ -1166,7 +1166,7 @@ global 两个 scope 的镜像行一并翻转（只翻一边会让另一边下次
 
 ---
 
-#### `vibe skill promote` (v8.1.0)
+#### `vibe skill promote` (v8.1.0+)
 
 Promote a candidate → draft SKILL.md + flip status. The draft is written to
 `.vibe/observability/skill_drafts/<id>/` (project scope, default) or
@@ -1223,7 +1223,7 @@ vibe skill promote bd1bc217 --activate
 
 ---
 
-#### `vibe skill dismiss` (v8.1.0)
+#### `vibe skill dismiss` (v8.1.0+)
 
 Dismiss a candidate with an optional reason. Status is sticky (the candidate
 stays dismissed across rescans). Distinct from `vibe skill discover dismiss`
@@ -1418,7 +1418,7 @@ vibe workflows match skill-a skill-b
 
 ## Autonomous Loops
 
-### `vibe loop` (v8.1.0)
+### `vibe loop` (v8.1.0+)
 
 Manage autonomous scheduled loops — recurring execution of a skill query or
 vibe subcommand on a cron schedule. VibeSOP ships no long-running daemon: an
@@ -1470,7 +1470,7 @@ are legitimate. Only `list` and bare `tick` filter by ownership.
 
 ---
 
-#### `vibe loop create` (v8.1.0)
+#### `vibe loop create` (v8.1.0+)
 
 Create a new scheduled loop. Exactly one execution target is required:
 `--skill` / `--query` / `--workflow` / `--command`, or `--preset` to load a
@@ -1514,7 +1514,7 @@ vibe loop create journal --query "summarise today's notes" --global
 
 ---
 
-#### `vibe loop list` (v8.1.0)
+#### `vibe loop list` (v8.1.0+)
 
 List loops. **Default: only loops owned by the current project** (unscoped
 loops plus loops whose `project_root` contains the current directory). Loops
@@ -1530,7 +1530,7 @@ vibe loop list [options]
 
 ---
 
-#### `vibe loop show` (v8.1.0)
+#### `vibe loop show` (v8.1.0+)
 
 Show loop details and recent run history, including the `Project` line
 (owning root or `(global)`).
@@ -1541,7 +1541,7 @@ vibe loop show <name>
 
 ---
 
-#### `vibe loop pause` / `resume` / `reset` (v8.1.0)
+#### `vibe loop pause` / `resume` / `reset` (v8.1.0+)
 
 Status lifecycle:
 
@@ -1557,7 +1557,7 @@ failure: `vibe loop adopt <name>` then `vibe loop reset <name>`.
 
 ---
 
-#### `vibe loop delete` (v8.1.0)
+#### `vibe loop delete` (v8.1.0+)
 
 Delete a loop — irreversible; spec, state, and all run history are removed.
 On macOS, a registered launchd plist is booted out and removed first
@@ -1573,7 +1573,7 @@ vibe loop delete <name> [--force]
 
 ---
 
-#### `vibe loop adopt` (v8.1.0)
+#### `vibe loop adopt` (v8.1.0+)
 
 Pin a loop's project ownership to the current directory (cwd). Untrusted cwd
 (no `.git/` or `pyproject.toml`) warns but proceeds — confirm the directory is
@@ -1585,7 +1585,7 @@ vibe loop adopt <name>
 
 ---
 
-#### `vibe loop migrate-ownership` (v8.1.0)
+#### `vibe loop migrate-ownership` (v8.1.0+)
 
 Backfill project ownership for legacy loops from launchd plists (macOS only).
 Reads the `WorkingDirectory` of `~/Library/LaunchAgents/com.vibesop.loop.*.plist`
@@ -1605,7 +1605,7 @@ vibe loop migrate-ownership [--dry-run] [--yes]
 
 ---
 
-#### `vibe loop tick` (v8.1.0)
+#### `vibe loop tick` (v8.1.0+)
 
 Execute one polling cycle: check the cron of every eligible (ACTIVE/FAILING)
 loop and run those due this minute. This is the command external schedulers
@@ -1642,7 +1642,7 @@ vibe loop tick --name ci-watcher
 
 ---
 
-#### `vibe loop install-launchd` (v8.1.0)
+#### `vibe loop install-launchd` (v8.1.0+)
 
 Generate a launchd plist and register it under `~/Library/LaunchAgents/`
 (macOS only). The plist invokes `vibe loop tick --name <name>` with the
@@ -1671,7 +1671,7 @@ vibe loop install-launchd <name> [options]
 
 ---
 
-#### `vibe loop uninstall-launchd` (v8.1.0)
+#### `vibe loop uninstall-launchd` (v8.1.0+)
 
 Unregister a loop from launchd (`launchctl bootout`) and delete the plist.
 Idempotent — succeeds even if the loop was never registered.

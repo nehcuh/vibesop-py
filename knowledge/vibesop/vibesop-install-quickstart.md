@@ -86,7 +86,9 @@ vibe build kimi-cli --output ~/.kimi-code
 vibe build pi --output .pi
 ```
 
-部署后在 Agent 里自然说话即可，hook 会在 UserPromptSubmit 时自动路由并注入技能指令。`vibe doctor` 可随时检查各平台配置健康度。
+部署后在 Agent 里自然说话即可，hook 会在 UserPromptSubmit 时自动路由并注入技能指令。`vibe doctor` / `vibe verify grok-build` 可检查配置健康度。
+
+**Windows + Grok/Pi**：`uv tool install` 把 `vibe.exe` 放到 `%USERPROFILE%\.local\bin`。该目录必须在**用户 PATH** 里，改完后重启 Grok（JSON hook 裸调 `vibe`，没有 bash 的 PATH 修补）。不要把 Kimi/Grok 自带的 `config.toml` 或 Pi 的 `settings.json` 当成已经装好 VibeSOP。
 
 ## 常见初次问题
 

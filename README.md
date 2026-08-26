@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.1.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.1.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -71,6 +71,37 @@ VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周
 
 ## ⚡ 快速开始
 
+### 5 分钟快速安装
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/nehcuh/vibesop-py.git
+cd vibesop-py
+
+# 2. 构建
+uv build
+
+# 3. 全局安装（Windows：把 %USERPROFILE%\.local\bin 加入用户 PATH）
+uv tool install .
+
+# 4. 配置平台（Grok Build / Claude Code）
+vibe build grok-build --output ~/.grok
+# vibe build claude-code --output ~/.claude
+
+# 5. 配置 API Key（选择一个）
+# Claude
+export ANTHROPIC_API_KEY="sk-ant-..."
+# 或 OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# 6. 重启 AI Agent，然后测试
+vibe route "帮我调试代码"
+```
+
+✅ **完成！** VibeSOP 现在已全局可用，支持 90+ 技能智能路由。
+
+---
+
 ### 🚀 一键安装技能（核心特性）
 
 **从 8 个手动步骤 → 1 条命令，98% 时间节省！**
@@ -101,6 +132,28 @@ vibe route "帮我获取茅台最近一年的股价"
 
 ### 安装 VibeSOP
 
+**方式一：全局安装（推荐）** - 在任何项目中使用 VibeSOP
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/nehcuh/vibesop-py.git
+cd vibesop-py
+
+# 2. Build wheel
+uv build
+
+# 3. Install as global tool
+uv tool install .
+
+# 4. 验证安装
+vibe --version
+
+# 5. 部署到你的 AI Agent 平台（以 Claude Code 为例）
+vibe build claude-code --output ~/.claude
+```
+
+**方式二：项目级安装** - 仅在当前项目中使用
+
 ```bash
 # Clone the repository
 git clone https://github.com/nehcuh/vibesop-py.git
@@ -108,9 +161,27 @@ cd vibesop-py
 
 # Install with uv (recommended - 10-100x faster than pip)
 uv sync
+
+# 激活虚拟环境后，使用 uv run vibe 命令
+source .venv/bin/activate  # Linux/Mac
+# 或
+.venv\Scripts\activate     # Windows
 ```
 
 ### 第一次使用
+
+**1. 验证安装**
+
+```bash
+# 检查版本
+vibe --version
+# 输出: VibeSOP v8.1.1
+
+# 检查环境
+vibe doctor
+```
+
+**2. 测试路由**
 
 ```bash
 # Single intent - routes to best skill
@@ -149,20 +220,79 @@ Plan:
 
 **就这么简单！** VibeSOP 理解你的意图——无论是单一任务还是复杂多步骤请求。
 
-> **⚠️ Important: VibeSOP requires its own LLM configuration**
->
-> VibeSOP runs as a CLI subprocess and **cannot reuse the host Agent's internal LLM** (e.g., OpenCode or Claude Code's session model). You must configure a separate LLM API key or local Ollama service for VibeSOP. Without LLM, VibeSOP uses keyword/TF-IDF matching only, and long queries may fail to match any skill.
->
-> ```bash
-> # Anthropic Claude (recommended)
-> export ANTHROPIC_API_KEY="sk-ant-..."
-> # or OpenAI
-> export OPENAI_API_KEY="sk-..."
-> # or local Ollama (zero cost, no data leaving your machine)
-> export VIBE_LLM_PROVIDER=ollama
-> export OLLAMA_BASE_URL=http://localhost:11434/v1
-> export OLLAMA_MODEL=qwen3:35b-a3b-mlx
-> ```
+---
+
+### 配置 AI Agent 平台
+
+安装完成后，需要部署配置到你的 AI Agent。VibeSOP 支持以下平台：
+
+| 平台 | 命令 |
+|------|------|
+| **Claude Code** | `vibe build claude-code --output ~/.claude` |
+| **Grok Build** | `vibe build grok-build --output ~/.grok` |
+| **Kimi CLI** | `vibe build kimi-cli --output ~/.kimi-code` |
+| **Pi Agent** | `vibe build pi --output .pi` |
+| **OpenCode** | `vibe build opencode --output ~/.config/opencode` |
+| **Cursor** | `vibe build cursor --output ~/.cursor` |
+
+```bash
+# 示例：为 Claude Code 配置
+vibe build claude-code --output ~/.claude
+
+# 输出示例：
+# ✓ Build complete!
+# Files created:
+#   📄 ~/.claude/CLAUDE.md
+#   📄 ~/.claude/rules/behaviors.md
+#   📄 ~/.claude/hooks/vibesop-route.sh
+#   📄 ~/.claude/skills/...
+#
+# Restart Claude Code to apply changes.
+```
+
+> **重要**: 部署完成后，**重启你的 AI Agent** 才能生效。
+
+---
+
+## 配置 LLM API
+
+VibeSOP 需要自己的 LLM 配置（无法复用 Agent 的内部 LLM）：
+
+**Linux / macOS:**
+```bash
+# Anthropic Claude（推荐）
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# 或 OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# 或本地 Ollama（零成本，数据不出机器）
+export VIBE_LLM_PROVIDER=ollama
+export OLLAMA_BASE_URL=http://localhost:11434/v1
+export OLLAMA_MODEL=qwen3:35b-a3b-mlx
+
+# 持久化（添加到 ~/.bashrc 或 ~/.zshrc）
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+```
+
+**Windows:**
+```cmd
+# 临时设置（当前会话）
+set ANTHROPIC_API_KEY=sk-ant-...
+set OPENAI_API_KEY=sk-...
+
+# 永久设置（系统环境变量）
+setx ANTHROPIC_API_KEY "sk-ant-..."
+setx OPENAI_API_KEY "sk-..."
+
+# 或通过 PowerShell
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', 'sk-ant-...', 'User')
+```
+
+> **提示**: 在 PowerShell 中，环境变量设置仅对当前进程生效。使用 GUI 方式可永久设置：
+> - Windows 设置 → 系统 → 关于 → 高级系统设置 → 环境变量
+> - 添加用户变量 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY`
 
 ---
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import builtins
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from vibesop.installer.quickstart_runner import QuickstartConfig, QuickstartRunner
 
@@ -18,11 +18,20 @@ class TestQuickstartRunner:
         assert runner is not None
         assert "claude-code" in runner._supported_platforms
         assert "opencode" in runner._supported_platforms
+        assert "grok-build" in runner._supported_platforms
 
     def test_supported_platforms(self) -> None:
         """Test that supported platforms are defined."""
         runner = QuickstartRunner()
         assert len(runner._supported_platforms) >= 2
+        assert "grok-build" in runner._supported_platforms
+        assert set(runner._supported_platforms) >= {
+            "claude-code",
+            "kimi-cli",
+            "opencode",
+            "pi",
+            "grok-build",
+        }
 
     def test_available_integrations_excludes_gstack(self) -> None:
         """gstack is deliberately excluded from default quickstart installs.
@@ -130,6 +139,31 @@ class TestQuickstartRunner:
         )
         runner._show_next_steps(config)  # Should not raise
 
+    def test_show_next_steps_grok_build(self, capsys) -> None:
+        """Global grok-build next steps must point at ~/.grok, not ~/.claude."""
+        runner = QuickstartRunner()
+        config = QuickstartConfig(
+            platform="grok-build",
+            install_integrations=True,
+            install_hooks=True,
+            project_path=Path.home(),
+            global_install=True,
+        )
+        runner._show_next_steps(config)
+        captured = capsys.readouterr()
+        assert "grok-build" in captured.out
+        assert "~/.grok" in captured.out
+
+    def test_run_uses_provided_platform(self, tmp_path: Path) -> None:
+        """Passing platform= skips the interactive platform prompt."""
+        runner = QuickstartRunner()
+        # Global install type, then cancel at confirm — no platform prompt.
+        with patch.object(builtins, "input", side_effect=["1", "n"]):
+            result = runner.run(project_path=tmp_path, platform="grok-build")
+        assert result["config"] is not None
+        assert result["config"].platform == "grok-build"
+        assert result["success"] is False
+
     def test_show_next_steps_project(self) -> None:
         """Test _show_next_steps for project install."""
         runner = QuickstartRunner()
@@ -178,3 +212,48 @@ class TestQuickstartRunner:
         )
         success = runner._execute_installation(config)
         assert success is True
+
+    def test_execute_installation_reports_hooks_from_single_install(self, tmp_path: Path) -> None:
+        """Hooks come from the first installer.install() call — do not reinstall.
+
+        Repro: quickstart called install() twice; the second hit _is_configured
+        and returned no hooks_installed, so the wizard printed
+        "No hooks available for this platform" even for claude-code/grok-build.
+        """
+        runner = QuickstartRunner()
+        config = QuickstartConfig(
+            platform="grok-build",
+            install_integrations=False,
+            install_hooks=True,
+            project_path=tmp_path,
+            global_install=True,
+        )
+        mock_installer = MagicMock()
+        mock_installer.install.return_value = {
+            "success": True,
+            "hooks_installed": ["vibesop-route.json"],
+            "files_created": [str(tmp_path / "hooks" / "vibesop-route.json")],
+            "errors": [],
+        }
+        mock_installer._platforms = {
+            "grok-build": {"config_dir": tmp_path},
+        }
+        mock_indexer = MagicMock()
+        mock_indexer.global_index_path.exists.return_value = True
+        mock_indexer.build_index.return_value = MagicMock(success=True)
+
+        with (
+            patch("vibesop.installer.init_support._ensure_global_config"),
+            patch(
+                "vibesop.installer.quickstart_runner.VibeSOPInstaller",
+                return_value=mock_installer,
+            ),
+            patch(
+                "vibesop.core.skills.indexer.SkillIndexer",
+                return_value=mock_indexer,
+            ),
+        ):
+            success = runner._execute_installation(config)
+
+        assert success is True
+        assert mock_installer.install.call_count == 1

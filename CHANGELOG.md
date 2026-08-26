@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.1] — 2026-08-26
+
+### Windows `vibe quickstart` + Grok Build 宿主部署
+
+Docker e2e 绿并不能覆盖 Windows 上的安装向导和真实宿主目录。
+
+- **grok-build 进入向导**：平台列表从 `VibeSOPInstaller` 派生；
+  `vibe quickstart --platform grok-build` 生效；next steps 指向 `~/.grok`。
+- **YAML traceback**：loader 跳过 `agents/` 等非技能目录；`YAMLError`
+  只记 debug，不再 `exc_info=True` dump 堆栈（datayes `openai.yaml`）。
+- **假 "No hooks available"**：quickstart 不再二次 `install()`；grok-build
+  JSON hook 从 adapter 写出的 `hooks/` 计入 `hooks_installed`。
+- **sentence-transformers**：缺 `semantic` extra 时 ImportError 走 debug。
+- **Grok 宿主部署**：`vibe build grok-build --output ~/.grok` 写出
+  `rules/routing.md` + JSON hooks；`vibe verify grok-build` 可检查；
+  UserPromptSubmit 去掉空 matcher、timeout 30s。
+- **`vibe` 必须在 PATH**：`uv tool` 装到 `~/.local/bin`。JSON hook / Pi /
+  OpenCode 插件裸调 `vibe`，不会走 bash 模板里的 Unix PATH 修补。
+- **「已安装」只认 VibeSOP 标记**：宿主原生 `config.toml`（Kimi/Grok）
+  和 `settings.json`（Pi）不再让 `_is_configured` 假阳性而跳过部署。
+
+### 测试/验证教训（必须记住）
+
+见 `docs/dev/platform-invariants.md`。核心：Docker 绿 ≠ 宿主 hook 能跑；
+平台名单禁止 `len >= 2`；`_is_configured` 禁止把宿主自己的配置文件当
+VibeSOP 已安装。
+
 ### gate44：Windows 兼容存量清零（409F→0）+ Windows job 转正（2026-08-25）
 
 按 `.omx/artifacts/gate44-synthesis.md` v2.1 终稿实施（三路评审 +
