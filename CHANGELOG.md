@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Claude Code Windows hook command**: wrapping
+  `"C:/Program Files/Git/bin/bash.exe"` still failed — Git Bash `-c` splits
+  on the space (`C:/Program: No such file`, exit 127). Emit a quoted POSIX
+  script path only (host already provides bash). `vibe verify claude-code`
+  now rejects backslash paths and Git-bash.exe wrappers.
+
 ## [8.1.1] — 2026-08-26
 
 ### Windows `vibe quickstart` + Grok Build 宿主部署

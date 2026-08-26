@@ -1,6 +1,13 @@
 
 ## Current Session
 
+### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook 二次失败
+
+- 中断点：S47 后 `efcd0cf` 把 command 改成 `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"`。用户仍报 `bash: C:UsersHuChen.claudehooks/vibesop-route.sh`
+- 复现：旧反斜杠形式 = 用户原错误 exit 127；Git-bash.exe 包装 = `C:/Program: No such file` exit 127（`bash -c` 空格拆开）
+- 脚本本身 `bash /c/Users/.../vibesop-route.sh` 能跑。Windows command 改为带引号 POSIX 路径，不包 bash.exe
+- Next: rebuild `~/.claude`；`vibe verify claude-code`；用户重启 Claude Code
+
 ### S47 (2026-08-26) [vibesop-py] session-end — v8.1.1 收工
 - Windows 上修完 quickstart/YAML/hooks 假阳性，实测配置 Grok Build（PATH + JSON hook + verify），教训写入 `docs/dev/platform-invariants.md`，版本 8.1.1 已 push `8af7546`
 - 不变量：平台名单 set 相等；`_is_configured` 只认 VibeSOP 标记；spawn-`vibe` 的 hook 必须能在用户 PATH 上找到二进制
@@ -9,6 +16,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
+- **Claude Code Windows hook**（active）— `bash_hook_command` 改为 quoted POSIX path。next_action: rebuild `~/.claude` + 重启 Claude Code 验证 UserPromptSubmit。updated: 2026-08-26
 - **Grok 真实会话 probe**（active）— hooks 已部署到 `~/.grok`，用户 PATH 已加 `~\.local\bin`。next_action: 重启 Grok 后开真实会话，确认 `/hooks` 加载 + route 注入。updated: 2026-08-26
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 

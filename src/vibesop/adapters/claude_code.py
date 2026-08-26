@@ -7,7 +7,6 @@ template infrastructure with the hook-based adapter reference pattern.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,38 +21,43 @@ _MIRROR_PROMPT_HOOK_MARKER = "vibesop-mirror-prompt.sh"
 
 
 def bash_hook_command(script: Path) -> str:
-    """Build a ``bash <script>`` hook command that survives Windows.
+    """Build a hook ``command`` that survives Windows Git Bash.
 
-    Claude Code stores ``command`` as a string and runs it via ``bash``.
-    Unquoted backslashes are eaten (``C:\\Users\\HuChen\\.claude\\hooks/x.sh``
-    becomes ``C:UsersHuChen.claudehooks/x.sh``, exit 127). Prefer Git Bash
-    over ``System32\\bash.exe`` (WSL stub with no distro).
+    Claude Code runs ``command`` via Git Bash ``-c``. Two wrappers fail:
+
+    * Unquoted backslashes are eaten (``C:\\Users\\...\\x.sh`` becomes
+      ``C:Users...x.sh``, exit 127).
+    * Wrapping ``C:/Program Files/Git/bin/bash.exe`` splits on the space
+      (``C:/Program: No such file``, exit 127). Prefixing ``bash `` also
+      double-wraps if the host prepends bash for ``.sh`` files.
+
+    Unix keeps ``bash <posix-path>``. Windows emits a quoted POSIX path
+    only — the host already provides bash.
     """
     script_posix = Path(script).resolve().as_posix()
     if sys.platform != "win32":
         return f"bash {script_posix}"
+    return f'"{script_posix}"'
 
-    def _win_env(name: str, default: str) -> str:
-        target = name.upper()
-        for key, val in os.environ.items():
-            if key.upper() == target and val:
-                return val
-        return default
 
-    program_files = Path(_win_env("PROGRAMFILES", r"C:\Program Files"))
-    program_files_x86 = Path(_win_env("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
-    candidates = (
-        program_files / "Git" / "bin" / "bash.exe",
-        program_files_x86 / "Git" / "bin" / "bash.exe",
-        Path.home() / "AppData" / "Local" / "Programs" / "Git" / "bin" / "bash.exe",
-    )
-    bash = next((p for p in candidates if p.is_file()), None)
-    bash_posix = bash.resolve().as_posix() if bash is not None else "bash"
-    return f'"{bash_posix}" "{script_posix}"'
+def _hook_script_from_command(cmd: str) -> Path | None:
+    """Extract the ``.sh`` path from a hook command string."""
+    stripped = cmd.strip().strip("'").strip('"')
+    idx = stripped.lower().rfind(".sh")
+    if idx < 0:
+        return None
+    end = idx + 3
+    start = idx
+    while start > 0 and stripped[start - 1] not in " \t\"'":
+        start -= 1
+    raw = stripped[start:end].replace("\\", "/")
+    if not raw:
+        return None
+    return Path(raw)
 
 
 def _rewrite_legacy_hook_entry(entry: Any) -> Any:
-    """Upgrade preserved ``bash C:\\...`` commands to Git-Bash-safe form."""
+    """Upgrade preserved hook commands to the current Git-Bash-safe form."""
     if not isinstance(entry, dict):
         return entry
     hooks = entry.get("hooks")
@@ -66,11 +70,12 @@ def _rewrite_legacy_hook_entry(entry: Any) -> Any:
             continue
         cmd = item.get("command")
         upgraded = item
-        if isinstance(cmd, str) and "\\" in cmd:
-            stripped = cmd.strip()
-            if stripped.lower().startswith("bash "):
-                rest = stripped[5:].strip().strip('"')
-                upgraded = {**item, "command": bash_hook_command(Path(rest))}
+        if isinstance(cmd, str):
+            script = _hook_script_from_command(cmd)
+            if script is not None:
+                new_cmd = bash_hook_command(script)
+                if new_cmd != cmd:
+                    upgraded = {**item, "command": new_cmd}
         rewritten.append(upgraded)
     return {**entry, "hooks": rewritten}
 

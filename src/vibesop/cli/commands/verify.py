@@ -19,6 +19,7 @@ Examples:
     vibe verify --verbose
 """
 
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -39,6 +40,7 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
             "rules_dir": "rules/ directory exists",
             "route_hook": "hooks/vibesop-route.sh exists",
             "route_hook_executable": "vibesop-route.sh is executable",
+            "route_hook_command": "settings.json hook commands are Git-Bash-safe",
             "track_hook": "hooks/vibesop-track.sh exists",
         },
     },
@@ -102,6 +104,43 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+def collect_settings_hook_commands(settings: dict[str, Any]) -> list[str]:
+    """Return every ``hooks.*.hooks[].command`` string from settings.json."""
+    commands: list[str] = []
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return commands
+    for entries in hooks.values():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            items = entry.get("hooks")
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, dict):
+                    cmd = item.get("command")
+                    if isinstance(cmd, str):
+                        commands.append(cmd)
+    return commands
+
+
+def unsafe_windows_hook_command_reason(command: str) -> str | None:
+    """Why a Claude Code hook command will fail under Git Bash ``-c``.
+
+    Returns None when the command is safe (quoted POSIX path, no wrapper).
+    """
+    if "\\" in command:
+        return "backslash in command (Git Bash eats \\ )"
+    lowered = command.lower()
+    if "program files" in lowered or "bash.exe" in lowered:
+        return "Git bash.exe wrapper (Program Files splits under bash -c)"
+    return None
+
 
 console = Console()
 
@@ -207,6 +246,39 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
                     result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
             else:
                 result["detail"] = "Script not found"
+
+        elif check_id == "route_hook_command":
+            path = config_dir / "settings.json"
+            if not path.exists():
+                result["detail"] = f"Missing: {path}"
+            else:
+                try:
+                    settings = json.loads(path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError) as exc:
+                    result["detail"] = f"Unreadable settings.json: {exc}"
+                else:
+                    if not isinstance(settings, dict):
+                        result["detail"] = "settings.json is not an object"
+                    else:
+                        cmds = collect_settings_hook_commands(settings)
+                        route_cmds = [c for c in cmds if "vibesop-route.sh" in c]
+                        unsafe = next(
+                            (
+                                f"{unsafe_windows_hook_command_reason(c)}: {c[:80]}"
+                                for c in cmds
+                                if unsafe_windows_hook_command_reason(c)
+                            ),
+                            None,
+                        )
+                        if not route_cmds:
+                            result["detail"] = "no vibesop-route.sh command in settings.json"
+                        elif unsafe:
+                            result["detail"] = unsafe
+                        else:
+                            result["pass"] = True
+                            result["detail"] = (
+                                f"{len(cmds)} hook command(s), POSIX paths, no bash.exe wrapper"
+                            )
 
         elif check_id == "track_hook":
             path = config_dir / "hooks" / "vibesop-track.sh"

@@ -8,12 +8,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from vibesop.adapters.claude_code import ClaudeCodeAdapter, bash_hook_command
+from vibesop.adapters.claude_code import (
+    ClaudeCodeAdapter,
+    _hook_script_from_command,
+    _rewrite_legacy_hook_entry,
+    bash_hook_command,
+)
 from vibesop.adapters.models import Manifest
 
 
 class TestBashHookCommand:
-    """Windows backslash paths must not be handed to bash unquoted."""
+    """Windows hook commands must be quoted POSIX paths, not bash wrappers."""
 
     def test_posix_path_is_unquoted_bash(self, tmp_path: Path, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "linux")
@@ -25,21 +30,59 @@ class TestBashHookCommand:
         assert "\\" not in cmd
         assert cmd.endswith("vibesop-route.sh")
 
-    def test_windows_command_has_no_raw_backslashes(self, tmp_path: Path, monkeypatch) -> None:
+    def test_windows_command_is_quoted_posix_without_bash_wrapper(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
         script = tmp_path / "hooks" / "vibesop-route.sh"
         script.parent.mkdir()
         script.write_text("#!/bin/bash\n", encoding="utf-8")
-        git_bash = tmp_path / "Git" / "bin" / "bash.exe"
-        git_bash.parent.mkdir(parents=True)
-        git_bash.write_text("", encoding="utf-8")
-        monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
-        monkeypatch.setenv("ProgramFiles", str(tmp_path))
         cmd = bash_hook_command(script)
         assert "\\" not in cmd
-        assert '"' in cmd
-        assert "vibesop-route.sh" in cmd
-        assert "bash.exe" in cmd
+        assert "Program Files" not in cmd
+        assert "bash.exe" not in cmd
+        assert cmd.startswith('"')
+        assert cmd.endswith('vibesop-route.sh"')
+        assert "/" in cmd
+
+
+class TestRewriteLegacyHookEntry:
+    """Rebuild must replace both backslash paths and Git-bash.exe wrappers."""
+
+    def test_extracts_script_from_backslash_bash_prefix(self) -> None:
+        script = _hook_script_from_command(r"bash C:\Users\HuChen\.claude\hooks/vibesop-route.sh")
+        assert script is not None
+        assert script.as_posix().endswith("hooks/vibesop-route.sh")
+
+    def test_extracts_script_from_git_bash_wrapper(self) -> None:
+        cmd = (
+            '"C:/Program Files/Git/bin/bash.exe" '
+            '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
+        script = _hook_script_from_command(cmd)
+        assert script is not None
+        assert script.as_posix().endswith("hooks/vibesop-mirror-prompt.sh")
+
+    def test_rewrites_git_bash_wrapper_on_windows(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = {
+            "matcher": "",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": (
+                        '"C:/Program Files/Git/bin/bash.exe" '
+                        '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
+                    ),
+                }
+            ],
+        }
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        cmd = rewritten["hooks"][0]["command"]
+        assert "bash.exe" not in cmd
+        assert "Program Files" not in cmd
+        assert "\\" not in cmd
+        assert cmd.endswith('vibesop-mirror-prompt.sh"')
 
 
 class TestClaudeCodeAdapter:
