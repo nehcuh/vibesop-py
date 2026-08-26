@@ -4,7 +4,11 @@ Refactored in v5.5.0 to inherit from HookBasedAdapter, sharing Jinja2
 template infrastructure with the hook-based adapter reference pattern.
 """
 
+from __future__ import annotations
+
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +19,60 @@ logger = logging.getLogger(__name__)
 
 _ROUTE_HOOK_MARKER = "vibesop-route.sh"
 _MIRROR_PROMPT_HOOK_MARKER = "vibesop-mirror-prompt.sh"
+
+
+def bash_hook_command(script: Path) -> str:
+    """Build a ``bash <script>`` hook command that survives Windows.
+
+    Claude Code stores ``command`` as a string and runs it via ``bash``.
+    Unquoted backslashes are eaten (``C:\\Users\\HuChen\\.claude\\hooks/x.sh``
+    becomes ``C:UsersHuChen.claudehooks/x.sh``, exit 127). Prefer Git Bash
+    over ``System32\\bash.exe`` (WSL stub with no distro).
+    """
+    script_posix = Path(script).resolve().as_posix()
+    if sys.platform != "win32":
+        return f"bash {script_posix}"
+
+    def _win_env(name: str, default: str) -> str:
+        target = name.upper()
+        for key, val in os.environ.items():
+            if key.upper() == target and val:
+                return val
+        return default
+
+    program_files = Path(_win_env("PROGRAMFILES", r"C:\Program Files"))
+    program_files_x86 = Path(_win_env("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+    candidates = (
+        program_files / "Git" / "bin" / "bash.exe",
+        program_files_x86 / "Git" / "bin" / "bash.exe",
+        Path.home() / "AppData" / "Local" / "Programs" / "Git" / "bin" / "bash.exe",
+    )
+    bash = next((p for p in candidates if p.is_file()), None)
+    bash_posix = bash.resolve().as_posix() if bash is not None else "bash"
+    return f'"{bash_posix}" "{script_posix}"'
+
+
+def _rewrite_legacy_hook_entry(entry: Any) -> Any:
+    """Upgrade preserved ``bash C:\\...`` commands to Git-Bash-safe form."""
+    if not isinstance(entry, dict):
+        return entry
+    hooks = entry.get("hooks")
+    if not isinstance(hooks, list):
+        return entry
+    rewritten: list[Any] = []
+    for item in hooks:
+        if not isinstance(item, dict):
+            rewritten.append(item)
+            continue
+        cmd = item.get("command")
+        upgraded = item
+        if isinstance(cmd, str) and "\\" in cmd:
+            stripped = cmd.strip()
+            if stripped.lower().startswith("bash "):
+                rest = stripped[5:].strip().strip('"')
+                upgraded = {**item, "command": bash_hook_command(Path(rest))}
+        rewritten.append(upgraded)
+    return {**entry, "hooks": rewritten}
 
 
 def _hook_entry_matches(entry: Any, marker: str) -> bool:
@@ -459,7 +517,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                         prompt_hooks = existing_hooks.get("UserPromptSubmit")
                         if isinstance(prompt_hooks, list):
                             preserved_prompt_hooks = [
-                                entry
+                                _rewrite_legacy_hook_entry(entry)
                                 for entry in prompt_hooks
                                 if not _hook_entry_matches(entry, _ROUTE_HOOK_MARKER)
                             ]
@@ -484,7 +542,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"bash {hooks_dir}/vibesop-route.sh",
+                            "command": bash_hook_command(hooks_dir / "vibesop-route.sh"),
                         }
                     ],
                 },
@@ -501,7 +559,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"bash {hooks_dir}/vibesop-tool-seq.sh",
+                            "command": bash_hook_command(hooks_dir / "vibesop-tool-seq.sh"),
                         }
                     ],
                 }
@@ -523,7 +581,9 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": f"bash {hooks_dir}/vibesop-mirror-prompt.sh",
+                                "command": bash_hook_command(
+                                    hooks_dir / "vibesop-mirror-prompt.sh"
+                                ),
                             }
                         ],
                     }
@@ -534,7 +594,9 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                     "hooks": [
                         {
                             "type": "command",
-                            "command": f"bash {hooks_dir}/vibesop-mirror-session-end.sh",
+                            "command": bash_hook_command(
+                                hooks_dir / "vibesop-mirror-session-end.sh"
+                            ),
                         }
                     ],
                 }

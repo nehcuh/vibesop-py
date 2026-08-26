@@ -8,8 +8,38 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from vibesop.adapters.claude_code import ClaudeCodeAdapter
+from vibesop.adapters.claude_code import ClaudeCodeAdapter, bash_hook_command
 from vibesop.adapters.models import Manifest
+
+
+class TestBashHookCommand:
+    """Windows backslash paths must not be handed to bash unquoted."""
+
+    def test_posix_path_is_unquoted_bash(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "linux")
+        script = tmp_path / "hooks" / "vibesop-route.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/bash\n", encoding="utf-8")
+        cmd = bash_hook_command(script)
+        assert cmd.startswith("bash ")
+        assert "\\" not in cmd
+        assert cmd.endswith("vibesop-route.sh")
+
+    def test_windows_command_has_no_raw_backslashes(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        script = tmp_path / "hooks" / "vibesop-route.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/bash\n", encoding="utf-8")
+        git_bash = tmp_path / "Git" / "bin" / "bash.exe"
+        git_bash.parent.mkdir(parents=True)
+        git_bash.write_text("", encoding="utf-8")
+        monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
+        monkeypatch.setenv("ProgramFiles", str(tmp_path))
+        cmd = bash_hook_command(script)
+        assert "\\" not in cmd
+        assert '"' in cmd
+        assert "vibesop-route.sh" in cmd
+        assert "bash.exe" in cmd
 
 
 class TestClaudeCodeAdapter:
