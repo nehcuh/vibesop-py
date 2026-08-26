@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checked `~/.local/share/uv/tools/vibesop/bin/python`. Also search
   `uv tool dir` / `%APPDATA%\uv\tools\...\Scripts\python.exe`, skip
   `WindowsApps` aliases.
+- **Docs**: `SessionStart:startup` Store-python errors are project/plugin
+  hooks (not `vibesop-route.sh` / UserPromptSubmit). See troubleshooting.
 
 ## [8.1.1] — 2026-08-26
 

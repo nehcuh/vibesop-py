@@ -74,6 +74,11 @@ uv run vibe build claude-code --output "$env:USERPROFILE\.claude"
 
 见 `docs/dev/platform-invariants.md` 不变量 6。
 
+VibeSOP 的 Claude Code 路由 hook 是 **UserPromptSubmit**（`vibesop-route.sh`），不是
+**SessionStart**。启动时出现 `SessionStart:startup hook error` 来自**项目或插件**
+自己注册的 hook（例如 `python -X utf8 …/case_ledger.py`），与 `vibe build
+claude-code` 无关。在该项目的 `.claude/settings.json` 里搜 `SessionStart`。
+
 ---
 
 ## 1. 路由不准确 / 找不到技能
