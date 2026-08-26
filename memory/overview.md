@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-24 (S42 — gate42 幻影 reask 治理 + CI 红灯清零 + v8.1.0 发布 PyPI/GitHub)
+**Last Updated**: 2026-08-26 (S47 — v8.1.1 Windows grok-build 宿主部署 + 平台不变量 push `8af7546`)
 
 ---
 
@@ -8,17 +8,13 @@
 
 ### Current Week (August 23-29, 2026)
 
-1. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
-   - 三路对抗设计+三轮三路评审定稿；gate35 队列可读性+展示层去噪；gate36 shadow verifier（PASS/WARN 永不阻断）
-   - 基线：pytest 6123 passed/14 skipped；e2e 68/68+7/7；文档同步清零（双 checker 0+0）
-2. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
-   - reask 触发面语义收窄（`not rs.is_cli` 两处）；三 lane 对抗+三路评审+确认轮；pytest 6324 passed；e2e 68/68+7/7
-   - CI 红灯清零（lint 24 + format 74 + launchd hermetic + p95 环境分级）；PyPI 8.1.0 + GitHub Release 落地
-3. **gate44 Windows 存量清零 + job 转正** ✅ (Completed - Aug 25, push `675a786`→`7af8959`)
-   - sibling 锁反模式 9 处清零 → Windows 409→0（CI 实证）；顺带修 infer_source 反斜杠 + 盘符冒号 2 产品 bug
-   - 项5 两段式转正：3 连绿后摘 continue-on-error + reruns-delay 1，Windows 现为 required gate（红灯堵发布链）
-   - cmspark 幽灵技能（injector 学 .vibe/skills）+ 回声技能（保留+改名+promote 警告）同日治理
-4. **grok 真实会话 probe**（等用户在 cmspark 用 grok）：tool_sequences 增长 + route spans 落盘 + 心跳三项验证
+1. **v8.1.1 Windows grok-build 宿主部署 + 平台不变量** ✅ (Completed - Aug 26, push `8af7546`)
+   - quickstart 纳入 grok-build；YAML 静默跳过；hooks 一次安装；`_is_configured` 只认 VibeSOP 标记
+   - 本机部署 `~/.grok/hooks` + User PATH `~\.local\bin`；`vibe verify grok-build` 5/5；教训 `docs/dev/platform-invariants.md`
+2. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
+3. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
+4. **gate44 Windows 存量清零 + job 转正** ✅ (Completed - Aug 25, push `675a786`→`7af8959`)
+5. **grok 真实会话 probe**（hooks 已部署，等重启 Grok + 真实会话）：tool_sequences 增长 + route spans 落盘 + `/hooks` 可见 vibesop-route.json
 5. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
 6. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
 7. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
@@ -116,16 +112,16 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.0.0.dev0 (Loop System Phase 1 + Observability v8.2 P1 + Conversation mirror；CI 全绿)
-**Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Kimi/Pi/Cursor/Zed）优化
-**Coverage**: ~4,633 tests passing，覆盖率 ~74%（门禁 73）
+**Status**: v8.1.1 (Windows grok-build 宿主部署 + 平台不变量；CI Windows 为 required gate)
+**Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
+**Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
-- CI: 6/6 jobs green (2026-07-18)
+- CI: Windows required + Ubuntu；release 复用 ci-gate
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
-- Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode, Cursor
+- Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
 
 **Recent Changes** (2026-07-18):
 - ✅ Fanout 六路诊断 → 全部问题收口：CI 转绿、release 管线修复（workflow_call）、pip-audit 全 extras 覆盖

@@ -193,6 +193,10 @@ with self._path.open("a") as f:
 
 ## Reusable Patterns
 
+### Spawn-`vibe` hooks inherit PATH the hard way (2026-08-26)
+
+Bash hook templates already prepend `$HOME/.local/bin`. Any **new** hook that is not bash (Grok JSON `command`, Pi/OpenCode `execSync("vibe ...")`) does **not** get that prefix. Lift the lesson: either bake an absolute `vibe` path at render time, or `vibe verify` must check `shutil.which("vibe")`, plus a stdin hook smoke on the real host. Docker e2e having `vibe` on PATH is not this check.
+
 ### Cross-process JSONL store pattern (append + atomic update) (2026-07-27)
 
 任何需要跨进程并发安全读写的 JSONL 持久层（spans / reflections / 未来的 DAG 节点），用同一套 pattern：
@@ -308,4 +312,4 @@ Full write-up: `docs/decisions/2026-07-31-positioning-vs-llm-space.md`.
 
 ### Dogfood Checklist: Reinstall CLI + Rebuild Platform Hooks
 
-After shipping vibe features that change CLI surface or hooks: (1) `uv tool install --reinstall --force .` from vibesop-py; (2) `vibe build claude-code -o <project>/.claude` and `vibe build grok-build -o <project>/.grok` (+ user homes if used); (3) restart agents; (4) verify in dogfood project (`cmspark`) with `vibe instinct stats/pending`. Version string may still say 8.1.0 while code is newer — trust command surface, not the banner.
+After shipping vibe features that change CLI surface or hooks: (1) `uv tool install --reinstall --force .` from vibesop-py; (2) `vibe build claude-code -o <project>/.claude` and `vibe build grok-build -o <project>/.grok` (+ user homes if used); (3) restart agents; (4) verify in dogfood project (`cmspark`) with `vibe instinct stats/pending`. Version string may still lag pyproject until `uv tool install --reinstall --force --no-cache .` — trust command surface, not the banner.

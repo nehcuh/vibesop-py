@@ -1,10 +1,23 @@
 
+## Current Session
+
+### S47 (2026-08-26) [vibesop-py] session-end — v8.1.1 收工
+- Windows 上修完 quickstart/YAML/hooks 假阳性，实测配置 Grok Build（PATH + JSON hook + verify），教训写入 `docs/dev/platform-invariants.md`，版本 8.1.1 已 push `8af7546`
+- 不变量：平台名单 set 相等；`_is_configured` 只认 VibeSOP 标记；spawn-`vibe` 的 hook 必须能在用户 PATH 上找到二进制
+- Next: 重启 Grok Build 后 `/hooks` 确认 vibesop-route.json；Kimi/Pi 假阳性代码已收口但未对真实 `~/.kimi-code` 再跑 `vibe build`；未打 `v8.1.1` tag（PyPI 另说）
+- Recorded: yes — pitfalls 已在 S44/S45 写入；本收工补 reusable pattern（非 bash hook 不继承 PATH 修补）
+
+## In-Flight Tasks (Cross-Session)
+
+- **Grok 真实会话 probe**（active）— hooks 已部署到 `~/.grok`，用户 PATH 已加 `~\.local\bin`。next_action: 重启 Grok 后开真实会话，确认 `/hooks` 加载 + route 注入。updated: 2026-08-26
+- **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
+
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
 
 - [x] 版本 8.1.0 → 8.1.1；CHANGELOG；`docs/dev/platform-invariants.md`
 - [x] `_is_configured` 按平台只认 VibeSOP 标记（Kimi/Pi 假阳性一并收口）
 - [x] `tests/cli/test_platform_registry_sync.py`：禁止 `len >= 2` 漏平台
-- [ ] push origin main
+- [x] push origin main (`8af7546`)
 
 ### S45 (2026-08-26) [vibesop-py] 实际配置 Grok Build 并跟踪
 

@@ -3,6 +3,26 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-26 S44–S47 [vibesop-py] v8.1.1 Windows grok-build 宿主部署 + 平台不变量
+
+**Session Summary**:
+- Windows 实测 `vibe quickstart`：向导无 grok-build、datayes `agents/openai.yaml` ScannerError 堆栈、二次 `install()` 报 No hooks、缺 sentence-transformers 打 WARNING
+- 修：向导从 installer 派生平台；YAML 跳过 `agents/` + YAMLError debug；hooks 用第一次 install 结果；ImportError debug；Grok JSON hook timeout 30s、去掉 UserPromptSubmit matcher
+- 本机部署 `vibe build grok-build --output ~/.grok`；User PATH 加入 `~\.local\bin`；`uv tool install --reinstall --force --no-cache .`；`vibe verify grok-build` 5/5；doctor grok-build 2/2
+- `_is_configured` 只认 VibeSOP 标记（Kimi/Pi 宿主 config.toml/settings.json 不再假阳性）；`docs/dev/platform-invariants.md` + registry set 测试
+- 版本 8.1.1 push `8af7546`（未打 tag / 未发 PyPI）
+
+**Key Decisions**:
+- Docker e2e 绿 ≠ 宿主 hook 能跑；平台名单禁止 `len >= 2`
+- 「已安装」= `vibesop-route.*`（或 grok `rules/routing.md`），不是宿主自己的配置文件
+- bash hook 的 PATH 修补不自动传给 JSON/Node/TS spawn-`vibe`
+
+**Next Steps**:
+1. 重启 Grok Build，`/hooks` 确认 vibesop-route.json / tool-seq.json
+2. 可选：对真实 `~/.kimi-code` 跑 `vibe build kimi-cli`（假阳性已修，hooks 目录仍空）
+3. 若要 PyPI：打 `v8.1.1` tag（会走发布管线）
+4. 挂账：cursor 未接线 installer/renderer；OpenCode 插件 timeout 5s 偏紧
+
 ### 2026-08-25 S43 [vibesop-py + cmspark] gate44 Windows 409→0 + job 转正 · cmspark 幽灵/回声技能治理 · 验收排程
 
 **Session Summary**:
@@ -22,20 +42,4 @@
 1. 三个 durable cron 到期自动跑验收（新增行判定必须 span_ts > cutover，勿用 recorded_at）；产物链 `.omx/artifacts/gate4*-t*-measure.md`
 2. gate43 T+7 FAIL 时按 synthesis 回滚条款（revert + 重 build）——cron 提示词已含，勿自行执行
 3. 挂账：cursor 死 `_render_route_hook`（gate43 §1.2，独立工作）；understander 黑洞正则生成器（死配置，若未来接通消费者须先修）
-
-### 2026-08-24 S42 [vibesop-py + cmspark] gate42 幻影 reask 治理 + CI 红灯清零 + 8.1.0 发布
-
-**Session Summary**:
-- gate42：vibe-cli 自路由 span 被误判为用户重问（cmspark 残余 reask 75% 幻影）→ bridge `_classify`/`_classify_hit` 两处 `later_same_task` 各加 `not rs.is_cli`（gate41 §6 预授权语义收窄）；三 lane 对抗完全收敛；三路评审+确认轮全 PASS
-- CI 红灯清零：lint 24 + ruff format 74 文件 → launchd uv 路径 hermetic mock + benchmark 重试 → p95 环境分级预算 CI 500µs/本地 100µs
-- 8.1.0 发布：PyPI + GitHub Release（147 commits；tag `18be788`）；cmspark rebuild dry-run 验收预审全过（硬闸 A CLI 触发=0 / 硬闸 B 0.93:1、0.23:1 / sanity 72.2%）
-
-**Key Decisions**:
-- 定性走 gate41 §6 授权链（语义收窄），不走"代码违背 docstring"叙事——三路评审一致打回后者
-- 绝对 µs 微基准在共享 runner 必假警 → 环境分级预算；`--reruns` 救不了系统性减速
-
-**Next Steps**:
-1. cmspark rebuild --apply（已完成于 8-24 晚）+ T+24h 早期检查（→ S43 已排程 cron）
-2. gate43：模板文案降级 + Windows fixture 修复（→ S43 已随 gate44 全部落地）
-3. 触发器：verdict ≥30 / M3 复检 / 留存池 2026-09-19 / P0-lite 观察期
 <!-- handoff:end -->
