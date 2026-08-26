@@ -2,6 +2,20 @@
 
 ## Technical Pitfalls
 
+### Wrapping `Git/bin/bash.exe` does not fix Claude Code Windows hooks (2026-08-26)
+
+**Issue**: UserPromptSubmit 报 `bash: C:UsersHuChen.claudehooks/vibesop-route.sh: No such file`（反斜杠被吃）。`efcd0cf` 改成 `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"` 后**仍然 127**：`C:/Program: No such file`。
+
+**Root Cause**: Claude Code 把 `command` 交给 Git Bash `bash -c`。宿主已经提供 bash。
+1. 反斜杠：`bash C:\Users\...` → MSYS 当转义吃掉。
+2. 包一层 `C:/Program Files/Git/bin/bash.exe`：`-c` 按空格拆词 → `C:/Program`。
+3. 若宿主对 `.sh` 再 prepend `bash `，`bash bash script` → cannot execute binary file。
+脚本本身 `bash /c/Users/.../x.sh` 能跑；settings.json 里的 command 字符串才是故障面。文件存在 / chmod 检查覆盖不到。
+
+**Solution**: Windows 只写带引号 POSIX 路径：`"C:/Users/.../hooks/vibesop-route.sh"`。Unix 保持 `bash <posix>`。`vibe verify claude-code` 拒绝 `\` 和 `bash.exe` / `Program Files`。烟雾测试必须是 `bash -c <settings.json 里那一整段 command>` + stdin JSON，不是直接 `bash script.sh`。
+
+**Files**: `adapters/claude_code.py` (`bash_hook_command`)、`cli/commands/verify.py` (`route_hook_command`)
+
 ### Run-level CI success swallows job-level failures under `continue-on-error` (2026-08-25)
 
 gate44 转正计数踩坑：run 32798482327（commit 3325200）run 级 conclusion=success，但
@@ -196,6 +210,10 @@ with self._path.open("a") as f:
 ### Spawn-`vibe` hooks inherit PATH the hard way (2026-08-26)
 
 Bash hook templates already prepend `$HOME/.local/bin`. Any **new** hook that is not bash (Grok JSON `command`, Pi/OpenCode `execSync("vibe ...")`) does **not** get that prefix. Lift the lesson: either bake an absolute `vibe` path at render time, or `vibe verify` must check `shutil.which("vibe")`, plus a stdin hook smoke on the real host. Docker e2e having `vibe` on PATH is not this check.
+
+### Smoke the host's exact hook argv, not a cousin invocation (2026-08-26)
+
+Adapter 写出 `command` 之后，用**宿主会用的那一种 spawn** 复现：Claude Code = Git Bash `bash -c <command 字符串>`。`bash script.sh`、PowerShell 直接跑、或包一层自发现的 `bash.exe`，都可能绿而宿主红。verify 要读 settings.json 的 command 文本（禁 `\`、禁 `Program Files/Git/bin/bash.exe`），不要只查 hook 文件在不在。
 
 ### Cross-process JSONL store pattern (append + atomic update) (2026-07-27)
 

@@ -1,12 +1,13 @@
 
 ## Current Session
 
-### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook 二次失败
+### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook — POSIX command 落地
 
-- 中断点：S47 后 `efcd0cf` 把 command 改成 `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"`。用户仍报 `bash: C:UsersHuChen.claudehooks/vibesop-route.sh`
-- 复现：旧反斜杠形式 = 用户原错误 exit 127；Git-bash.exe 包装 = `C:/Program: No such file` exit 127（`bash -c` 空格拆开）
-- 脚本本身 `bash /c/Users/.../vibesop-route.sh` 能跑。Windows command 改为带引号 POSIX 路径，不包 bash.exe
-- Next: rebuild `~/.claude`；`vibe verify claude-code`；用户重启 Claude Code
+- 中断续作：`efcd0cf` 的 Git-bash.exe 包装仍 127（`Program Files` 被 `bash -c` 拆开）。改为 quoted POSIX path；`vibe verify claude-code` 加 `route_hook_command`
+- 本机 rebuild `~/.claude`；4 条 hook command 无反斜杠/无 bash.exe；`bash -c` + stdin JSON exit 0；verify 8/8 PASS
+- push `e467519`
+- Next: 用户必须重启 Claude Code 才能吃到新 command；Grok 本会话 shell PATH 仍缺 `~\.local\bin`（User PATH 已有），JSON hook 可能 fail-open
+- Recorded: yes — pitfall + smoke-the-exact-argv pattern → project-knowledge.md
 
 ### S47 (2026-08-26) [vibesop-py] session-end — v8.1.1 收工
 - Windows 上修完 quickstart/YAML/hooks 假阳性，实测配置 Grok Build（PATH + JSON hook + verify），教训写入 `docs/dev/platform-invariants.md`，版本 8.1.1 已 push `8af7546`
@@ -16,8 +17,8 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **Claude Code Windows hook**（active）— `bash_hook_command` 改为 quoted POSIX path。next_action: rebuild `~/.claude` + 重启 Claude Code 验证 UserPromptSubmit。updated: 2026-08-26
-- **Grok 真实会话 probe**（active）— hooks 已部署到 `~/.grok`，用户 PATH 已加 `~\.local\bin`。next_action: 重启 Grok 后开真实会话，确认 `/hooks` 加载 + route 注入。updated: 2026-08-26
+- **Claude Code Windows hook**（active）— 代码+宿主 rebuild 已落地 `e467519`。next_action: 用户重启 Claude Code，确认 UserPromptSubmit 不再报 `C:Users...` / `C:/Program:`。updated: 2026-08-26
+- **Grok 真实会话 probe**（active）— hooks 在 `~/.grok`；本会话 Grok PowerShell PATH 无 `~\.local\bin`（注册表 User PATH 有），`vibe route --hook` 可能没注入。next_action: 查 Grok 进程 PATH / 考虑 JSON hook 写绝对路径。updated: 2026-08-26
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
