@@ -16,7 +16,7 @@
 - 不要 `uv run` 于随机 cwd（会拉临时环境卡住）
 
 **Next Steps**:
-1. 重启 Claude Code，确认不再报 `C:Users...` / `C:/Program:` / Microsoft Store
+1. 重启 Claude Code：UserPromptSubmit 走 vibe-route；`SessionStart:startup` 商店 python 是 cmspark pentest hook（已清）/ Black-cat 已改 shim
 2. Grok JSON hook：本会话 shell PATH 无 `~\.local\bin`，考虑绝对路径
 3. 未打 `v8.1.1` tag / 未发 PyPI；Kimi 真目录 `vibe build` 仍可选
 

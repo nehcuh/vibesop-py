@@ -7,6 +7,7 @@
 - 第二刀：脚本跑通后报商店 `python3` stub。uv-tool 解释器在 `%APPDATA%\uv\tools\vibesop\Scripts\python.exe`，模板只查了 Unix `bin/python`。跳过 WindowsApps；`/tmp` 烟雾 exit 0。push `2c72fd7`
 - 本机 rebuild `~/.claude`；verify 8/8 PASS
 - Next: 用户重启 Claude Code，确认不再报 `C:Users...` / `C:/Program:` / Microsoft Store
+- 启动时报 `SessionStart:startup` + 商店 python：**不是** vibe route。cmspark `.claude/settings.json` 里 pentest `python -X utf8 …/case_ledger.py`（脚本已不存在）；已清空该文件（`.claude/` gitignore）。Black-cat 改为 uv `python find` shim。
 - Recorded: yes — bash.exe 包装 + Store python3 两条 pitfall → project-knowledge.md
 
 ### S47 (2026-08-26) [vibesop-py] session-end — v8.1.1 收工
