@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the space (`C:/Program: No such file`, exit 127). Emit a quoted POSIX
   script path only (host already provides bash). `vibe verify claude-code`
   now rejects backslash paths and Git-bash.exe wrappers.
+- **Claude Code Windows hook Python**: after the path fix, the script still
+  defaulted to `python3` (Microsoft Store stub) because uv-tool lookup only
+  checked `~/.local/share/uv/tools/vibesop/bin/python`. Also search
+  `uv tool dir` / `%APPDATA%\uv\tools\...\Scripts\python.exe`, skip
+  `WindowsApps` aliases.
 
 ## [8.1.1] — 2026-08-26
 

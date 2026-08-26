@@ -169,7 +169,8 @@ class TestClaudeCodeHookRendering:
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
         assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
-        assert "python3 -c" in content or "uv run python" in content, "Python invocation missing"
+        assert "handle_query_for_hook" in content
+        assert "uv run python" in content or '"$@" -c' in content, "Python invocation missing"
 
     def test_route_hook_has_slash_command_detection(self, adapter, tmp_path):
         """Hook must pass query to AgentRuntime (slash commands handled in Python)."""

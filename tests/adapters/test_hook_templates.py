@@ -149,12 +149,11 @@ class TestRouteHookSessionForwarding:
         """Execute the rendered route script hermetically and return stdout.
 
         The script prepends real system dirs (/opt/homebrew/bin, /usr/bin) to
-        PATH, so ``python3``/``uv`` stubs on PATH never win. The one
-        interpreter path fully under our control is the uv-tool fallback
-        ``$HOME/.local/share/uv/tools/vibesop/bin/python`` — plant the stub
-        there. From cwd=tmp_path the real ``uv run python -c "import
-        vibesop"`` probe fails (no project, no vibesop), so the stub is
-        selected.
+        PATH, so ``python3``/``uv`` stubs on PATH never win. The uv-tool
+        fallbacks (``bin/python`` or Windows ``Scripts/python.exe``) are
+        the interpreters fully under our control — plant a stub there.
+        From cwd=tmp_path the real ``uv run python -c "import vibesop"``
+        probe fails (no project, no vibesop), so the stub is selected.
         """
         import shutil
         import subprocess
@@ -213,3 +212,59 @@ class TestRouteHookSessionForwarding:
         out = self._run_rendered_script(tmp_path, json.dumps({"prompt": "hello no session"}))
         assert "STUBARGS:" in out
         assert "hello no session" in out
+
+    def test_template_discovers_windows_uv_tool_python(self) -> None:
+        result = render_route_hook(platform="claude-code", platform_name="Claude Code")
+        assert "Scripts/python.exe" in result
+        assert "WindowsApps" in result
+        assert "uv tool dir" in result
+
+    def test_rendered_script_uses_windows_scripts_python(self, tmp_path) -> None:
+        """%APPDATA%/uv/tools/vibesop/Scripts/python.exe is a valid uv-tool layout."""
+        import json
+        import shutil
+        import subprocess
+
+        jq = shutil.which("jq")
+        bash = shutil.which("bash")
+        if jq is None or bash is None:
+            pytest.skip("bash/jq not available")
+
+        home = tmp_path / "home"
+        appdata = home / "AppData" / "Roaming"
+        # ``python.exe`` is also probed; a shebang stub must be named
+        # ``python`` so Git Bash will exec it on Windows.
+        stub = appdata / "uv" / "tools" / "vibesop" / "Scripts" / "python"
+        stub.parent.mkdir(parents=True)
+        stub.write_text(
+            '#!/bin/sh\ncase "$*" in\n'
+            "  *import\\ vibesop*) exit 0;;\n"
+            "  *) printf 'STUBARGS:%s\\n' \"$*\";;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+
+        script = tmp_path / "vibesop-route.sh"
+        script.write_text(
+            render_route_hook(platform="claude-code", platform_name="Claude Code"),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [bash, str(script)],
+            input=json.dumps({"prompt": "windows uv tool", "session_id": "s-win"}).encode(),
+            capture_output=True,
+            cwd=tmp_path,
+            env={
+                "HOME": str(home),
+                "APPDATA": str(appdata),
+                "PATH": f"/usr/bin:/bin:{Path(jq).parent}",
+            },
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        out = result.stdout.decode()
+        assert "STUBARGS:" in out
+        assert "windows uv tool" in out
+        assert "s-win" in out

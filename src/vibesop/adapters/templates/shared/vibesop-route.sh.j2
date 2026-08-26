@@ -51,23 +51,75 @@ if [ -n "$_VIBESOP_PROJECT_ROOT" ]; then
     cd "$_VIBESOP_PROJECT_ROOT"
 fi
 
-# Detect Python with vibesop available (uv project > system). When a project
-# root was found, run uv from there so it can locate pyproject.toml.
-_VIBESOP_PYTHON="python3"
-if [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv &> /dev/null; then
-    if (cd "$_VIBESOP_PROJECT_ROOT" && uv run python -c "import vibesop" 2>/dev/null); then
-        _VIBESOP_PYTHON="uv run python"
+# Detect a Python that can import vibesop. Never fall through to the
+# Windows Store ``python3`` alias (WindowsApps) — it prints
+# "Python was not found; ... Microsoft Store" and Claude Code surfaces
+# that as a UserPromptSubmit hook error even though ``uv``/``vibe`` exist.
+_is_store_python() {
+    case "$1" in *WindowsApps*) return 0 ;; esac
+    return 1
+}
+_try_set_python() {
+    [ -n "$_VIBESOP_PYTHON" ] && return 0
+    if "$@" -c "import vibesop" >/dev/null 2>&1; then
+        if [ "$#" -eq 1 ]; then
+            _VIBESOP_PYTHON="$1"
+        else
+            _VIBESOP_PYTHON="$*"
+        fi
+        return 0
     fi
-elif command -v uv &> /dev/null && uv run python -c "import vibesop" 2>/dev/null; then
-    _VIBESOP_PYTHON="uv run python"
+    return 1
+}
+_VIBESOP_PYTHON=""
+# Only ``uv run`` from a vibesop project root — from a random cwd it can
+# stall creating an ephemeral env. Global install is the uv-tool python.
+if [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv >/dev/null 2>&1; then
+    _try_set_python uv run python || true
 fi
-# Fallback: globally-installed vibesop (uv tool) — its Python can import vibesop
-# even when the project root isn't found and system python3 lacks the package.
-if [ "$_VIBESOP_PYTHON" = "python3" ]; then
-    _UV_TOOL_PYTHON="$HOME/.local/share/uv/tools/vibesop/bin/python"
-    [ -x "$_UV_TOOL_PYTHON" ] && "$_UV_TOOL_PYTHON" -c "import vibesop" 2>/dev/null && _VIBESOP_PYTHON="$_UV_TOOL_PYTHON"
+# uv tool env: Unix ``bin/python``, Windows ``Scripts/python.exe``.
+# Layouts: XDG (~/.local/share), ``uv tool dir`` (Windows = %APPDATA%\uv\tools).
+if [ -z "$_VIBESOP_PYTHON" ]; then
+    _td=""
+    command -v uv >/dev/null 2>&1 && _td=$(uv tool dir 2>/dev/null || true)
+    _td=${_td//\\//}
+    _appdata=${APPDATA//\\//}
+    for _base in \
+        "$HOME/.local/share/uv/tools" \
+        "${XDG_DATA_HOME:-}/uv/tools" \
+        "${_appdata:+$_appdata/uv/tools}" \
+        "$_td"
+    do
+        [ -n "$_base" ] || continue
+        for _cand in \
+            "$_base/vibesop/bin/python" \
+            "$_base/vibesop/Scripts/python.exe" \
+            "$_base/vibesop/Scripts/python"
+        do
+            if [ -e "$_cand" ] && ! _is_store_python "$_cand"; then
+                _try_set_python "$_cand" && break 2
+            fi
+        done
+    done
 fi
-$_VIBESOP_PYTHON -c "
+if [ -z "$_VIBESOP_PYTHON" ]; then
+    for _cand in python3 python; do
+        _resolved=$(command -v "$_cand" 2>/dev/null || true)
+        [ -n "$_resolved" ] || continue
+        _is_store_python "$_resolved" && continue
+        _try_set_python "$_resolved" && break
+    done
+fi
+if [ -z "$_VIBESOP_PYTHON" ]; then
+    echo '{}'
+    exit 0
+fi
+if [ "$_VIBESOP_PYTHON" = "uv run python" ]; then
+    set -- uv run python
+else
+    set -- "$_VIBESOP_PYTHON"
+fi
+"$@" -c "
 import sys
 from vibesop.agent.runtime import AgentRuntime
 r = AgentRuntime()

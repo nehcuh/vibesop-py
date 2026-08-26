@@ -280,7 +280,8 @@ class TestKimiCliAdapter:
         content = hook_path.read_text(encoding="utf-8")
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
         assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
-        assert "python3 -c" in content or "uv run python" in content, "Python invocation missing"
+        assert "handle_query_for_hook" in content
+        assert "uv run python" in content or '"$@" -c' in content, "Python invocation missing"
         assert "vibe" in content, "vibe reference missing"
 
     def test_config_toml_has_hooks_section(self, tmp_path: Path) -> None:
