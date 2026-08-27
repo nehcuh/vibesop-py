@@ -247,7 +247,9 @@ def load_merged_scenario_config(project_root: str | Path = ".") -> dict[str, Any
     # wheel-bundled copy on pipx/uv-tool installs).
     from vibesop.utils.bundled import bundled_core_file
 
-    global_config = load_registry_scenario_config(bundled_core_file("registry.yaml", Path(project_root)))
+    global_config = load_registry_scenario_config(
+        bundled_core_file("registry.yaml", Path(project_root))
+    )
 
     # Load project routing
     project_routing = load_project_routing(project_root)

@@ -87,9 +87,7 @@ class TestInjectorBuiltinResolution:
         fake_pkg = tmp_path / "site-packages" / "vibesop"
         skill_dir = fake_pkg / "builtin_skills" / "commit-message"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(
-            "# WHEEL BUNDLE COPY\n", encoding="utf-8"
-        )
+        (skill_dir / "SKILL.md").write_text("# WHEEL BUNDLE COPY\n", encoding="utf-8")
         fake_init = fake_pkg / "__init__.py"
         fake_init.write_text("", encoding="utf-8")
         monkeypatch.setattr(vibesop, "__file__", str(fake_init))

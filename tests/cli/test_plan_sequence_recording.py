@@ -131,9 +131,7 @@ class TestConfirmationFlowRecording:
         monkeypatch.setattr("vibesop.cli.main._safe_questionary_select", _no_prompt)
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         router = SimpleNamespace(
-            _config=SimpleNamespace(
-                confirmation_mode="ambiguous_only", auto_select_threshold=0.6
-            )
+            _config=SimpleNamespace(confirmation_mode="ambiguous_only", auto_select_threshold=0.6)
         )
 
         confirmed = _orchestration_confirmation_flow(

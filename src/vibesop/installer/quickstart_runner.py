@@ -116,9 +116,7 @@ class QuickstartRunner:
                 console.print()
 
                 if config.install_hooks is None:
-                    config.install_hooks = self._ask_yes_no(
-                        "Install platform hooks?", default=True
-                    )
+                    config.install_hooks = self._ask_yes_no("Install platform hooks?", default=True)
                 console.print()
 
                 self._show_summary(config)
@@ -475,9 +473,7 @@ class QuickstartRunner:
             # `skills list` shows only materialized/pack installs (0 on a
             # fresh machine); `skills available` includes wheel builtins.
             console.print("3. Run: [cyan]vibe skills available[/cyan] to see all skills")
-            console.print(
-                "4. Later, add community packs: [cyan]vibe install superpowers[/cyan]"
-            )
+            console.print("4. Later, add community packs: [cyan]vibe install superpowers[/cyan]")
         else:
             console.print("1. Review .vibe/ directory")
             console.print("2. Add skills to .vibe/skills/")

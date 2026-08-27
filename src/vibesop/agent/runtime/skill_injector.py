@@ -279,7 +279,9 @@ class SkillInjector:
             # quickstart demo with project_root elsewhere) finds nothing.
             import sys
 
-            repo_core = Path(sys.modules["vibesop"].__file__).parent.parent.parent / "core" / "skills"
+            repo_core = (
+                Path(sys.modules["vibesop"].__file__).parent.parent.parent / "core" / "skills"
+            )
             if repo_core.exists():
                 strip_bases.append(repo_core)
             # Scan sys.path for bundled builtin_skills data dirs. This finds

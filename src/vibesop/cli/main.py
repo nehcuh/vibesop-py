@@ -347,9 +347,7 @@ def _record_plan_sequence(plan: Any, success: bool, query: str = "") -> None:
         logger.debug("Plan-sequence recording skipped", exc_info=True)
 
 
-def _is_unattended_run(
-    yes: bool, json_output: bool, validate: bool, router: Any
-) -> bool:
+def _is_unattended_run(yes: bool, json_output: bool, validate: bool, router: Any) -> bool:
     """True when no interactive confirmation can occur for reasons knowable
     BEFORE routing results exist (--yes/--json/--validate/non-TTY/never).
 
@@ -658,7 +656,11 @@ def route(
         platform = hook_platform
         if isinstance(payload, dict):
             env_platform = payload.get("platform")
-            if hook_platform == "grok-build" and isinstance(env_platform, str) and env_platform.strip():
+            if (
+                hook_platform == "grok-build"
+                and isinstance(env_platform, str)
+                and env_platform.strip()
+            ):
                 platform = env_platform.strip()
         try:
             out = AgentRuntime(project_root=root).handle_query_for_hook(

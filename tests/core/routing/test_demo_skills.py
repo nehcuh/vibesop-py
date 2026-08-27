@@ -56,9 +56,7 @@ PACK_OWNED_QUERIES: list[tuple[str, str]] = [
 ]
 
 
-def _isolate_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_packs: bool
-) -> Path:
+def _isolate_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_packs: bool) -> Path:
     """Point HOME (env + Path.home + ExternalSkillLoader.EXTERNAL_PATHS —
     the class var binds to the real home at import) at a scratch dir,
     optionally seeded with realistic fake pack skills."""
@@ -68,9 +66,7 @@ def _isolate_home(
     home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: home)
-    monkeypatch.setattr(
-        ExternalSkillLoader, "EXTERNAL_PATHS", [home / ".claude" / "skills"]
-    )
+    monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [home / ".claude" / "skills"])
     if with_packs:
         pack_skills = {
             ("superpowers", "systematic-debugging"): (
@@ -117,9 +113,7 @@ class TestDemoSkillFiles:
 
     def test_frontmatter_wellformed(self) -> None:
         for name in DEMO_SKILLS:
-            text = (REPO_ROOT / "core" / "skills" / name / "SKILL.md").read_text(
-                encoding="utf-8"
-            )
+            text = (REPO_ROOT / "core" / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
             assert text.startswith("---"), f"{name}: missing frontmatter"
             fm = yaml.safe_load(text.split("---", 2)[1])
             assert fm["id"] == f"builtin/{name}"
@@ -195,9 +189,7 @@ class TestDemoSkillDualStateRouting:
                 misses.append(f"{query!r} -> {got} (want {expected})")
         assert not misses, "demo query hijacked by installed packs:\n  " + "\n  ".join(misses)
 
-    def test_pack_owned_queries_not_stolen_by_builtin(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_pack_owned_queries_not_stolen_by_builtin(self, tmp_path, monkeypatch) -> None:
         """误伤面档案 (pi P1-5): builtin demo skills must not keyword-own
         queries that installed pack skills own. Before the tag fix,
         `write tests` hit builtin/test-generation at 1.00 (keyword layer)
@@ -207,6 +199,6 @@ class TestDemoSkillDualStateRouting:
             result = router.route(query)
             got = result.get("skill_id") or ""
             layer = result.get("layer") or ""
-            assert not (
-                got.startswith("builtin/") and layer == "keyword"
-            ), f"{query!r} keyword-stolen by {got} (owner: {owner})"
+            assert not (got.startswith("builtin/") and layer == "keyword"), (
+                f"{query!r} keyword-stolen by {got} (owner: {owner})"
+            )

@@ -286,9 +286,7 @@ class TestRouteDemo:
                 "vibesop.core.routing.lightweight_api.LightweightRouter",
                 return_value=fake_router,
             ) as mock_cls,
-            patch.object(
-                QuickstartRunner, "_run_inject_preview"
-            ) as mock_preview,
+            patch.object(QuickstartRunner, "_run_inject_preview") as mock_preview,
         ):
             runner._run_route_demo(self._config())
 
@@ -374,7 +372,8 @@ class TestInjectPreview:
         runner = QuickstartRunner()
         fake_runtime = MagicMock()
         fake_runtime.handle_query_for_hook.return_value = self._hook_json(
-            "[ACTIVE SKILL: builtin/commit-message]\n---\nid: builtin/commit-message\n# Commit Message\nstep one\n" + "filler\n" * 20
+            "[ACTIVE SKILL: builtin/commit-message]\n---\nid: builtin/commit-message\n# Commit Message\nstep one\n"
+            + "filler\n" * 20
         )
         with patch(
             "vibesop.agent.runtime.AgentRuntime",
