@@ -1,0 +1,102 @@
+# S51 Lane B — Architecture / Devil's Advocate
+
+- Reviewer: independent general-purpose agent
+- Window: e286e67..f6a90fd
+- Files actually read: docs/decisions/_review-s51-gate45-46-brief.md, CHANGELOG.md (Unreleased), git log/stat e286e67..HEAD, src/vibesop/utils/hook_commands.py, src/vibesop/utils/bundled.py, src/vibesop/agent/runtime/skill_injector.py, src/vibesop/agent/runtime/agent_runtime.py, src/vibesop/agent/runtime/plan_executor.py, src/vibesop/cli/commands/verify.py, src/vibesop/cli/confirmation.py, src/vibesop/cli/main.py, src/vibesop/core/config/manager.py, src/vibesop/core/routing/candidate_manager.py, src/vibesop/core/routing/project_config.py, src/vibesop/core/routing/orchestrator.py, src/vibesop/core/skills/loader.py, src/vibesop/core/instinct/learner.py, src/vibesop/core/instinct/tool_sequences.py, src/vibesop/adapters/grok_build.py, src/vibesop/adapters/claude_code.py, src/vibesop/adapters/_content.py, src/vibesop/adapters/templates/shared/SKILL.md.j2, src/vibesop/adapters/base.py, src/vibesop/installer/quickstart_runner.py, src/vibesop/cli/commands/quickstart.py, src/vibesop/installer/init_support.py, pyproject.toml, core/registry.yaml, core/skills/{code-review,test-generation}/SKILL.md, docs/SKILLS_GUIDE.md, tests/utils/test_bundled.py, tests/agent/runtime/test_skill_injector.py, tests/core/routing/test_demo_skills.py, tests/cli/test_plan_sequence_recording.py, tests/cli/test_verify_hook_commands.py, git show e286e67:MANIFEST.in
+- Architectural Status: WATCH
+- Verdict: NEEDS_FIX
+- Counts: 0 BLOCKER / 3 MAJOR / 5 MINOR
+
+## Strongest counterargument against shipping
+
+This window claims a single packaging/runtime story — wheel builtins are no longer empty, `bundled.py` is the fallback, confirmation no longer starves learning, demo skills make the aha real — but it does not introduce a single builtin-resolution *policy*. Five readers (SkillLoader defaults, CandidateManager.insert, SkillInjector 4-level strip, `bundled_core_file` checkout-wins, Grok `_count_builtin_skills`, plus the unmigrated adapter `find_skill_content`) disagree on order, and two of them still treat *any* `cwd/core/skills` as "the dev repo" with no identity check. That is the cmspark ghost-skill / priority-inversion class, now carrying a larger always-on keyword surface (4 new builtins) and a generated `routing.md` count that can name a different tree than the one that actually routes. Until one ladder owns registry + discovery + injection + adapter render + count, 8.1.2 is shipping a locally-true wheel fallback on top of an ungoverned namespace.
+
+## Findings
+
+### F1 — Severity: MAJOR
+- File: src/vibesop/utils/bundled.py:23, src/vibesop/agent/runtime/skill_injector.py:267, src/vibesop/core/skills/loader.py:103, src/vibesop/core/routing/candidate_manager.py:238, src/vibesop/adapters/grok_build.py:140, src/vibesop/adapters/_content.py:93, src/vibesop/agent/runtime/agent_runtime.py:197
+- Fact vs suggestion: **Fact** (disagreeing ladders, dead insert-order, no identity check). Suggestion is how to collapse them.
+- Description: `bundled.py` is not a single source of truth. It is one helper used by some callers, with a *different* precedence than the injector, the loader, the candidate-path comment, the Grok counter, and the adapter SKILL.md renderer. A cwd that happens to contain `core/skills` (older/newer clone, fork, or unrelated tree) shadows the installed wheel for injection and SkillLoader discovery, while Grok's builtin count and `find_skill_content` may still read the wheel / miss entirely.
+- Evidence:
+  - `bundled_core_file`: `project_root/core/<name>` wins if it exists, else `vibesop/builtin_data/core/<name>` (`bundled.py:23-29`). No `__file__` repo derivation; no check that `project_root` is the VibeSOP checkout.
+  - Injector Strategy 0 (`skill_injector.py:267-296`): `project_root/core/skills` → `bundled_path("builtin_skills")` → `__file__/../../core/skills` → sys.path scan. First existing file wins. Test `test_load_skill_builtin_dev_repo_preferred_over_bundle` names this "dev repo" but the fixture is *any* `project_root/core/skills` (`tests/agent/runtime/test_skill_injector.py:385-408`).
+  - SkillLoader defaults (`loader.py:109-114`): `project_root/core/skills` **before** `pkg_builtins`. First-wins on skill id (`loader.py:336-338`). CandidateManager constructs SkillLoader with extra paths **appended** to these defaults (`loader.py:85-89`), so CandidateManager's `insert(0)` order (`candidate_manager.py:252-254`) does **not** control discovery. The new comment "Exactly one of the two exists in any given environment" (`candidate_manager.py:238-240`) and the matching test (`tests/utils/test_bundled.py:69-74`) are false for `uv tool install` + cwd-in-clone (the cmspark deploy path recorded in `memory/session.md`).
+  - Grok count (`grok_build.py:140-149`): `__file__`-derived repo first, then package `builtin_skills`. **Does not consult `project_root`.** Docstring claims "same resolution ladder as the candidate manager"; even that is not the ladder SkillLoader actually walks. Generated `routing.md` can print the wheel's 14 while cwd discovery serves 18, or the reverse.
+  - Adapter `find_skill_content` (`_content.py:109-116`) was **not** migrated: cwd `core/skills` then `src/vibesop/core/skills` (the Python package, not the force-include). Wheel installs therefore still render Jinja stubs via `render_skill_md` (`_content.py:268-330`) while the hook injector now loads real bundled SKILL.md. Two writers of the same skill, this window only fixed one.
+  - PlanExecutor embeds via SkillLoader (`plan_executor.py:110-116`); SkillInjector loads via its own filesystem walk. Empty-gate markers differ (`CONTENT_NOT_FOUND_MARKER` vs `not skill_content.strip()`).
+- Suggestion: One function, e.g. `resolve_builtin_skills_dir(project_root) -> Path`, with an explicit identity test (repo marker / `pyproject` name `vibesop`, not "any `core/skills`"). Order should be: identified checkout → wheel `builtin_skills` → stop. Delete the sys.path scan or keep it as last resort behind a flag. Route SkillLoader, CandidateManager, injector, `to_hook_response` hint, Grok count, and `find_skill_content` through it. Add a test: uv-tool layout + foreign `cwd/core/skills/code-review/SKILL.md` must **not** shadow the wheel.
+- Status: open
+
+### F2 — Severity: MAJOR
+- File: src/vibesop/cli/main.py:326, src/vibesop/cli/main.py:1429, src/vibesop/core/instinct/learner.py:118, src/vibesop/installer/quickstart_runner.py:345
+- Fact vs suggestion: **Fact** that auto-proceed records `success=False` into a promoter that requires `success_rate >= 0.8`. Suggestion is the polarity/schema fix.
+- Description: `confirmation_mode` default `always` → `ambiguous_only` makes explicit confirm (the only `success=True` source) the uncommon path. The "starvation" patch records skipped confirmation as application-only telemetry (`success=False`). That does not feed the learning loop; it writes **anti-signal**. `SequencePattern.is_candidate` requires `total_count >= 5` **and** `success_rate >= 0.8`. A flood of auto-proceeds drives rate toward 0 and can keep a later real confirm from ever graduating. The aha path never hits this code at all.
+- Evidence:
+  - Privacy rule (`cli/main.py:329-332`): only orchestration confirm may pass `success=True`; auto-proceed is grouped with skip/reject/unattended as `success=False`.
+  - Skip-point record (`cli/main.py:1432-1440`): TTY + `ambiguous_only` + all-confident → `_record_plan_sequence(..., success=False)`.
+  - Promoter (`learner.py:122-123`): `is_candidate` ⇔ `total_count >= 5 and success_rate >= 0.8`. `record_sequence` increments `total_count` always, `success_count` only if `success` (`learner.py:828-830`).
+  - Aha path (`quickstart_runner.py:345-417`): `LightweightRouter.route` then `AgentRuntime.handle_query_for_hook`. No `_sequence_unattended`, no confirmation flow, no `record_sequence`. Hook `--hook` returns before CLI context is built (`cli/main.py:618-678`). Default 8.1.2 users in the advertised aha therefore contribute **zero** plan-sequence signal; CLI TTY users contribute **negative** polarity for the now-default auto-proceed.
+- Suggestion: Do not reuse `success=False` for "confident auto-proceed". Either omit the write (honest starvation), or record a third class (`source=auto_proceed`, not in the failure numerator). If the privacy rule forbids `success=True` without a human, then the changelog must not claim the instinct loop is un-starved — appearance of jsonl rows is not promotion. The aha/hook path should be documented as out of the sequence-learning loop, not implied by the confirmation fix.
+- Status: open
+
+### F3 — Severity: MAJOR
+- File: core/registry.yaml:712, core/skills/code-review/SKILL.md:1, core/skills/test-generation/SKILL.md:8, tests/core/routing/test_demo_skills.py:183, docs/SKILLS_GUIDE.md:40
+- Fact vs suggestion: **Fact** that four new skills are always-on `trusted_builtin`, force-included in every wheel, and tested to beat installed packs. Suggestion is to treat them as an opt-in demo extra for a patch release.
+- Description: Gate46's aha is implemented as a catalog contract change, not a demo flag. 14→18 builtins ship in the wheel; SKILLS_GUIDE still describes Builtin as "必须启用 / 优先级最高（P0） / 完全信任". Dual-state tests **require** demo queries to keep hitting builtin when superpowers/omx fixtures are present (`test_demo_queries_hit_with_packs_installed`). That is pack crowd-out in a 8.1.2 "fix" window: review / debug / tests / commit are now owned by bundled demos on keyless keyword routing.
+- Evidence:
+  - Registry block (`core/registry.yaml:712-777`): four ids, `namespace: builtin`, `safety_level: trusted_builtin`, `trigger_mode: suggest`, grok-build in `supported_targets`.
+  - Keyword surface: tests demand `len(tags) >= 8` plus CJK (`test_demo_skills.py:120-124`). `code-review` tags include `review my changes` (`core/skills/code-review/SKILL.md:5-6`). `test-generation` keeps `"write tests"` as a **trigger** (`core/skills/test-generation/SKILL.md:8-11`) after moving it off tags so the keyword layer does not steal — the explicit layer still owns the phrase; the pack-owned test only forbids `layer == "keyword"` (`test_demo_skills.py:192-204`).
+  - Hatch force-include (`pyproject.toml:106-109`) copies all of `core/skills`, so the four demos are in every pipx/uv-tool wheel. No opt-in extra, no `vibe quickstart` toggle (integrations default off; demos are not integrations).
+  - SKILLS_GUIDE (`docs/SKILLS_GUIDE.md:40, 69-75`): "Builtin (18 个)" and "必须启用". Count matches `ls core/skills` (18 dirs, [inspected]); the P0/must-enable copy does not match the four P1 demos.
+- Suggestion: If 8.1.2 is a packaging/hook fix, ship the wheel fallback without expanding the always-on keyword catalog — or gate the four behind `vibe quickstart --demos` / a `builtin.demos` config defaulting off for existing `~/.vibe/config.toml` users. If they stay on, bump is a minor product release (routing winners changed), not a patch, and SKILLS_GUIDE must stop calling them P0-mandatory.
+- Status: open
+
+### F4 — Severity: MINOR
+- File: src/vibesop/utils/hook_commands.py:1, src/vibesop/utils/hook_commands.py:44, src/vibesop/utils/hook_commands.py:65, src/vibesop/adapters/claude_code.py:76, src/vibesop/cli/commands/verify.py:299
+- Fact vs suggestion: **Fact** that one module exports two matching policies that share only the basename set. Suggestion is a shared corpus test.
+- Description: The "single source of truth" is `VIBESOP_HOOK_SCRIPT_BASENAMES` plus two incompatible tokenizers. `classify_vibesop_hook_command` (verify) is whitespace-split, quote-overstrip, case-fold, any-token. `parse_hook_script_command` (rewrite) is `shlex(posix=False)`, exactly two tokens, bash interpreter, allowlist, platform-absolute, **case-sensitive** basename. They will silently diverge on any new hook shape; a contributor "unifying" them will either start rewriting commands verify never meant to own, or stop scanning Windows quoted one-token forms.
+- Evidence: Module docstring (`hook_commands.py:3-5`) already admits two policies. Classify (`:60-62`) vs parse (`:65-100`): parse rejects `len(tokens) != 2`, non-bash, relative paths, foreign-platform forms, and `VIBESOP-ROUTE.SH` (no `.lower()` on `:98`). Verify only calls classify (`verify.py:299`); rewrite only calls parse (`claude_code.py:76`). Tests cover each consumer separately (`tests/cli/test_verify_hook_commands.py`, `tests/adapters/test_claude_code.py`); no shared table asserts "classify True ⇏ parse returns a path".
+- Suggestion: Keep the split — it is the right fail-open vs fail-closed pair — but name it in the API (`classify_for_verify` / `parse_for_rewrite`) and pin one parameterized corpus: every rewrite fixture must appear in the verify matrix, and every verify-positive that is not a 2-token bash form must assert `parse_* is None`.
+- Status: open
+
+### F5 — Severity: MINOR
+- File: pyproject.toml:98, git show e286e67:MANIFEST.in
+- Fact vs suggestion: **Fact** that force-include is wheel-only and MANIFEST.in is deleted with no `[tool.hatch.build.targets.sdist]` counterpart. Suggestion is an explicit sdist include.
+- Description: Hatchling ignores MANIFEST.in (setuptools-era). Deleting it is not by itself a regression — the old file did not even list repo-root `core/skills` / `core/registry.yaml`. The new mechanism (`[tool.hatch.build.targets.wheel.force-include]`) maps skills → `vibesop/builtin_skills` and registry/policies → `vibesop/builtin_data/core/`. Building a wheel **from an sdist** only works if the sdist still contains `core/`. Hatchling's default is VCS `git ls-files`; there is no sdist force-include to make that independent of git. `bundled_core_file("skills")` would look under `builtin_data/core/skills`, which the wheel does not contain (skills live in `builtin_skills`). Two on-disk layouts for "core".
+- Evidence: `pyproject.toml:98-109` has only `targets.wheel` + `force-include`. No `targets.sdist` anywhere in the tree ([inspected] grep). Deleted MANIFEST.in listed `src/vibesop/core *.yaml` (package YAML), not repo `core/`.
+- Suggestion: Add `[tool.hatch.build.targets.sdist] only-include` / force-include for `core/skills`, `core/registry.yaml`, `core/policies`. Add a CI job: `uv build` → unpack sdist → build wheel from that sdist → assert `vibesop/builtin_skills/code-review/SKILL.md` and `builtin_data/core/registry.yaml` exist. Do not teach `bundled_core_file` to resolve skills.
+- Status: open
+
+### F6 — Severity: MINOR
+- File: src/vibesop/cli/main.py:494, src/vibesop/cli/main.py:653
+- Fact vs suggestion: **Fact** that help text and code disagree on flag vs envelope precedence. Suggestion is to stop using the default as a sentinel.
+- Description: `--platform` help says the JSON `platform` field is readable and "flag wins". Implementation treats the default `"grok-build"` as "unset": if the flag still equals the default, a non-empty envelope `platform` **overrides**. Explicit `--platform grok-build` cannot beat a JSON `platform: claude-code`. Dual-platform aha/probe coupling is therefore "default loses", not "flag wins", and Typer cannot tell omitted from explicit default.
+- Evidence: Option (`cli/main.py:494-498`) vs override (`cli/main.py:653-664`). Comment at `:653-655` says "CLI flag > JSON envelope field > grok-build default" which matches the help and **contradicts** the `hook_platform == "grok-build"` guard.
+- Suggestion: Use `None` default + `or payload.get("platform") or "grok-build"`, or a `--platform` that is always the winner when present (`is_default` via a sentinel / callback). Align help, comment, and probe scripts to one rule.
+- Status: open
+
+### F7 — Severity: MINOR
+- File: src/vibesop/agent/runtime/skill_injector.py:152, src/vibesop/agent/runtime/skill_injector.py:181, src/vibesop/agent/runtime/agent_runtime.py:157
+- Fact vs suggestion: **Fact** that GROK_BUILD was added to single-skill injection only. Suggestion is to treat plan injection as the same platform matrix.
+- Description: This window maps Grok UserPromptSubmit to Claude-shaped `additionalContext` for **one** skill (`:152-155`). `inject_execution_plan` still switches only on CLAUDE_CODE / OPENCODE / KIMI_CLI; GROK_BUILD falls through to generic TEXT (`:181-204`). The live hook orchestrate path does not call that method anyway — `to_hook_response` dumps `json.dumps(self.plan)` (`agent_runtime.py:157-169`). Three writers of "what the agent sees for a plan": injector formatter, hook JSON dump, PlanExecutor manifest. Grok got the single-skill banner fix; plan shape remains a sidecar.
+- Evidence: `PlatformType.GROK_BUILD` added (`skill_injector.py:36`) and used only in `inject_single_skill`. `inject_execution_plan` tests cover Claude and Kimi only (`tests/agent/runtime/test_skill_injector.py:179-204`).
+- Suggestion: Either delete `inject_execution_plan` as dead API or make GROK_BUILD share the Claude additionalContext branch, and have `to_hook_response` orchestrate call it so the banner/plan format cannot drift again.
+- Status: open
+
+### F8 — Severity: MINOR
+- File: src/vibesop/installer/quickstart_runner.py:361, src/vibesop/cli/main.py:618, core/registry.yaml:80
+- Fact vs suggestion: **Fact** that aha, hook, registry scenario keywords, and Grok count are separately hardcoded. Suggestion is to derive demo pairs and counts from one registry field.
+- Description: Hidden coupling for the "parameterized `--hook --platform`" aha: quickstart hardcodes the bilingual commit-message pair (`quickstart_runner.py:367`) instead of importing `VERIFIED_DEMO_QUERIES`; `--force` sets `project_path=Path.home()` (`:89`) so preview injection is not the user's repo; `--platform` default grok-build plus envelope override (F6) is what makes the dual-platform probe "two strings" rather than a real matrix; `registry.yaml` `scenario_keywords` still owns `测试` / `review` at the scenario layer (the ZH demo query is written to *avoid* `测试` — `test_demo_skills.py:37-39`). Grok `routing.md` interpolates a filesystem count that can disagree with registry skill rows (slash-* live in `core/skills` as dirs and in registry as entrypoints into `vibesop.core.skills.slash_commands`).
+- Evidence: Demo pair literal vs `tests/core/routing/test_demo_skills.py:32-44`. Registry scenario `qa_cycling` includes `"测试"` (`core/registry.yaml:164`). `_count_builtin_skills` counts dirs, not registry `namespace: builtin` rows (`grok_build.py:148`).
+- Suggestion: Export demo queries from registry/frontmatter (`triggers[0]` per demo id). Count builtins from the same list the router uses after `filter_routable`. Keep scenario keywords out of demo tag tests or drop the colliding tokens from the scenario layer.
+- Status: open
+
+## Watchlist
+- C1 whitelist canary still missing / C2 preserve-matcher still substring-based — this window made rewrite *more* conservative (`parse_hook_script_command` None → leave byte-identical) so C2 is not worse; do not reopen as 8.1.2 scope. status: known 8.1.2 leftover, unchanged. recommendation: keep on the 8.1.2 leftover list, not this gate.
+- `uv tool install` + cwd inside an older/newer vibesop clone — `bundled_core_file` and SkillLoader prefer the clone; Grok count prefers `__file__`. status: untested in this window (tests assume "exactly one source"). recommendation: the F1 identity check; until then treat dogfood `uv tool install --force --no-cache` as a version-pin ritual, not a solved layout.
+- Adapter templates (`SKILL.md.j2`) vs runtime injector banners — stub collapse of `\n{4,}` is a content fix; it does not unify the two SKILL.md producers. status: watch. recommendation: wheel `vibe build` should copy bundled SKILL.md or refuse to write stubs for `builtin/*`.
+- Confirmation default vs PHILOSOPHY — `ambiguous_only` is a coherent product call; the architecture defect is stuffing auto-proceed into the failure numerator (F2), not the default itself.
+- Demo `triggers` vs `tags` — "write tests" moved to triggers; keyword-layer steal is tested. Explicit-layer / levenshtein steal is explicitly out of scope (`test_demo_skills.py:50-53`). status: residual keyword surface. recommendation: Lane C invariant; do not treat the comment as a guarantee.
+- Hatch sdist-without-git — force-include is wheel-only (F5). status: watch until a from-sdist CI job exists.
+- `inject_execution_plan` GROK_BUILD fallthrough (F7) — low blast while hook orchestrate uses `to_hook_response`. status: watch if orchestrate aha is ever previewed.
+)
