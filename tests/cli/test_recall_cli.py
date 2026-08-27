@@ -7,6 +7,7 @@ Uses explicit ``--span-file`` to avoid CWD-dependent singleton state
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,6 +15,15 @@ import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+
+
+def _recent_span_ts() -> str:
+    """Inside recall's days-window (default 30) whenever the test runs.
+
+    A pinned absolute timestamp is a time bomb: 2026-07-28T12:00Z aged out
+    of the window on 2026-08-27 and these tests started failing.
+    """
+    return (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
 
 @pytest.fixture
@@ -77,7 +87,7 @@ class TestRecallCli:
                     "input_data": {"query": "screenshot permission popup"},
                     "name": "route:query",
                     "project_id": "test",
-                    "timestamp": "2026-07-28T12:00:00+00:00",
+                    "timestamp": _recent_span_ts(),
                 }
             ],
         )
@@ -112,7 +122,7 @@ class TestRecallCli:
                     "input_data": {"query": "screenshot permission"},
                     "name": "route:query",
                     "project_id": "test",
-                    "timestamp": "2026-07-28T12:00:00+00:00",
+                    "timestamp": _recent_span_ts(),
                 }
             ],
         )
@@ -139,7 +149,7 @@ class TestRecallCli:
                     "input_data": {"query": "alpha"},
                     "name": "route:query",
                     "project_id": "test",
-                    "timestamp": "2026-07-28T12:00:00+00:00",
+                    "timestamp": _recent_span_ts(),
                 }
             ],
         )
