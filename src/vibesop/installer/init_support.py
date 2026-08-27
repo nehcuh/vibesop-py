@@ -140,7 +140,7 @@ max_tokens = 4096
 
 # Routing configuration
 [routing]
-confirmation_mode = "always"  # always | never | ambiguous_only
+confirmation_mode = "ambiguous_only"  # ambiguous_only (default) | always | never
 enable_ai_triage = true
 enable_orchestration = true
 enable_embedding = false
@@ -297,10 +297,10 @@ max_tokens = 4096
 # ─────────────────────────────────────────────────────
 [routing]
 # User confirmation before selecting a skill
-#   "always"          - ask for confirmation every time (default)
+#   "ambiguous_only"  - ask only when confidence is below auto-select threshold (default)
+#   "always"          - ask for confirmation every time
 #   "never"           - skip confirmation, auto-select
-#   "ambiguous_only"  - ask only when multiple close candidates
-confirmation_mode = "always"
+confirmation_mode = "ambiguous_only"
 
 # AI-powered semantic triage (Layer 2 of 10-layer pipeline)
 # Disable if no LLM configured or you want keyword-only routing

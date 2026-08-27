@@ -110,6 +110,49 @@ class TestConfirmationFlowRecording:
         assert stored[0]["success_count"] == 0
         assert stored[0]["total_count"] == 1
 
+    def test_ambiguous_only_auto_proceed_records_application_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ambiguous_only + all-confident (TTY): confirmation is skipped, but
+        the plan sequence must still be recorded as application-only telemetry
+        — the pre-routing ``_sequence_unattended`` flag cannot cover this case
+        (step confidences unknown at context setup), and the instinct loop
+        would otherwise starve under the ambiguous_only default.
+        """
+
+        def _no_prompt(*args: object, **kwargs: object) -> str:
+            raise AssertionError("prompt must not fire on confident auto-proceed")
+
+        plan = SimpleNamespace(
+            steps=[SimpleNamespace(skill_id=s, confidence=0.9) for s in ("a", "b", "c")]
+        )
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
+        monkeypatch.setattr("vibesop.cli.main._safe_questionary_select", _no_prompt)
+        monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
+        router = SimpleNamespace(
+            _config=SimpleNamespace(
+                confirmation_mode="ambiguous_only", auto_select_threshold=0.6
+            )
+        )
+
+        confirmed = _orchestration_confirmation_flow(
+            _result(plan),
+            yes=False,
+            execute=False,
+            json_output=False,
+            console=MagicMock(),
+            router=router,
+            already_rendered=True,
+        )
+
+        assert confirmed is True
+        stored = _stored_sequences(tmp_path)
+        assert len(stored) == 1
+        assert stored[0]["steps"] == ["a", "b", "c"]
+        assert stored[0]["success_count"] == 0
+        assert stored[0]["total_count"] == 1
+
     def test_single_fallback_records_application_only(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

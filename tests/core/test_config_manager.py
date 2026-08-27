@@ -112,7 +112,7 @@ def test_get_routing_config_type_and_defaults(manager_no_files: ConfigManager) -
     assert rc.use_cache is True
     assert rc.enable_ai_triage is True
     assert rc.enable_embedding is False
-    assert rc.confirmation_mode == "always"
+    assert rc.confirmation_mode == "ambiguous_only"
     assert rc.index_match_threshold == pytest.approx(0.20)
 
 

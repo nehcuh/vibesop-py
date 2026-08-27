@@ -256,7 +256,9 @@ vibe build claude-code --output ~/.claude
 
 ## 配置 LLM API
 
-VibeSOP 需要自己的 LLM 配置（无法复用 Agent 的内部 LLM）：
+> 💡 **Agent 开发者可跳过本节**：如果你的 Agent 以 Python 库形式集成 VibeSOP（进程内），`AgentRouter.set_llm()` 可直接复用宿主 Agent 的 LLM，无需任何 API key——见 **[Agent 集成指南](docs/agent-integration.md)**。以下配置仅适用于 CLI 子进程路径（`vibe route`）。
+
+CLI 路径下 VibeSOP 需要自己的 LLM 配置（子进程无法复用 Agent 的内部 LLM）：
 
 **Linux / macOS:**
 ```bash
@@ -728,7 +730,7 @@ routing:
   enable_ai_triage: true
   enable_embedding: false
   max_candidates: 3
-  confirmation_mode: always  # always | never | ambiguous_only
+  confirmation_mode: ambiguous_only  # ambiguous_only（默认）| always | never
   keyword_match_max_chars: 5  # max chars for keyword routing (0=always LLM, 200=always keyword)
 
   # Degradation: confidence-gated layered fallback (v5.2.0)
@@ -752,7 +754,7 @@ skills:
 
 #### 用户确认模式
 
-默认情况下，VibeSOP 会在选择技能前展示路由决策报告并要求你确认：
+默认 `ambiguous_only`：置信度 ≥ `auto_select_threshold`（0.6）的路由自动放行（阈值默认与降级梯度 AUTO 档一致，但二者独立可调），只在置信度不足或多意图编排存在分歧时弹出确认：
 
 ```bash
 $ vibe route "帮我 review 代码"
@@ -760,19 +762,22 @@ $ vibe route "帮我 review 代码"
 │ Selected: mattpocock/tdd (confidence: 87%)      │
 │ ...                                            │
 ╰────────────────────────────────────────────────╯
+（≥ 0.6：自动选择，直接继续）
+
+$ vibe route "这个查询有点含糊"
 How would you like to proceed?
   ✅ Confirm selected skill
   🔀 Choose a different skill
   📝 Skip skill, use raw LLM
 ```
 
-你可以通过以下方式关闭确认：
+调整方式：
 
+- **每次都确认**：`routing.confirmation_mode = "always"`（旧版默认值）
 - **临时跳过**：`vibe route "query" --yes` 或 `-y`
-- **全局关闭**：在 `~/.vibe/config.toml` 中设置 `routing.confirmation_mode = "never"`
-- **仅低置信度时确认**：设置 `routing.confirmation_mode: ambiguous_only`
+- **完全关闭**：在 `~/.vibe/config.toml` 中设置 `routing.confirmation_mode = "never"`
 
-> ⚠️ **注意**：确认模式默认开启 (`always`)，旨在让你了解 VibeSOP 的决策过程。关闭后将恢复为自动选择。
+> 💡 **为什么改默认**：`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」相抵触——每条路由都要人点一次头，系统本身就成了瓶颈。`ambiguous_only` 把人工关口保留给真正模糊的决策。
 
 ### 全局配置
 
@@ -936,6 +941,9 @@ VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic 
   - 4 阶段路由级联
   - 优先级决策机制
   - 手动切换技能
+- **🆕 [docs/agent-integration.md](docs/agent-integration.md)** - Agent 进程内集成指南
+  - `AgentRouter.set_llm()` 复用宿主 Agent 的 LLM，无需 API key
+  - 多轮对话 reroute / 置信度感知
 - [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门
 - [docs/QUICKSTART_DEVELOPERS.md](docs/QUICKSTART_DEVELOPERS.md) - 开发者快速入门
 - [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md) - CLI 命令参考

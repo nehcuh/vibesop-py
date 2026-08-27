@@ -133,8 +133,12 @@ class RoutingConfig(TolerantConfig):
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     confirmation_mode: str = Field(
-        default="always",
-        description="User confirmation mode: always (default), never, or ambiguous_only",
+        default="ambiguous_only",
+        description=(
+            "User confirmation mode: ambiguous_only (default — confirm only when "
+            "primary confidence < auto_select_threshold, per PHILOSOPHY.md "
+            "'延续 > 启动'), always, or never"
+        ),
     )
     enable_orchestration: bool = Field(
         default=True,

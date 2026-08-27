@@ -328,8 +328,8 @@ def _record_plan_sequence(plan: Any, success: bool, query: str = "") -> None:
 
     Privacy rule: ONLY an explicit user confirmation in the orchestration
     confirmation flow may pass success=True; every implicit signal
-    (unattended runs, skips, rejections) is application-only telemetry
-    (success=False). Plans with <3 steps are a natural no-op
+    (unattended runs, skips, rejections, auto-proceeds) is application-only
+    telemetry (success=False). Plans with <3 steps are a natural no-op
     (``record_sequence`` threshold). Fully fault-tolerant: learning must
     never affect the main flow.
     """
@@ -345,6 +345,26 @@ def _record_plan_sequence(plan: Any, success: bool, query: str = "") -> None:
         learner.record_sequence(steps=steps, success=success, context=query)
     except Exception:
         logger.debug("Plan-sequence recording skipped", exc_info=True)
+
+
+def _is_unattended_run(
+    yes: bool, json_output: bool, validate: bool, router: Any
+) -> bool:
+    """True when no interactive confirmation can occur for reasons knowable
+    BEFORE routing results exist (--yes/--json/--validate/non-TTY/never).
+
+    The ``ambiguous_only`` + all-confident auto-proceed is deliberately NOT
+    covered here — step confidences are only known after routing; that case
+    is recorded at the confirmation skip point in
+    ``_confirm_orchestrated_result``.
+    """
+    return bool(
+        yes
+        or json_output
+        or validate
+        or not sys.stdin.isatty()
+        or getattr(router._config, "confirmation_mode", None) == "never"
+    )
 
 
 def _maybe_assemble_tool_sequences(project_root: Path) -> None:
@@ -570,9 +590,10 @@ def route(
     retains or deprecates. Skill execution is delegated to your AI Agent
     (Claude Code, Cursor, OpenCode).
 
-    By default, VibeSOP asks for confirmation before selecting a skill.
-    Set routing.confirmation_mode to 'never' for automatic selection,
-    or use --yes to skip once.
+    Confirmation defaults to 'ambiguous_only': low-confidence or contested
+    routing asks for confirmation, confident matches proceed automatically.
+    Set routing.confirmation_mode to 'always' to confirm every time, or
+    'never' for fully automatic selection; --yes skips confirmation once.
 
     Use --verbose to inspect the full routing decision tree.
     Use --slash to invoke a quick command explicitly (e.g., --slash '/vibe-help').
@@ -760,13 +781,7 @@ def route(
     # orchestrator records the plan sequence as application-only telemetry
     # (success=False). Metadata survives the _copy_context enrichment used by
     # the squad/single-agent paths.
-    if (
-        yes
-        or json_output
-        or validate
-        or not sys.stdin.isatty()
-        or getattr(router._config, "confirmation_mode", None) == "never"
-    ):
+    if _is_unattended_run(yes, json_output, validate, router):
         context.metadata["_sequence_unattended"] = True
 
     # Apply workflow pattern and verification hints
@@ -1398,6 +1413,15 @@ def _orchestration_confirmation_flow(
     if not _needs_confirmation(
         result, router, yes, json_output, validate=validate, is_orchestrated=True
     ):
+        # ambiguous_only + all-confident auto-proceed: no explicit human
+        # signal exists, but the pre-routing _sequence_unattended flag could
+        # not cover this case (step confidences unknown at context setup).
+        # Record application-only telemetry here so the instinct loop does
+        # not starve under the ambiguous_only default. Unattended runs
+        # (--yes/--json/validate/non-TTY/never) are excluded — the
+        # orchestrator already records those via the context flag.
+        if not _is_unattended_run(yes, json_output, validate, router):
+            _record_plan_sequence(plan, success=False, query=result.original_query or "")
         return True
 
     if not already_rendered:

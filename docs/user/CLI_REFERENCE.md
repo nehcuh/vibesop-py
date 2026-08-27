@@ -67,7 +67,8 @@ By default, VibeSOP will:
 1. Detect if your query contains multiple intents
 2. Decompose complex requests into sub-tasks
 3. Build an execution plan with optimal skill selection
-4. Show a summary for confirmation
+4. Show a summary — for confirmation when confidence is low or contested
+   (`ambiguous_only` default; confident matches proceed automatically)
 
 > **Note**: VibeSOP routes queries and injects skill instructions only. Skill
 > execution (code changes, file writes, tool calls) is performed by an external

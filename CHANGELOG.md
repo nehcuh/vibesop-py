@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度
+  ≥ `auto_select_threshold`（0.6）的路由自动放行，仅低置信度/编排分歧时弹出
+  确认。`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」
+  相抵触——每条路由都要人点一次头，系统本身成了瓶颈。已有用户配置不受影响
+  （仅默认值变更）。来源：Kimi 深度评价报告的四路对抗评审（多空双向独立
+  点名此矛盾）。
+- **README「配置 LLM API」不再声称「无法复用 Agent 的内部 LLM」**：该限制
+  仅适用于 CLI 子进程路径；进程内 Python 集成（`AgentRouter.set_llm()`）
+  可复用宿主 Agent 的 LLM，无需 API key。Agent 集成指南提升到 README 文档
+  索引一级入口。
+
 ### Fixed
 
 - **Runtime 安全扫描误报（自产 stub 被判「疑似篡改」）**：`DefaultHeuristicAnalyzer`
@@ -21,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   提示）与「内容不安全」（→ `[VibeSOP SECURITY]` 安全告警），不再用安全
   恐吓文案报数据问题；编排路径（`PlanExecutor.build_manifest`）同步接入
   空内容 gate，占位符标记提为共享常量。
+- **`ambiguous_only` 默认下编排学习信号断流**：TTY + 全步骤高置信的编排计划
+  既不走确认流（无 success=True 来源）也不带 `_sequence_unattended` 预置
+  flag（context 建立时 step 置信度未知），plan sequence 什么都不记。现在
+  确认跳过点补记 application-only 遥测（success=False），隐私规则不变
+  （success=True 仍仅来自显式确认）。
+- **`vibe route --help` 与 CLI_REFERENCE 沿用旧默认文案**：docstring 仍称
+  「默认每次确认」，与新默认 `ambiguous_only` 矛盾，两处已改。
 
 - **Claude Code Windows hook command**: wrapping
   `"C:/Program Files/Git/bin/bash.exe"` still failed — Git Bash `-c` splits
