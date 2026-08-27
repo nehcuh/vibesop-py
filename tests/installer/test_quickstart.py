@@ -105,7 +105,8 @@ class TestQuickstartRunner:
         with patch.object(builtins, "input", return_value="1"):
             config = runner._ask_install_type(Path("/tmp/project"))
             assert config.global_install is True
-            assert config.install_integrations is True
+            # Third-party packs are opt-in since the adoption redesign.
+            assert config.install_integrations is False
 
     def test_ask_install_type_project(self) -> None:
         """Test _ask_install_type returns project config."""
@@ -179,8 +180,8 @@ class TestQuickstartRunner:
     def test_run_cancelled_at_confirm(self, tmp_path: Path) -> None:
         """Test run cancelled by user at confirmation step."""
         runner = QuickstartRunner()
-        # For global install, install_integrations/hooks are already set to True,
-        # so only install type, platform, and confirm inputs are needed.
+        # Global install: integrations/hooks defaults are non-None, so only
+        # install type, platform, and confirm inputs are needed.
         inputs = ["1", "1", "n"]
         with patch.object(builtins, "input", side_effect=inputs):
             result = runner.run(project_path=tmp_path)
@@ -257,3 +258,67 @@ class TestQuickstartRunner:
 
         assert success is True
         assert mock_installer.install.call_count == 1
+
+
+class TestRouteDemo:
+    """Post-install keyless demo (_run_route_demo)."""
+
+    def _config(self) -> QuickstartConfig:
+        return QuickstartConfig(
+            platform="claude-code",
+            install_integrations=False,
+            install_hooks=True,
+            project_path=Path("/tmp"),
+            global_install=True,
+        )
+
+    def test_demo_renders_hits_and_misses(self, capsys) -> None:
+        """Hits print the matched skill id; fallbacks print 'no builtin match'."""
+        runner = QuickstartRunner()
+        fake_router = MagicMock()
+        fake_router.route.side_effect = [
+            {"skill_id": "builtin/slash-list", "confidence": 0.79},
+            {"skill_id": "builtin/session-end", "confidence": 0.95},
+            {"skill_id": "fallback-llm", "confidence": 1.0},
+        ]
+        with patch(
+            "vibesop.core.routing.lightweight_api.LightweightRouter",
+            return_value=fake_router,
+        ) as mock_cls:
+            runner._run_route_demo(self._config())
+
+        assert mock_cls.call_args.kwargs.get("project_root") == Path("/tmp")
+        assert fake_router.route.call_count == 3
+        out = capsys.readouterr().out
+        assert "builtin/slash-list (79%)" in out
+        assert "builtin/session-end (95%)" in out
+        assert "no builtin match" in out
+
+    def test_demo_restores_logger_level(self) -> None:
+        """The targeted logger silencing must be undone after the demo."""
+        import logging
+
+        unified = logging.getLogger("vibesop.core.routing.unified")
+        saved_before = unified.level
+        runner = QuickstartRunner()
+        fake_router = MagicMock()
+        fake_router.route.return_value = {"skill_id": "", "confidence": 0.0}
+        with patch(
+            "vibesop.core.routing.lightweight_api.LightweightRouter",
+            return_value=fake_router,
+        ):
+            runner._run_route_demo(self._config())
+        assert unified.level == saved_before
+
+    def test_demo_survives_router_exception(self, capsys) -> None:
+        """A routing error degrades to 'no builtin match', never a crash."""
+        runner = QuickstartRunner()
+        fake_router = MagicMock()
+        fake_router.route.side_effect = RuntimeError("boom")
+        with patch(
+            "vibesop.core.routing.lightweight_api.LightweightRouter",
+            return_value=fake_router,
+        ):
+            runner._run_route_demo(self._config())
+        out = capsys.readouterr().out
+        assert out.count("no builtin match") == 3

@@ -114,6 +114,7 @@ class QuickstartRunner:
                 console.print()
                 console.print("✅ Installation complete!")
                 console.print()
+                self._run_route_demo(config)
                 self._show_next_steps(config)
 
         except KeyboardInterrupt:
@@ -135,7 +136,9 @@ class QuickstartRunner:
         if choice == "1":
             return QuickstartConfig(
                 platform="ask",
-                install_integrations=True,
+                # Third-party packs (superpowers/omx) are opt-in, not a default:
+                # keep the default install license-clean and self-contained.
+                install_integrations=False,
                 install_hooks=True,
                 project_path=Path.home(),
                 global_install=True,
@@ -316,6 +319,45 @@ class QuickstartRunner:
         if total > 0:
             console.print(f"  Synced {total} skill(s) to {platform}")
 
+    def _run_route_demo(self, config: QuickstartConfig) -> None:
+        """Keyless routing demo — first value moment before any configuration.
+
+        LightweightRouter does keyword/scenario routing only (no LLM, no API
+        key), so the demo works on a fresh install. Queries are verified
+        against the builtin pool: slash-list and session-end both hit.
+        """
+        import contextlib
+        import logging
+
+        from vibesop.core.routing.lightweight_api import LightweightRouter
+
+        console.print("[bold cyan]🧭 Routing demo (no API key required)[/bold cyan]")
+        console.print("   Watch natural language match skills:\n")
+        router = LightweightRouter(project_root=config.project_path)
+        # The no-prompt_builder constructor warning targets LLM-triage callers;
+        # this demo never reaches AI triage, so silence that one logger.
+        unified_logger = logging.getLogger("vibesop.core.routing.unified")
+        saved_level = unified_logger.level
+        unified_logger.setLevel(logging.ERROR)
+        try:
+            for query in ("show me all the skills", "wrap up the session", "今天就到这里，收工"):
+                try:
+                    result = router.route(query)
+                except Exception:
+                    result = {}
+                skill = result.get("skill_id") or ""
+                confidence = result.get("confidence") or 0.0
+                if skill and not skill.startswith("fallback"):
+                    console.print(
+                        f'   vibe route "{query}" → [green]{skill}[/green] ({confidence:.0%})'
+                    )
+                else:
+                    console.print(f'   vibe route "{query}" → [yellow]no builtin match[/yellow]')
+        finally:
+            with contextlib.suppress(Exception):
+                unified_logger.setLevel(saved_level)
+        console.print()
+
     def _show_next_steps(self, config: QuickstartConfig) -> None:
         console.print("\n[bold]📚 Next Steps:[/bold]\n")
 
@@ -337,6 +379,9 @@ class QuickstartRunner:
                 console.print(f"1. Run: [cyan]vibe build {config.platform}[/cyan]")
             console.print('2. Run: [cyan]vibe route "your query"[/cyan] to find skills')
             console.print("3. Run: [cyan]vibe skills list[/cyan] to see available skills")
+            console.print(
+                "4. Later, add community packs: [cyan]vibe install superpowers[/cyan]"
+            )
         else:
             console.print("1. Review .vibe/ directory")
             console.print("2. Add skills to .vibe/skills/")
