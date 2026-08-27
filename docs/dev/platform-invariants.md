@@ -51,13 +51,15 @@ and Grok JSON hooks could not find `vibe` on PATH.
    `agents_md` / `extensions_dir` in `PLATFORM_CONFIGS` without a
    matching `check_id` branch in `_check_platform` is a silent all-FAIL.
 
-5. **Claude Code Windows `command` is a quoted POSIX path, not a bash
-   wrapper.** The host already runs Git Bash `-c`:
-   - `bash C:\Users\...` → `C:Users...` (exit 127)
+5. **Claude Code Windows `command` is config-relative `hooks/<script>.sh`.**
+   The host treats `command` as a filesystem path and prepends
+   `~/.claude\\` when `path.win32.isAbsolute(command)` is false. A
+   quoted POSIX absolute (`"C:/Users/.../x.sh"`) is not absolute, which
+   produces `C:\Users\...\.claude\"C:/Users/.../x.sh"` (command not
+   found). Also still fail:
+   - `bash C:\Users\...` → `C:Users...` (Git Bash eats `\\`)
    - `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"` → `C:/Program:`
-     (exit 127; space split)
-   - `bash bash x.sh` (host prepends bash onto a `bash ` prefix) →
-     cannot execute binary file
+   - `bash bash x.sh` (host prepends bash onto a `bash ` prefix)
    File-existence checks do not catch this. `vibe verify claude-code`
    must inspect `settings.json` commands.
 

@@ -137,10 +137,16 @@ def collect_settings_hook_commands(settings: dict[str, Any]) -> list[str]:
 
 
 def unsafe_windows_hook_command_reason(command: str) -> str | None:
-    """Why a Claude Code hook command will fail under Git Bash ``-c``.
+    """Why a Claude Code hook command will fail on Windows.
 
-    Returns None when the command is safe (quoted POSIX path, no wrapper).
+    Returns None when the command is safe (config-relative ``hooks/*.sh``,
+    no wrapper, no quotes). Quoted POSIX paths are *not* safe: Claude Code
+    path-joins ``~/.claude\\`` onto them because a leading quote makes
+    ``path.win32.isAbsolute`` false.
     """
+    stripped = command.lstrip()
+    if stripped.startswith(('"', "'")):
+        return "quoted path is not absolute to Claude Code (configDir+quote join)"
     if "\\" in command:
         return "backslash in command (Git Bash eats \\ )"
     lowered = command.lower()
@@ -170,7 +176,10 @@ def _vibesop_command_unsafe_reason(command: str) -> str | None:
     if sys.platform == "win32":
         if command.lstrip().lower().startswith(("bash ", "bash\t")):
             return "bash prefix double-wraps (win32 host provides bash)"
-        return None
+        token = unwrap_token(command.strip()).replace("\\", "/")
+        if token.startswith("hooks/") and "/" not in token[6:]:
+            return None
+        return "Windows Claude Code needs config-relative hooks/<script>.sh"
     drive = _windows_drive_token(command)
     if drive:
         return f"drive-letter token ({drive}) - Windows form on a non-win32 host"
@@ -422,6 +431,42 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
             vibe = shutil.which("vibe")
             result["pass"] = vibe is not None
             result["detail"] = vibe if vibe else "vibe not on PATH (uv tool bin missing from PATH)"
+
+        elif check_id == "agents_md":
+            path = project_root / "AGENTS.md"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "extensions_dir":
+            path = config_dir / "extensions"
+            result["pass"] = path.is_dir()
+            result["detail"] = f"Found {path}" if result["pass"] else f"Missing: {path}"
+
+        elif check_id == "skills_dir":
+            path = config_dir / "skills"
+            result["pass"] = path.is_dir()
+            result["detail"] = f"Found {path}" if result["pass"] else f"Missing: {path}"
+
+        elif check_id == "route_extension":
+            path = config_dir / "extensions" / "vibesop-route.ts"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "track_extension":
+            path = config_dir / "extensions" / "vibesop-track.ts"
+            result["pass"] = path.exists()
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
+
+        elif check_id == "prompts_dir":
+            path = config_dir / "prompts"
+            result["pass"] = path.is_dir()
+            result["detail"] = f"Found {path}" if result["pass"] else f"Missing: {path}"
 
         results.append(result)
 

@@ -101,16 +101,12 @@ class SkillLoader:
             )
 
     def _default_search_paths(self) -> list[Path]:
-        # Bundled-in-package builtin skills (available on any install, not just
-        # the dev repo). force-include'd into the wheel at vibesop/builtin_skills.
-        import vibesop as _vibesop
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
 
-        pkg_builtins = Path(_vibesop.__file__).parent / "builtin_skills"
         return [
             self.project_root / "skills",
             self.project_root / ".vibe" / "skills",
-            self.project_root / "core" / "skills",
-            pkg_builtins,
+            resolve_builtin_skills_dir(self.project_root),
         ]
 
     def _compute_project_hash(self) -> str:

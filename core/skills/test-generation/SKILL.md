@@ -7,7 +7,6 @@ tags: [unit test, test cases, test coverage, golden path,
        测试用例, 边界情况, 表驱动测试, 单元用例, 补一组用例]
 triggers:
   - "write unit tests"
-  - "write tests"
   - "add tests for this"
   - "写单元测试"
   - "补充测试用例"

@@ -3,7 +3,7 @@ id: builtin/code-review
 name: code-review
 description: Structured pre-push review — correctness, security, tests, then style; findings ranked by severity
 tags: [review changes, pre-push check, code walkthrough, look over diff,
-       review my changes, 代码走查, 过一遍改动, 提交前检查, 看看这次改动,
+       代码走查, 过一遍改动, 提交前检查, 看看这次改动,
        diff review, review the patch]
 triggers:
   - "look over my changes"

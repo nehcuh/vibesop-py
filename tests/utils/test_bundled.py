@@ -10,7 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from vibesop.core.routing.candidate_manager import CandidateManager
-from vibesop.utils.bundled import bundled_core_file, bundled_path
+from vibesop.utils.bundled import (
+    bundled_core_file,
+    bundled_path,
+    is_vibesop_checkout,
+    resolve_builtin_skills_dir,
+)
 
 
 class TestBundledPath:
@@ -72,3 +77,28 @@ class TestCandidateManagerSearchPaths:
         repo_builtins = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
         pkg_builtins = bundled_path("builtin_skills")
         assert (repo_builtins in paths) or (pkg_builtins in paths)
+
+
+class TestResolveBuiltinSkillsDir:
+    def test_foreign_core_skills_does_not_shadow_wheel(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "core" / "skills" / "code-review").mkdir(parents=True)
+        (tmp_path / "core" / "skills" / "code-review" / "SKILL.md").write_text(
+            "# FOREIGN\n", encoding="utf-8"
+        )
+        fake_pkg = tmp_path / "site-packages" / "vibesop"
+        wheel_skill = fake_pkg / "builtin_skills" / "code-review"
+        wheel_skill.mkdir(parents=True)
+        (wheel_skill / "SKILL.md").write_text("# WHEEL\n", encoding="utf-8")
+        (fake_pkg / "__init__.py").write_text("", encoding="utf-8")
+        import vibesop
+
+        monkeypatch.setattr(vibesop, "__file__", str(fake_pkg / "__init__.py"))
+
+        resolved = resolve_builtin_skills_dir(tmp_path)
+        assert resolved == fake_pkg / "builtin_skills"
+        assert not is_vibesop_checkout(tmp_path)
+
+    def test_identified_checkout_wins(self, tmp_path: Path) -> None:
+        (tmp_path / "core" / "skills" / "foo").mkdir(parents=True)
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
+        assert resolve_builtin_skills_dir(tmp_path) == tmp_path / "core" / "skills"

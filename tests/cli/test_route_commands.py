@@ -402,7 +402,7 @@ class TestRouteHookMode:
         self.captured = captured  # type: ignore[attr-defined]
 
     def test_hook_mode_camelcase_grok_payload(self) -> None:
-        payload = {"prompt": "帮我合并到 main 吧", "sessionId": "grok-sess-1"}
+        payload = {"userPrompt": "帮我合并到 main 吧", "sessionId": "grok-sess-1"}
         result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
         assert result.exit_code == 0
         assert "hookSpecificOutput" in result.output
@@ -432,6 +432,20 @@ class TestRouteHookMode:
         result = runner.invoke(app, ["route", "--hook"], input="plain query text")
         assert result.exit_code == 0
         assert self.captured["query"] == "plain query text"  # type: ignore[attr-defined]
+
+    def test_explicit_platform_flag_beats_json_platform(self) -> None:
+        payload = {"userPrompt": "x", "platform": "claude-code"}
+        result = runner.invoke(
+            app, ["route", "--hook", "--platform", "grok-build"], input=json.dumps(payload)
+        )
+        assert result.exit_code == 0
+        assert self.captured["platform"] == "grok-build"  # type: ignore[attr-defined]
+
+    def test_omitted_flag_reads_json_platform(self) -> None:
+        payload = {"userPrompt": "x", "platform": "claude-code"}
+        result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
+        assert result.exit_code == 0
+        assert self.captured["platform"] == "claude-code"  # type: ignore[attr-defined]
 
     def test_no_query_no_hook_errors(self) -> None:
         result = runner.invoke(app, ["route"])

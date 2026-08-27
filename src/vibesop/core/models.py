@@ -396,6 +396,12 @@ class ExecutionStep(BaseModel):
         default_factory=list,
         description="Skills available to the assigned role for this step",
     )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Routing confidence for this step (0 when unknown)",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -426,6 +432,7 @@ class ExecutionStep(BaseModel):
             "assigned_role": self.assigned_role,
             "agent_squad_id": self.agent_squad_id,
             "role_skills": self.role_skills,
+            "confidence": self.confidence,
         }
 
     @classmethod
@@ -473,6 +480,7 @@ class ExecutionStep(BaseModel):
             assigned_role=data.get("assigned_role"),
             agent_squad_id=data.get("agent_squad_id"),
             role_skills=data.get("role_skills", []),
+            confidence=data.get("confidence", 0.0),
         )
 
 

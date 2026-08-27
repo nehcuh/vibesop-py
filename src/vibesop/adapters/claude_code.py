@@ -22,23 +22,27 @@ _MIRROR_PROMPT_HOOK_MARKER = "vibesop-mirror-prompt.sh"
 
 
 def bash_hook_command(script: Path) -> str:
-    """Build a hook ``command`` that survives Windows Git Bash.
+    """Build a hook ``command`` that the host can actually spawn.
 
-    Claude Code runs ``command`` via Git Bash ``-c``. Two wrappers fail:
+    Unix: ``bash <posix-path>``.
 
-    * Unquoted backslashes are eaten (``C:\\Users\\...\\x.sh`` becomes
-      ``C:Users...x.sh``, exit 127).
-    * Wrapping ``C:/Program Files/Git/bin/bash.exe`` splits on the space
-      (``C:/Program: No such file``, exit 127). Prefixing ``bash `` also
-      double-wraps if the host prepends bash for ``.sh`` files.
-
-    Unix keeps ``bash <posix-path>``. Windows emits a quoted POSIX path
-    only — the host already provides bash.
+    Windows: config-relative ``hooks/<basename>.sh``. Claude Code treats
+    ``command`` as a filesystem path and prepends ``~/.claude\\`` when
+    ``path.win32.isAbsolute(command)`` is false. A quoted POSIX absolute
+    (``"C:/Users/.../x.sh"``) is not absolute, which produces
+    ``C:\\Users\\...\\.claude\\"C:/Users/.../x.sh"`` — command not found.
+    Relative ``hooks/<name>.sh`` joins to the real script and has no
+    spaces even when the username does.
     """
-    script_posix = Path(script).resolve().as_posix()
+    name = Path(script).name
     if sys.platform != "win32":
-        return f"bash {script_posix}"
-    return f'"{script_posix}"'
+        return f"bash {Path(script).resolve().as_posix()}"
+    return f"hooks/{name}"
+
+
+def _windows_canonical_hook_command(norm: str) -> str:
+    """Config-relative command Claude Code on Windows can spawn."""
+    return f"hooks/{Path(norm).name}"
 
 
 def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
@@ -49,13 +53,9 @@ def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
     gated on a non-POSIX normalized path so literal-backslash POSIX
     filenames (legal on mac) are never rewritten to a different file.
     """
-    if "\\" in cmd and not norm.startswith("/"):
-        return True
     if sys.platform == "win32":
-        if "bash.exe" in cmd.lower():
-            return True
-        return cmd.lstrip().lower().startswith(("bash ", "bash\t"))
-    return False
+        return cmd.strip() != _windows_canonical_hook_command(norm)
+    return bool("\\" in cmd and not norm.startswith("/"))
 
 
 def _rewrite_legacy_hook_entry(entry: Any) -> Any:
@@ -75,7 +75,11 @@ def _rewrite_legacy_hook_entry(entry: Any) -> Any:
         if isinstance(cmd, str):
             norm = parse_hook_script_command(cmd)
             if norm is not None:
-                new_cmd = f'"{norm}"' if sys.platform == "win32" else f"bash {norm}"
+                new_cmd = (
+                    _windows_canonical_hook_command(norm)
+                    if sys.platform == "win32"
+                    else f"bash {norm}"
+                )
                 if new_cmd != cmd and _legacy_rewrite_signal(cmd, norm):
                     logger.warning("upgraded legacy vibesop hook command: %r -> %r", cmd, new_cmd)
                     upgraded = {**item, "command": new_cmd}

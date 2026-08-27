@@ -53,7 +53,8 @@ def test_unsafe_hook_command_detects_backslash_and_git_bash_wrapper() -> None:
     assert unsafe_windows_hook_command_reason(
         '"C:/Program Files/Git/bin/bash.exe" "C:/Users/x/.claude/hooks/x.sh"'
     )
-    assert unsafe_windows_hook_command_reason('"C:/Users/x/.claude/hooks/x.sh"') is None
+    assert unsafe_windows_hook_command_reason('"C:/Users/x/.claude/hooks/x.sh"')
+    assert unsafe_windows_hook_command_reason("hooks/vibesop-route.sh") is None
 
 
 def test_collect_settings_hook_commands_walks_nested_hooks() -> None:

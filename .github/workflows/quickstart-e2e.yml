@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 env:
-  UV_VERSION: "0.8.17"
+  UV_VERSION: "0.11.19"
   # Prove the demo has no embedding dependency: fresh machines have no
   # MiniLM cache, and the demo queries must hit KEYWORD/SCENARIO offline.
   HF_HUB_OFFLINE: "1"
@@ -129,7 +129,29 @@ jobs:
             fi
           done
           [ "$grok_hook_found" -eq 1 ] || { echo "  MISSING: grok JSON hook referencing 'vibe route --hook'"; fail=1; }
+          if grep -qF "vibe route --hook --platform grok-build" "$HOME/.grok/hooks/"*.json 2>/dev/null \
+             || grep -qF "vibe route --hook --platform grok-build" "$HOME/.grok/"*.json 2>/dev/null; then
+            echo "  ok: grok JSON command includes --platform grok-build"
+          else
+            echo "  MISSING: grok JSON command --platform grok-build"; fail=1
+          fi
           [ "$fail" -eq 0 ] || exit 1
+
+      - name: Claude host-shaped hook smoke
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+        run: |
+          # The generated command is config-relative hooks/*.sh on Windows
+          # and `bash <abs>` on Unix. Invoke the script file directly so
+          # we do not depend on Claude's configDir join. Stdin is snake_case
+          # `prompt` — what vibesop-route.sh.j2 jq actually reads.
+          script="$HOME/.claude/hooks/vibesop-route.sh"
+          test -f "$script"
+          "$(uv python find 3.12)" -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "session_id": "e2e-claude"}))' \
+            "help me write a commit message" | bash "$script" | tee /tmp/claude-hook-out.txt
+          grep -qF "[ACTIVE SKILL: builtin/commit-message]" /tmp/claude-hook-out.txt
 
       - name: Dual-platform injection probe (claude-code vs grok-build)
         working-directory: ${{ runner.temp }}

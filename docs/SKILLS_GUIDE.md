@@ -69,8 +69,9 @@ VibeSOP 技能生态
 #### 1. Builtin (内置技能)
 
 **特点**:
-- ✅ 核心工作流，必须启用
-- ✅ 优先级最高（P0）
+- ✅ slash / session-end 等核心工作流必须启用（P0）
+- ✅ 四个 aha 演示技能（commit-message / test-generation / code-review /
+  systematic-debugging）是 P1 keyless 示例，不是「必须启用」
 - ✅ 完全信任，无安全风险
 - ✅ VibeSOP 维护
 

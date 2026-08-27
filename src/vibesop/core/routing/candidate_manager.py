@@ -233,12 +233,7 @@ class CandidateManager:
 
     def _build_search_paths(self) -> list[Path]:
         """Build the list of search paths for skill discovery."""
-        import vibesop
-
-        # Wheel-bundled builtins (pipx/uv tool installs) first, then the dev
-        # repo checkout layout (src/vibesop → <repo>/core/skills). Exactly one
-        # of the two exists in any given environment.
-        from vibesop.utils.bundled import bundled_path
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
 
         paths: list[Path] = [
             self.project_root / ".vibe" / "skills",
@@ -247,11 +242,9 @@ class CandidateManager:
             Path.home() / ".claude" / "skills",
             Path.home() / ".kimi" / "skills",
         ]
-        pkg_builtins = bundled_path("builtin_skills")
-        repo_builtins = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
-        for builtin_path in (pkg_builtins, repo_builtins):
-            if builtin_path.exists() and builtin_path not in paths:
-                paths.insert(0, builtin_path)
+        builtin_path = resolve_builtin_skills_dir(self.project_root)
+        if builtin_path.exists() and builtin_path not in paths:
+            paths.insert(0, builtin_path)
         return paths
 
     def reload(self) -> int:

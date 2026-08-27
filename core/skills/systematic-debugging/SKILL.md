@@ -5,8 +5,8 @@ description: Hypothesis-driven root cause debugging — reproduce, isolate, veri
 tags: [debugging workflow, root cause, hypothesis testing, reproduce first,
        isolate variable, 排查思路, 根因分析, 假设验证, 复现问题, 定位根因,
        systematic debugging, fault isolation, 故障排查, broken code,
-       why broken, 不对劲, 出问题了, something is wrong, bug 排查,
-       troubleshoot, troubleshooting]
+       why broken, why is this broken, 不对劲, 出问题了, something is wrong,
+       bug 排查, troubleshoot, troubleshooting]
 triggers:
   - "find the root cause"
   - "why is this broken"

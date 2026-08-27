@@ -62,8 +62,42 @@ def classify_vibesop_hook_command(cmd: str) -> bool:
     return bool(command_basenames(cmd) & VIBESOP_HOOK_SCRIPT_BASENAMES)
 
 
+def _is_double_quoted(tok: str) -> bool:
+    return len(tok) >= 2 and tok[0] == tok[-1] == '"'
+
+
+def _normalize_script_token(raw: str, *, quoted: bool) -> str | None:
+    """Normalize a vibesop hook script token, or None if confidence is low."""
+    norm = raw.replace("\\", "/")
+    allowed = _PATH_ALLOWED | ({" "} if quoted else set())
+    if not norm.lower().endswith(".sh"):
+        return None
+    if not norm or any(ch not in allowed for ch in norm):
+        return None
+    basename = norm.rsplit("/", 1)[-1]
+    if basename not in VIBESOP_HOOK_SCRIPT_BASENAMES:
+        return None
+    win_abs = (
+        len(norm) >= 3 and norm[0] in string.ascii_letters and norm[1] == ":" and norm[2] == "/"
+    )
+    posix_abs = norm.startswith("/")
+    relative_hooks = norm.startswith("hooks/") and "/" not in norm[6:]
+    if relative_hooks:
+        return norm
+    if not (posix_abs or win_abs):
+        return None
+    if sys.platform != "win32" and win_abs:
+        return None
+    if sys.platform == "win32" and posix_abs and not win_abs:
+        return None
+    return norm
+
+
 def parse_hook_script_command(cmd: str) -> str | None:
-    """Strictly parse ``<bash> <script>`` into a normalized POSIX path.
+    """Parse a vibesop hook command into a normalized POSIX script path.
+
+    Accepts ``<bash> <script>`` (legacy) and a single script token (quoted
+    absolute, unquoted absolute, or config-relative ``hooks/<name>.sh``).
 
     Returns None whenever confidence is low: wrong token count, non-bash
     interpreter, characters outside the allowlist, non-absolute or
@@ -71,30 +105,18 @@ def parse_hook_script_command(cmd: str) -> str | None:
     Callers must treat None as "do not rewrite".
     """
     try:
-        tokens = [unwrap_token(t) for t in shlex.split(cmd, posix=False)]
+        raw_tokens = shlex.split(cmd, posix=False)
     except ValueError:
         return None
+    tokens = [unwrap_token(t) for t in raw_tokens]
+    if len(tokens) == 1:
+        return _normalize_script_token(tokens[0], quoted=_is_double_quoted(raw_tokens[0]))
     if len(tokens) != 2:
         return None
     interp, raw = tokens
     interp_n = interp.replace("\\", "/").lower()
-    norm = raw.replace("\\", "/")
     if interp_n not in ("bash", "bash.exe") and not interp_n.endswith("/bash.exe"):
         return None
-    if not norm.lower().endswith(".sh"):
+    if sys.platform != "win32" and interp_n != "bash":
         return None
-    if not norm or any(ch not in _PATH_ALLOWED for ch in norm):
-        return None
-    win_abs = (
-        len(norm) >= 3 and norm[0] in string.ascii_letters and norm[1] == ":" and norm[2] == "/"
-    )
-    posix_abs = norm.startswith("/")
-    if not (posix_abs or win_abs):
-        return None
-    if sys.platform != "win32" and (win_abs or interp_n != "bash"):
-        return None
-    if sys.platform == "win32" and posix_abs and not win_abs:
-        return None
-    if norm.rsplit("/", 1)[-1] not in VIBESOP_HOOK_SCRIPT_BASENAMES:
-        return None
-    return norm
+    return _normalize_script_token(raw, quoted=_is_double_quoted(raw_tokens[1]))

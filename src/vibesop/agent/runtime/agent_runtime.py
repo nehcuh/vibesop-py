@@ -194,38 +194,13 @@ class AgentRuntimeResult:
         if "/" in self.skill_id:
             namespace, bare_name = self.skill_id.split("/", 1)
             if namespace == "builtin":
-                import sys
+                from vibesop.utils.bundled import resolve_builtin_skills_dir
 
-                builtin_candidates = [user_root / "core" / "skills" / bare_name / "SKILL.md"]
-                # Same resolution ladder as skill_injector._load_skill_content
-                # Strategy 0: wheel bundle via __file__, then dev-repo core/.
-                from vibesop.utils.bundled import bundled_path
-
-                bundled_file = bundled_path("builtin_skills") / bare_name / "SKILL.md"
-                if bundled_file not in builtin_candidates:
-                    builtin_candidates.append(bundled_file)
-                import vibesop as _vibesop
-
-                repo_file = (
-                    Path(_vibesop.__file__).parent.parent.parent
-                    / "core"
-                    / "skills"
-                    / bare_name
-                    / "SKILL.md"
-                )
-                if repo_file not in builtin_candidates:
-                    builtin_candidates.append(repo_file)
-                for path_entry in sys.path:
-                    if not path_entry:
-                        continue
-                    bundled = (
-                        Path(path_entry) / "vibesop" / "builtin_skills" / bare_name / "SKILL.md"
-                    )
-                    if bundled not in builtin_candidates:
-                        builtin_candidates.append(bundled)
-                hint_path = next(
-                    (p.as_posix() for p in builtin_candidates if p.exists()),
-                    f"core/skills/{bare_name}/SKILL.md",
+                hint_file = resolve_builtin_skills_dir(user_root) / bare_name / "SKILL.md"
+                hint_path = (
+                    hint_file.as_posix()
+                    if hint_file.exists()
+                    else f"core/skills/{bare_name}/SKILL.md"
                 )
             else:
                 hint_path = f"skills/{skill_flat}/SKILL.md"

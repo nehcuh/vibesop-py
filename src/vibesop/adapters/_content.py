@@ -106,13 +106,14 @@ def find_skill_content(skill_id: str, project_root: Path) -> str | None:
     # Strip namespace prefix for directory lookup (e.g. "builtin/instinct" → "instinct")
     name_only = skill_id.split("/", 1)[1] if "/" in skill_id else skill_id
 
+    from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+    builtin = resolve_builtin_skills_dir(project_root)
     skill_paths = [
-        project_root / "core" / "skills" / name_only / "SKILL.md",
-        project_root / "core" / "skills" / skill_id / "SKILL.md",
+        builtin / name_only / "SKILL.md",
+        builtin / skill_id / "SKILL.md",
         project_root / "skills" / name_only / "SKILL.md",
         project_root / "skills" / skill_id / "SKILL.md",
-        Path(__file__).parent.parent / "core" / "skills" / name_only / "SKILL.md",
-        Path(__file__).parent.parent / "core" / "skills" / skill_id / "SKILL.md",
     ]
 
     for skill_path in skill_paths:

@@ -237,8 +237,10 @@ class SkillInjector:
         home = Path.home()
 
         # Candidate base directories in priority order
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
+
         candidate_dirs: list[Path] = [
-            self.project_root / "core" / "skills",
+            resolve_builtin_skills_dir(self.project_root),
             self.project_root / ".vibe" / "skills",
             home / ".claude" / "skills",
             home / ".pi" / "agent" / "skills",
@@ -248,51 +250,12 @@ class SkillInjector:
         ]
 
         # Strategy 0 (builtin skills only): strip namespace prefix.
-        # SKILL.md frontmatter carries namespaced ids like "builtin/xxx",
-        # but on-disk layout is flat (no "builtin/" segment, no "builtin-"
-        # prefix). Four locations carry builtin skills, tried in order:
-        #
-        #   1. Dev repo:        <project_root>/core/skills/{name}/SKILL.md
-        #       (when running inside the vibesop-py repo itself)
-        #   2. Wheel bundle:    <pkg-dir>/vibesop/builtin_skills/{name}/SKILL.md
-        #       (force-include data per commit 185dfe4; resolved via
-        #        bundled_path/__file__ — covers pipx/uv-tool installs)
-        #   3. Repo derivation: <repo>/core/skills (editable/dev installs,
-        #       __file__-based, works even when the venv is not on sys.path)
-        #   4. sys.path scan:   <sys.path entry>/vibesop/builtin_skills/...
-        #       (legacy fallback for exotic layouts)
-        #
-        # External packs (gstack/yyy) are NOT stripped here — they keep
-        # pack-prefixed flat dirs (Strategy 1/2 below).
+        # On-disk layout is flat. Resolution is a single policy:
+        # resolve_builtin_skills_dir (identified checkout → wheel).
+        # External packs (gstack/yyy) are NOT stripped here.
         if "/" in skill_id:
             name_only = skill_id.split("/", 1)[1]
-            strip_bases: list[Path] = [self.project_root / "core" / "skills"]
-            # Wheel-bundled copy: <pkg>/vibesop/builtin_skills (force-include).
-            # __file__-based, so it works even when the venv is not on sys.path
-            # in the usual way (quickstart in-process calls).
-            from vibesop.utils.bundled import bundled_path
-
-            strip_bases.append(bundled_path("builtin_skills"))
-            # Dev-repo derivation: src-layout checkout has no bundle; the
-            # repo's core/skills sits two levels above the package. Without
-            # this, a dev machine injecting into a NON-repo project (e.g.
-            # quickstart demo with project_root elsewhere) finds nothing.
-            import sys
-
-            repo_core = (
-                Path(sys.modules["vibesop"].__file__).parent.parent.parent / "core" / "skills"
-            )
-            if repo_core.exists():
-                strip_bases.append(repo_core)
-            # Scan sys.path for bundled builtin_skills data dirs. This finds
-            # both uv-tool installs and editable installs where data lives
-            # in site-packages alongside the .pth pointer.
-            for path_entry in sys.path:
-                if not path_entry:
-                    continue
-                bundled = Path(path_entry) / "vibesop" / "builtin_skills"
-                if bundled.exists():
-                    strip_bases.append(bundled)
+            strip_bases: list[Path] = [resolve_builtin_skills_dir(self.project_root)]
             for base in strip_bases:
                 direct = base / name_only / "SKILL.md"
                 if direct.exists():

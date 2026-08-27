@@ -1,6 +1,18 @@
 
 ## Current Session
 
+### S51 (2026-08-27) [vibesop-py] pull + 三路独立对抗评审（gate45/46 落地窗）
+
+- 拉取：`e286e67` → `f6a90fd`（ff-only，22 commits，63 files +3237/−1736）
+- 路由命中 `fuck-my-shit-mountain`（69%）但磁盘无 SKILL.md；按用户原话走项目既有「多路独立对抗评审」
+- 三路均 NEEDS_FIX，0 BLOCKER；A 2 MAJOR / B 3 MAJOR + WATCH / C 4 MAJOR（6 invariant BROKEN）
+- 合成：**REQUEST CHANGES**（任何 MAJOR 即不可 APPROVE）。经验复验：三路 MAJOR 几乎不重叠
+- 产物：`docs/decisions/_review-s51-gate45-46-{brief,merged}.md` + `_review-s51-lane-{correctness,architecture,invariants}.md`
+- Next: 用户贴了 Windows `command not found: ~/.claude\\"C:/Users/Huchen/..."`。quoted POSIX 被否证。M1 改为 `hooks/<name>.sh`；本机 settings 已改并 `vibe build claude-code -o ~/.claude`。M1–M7 已落地（plan v1 双路 REJECT，按 v1.1 锁点实施）。
+- 验证：[executed] `ruff check src/ tests/` pass；`ruff format --check src/ tests/` 717 files already formatted；定向 194 passed / 1 skipped
+- Next: 原子提交 + push origin main
+- Recorded: no（push 后再写 project-knowledge）
+
 ### S50 (2026-08-27) [vibesop-py] gate46 块2 quickstart 双平台 aha — 全流程闭环（设计→双路确认→实施→双路复审→P1 清零→8 commits）
 
 - 设计稿 → grok + claude-pi 双路确认（v2.1 PASS）；实施 4 演示技能（commit-message/test-generation/code-review/systematic-debugging，双语 keyless tags）+ 注入预览 + 双平台探针

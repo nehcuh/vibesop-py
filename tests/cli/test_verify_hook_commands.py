@@ -17,6 +17,7 @@ from typing import Any
 from vibesop.cli.commands.verify import PLATFORM_CONFIGS, _check_platform
 
 HEALTHY_MAC_ROUTE = "bash /Users/h/.claude/hooks/vibesop-route.sh"
+HEALTHY_WIN_ROUTE = "hooks/vibesop-route.sh"
 USER_POWERSHELL = r"powershell.exe -File C:\Users\x\hook.ps1"
 
 
@@ -52,34 +53,34 @@ def test_user_command_mentioning_basename_is_not_route(tmp_path, monkeypatch) ->
     assert result["pass"], result["detail"]
 
 
-def test_win32_canonical_one_token_passes(tmp_path, monkeypatch) -> None:
+def test_win32_canonical_relative_passes(tmp_path, monkeypatch) -> None:
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        [HEALTHY_WIN_ROUTE, USER_POWERSHELL],
+        "win32",
+    )
+    assert result["pass"], result["detail"]
+
+
+def test_win32_quoted_posix_fails(tmp_path, monkeypatch) -> None:
     result = _route_hook_result(
         tmp_path,
         monkeypatch,
         ['"C:/Users/h/.claude/hooks/vibesop-route.sh"', USER_POWERSHELL],
         "win32",
     )
-    assert result["pass"], result["detail"]
+    assert not result["pass"], result["detail"]
 
 
-def test_win32_spaced_username_canonical_passes(tmp_path, monkeypatch) -> None:
+def test_win32_quoted_spaced_username_fails(tmp_path, monkeypatch) -> None:
     result = _route_hook_result(
         tmp_path,
         monkeypatch,
         ['"C:/Users/First Last/.claude/hooks/vibesop-route.sh"', USER_POWERSHELL],
         "win32",
     )
-    assert result["pass"], result["detail"]
-
-
-def test_win32_single_quoted_spaced_path_passes(tmp_path, monkeypatch) -> None:
-    result = _route_hook_result(
-        tmp_path,
-        monkeypatch,
-        ["'C:/Users/First Last/.claude/hooks/vibesop-route.sh'", USER_POWERSHELL],
-        "win32",
-    )
-    assert result["pass"], result["detail"]
+    assert not result["pass"], result["detail"]
 
 
 def test_win32_bash_prefix_fails(tmp_path, monkeypatch) -> None:

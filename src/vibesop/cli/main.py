@@ -491,11 +491,12 @@ def route(
         "(deployed as the grok UserPromptSubmit JSON hook — gate33). "
         "Prints the hook response envelope and always exits 0.",
     ),
-    hook_platform: str = typer.Option(
-        "grok-build",
+    hook_platform: str | None = typer.Option(
+        None,
         "--platform",
         help="Hook mode only: platform whose injection format to use. "
-        "Also readable from the stdin JSON 'platform' field (flag wins).",
+        "When passed, the flag wins over the stdin JSON 'platform' field. "
+        "Default grok-build.",
     ),
     min_confidence: float | None = typer.Option(
         None,
@@ -653,15 +654,12 @@ def route(
         # gate46 dual-review: platform is parameterizable (CLI flag > JSON
         # envelope field > grok-build default) so the dual-platform probe
         # exercises two real platform strings, not one path twice.
-        platform = hook_platform
+        json_platform = None
         if isinstance(payload, dict):
             env_platform = payload.get("platform")
-            if (
-                hook_platform == "grok-build"
-                and isinstance(env_platform, str)
-                and env_platform.strip()
-            ):
-                platform = env_platform.strip()
+            if isinstance(env_platform, str) and env_platform.strip():
+                json_platform = env_platform.strip()
+        platform = hook_platform or json_platform or "grok-build"
         try:
             out = AgentRuntime(project_root=root).handle_query_for_hook(
                 hook_query,
@@ -1436,8 +1434,9 @@ def _orchestration_confirmation_flow(
         # not starve under the ambiguous_only default. Unattended runs
         # (--yes/--json/validate/non-TTY/never) are excluded — the
         # orchestrator already records those via the context flag.
-        if not _is_unattended_run(yes, json_output, validate, router):
-            _record_plan_sequence(plan, success=False, query=result.original_query or "")
+        # Auto-proceed (ambiguous_only + all-confident TTY) is not an
+        # explicit human signal. Recording success=False here is anti-signal
+        # for a promoter that requires success_rate >= 0.8. Omit.
         return True
 
     if not already_rendered:

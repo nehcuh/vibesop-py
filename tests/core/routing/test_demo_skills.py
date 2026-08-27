@@ -53,6 +53,7 @@ VERIFIED_DEMO_QUERIES: list[tuple[str, str]] = [
 # — that tier is pre-existing ownerless-query noise, not a steal.
 PACK_OWNED_QUERIES: list[tuple[str, str]] = [
     ("write tests", "superpowers/test-driven-development"),
+    ("review my changes", "superpowers/review"),
 ]
 
 
@@ -80,6 +81,10 @@ def _isolate_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_packs: b
             ("superpowers", "test-driven-development"): (
                 "TDD red-green-refactor workflow",
                 ["tdd", "write tests", "test first", "red green refactor", "测试驱动"],
+            ),
+            ("superpowers", "review"): (
+                "Review pending changes",
+                ["review", "review my changes", "code review", "走查"],
             ),
             ("omx", "ultraqa"): (
                 "QA loop orchestration",
@@ -198,7 +203,6 @@ class TestDemoSkillDualStateRouting:
         for query, owner in PACK_OWNED_QUERIES:
             result = router.route(query)
             got = result.get("skill_id") or ""
-            layer = result.get("layer") or ""
-            assert not (got.startswith("builtin/") and layer == "keyword"), (
-                f"{query!r} keyword-stolen by {got} (owner: {owner})"
+            assert not str(got).startswith("builtin/"), (
+                f"{query!r} stolen by {got} layer={result.get('layer')} (owner: {owner})"
             )

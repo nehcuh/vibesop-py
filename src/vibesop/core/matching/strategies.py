@@ -705,6 +705,20 @@ class EmbeddingMatcher:
         }
 
 
+# Aha demo builtins must not win pack-owned phrases via last-resort fuzzy
+# match (`write tests` → commit-message, `review my changes` → code-review).
+LEVENSHTEIN_EXCLUDED_SKILL_IDS = frozenset(
+    {
+        "builtin/commit-message",
+        "builtin/code-review",
+        "builtin/test-generation",
+        "commit-message",
+        "code-review",
+        "test-generation",
+    }
+)
+
+
 class LevenshteinMatcher:
     """Fuzzy matcher using Levenshtein distance."""
 
@@ -722,6 +736,9 @@ class LevenshteinMatcher:
         results: list[MatchResult] = []
 
         for candidate in candidates:
+            skill_id = str(candidate.get("id", ""))
+            if skill_id in LEVENSHTEIN_EXCLUDED_SKILL_IDS:
+                continue
             score = self.score(query, candidate, context)
 
             if score >= self._config.min_confidence:

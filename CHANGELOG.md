@@ -34,19 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   提示）与「内容不安全」（→ `[VibeSOP SECURITY]` 安全告警），不再用安全
   恐吓文案报数据问题；编排路径（`PlanExecutor.build_manifest`）同步接入
   空内容 gate，占位符标记提为共享常量。
-- **`ambiguous_only` 默认下编排学习信号断流**：TTY + 全步骤高置信的编排计划
-  既不走确认流（无 success=True 来源）也不带 `_sequence_unattended` 预置
-  flag（context 建立时 step 置信度未知），plan sequence 什么都不记。现在
-  确认跳过点补记 application-only 遥测（success=False），隐私规则不变
-  （success=True 仍仅来自显式确认）。
+- **`ambiguous_only` 编排跳过不再写反信号**：`ExecutionStep.confidence`
+  接入 PlanBuilder，TTY + 全步骤高置信时确认流会跳过。跳过点**不**写入
+  plan-sequence（`success=False` 会把 promoter 的成功率往 0 拉）。只有显式
+  Confirm 才写 `success=True`。aha / `vibe route --hook` 不在此学习环内。
+  `--yes` / `--json` / 非 TTY 的 unattended 路径仍记 application-only。
 - **`vibe route --help` 与 CLI_REFERENCE 沿用旧默认文案**：docstring 仍称
   「默认每次确认」，与新默认 `ambiguous_only` 矛盾，两处已改。
 
-- **Claude Code Windows hook command**: wrapping
-  `"C:/Program Files/Git/bin/bash.exe"` still failed — Git Bash `-c` splits
-  on the space (`C:/Program: No such file`, exit 127). Emit a quoted POSIX
-  script path only (host already provides bash). `vibe verify claude-code`
-  now rejects backslash paths and Git-bash.exe wrappers.
+- **Claude Code Windows hook command**: quoted POSIX absolute
+  (`"C:/Users/.../vibesop-tool-seq.sh"`) is not `path.win32.isAbsolute`,
+  so Claude joins `~/.claude\\` onto it (`command not found:
+  C:\\Users\\...\\.claude\\"C:/Users/..."`). Canonical form is
+  config-relative `hooks/<script>.sh`. Rebuild rewrites the quoted
+  legacy form. `vibe verify claude-code` flags quoted paths as unsafe.
 - **Claude Code Windows hook Python**: after the path fix, the script still
   defaulted to `python3` (Microsoft Store stub) because uv-tool lookup only
   checked `~/.local/share/uv/tools/vibesop/bin/python`. Also search

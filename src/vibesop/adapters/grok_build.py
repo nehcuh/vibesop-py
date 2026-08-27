@@ -138,15 +138,13 @@ class GrokBuildAdapter(PlatformAdapter):
 
     @staticmethod
     def _count_builtin_skills() -> int:
-        """Count builtin skill dirs using the same resolution ladder as the
-        candidate manager (repo checkout first, wheel bundle second)."""
-        import vibesop as _vibesop
+        """Count builtin skill dirs via ``resolve_builtin_skills_dir``."""
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
 
-        repo_core = Path(_vibesop.__file__).parent.parent.parent / "core" / "skills"
-        for base in (repo_core, Path(_vibesop.__file__).parent / "builtin_skills"):
-            if base.is_dir():
-                return sum(1 for p in base.iterdir() if p.is_dir() and not p.name.startswith("."))
-        return 0
+        base = resolve_builtin_skills_dir()
+        if not base.is_dir():
+            return 0
+        return sum(1 for p in base.iterdir() if p.is_dir() and not p.name.startswith("."))
 
     @staticmethod
     def _render_routing_rule() -> str:
@@ -210,7 +208,7 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": "vibe route --hook",
+                                "command": "vibe route --hook --platform grok-build",
                                 "timeout": 30,
                             }
                         ],

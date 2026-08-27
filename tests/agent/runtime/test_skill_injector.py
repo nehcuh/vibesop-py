@@ -208,9 +208,9 @@ class TestSkillInjector:
         assert "skill-a" in result.payload
 
     def test_load_skill_from_core_skills(self, tmp_path) -> None:
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         injector = SkillInjector(project_root=tmp_path)
 
-        # Create a mock skill file
         skill_dir = tmp_path / "core" / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("# Test Skill from core", encoding="utf-8")
@@ -312,6 +312,7 @@ class TestSkillInjector:
         fell back to the "Skill content not found" placeholder and the
         agent saw an empty ACTIVE SKILL block.
         """
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         injector = SkillInjector(project_root=tmp_path)
 
         skill_dir = tmp_path / "core" / "skills" / "deep-diagnosis-optimization"
@@ -390,6 +391,7 @@ class TestSkillInjector:
         ensures uncommitted changes win during local testing.
         """
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "fakehome")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
 
         # Dev repo layout (preferred).
         dev = tmp_path / "core" / "skills" / "foo-skill"

@@ -415,6 +415,7 @@ class PlanBuilder:
                     estimated_risk=risk,
                     estimated_file_count=len(source_files),
                     source_files=source_files,
+                    confidence=float(confidence),
                 )
             )
             last_step_id = step_id
