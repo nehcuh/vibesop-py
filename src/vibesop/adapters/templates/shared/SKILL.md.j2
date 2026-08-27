@@ -25,10 +25,11 @@ type: {{ skill.skill_type or 'prompt' }}
 **Author**: {{ skill.author }}
 {% endif %}
 
+{% if skill.trigger_when %}
 ## When to Use
 
 {{ skill.trigger_when }}
-
+{% endif %}
 {% if skill.tags %}
 **Tags**: {{ skill.tags | join(', ') }}
 {% endif %}

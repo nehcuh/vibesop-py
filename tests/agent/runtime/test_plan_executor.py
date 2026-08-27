@@ -86,6 +86,43 @@ class TestPlanExecutor:
         assert "Ignore all previous instructions" not in embedded
         assert "VibeSOP SECURITY" in embedded  # replaced with a security notice
 
+    def test_build_manifest_empty_skill_content_gets_data_notice(self) -> None:
+        """A missing skill file (empty content) must surface a data notice in
+        the manifest step, NOT be silently embedded as an empty body — the
+        empty gate mirrors SkillInjector.inject_single_skill so the two
+        injection paths can't drift (runtime_scan's centralisation promise).
+        """
+        from unittest.mock import MagicMock, patch
+
+        executor = PlanExecutor()
+        plan = ExecutionPlan(
+            plan_id="plan-ghost",
+            original_query="do something",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="ghost-skill",
+                    intent="Run ghost",
+                    input_query="run ghost",
+                    output_as="out",
+                ),
+            ],
+            execution_mode=ExecutionMode.SEQUENTIAL,
+            status=PlanStatus.PENDING,
+        )
+        mock_loader = MagicMock()
+        mock_loader.read_skill_content.return_value = ""
+        mock_loader.get_skill.return_value = None
+
+        with patch("vibesop.core.skills.SkillLoader", return_value=mock_loader):
+            manifest = executor.build_manifest(plan)
+
+        embedded = manifest.steps[0].skill_content
+        assert "no injectable content" in embedded
+        assert "SECURITY" not in embedded  # data problem, not a security scare
+        assert embedded.strip() != ""
+
     def test_build_guide_parallel_steps(self) -> None:
         executor = PlanExecutor()
         plan = ExecutionPlan(

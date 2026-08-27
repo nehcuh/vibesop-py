@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -75,10 +76,19 @@ class TestAgentRuntimeFullChain:
         )
 
         injector = SkillInjector()
-        injection = injector.inject_single_skill(
-            skill_id="gstack-review",
-            platform=PlatformType.CLAUDE_CODE,
-        )
+        # Content loading is mocked so the chain test does not depend on
+        # machine-local skill installs (and never silently exercises the
+        # "content not found" placeholder path). Real multi-path loader
+        # resolution stays covered in tests/agent/runtime/test_skill_injector.py.
+        with patch.object(
+            injector,
+            "_load_skill_content",
+            return_value="# gstack/review\n\nStructured code review workflow.",
+        ):
+            injection = injector.inject_single_skill(
+                skill_id="gstack-review",
+                platform=PlatformType.CLAUDE_CODE,
+            )
 
         assert injection.method == InjectionMethod.ADDITIONAL_CONTEXT
         assert "gstack-review" in injection.payload.get("additionalContext", "")
@@ -189,10 +199,15 @@ class TestAgentRuntimeFullChain:
         assert "explicit" in decision.reason.lower() or "override" in decision.reason.lower()
 
         injector = SkillInjector()
-        injection = injector.inject_single_skill(
-            skill_id="gstack-review",
-            platform=PlatformType.KIMI_CLI,
-        )
+        with patch.object(
+            injector,
+            "_load_skill_content",
+            return_value="# gstack/review\n\nStructured code review workflow.",
+        ):
+            injection = injector.inject_single_skill(
+                skill_id="gstack-review",
+                platform=PlatformType.KIMI_CLI,
+            )
 
         assert injection.method == InjectionMethod.INSTRUCTION
         assert "gstack-review" in str(injection.payload)

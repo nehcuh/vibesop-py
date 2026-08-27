@@ -13,6 +13,7 @@ These functions form the skill lifecycle layer:
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -314,7 +315,7 @@ def render_skill_md(
     if skill_dict.get("description"):
         skill_dict["description"] = _yaml_dquote(skill_dict["description"])
 
-    return template.render(
+    rendered = template.render(
         skill=skill_dict,
         metadata={
             "created_at": datetime.now(),
@@ -322,6 +323,11 @@ def render_skill_md(
         },
         version=version,
     )
+    # Cap blank-line runs at two so empty template sections can never ship
+    # blank-run-heavy stubs (2026-08-27: a stub with an empty "When to Use"
+    # section rendered enough consecutive newlines to trip the runtime
+    # injection heuristic, flagging VibeSOP's own generated stub as tampered).
+    return re.sub(r"\n{4,}", "\n\n\n", rendered)
 
 
 __all__ = [

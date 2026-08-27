@@ -43,3 +43,18 @@ def unsafe_replacement_notice(skill_id: str) -> str:
         f"have been modified after install or contains a threat. Re-install or "
         f"audit it before use."
     )
+
+
+def empty_content_notice(skill_id: str) -> str:
+    """The notice injected when a skill resolves to no injectable content.
+
+    Deliberately NOT a security notice: a missing file or contentless registry
+    stub is a routing/data problem. Shipping a scary "flagged unsafe" message
+    here (the previous behaviour conflated the two) trains users to ignore
+    the real security notice above.
+    """
+    return (
+        f"[VibeSOP] Skill '{skill_id}' has no injectable content (generated "
+        f"registry stub or missing SKILL.md body); nothing was injected. "
+        f"Re-install the skill or check its source."
+    )

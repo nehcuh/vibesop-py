@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Runtime 安全扫描误报（自产 stub 被判「疑似篡改」）**：`DefaultHeuristicAnalyzer`
+  的 `\n{5,}`（"过多换行 = 注入企图"）规则把 VibeSOP 自己生成的 manifest
+  stub 判为 unsafe——stub 的空 "When to Use" 段渲染出 4 个连续空行即触发，
+  注入被替换为「可能被篡改/含威胁」的恐吓文案。修复三连：① 移除 `\n{5,}`
+  独立启发式（纯空行不构成注入信号）；② SKILL.md.j2 模板对空段做 if-guard，
+  且 `render_skill_md` 渲染后把 3+ 空行折叠为至多 2 行，杜绝再次产出空行堆；③
+  injector 区分「内容为空」（registry stub / 文件缺失 → `[VibeSOP]` 普通
+  提示）与「内容不安全」（→ `[VibeSOP SECURITY]` 安全告警），不再用安全
+  恐吓文案报数据问题；编排路径（`PlanExecutor.build_manifest`）同步接入
+  空内容 gate，占位符标记提为共享常量。
+
 - **Claude Code Windows hook command**: wrapping
   `"C:/Program Files/Git/bin/bash.exe"` still failed — Git Bash `-c` splits
   on the space (`C:/Program: No such file`, exit 127). Emit a quoted POSIX

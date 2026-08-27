@@ -122,8 +122,12 @@ class DefaultHeuristicAnalyzer:
             ),
             # Mixed encoding attempts
             (r"[a-zA-Z]{3,}[0-9]{3,}[a-zA-Z]{3,}", ThreatType.INDIRECT_INJECTION),
-            # Excessive line breaks (common in injection attempts)
-            (r"\n{5,}", ThreatType.INSTRUCTION_INJECTION),
+            # NOTE: no bare "\n{5,}" (excessive line breaks) rule. Blank-line
+            # runs are normal markdown formatting and carry no solo injection
+            # signal; as a standalone MEDIUM threat it only produced false
+            # positives (2026-08-27: VibeSOP's own generated registry stub
+            # was flagged as "tampered" because its empty "When to Use"
+            # section rendered 4 blank lines).
         ]
 
     def analyze(self, text: str) -> list[Threat]:

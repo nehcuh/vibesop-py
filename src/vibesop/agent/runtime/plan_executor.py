@@ -114,16 +114,26 @@ class PlanExecutor:
 
         for step in plan.steps:
             skill_content = loader.read_skill_content(step.skill_id)
-            # Runtime security gate (parallel to SkillInjector.inject_single_skill):
-            # the install-time audit is the only other check, so post-install
-            # tampering of SKILL.md would otherwise reach the agent prompt
-            # verbatim via the manifest. Refuse (embed a notice) if unsafe.
+            # Content gates (parallel to SkillInjector.inject_single_skill):
+            # 1. Empty gate — a missing file is a data problem: surface a
+            #    notice instead of silently embedding an empty step body.
+            # 2. Runtime security gate — the install-time audit is the only
+            #    other check, so post-install tampering of SKILL.md would
+            #    otherwise reach the agent prompt verbatim via the manifest.
+            #    Refuse (embed a notice) if unsafe.
             from vibesop.security.runtime_scan import (
+                empty_content_notice,
                 is_skill_content_safe,
                 unsafe_replacement_notice,
             )
 
-            if not is_skill_content_safe(skill_content):
+            if not skill_content.strip():
+                logger.warning(
+                    "Skill '%s' resolved to no injectable content for manifest step.",
+                    step.skill_id,
+                )
+                skill_content = empty_content_notice(step.skill_id)
+            elif not is_skill_content_safe(skill_content):
                 logger.warning(
                     "Refusing to embed skill '%s' in execution manifest: "
                     "runtime security scan flagged the content unsafe.",

@@ -78,6 +78,31 @@ class TestSkillInjector:
         assert result.method == InjectionMethod.TEXT
         assert "VibeSOP SECURITY" in str(result.payload)
 
+    def test_empty_content_gets_data_notice_not_security_scare(self, tmp_path) -> None:
+        """A contentless registry stub or missing file is a data problem, not a
+        security finding. Previously the placeholder text flowed into the
+        platform payload (or worse, blank-run-heavy stubs tripped the runtime
+        scan and produced a "may have been tampered" security notice). The
+        notice must say "no injectable content" and must NOT cry security.
+        """
+        injector = SkillInjector(project_root=tmp_path)
+
+        placeholder = "# Skill: ghost/skill\n\n*Skill content not found at expected locations.*"
+        with patch.object(injector, "_load_skill_content", return_value=placeholder):
+            result = injector.inject_single_skill("ghost/skill", PlatformType.CLAUDE_CODE)
+
+        assert result.method == InjectionMethod.TEXT
+        assert "no injectable content" in str(result.payload)
+        assert "SECURITY" not in str(result.payload)
+        assert "*Skill content not found*" not in str(result.payload)
+
+        with patch.object(injector, "_load_skill_content", return_value="   \n"):
+            empty = injector.inject_single_skill("ghost/skill", PlatformType.PI)
+
+        assert empty.method == InjectionMethod.TEXT
+        assert "no injectable content" in str(empty.payload)
+        assert "SECURITY" not in str(empty.payload)
+
     def test_opencode_injection(self, tmp_path) -> None:
         injector = SkillInjector(project_root=tmp_path)
 

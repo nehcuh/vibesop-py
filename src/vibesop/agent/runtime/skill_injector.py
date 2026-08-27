@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Not-found placeholder emitted by ``_load_skill_content``; the empty-content
+# gate in ``inject_single_skill`` keys on this marker. Producer and gate must
+# share one constant — a drifted literal would silently disable the gate and
+# let the placeholder text be injected as if it were skill content.
+CONTENT_NOT_FOUND_MARKER = "*Skill content not found"
+
 
 class PlatformType(StrEnum):
     """Supported AI agent platforms."""
@@ -100,6 +106,22 @@ class SkillInjector:
             InjectionResult with platform-specific payload
         """
         skill_content = self._load_skill_content(skill_id)
+
+        # Empty/placeholder content gate: a registry stub or a missing file is
+        # a data problem, not a security finding — report it as such instead
+        # of letting the placeholder text (or an empty payload) reach the
+        # agent context.
+        if not skill_content.strip() or CONTENT_NOT_FOUND_MARKER in skill_content:
+            from vibesop.security.runtime_scan import empty_content_notice
+
+            logger.warning(
+                "Skill '%s' resolved to no injectable content; skipping injection.", skill_id
+            )
+            return InjectionResult(
+                method=InjectionMethod.TEXT,
+                payload=empty_content_notice(skill_id),
+                skill_id=skill_id,
+            )
 
         # Runtime security gate: re-scan the loaded content before injecting.
         # The install-time audit is otherwise the ONLY check, so a post-install
@@ -314,7 +336,7 @@ class SkillInjector:
             except (OSError, PermissionError):
                 pass
 
-        return f"# Skill: {skill_id}\n\n*Skill content not found at expected locations.*"
+        return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
 
     def _is_content_safe(self, content: str) -> tuple[bool, str]:
         """Runtime security check of skill content before injection.
