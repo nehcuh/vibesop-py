@@ -243,8 +243,11 @@ def load_merged_scenario_config(project_root: str | Path = ".") -> dict[str, Any
     Returns:
         Dictionary with "strategies" and "keywords" keys.
     """
-    # Load global config from core/registry.yaml
-    global_config = load_registry_scenario_config(Path(project_root) / "core" / "registry.yaml")
+    # Load global config from core/registry.yaml (repo checkout, or the
+    # wheel-bundled copy on pipx/uv-tool installs).
+    from vibesop.utils.bundled import bundled_core_file
+
+    global_config = load_registry_scenario_config(bundled_core_file("registry.yaml", Path(project_root)))
 
     # Load project routing
     project_routing = load_project_routing(project_root)

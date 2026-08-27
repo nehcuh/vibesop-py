@@ -380,10 +380,33 @@ def test_load_registry_logs_error_on_parse_failure(
 
 
 def test_load_registry_returns_empty_when_missing(tmp_path: Path) -> None:
-    """No registry.yaml -> empty contract (this path is fine to stay quiet)."""
+    """Neither a repo checkout nor a wheel bundle -> empty (quiet is fine)."""
     manager = ConfigManager(project_root=str(tmp_path))
     registry = manager.load_registry(force_reload=True)
     assert registry == {"skills": [], "version": "1.0.0"}
+
+
+def test_load_registry_falls_back_to_wheel_bundle(tmp_path: Path, monkeypatch) -> None:
+    """pipx/uv-tool installs have no repo checkout: the wheel-bundled
+    registry.yaml (vibesop/builtin_data/core/) must actually be parsed
+    and served, not just path-resolved."""
+    import vibesop
+
+    fake_pkg = tmp_path / "site-packages" / "vibesop"
+    bundled = fake_pkg / "builtin_data" / "core" / "registry.yaml"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_text(
+        "skills:\n  - id: bundled-demo\n    name: Bundled demo\n",
+        encoding="utf-8",
+    )
+    fake_init = fake_pkg / "__init__.py"
+    fake_init.write_text("", encoding="utf-8")
+    monkeypatch.setattr(vibesop, "__file__", str(fake_init))
+
+    manager = ConfigManager(project_root=str(tmp_path))
+    registry = manager.load_registry(force_reload=True)
+
+    assert [s["id"] for s in registry["skills"]] == ["bundled-demo"]
 
 
 # ---------------------------------------------------------------------------

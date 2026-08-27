@@ -80,7 +80,6 @@ REQUIRED_FILES=(
     "CHANGELOG.md"
     "CONTRIBUTING.md"
     "pyproject.toml"
-    "MANIFEST.in"
 )
 
 ALL_FILES_PRESENT=true

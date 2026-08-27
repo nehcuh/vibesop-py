@@ -100,8 +100,13 @@ packages = ["src/vibesop"]
 
 # Bundle the builtin skills (core/skills/) into the wheel so they're available
 # on any installation (uv tool / pip / pipx), not just the dev repo checkout.
+# core/registry.yaml feeds the scenario layer + skill registry; core/policies
+# are reference material rendered into generated docs. Without them, wheel
+# installs silently route with zero scenarios/registry.
 [tool.hatch.build.targets.wheel.force-include]
 "core/skills" = "vibesop/builtin_skills"
+"core/registry.yaml" = "vibesop/builtin_data/core/registry.yaml"
+"core/policies" = "vibesop/builtin_data/core/policies"
 
 # ============================================
 # Ruff - Modern Python Linter

@@ -850,7 +850,11 @@ class ConfigManager:
         if not force_reload and cache_key in self._cache:
             return self._cache[cache_key]
 
-        registry_path = self.project_root / "core" / "registry.yaml"
+        # Repo checkout wins; wheel installs (pipx/uv tool) fall back to the
+        # bundled copy so routing does not silently run with an empty registry.
+        from vibesop.utils.bundled import bundled_core_file
+
+        registry_path = bundled_core_file("registry.yaml", self.project_root)
 
         if not registry_path.exists():
             return {"skills": [], "version": "1.0.0"}
