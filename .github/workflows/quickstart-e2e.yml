@@ -143,15 +143,31 @@ jobs:
           HOME: ${{ runner.temp }}/scratch-home
           USERPROFILE: ${{ runner.temp }}/scratch-home
         run: |
-          # Invoke the script file directly. Write JSON to a file first —
-          # python|bash pipes die with BrokenPipeError/exit 120 under
-          # `set -o pipefail` when the hook exits before python flushes.
           script="$HOME/.claude/hooks/vibesop-route.sh"
           test -f "$script"
-          payload="${RUNNER_TEMP:-/tmp}/claude-hook-in.json"
+          # Pin the generated command shape (Windows: config-relative;
+          # Unix: bash <abs>). Quoted POSIX is the live join-bug.
+          if grep -qF '"command": "hooks/vibesop-route.sh"' "$HOME/.claude/settings.json" \
+             || grep -qE '"command": "bash [^"]+vibesop-route.sh"' "$HOME/.claude/settings.json"; then
+            echo "ok: settings.json hook command shape"
+          else
+            echo "BAD command in settings.json:"
+            grep '"command"' "$HOME/.claude/settings.json" || true
+            exit 1
+          fi
+          # uv tool was installed BEFORE HOME redirect. The .sh script
+          # only searches $HOME for uv-tool python, so under scratch-home
+          # it prints {} in ~20ms. Smoke the injection path with `vibe`
+          # which remains on PATH. Files live in $PWD (working-directory
+          # is runner.temp) — do not use RUNNER_TEMP, whose Windows value
+          # contains `\t` (tab-expanded in bash double quotes).
+          payload="$PWD/claude-hook-in.json"
+          out="$PWD/claude-hook-out.txt"
           printf '%s\n' '{"prompt":"help me write a commit message","session_id":"e2e-claude"}' > "$payload"
-          bash "$script" < "$payload" > "${RUNNER_TEMP:-/tmp}/claude-hook-out.txt" || true
-          grep -qF "[ACTIVE SKILL: builtin/commit-message]" "${RUNNER_TEMP:-/tmp}/claude-hook-out.txt"
+          vibe route --hook --platform claude-code < "$payload" > "$out" || true
+          echo "----- hook stdout -----"
+          cat "$out" || true
+          grep -qF "[ACTIVE SKILL: builtin/commit-message]" "$out"
 
       - name: Dual-platform injection probe (claude-code vs grok-build)
         working-directory: ${{ runner.temp }}
