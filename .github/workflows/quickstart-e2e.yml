@@ -143,15 +143,15 @@ jobs:
           HOME: ${{ runner.temp }}/scratch-home
           USERPROFILE: ${{ runner.temp }}/scratch-home
         run: |
-          # The generated command is config-relative hooks/*.sh on Windows
-          # and `bash <abs>` on Unix. Invoke the script file directly so
-          # we do not depend on Claude's configDir join. Stdin is snake_case
-          # `prompt` — what vibesop-route.sh.j2 jq actually reads.
+          # Invoke the script file directly. Write JSON to a file first —
+          # python|bash pipes die with BrokenPipeError/exit 120 under
+          # `set -o pipefail` when the hook exits before python flushes.
           script="$HOME/.claude/hooks/vibesop-route.sh"
           test -f "$script"
-          "$(uv python find 3.12)" -c 'import json,sys; print(json.dumps({"prompt": sys.argv[1], "session_id": "e2e-claude"}))' \
-            "help me write a commit message" | bash "$script" | tee /tmp/claude-hook-out.txt
-          grep -qF "[ACTIVE SKILL: builtin/commit-message]" /tmp/claude-hook-out.txt
+          payload="${RUNNER_TEMP:-/tmp}/claude-hook-in.json"
+          printf '%s\n' '{"prompt":"help me write a commit message","session_id":"e2e-claude"}' > "$payload"
+          bash "$script" < "$payload" > "${RUNNER_TEMP:-/tmp}/claude-hook-out.txt" || true
+          grep -qF "[ACTIVE SKILL: builtin/commit-message]" "${RUNNER_TEMP:-/tmp}/claude-hook-out.txt"
 
       - name: Dual-platform injection probe (claude-code vs grok-build)
         working-directory: ${{ runner.temp }}

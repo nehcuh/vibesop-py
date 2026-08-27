@@ -18,6 +18,7 @@ class TestFindSkillContent:
     """Test find_skill_content."""
 
     def test_find_existing_skill(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         skill_dir = tmp_path / "core" / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         skill_file = skill_dir / "SKILL.md"
@@ -40,6 +41,7 @@ class TestFindSkillContent:
         assert result is None
 
     def test_read_error(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         skill_dir = tmp_path / "core" / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
         skill_file = skill_dir / "SKILL.md"

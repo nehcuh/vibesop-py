@@ -101,13 +101,23 @@ class SkillLoader:
             )
 
     def _default_search_paths(self) -> list[Path]:
-        from vibesop.utils.bundled import resolve_builtin_skills_dir
+        from vibesop.utils.bundled import bundled_path, is_vibesop_checkout
 
-        return [
+        # Do not use resolve_builtin_skills_dir's __file__ checkout rung
+        # here: that would leak this clone's builtins into every
+        # SkillLoader(project_root=tmp_path) test. Routing still uses
+        # CandidateManager → resolve_builtin_skills_dir for the live pool.
+        paths = [
             self.project_root / "skills",
             self.project_root / ".vibe" / "skills",
-            resolve_builtin_skills_dir(self.project_root),
         ]
+        if is_vibesop_checkout(self.project_root):
+            paths.append(self.project_root / "core" / "skills")
+        else:
+            wheel = bundled_path("builtin_skills")
+            if wheel.is_dir():
+                paths.append(wheel)
+        return paths
 
     def _compute_project_hash(self) -> str:
         import hashlib

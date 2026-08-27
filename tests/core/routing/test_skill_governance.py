@@ -9,6 +9,7 @@ from vibesop.core.skills.config_manager import SkillConfigManager
 @pytest.fixture
 def router_with_skills(tmp_path):
     """Router with a local project skill and a builtin skill."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
     (tmp_path / ".vibe").mkdir()
     (tmp_path / ".vibe" / "skills").mkdir()
 
