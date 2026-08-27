@@ -13,6 +13,7 @@ from typing import Any
 
 from vibesop.adapters.hook_based import HookBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
+from vibesop.utils.hook_commands import parse_hook_script_command
 
 logger = logging.getLogger(__name__)
 
@@ -40,20 +41,21 @@ def bash_hook_command(script: Path) -> str:
     return f'"{script_posix}"'
 
 
-def _hook_script_from_command(cmd: str) -> Path | None:
-    """Extract the ``.sh`` path from a hook command string."""
-    stripped = cmd.strip().strip("'").strip('"')
-    idx = stripped.lower().rfind(".sh")
-    if idx < 0:
-        return None
-    end = idx + 3
-    start = idx
-    while start > 0 and stripped[start - 1] not in " \t\"'":
-        start -= 1
-    raw = stripped[start:end].replace("\\", "/")
-    if not raw:
-        return None
-    return Path(raw)
+def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
+    """Whether cmd carries a legacy marker that permits an unequal rewrite.
+
+    Without a signal the command is left byte-identical (no quote or
+    resolve churn on already-canonical forms). The backslash clause is
+    gated on a non-POSIX normalized path so literal-backslash POSIX
+    filenames (legal on mac) are never rewritten to a different file.
+    """
+    if "\\" in cmd and not norm.startswith("/"):
+        return True
+    if sys.platform == "win32":
+        if "bash.exe" in cmd.lower():
+            return True
+        return cmd.lstrip().lower().startswith(("bash ", "bash\t"))
+    return False
 
 
 def _rewrite_legacy_hook_entry(entry: Any) -> Any:
@@ -71,10 +73,11 @@ def _rewrite_legacy_hook_entry(entry: Any) -> Any:
         cmd = item.get("command")
         upgraded = item
         if isinstance(cmd, str):
-            script = _hook_script_from_command(cmd)
-            if script is not None:
-                new_cmd = bash_hook_command(script)
-                if new_cmd != cmd:
+            norm = parse_hook_script_command(cmd)
+            if norm is not None:
+                new_cmd = f'"{norm}"' if sys.platform == "win32" else f"bash {norm}"
+                if new_cmd != cmd and _legacy_rewrite_signal(cmd, norm):
+                    logger.warning("upgraded legacy vibesop hook command: %r -> %r", cmd, new_cmd)
                     upgraded = {**item, "command": new_cmd}
         rewritten.append(upgraded)
     return {**entry, "hooks": rewritten}

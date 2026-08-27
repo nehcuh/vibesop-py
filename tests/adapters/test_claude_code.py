@@ -10,11 +10,11 @@ import pytest
 
 from vibesop.adapters.claude_code import (
     ClaudeCodeAdapter,
-    _hook_script_from_command,
     _rewrite_legacy_hook_entry,
     bash_hook_command,
 )
 from vibesop.adapters.models import Manifest
+from vibesop.utils.hook_commands import parse_hook_script_command
 
 
 class TestBashHookCommand:
@@ -49,40 +49,88 @@ class TestBashHookCommand:
 class TestRewriteLegacyHookEntry:
     """Rebuild must replace both backslash paths and Git-bash.exe wrappers."""
 
-    def test_extracts_script_from_backslash_bash_prefix(self) -> None:
-        script = _hook_script_from_command(r"bash C:\Users\HuChen\.claude\hooks/vibesop-route.sh")
-        assert script is not None
-        assert script.as_posix().endswith("hooks/vibesop-route.sh")
+    @staticmethod
+    def _entry(cmd: str) -> dict:
+        return {"matcher": "", "hooks": [{"type": "command", "command": cmd}]}
 
-    def test_extracts_script_from_git_bash_wrapper(self) -> None:
+    def test_extracts_script_from_backslash_bash_prefix(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        norm = parse_hook_script_command(r"bash C:\Users\HuChen\.claude\hooks/vibesop-route.sh")
+        assert norm == "C:/Users/HuChen/.claude/hooks/vibesop-route.sh"
+
+    def test_extracts_script_from_git_bash_wrapper(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
         cmd = (
             '"C:/Program Files/Git/bin/bash.exe" '
             '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
         )
-        script = _hook_script_from_command(cmd)
-        assert script is not None
-        assert script.as_posix().endswith("hooks/vibesop-mirror-prompt.sh")
+        norm = parse_hook_script_command(cmd)
+        assert norm == "C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"
 
     def test_rewrites_git_bash_wrapper_on_windows(self, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
-        entry = {
-            "matcher": "",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": (
-                        '"C:/Program Files/Git/bin/bash.exe" '
-                        '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
-                    ),
-                }
-            ],
-        }
+        entry = self._entry(
+            '"C:/Program Files/Git/bin/bash.exe" '
+            '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
         rewritten = _rewrite_legacy_hook_entry(entry)
         cmd = rewritten["hooks"][0]["command"]
-        assert "bash.exe" not in cmd
-        assert "Program Files" not in cmd
-        assert "\\" not in cmd
-        assert cmd.endswith('vibesop-mirror-prompt.sh"')
+        assert cmd == '"C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"'
+
+    def test_rewrites_backslash_form_on_windows(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry(r"bash C:\Users\h\.claude\hooks\vibesop-mirror-prompt.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == (
+            '"C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
+
+    def test_rewrites_bash_prefix_posix_form_on_windows(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry("bash C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == (
+            '"C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
+
+    def test_rewrites_casefolded_tab_prefix_on_windows(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry("BASH\tC:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == (
+            '"C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
+
+    def test_noop_quoted_posix_without_signal(self) -> None:
+        entry = self._entry('bash "/abs/vibesop-route.sh"')
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == 'bash "/abs/vibesop-route.sh"'
+
+    def test_noop_backtick_path(self) -> None:
+        entry = self._entry('bash "/tmp/`id`/vibesop-route.sh"')
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == 'bash "/tmp/`id`/vibesop-route.sh"'
+
+    def test_noop_win32_canonical_one_token(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry('"C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"')
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == (
+            '"C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"'
+        )
+
+    def test_noop_mac_literal_backslash_posix_path(self) -> None:
+        entry = self._entry("bash /Users/h/foo\\bar/vibesop-route.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == "bash /Users/h/foo\\bar/vibesop-route.sh"
+
+    def test_noop_windows_form_on_mac(self, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "platform", "darwin")
+        entry = self._entry(r"bash C:\Users\h\.claude\hooks\vibesop-route.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == (
+            r"bash C:\Users\h\.claude\hooks\vibesop-route.sh"
+        )
 
 
 class TestClaudeCodeAdapter:

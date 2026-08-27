@@ -21,6 +21,7 @@ Examples:
 
 import json
 import shutil
+import string
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,12 @@ from typing import Any
 import typer
 from rich.console import Console
 from rich.table import Table
+
+from vibesop.utils.hook_commands import (
+    classify_vibesop_hook_command,
+    command_basenames,
+    unwrap_token,
+)
 
 PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
     "claude-code": {
@@ -40,7 +47,7 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
             "rules_dir": "rules/ directory exists",
             "route_hook": "hooks/vibesop-route.sh exists",
             "route_hook_executable": "vibesop-route.sh is executable",
-            "route_hook_command": "settings.json hook commands are Git-Bash-safe",
+            "route_hook_command": "vibesop hook commands in settings.json are Git-Bash-safe",
             "track_hook": "hooks/vibesop-track.sh exists",
         },
     },
@@ -139,6 +146,34 @@ def unsafe_windows_hook_command_reason(command: str) -> str | None:
     lowered = command.lower()
     if "program files" in lowered or "bash.exe" in lowered:
         return "Git bash.exe wrapper (Program Files splits under bash -c)"
+    return None
+
+
+def _windows_drive_token(command: str) -> str | None:
+    """First token starting with a drive-letter prefix (``C:/`` or ``C:\\``).
+
+    Anchored at the token start (same shape as the parser's win_abs check):
+    ``re.search`` would false-positive on ``https://`` (``s:/``).
+    """
+    for tok in command.split():
+        t = unwrap_token(tok).strip("\"'")
+        if len(t) >= 3 and t[0] in string.ascii_letters and t[1] == ":" and t[2] in "/\\":
+            return t
+    return None
+
+
+def _vibesop_command_unsafe_reason(command: str) -> str | None:
+    """Why a vibesop hook command is unsafe on this host (None = safe)."""
+    reason = unsafe_windows_hook_command_reason(command)
+    if reason:
+        return reason
+    if sys.platform == "win32":
+        if command.lstrip().lower().startswith(("bash ", "bash\t")):
+            return "bash prefix double-wraps (win32 host provides bash)"
+        return None
+    drive = _windows_drive_token(command)
+    if drive:
+        return f"drive-letter token ({drive}) - Windows form on a non-win32 host"
     return None
 
 
@@ -261,23 +296,27 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
                         result["detail"] = "settings.json is not an object"
                     else:
                         cmds = collect_settings_hook_commands(settings)
-                        route_cmds = [c for c in cmds if "vibesop-route.sh" in c]
-                        unsafe = next(
-                            (
-                                f"{unsafe_windows_hook_command_reason(c)}: {c[:80]}"
-                                for c in cmds
-                                if unsafe_windows_hook_command_reason(c)
-                            ),
-                            None,
-                        )
+                        vibesop_cmds = [c for c in cmds if classify_vibesop_hook_command(c)]
+                        route_cmds = [
+                            c for c in vibesop_cmds if "vibesop-route.sh" in command_basenames(c)
+                        ]
+                        unsafe: str | None = None
+                        for c in vibesop_cmds:
+                            reason = _vibesop_command_unsafe_reason(c)
+                            if reason:
+                                unsafe = f"{reason}: {c[:80]}"
+                                break
                         if not route_cmds:
                             result["detail"] = "no vibesop-route.sh command in settings.json"
+                            if unsafe:
+                                result["detail"] += f" (also unsafe: {unsafe})"
                         elif unsafe:
                             result["detail"] = unsafe
                         else:
                             result["pass"] = True
                             result["detail"] = (
-                                f"{len(cmds)} hook command(s), POSIX paths, no bash.exe wrapper"
+                                f"{len(vibesop_cmds)} hook command(s), "
+                                "vibesop commands Git-Bash-safe"
                             )
 
         elif check_id == "track_hook":
