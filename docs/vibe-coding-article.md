@@ -70,7 +70,7 @@ Ruby 版本的 VibeSOP 证明了一件事：**意图路由这条路是通的**�
 
 - **性能瓶颈**：Ruby 的 TF-IDF 和向量计算不够快，路由延迟在 500ms+，用户能感知到卡顿
 - **生态限制**：Python 在 NLP/ML 生态（scikit-learn、sentence-transformers）上远超 Ruby
-- **类型安全**：Ruby 的 duck typing 在 50+ 技能的复杂路由中带来了隐患
+- **类型安全**：Ruby 的 duck typing 在数十个技能的复杂路由中带来了隐患
 
 2026 年 4 月 1 日，Python 版 VibeSOP 的第一个 commit 诞生。一个 5 层路由引擎的初始实现。
 

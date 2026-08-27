@@ -12,7 +12,7 @@
 
 If you've hit any of these, VibeSOP was built for you:
 
-- "I know skill packs like superpowers / gstack / omx are powerful, but **I can't memorize 50+ commands**"
+- "I know skill packs like superpowers / gstack / omx are powerful, but **I can't memorize dozens of commands**"
 - "I installed skills in Claude Code, **switched to Cursor and had to reinstall everything**"
 - "Team of 5, each person fumbling through the same workflows, **reinventing the same wheels**"
 - "CI went red after hours, **nobody noticed until next morning** — 8 hours of broken builds"
@@ -372,7 +372,7 @@ vibe instinct status                   # pattern learning
 
 ## Next Steps
 
-- **Want to install skills**: [`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) details 50+ built-in skills
+- **Want to install skills**: [`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) details 14 built-in skills + community packs
 - **Want cross-platform**: [`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) install guide
 - **Want loops**: [`loop-setup-guide.md`](loop-setup-guide.md) 24-hour deployment
 - **Want the philosophy**: [`PHILOSOPHY.md`](PHILOSOPHY.md) design rationale

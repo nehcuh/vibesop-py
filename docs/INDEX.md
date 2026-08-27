@@ -11,7 +11,8 @@ This document serves as the central index for all VibeSOP documentation, organiz
 
 These files remain in the project root for discoverability and tool integration:
 
-- **[README.md](../README.md)** — Main project entry point, vision, quick start
+- **[README.md](../README.md)** — Main project entry point, vision, quick start (English)
+- **[README.zh-CN.md](../README.zh-CN.md)** — Chinese edition of the README
 - **[AGENTS.md](../AGENTS.md)** — Agent configuration and routing protocol
 - **[GOALS.md](../GOALS.md)** — Project goals and objective checklist
 - **[CLAUDE.md](../CLAUDE.md)** — Claude Code specific integration notes
@@ -26,7 +27,7 @@ These files remain in the project root for discoverability and tool integration:
 ### Getting Started
 
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
-  - 50+ skills explained (builtin, superpowers, gstack, omx)
+  - 14 built-in skills + community packs explained (superpowers, gstack, omx)
   - 4-stage routing cascade详解
   - Priority decision mechanism and scenario-based selection
 - **[Quick Start - Users](QUICKSTART_USERS.md)** — User-facing installation and basic usage
@@ -170,7 +171,7 @@ These files remain in the project root for discoverability and tool integration:
 | **Version** | 8.1.0 |
 | **Tests** | 4,066+ pytest passing |
 | **Coverage** | ~73% (target: 75%) |
-| **Skills Supported** | 50+ builtin + 43 community (mattpocock + superpowers) |
+| **Skills Supported** | 14 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
 | **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
 | **Routing Model** | 4-Stage Cascade |

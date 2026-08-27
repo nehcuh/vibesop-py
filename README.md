@@ -1,208 +1,180 @@
 # VibeSOP
 
-> **AI 辅助开发的技能操作系统**
+> **Skill routing and lifecycle management for AI coding agents** — [中文文档](README.zh-CN.md)
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
 [![Version](https://img.shields.io/badge/Version-8.1.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
-[![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
----
+VibeSOP is an **AI SkillOS**: it routes your intent to the right skill, orchestrates
+multi-step tasks, and manages the full skill lifecycle for your AI coding agents.
 
-## 愿景
+## Why VibeSOP?
 
-**不再记忆命令，只需表达意图。**
-**不再猜测工具，智能匹配最佳。**
-**不再学习平台，一次掌握所有。**
+**1. Install once, works across your AI coding agents.**
+One skill definition, every agent. Claude Code and Grok Build get full hook injection
+(hook layer verified end-to-end on Claude Code); OpenCode, Cursor, Kimi CLI, and Pi are
+supported at the config-generation level.
 
----
+**2. Your experience compounds across projects.**
+The task-memory loop turns daily work into reusable assets: every routed task leaves a
+trace → traces cluster into repeatable patterns → `vibe recall` surfaces past solutions
+when you hit a similar problem, even in another project.
 
-## 什么是 VibeSOP？
-
-VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周期：
-
-### 技能全生命周期管理（SkillOS 定位）
-
-- **发现与安装**：一键安装技能，自动安全审计，零配置
-
-- **智能路由**：理解意图，从 50+ 技能中匹配最佳
-
-- **任务编排**：复杂请求自动分解，生成串行/分组执行计划
-
-- **生命周期管理**：启禁用、作用域隔离、质量评估、自动淘汰
-
-- **跨平台适配**：一套技能定义，所有 AI Agent 通用
-
-**VibeSOP 定位**: VibeSOP 是 SkillOS + 轻量引导执行层。它管理技能的**全生命周期**：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。
-简单任务由 VibeSOP 端到端完成（路由→注入→引导执行），复杂任务由 AI Agent（Claude Code, Cursor, OpenCode）接手。
-
-📖 **阅读我们的哲学**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)
-
-🎯 **实际用例**: [docs/USE_CASES.md](docs/USE_CASES.md) (中文) | [docs/USE_CASES.en.md](docs/USE_CASES.en.md) (English) — 12 个具体场景
-
----
-
-## 核心价值
-
-### 发现 > 执行
-
-找到正确的工具比执行更重要。AI 工具已经足够强大，真正的问题是：**找到正确的工具**。
-
-### 编排 > 单技能
-
-真实世界的请求往往是复合的。VibeSOP 能够分解复杂意图，编排多个技能协同工作。
-
-### 生命周期 > 堆积
-
-技能应该被管理，而不是无限堆积。启用/禁用、作用域隔离、质量评估、自动淘汰——让技能生态保持健康。
-
-### 匹配 > 猜测
-
-理解意图比记忆命令更重要。你记不住 50+ 个技能的命令，但你可以自然地表达你想做什么。
-
-### 开放 > 封闭
-
-开放生态比封闭系统更有价值。VibeSOP 不绑定任何平台，你可以使用任何 AI 工具。
-
----
-
-## ⚡ 快速开始
-
-### 5 分钟快速安装
+## Quick start
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/nehcuh/vibesop-py.git
-cd vibesop-py
+pipx install vibesop   # or: uv tool install vibesop
+vibe quickstart
+```
 
-# 2. 构建
-uv build
+No API key needed for the routing demo — quickstart runs on the local lightweight
+routing path (keyword/scenario matching). LLM-enhanced routing is covered in
+[LLM Configuration](#llm-configuration) below.
 
-# 3. 全局安装（Windows：把 %USERPROFILE%\.local\bin 加入用户 PATH）
-uv tool install .
+---
 
-# 4. 配置平台（Grok Build / Claude Code）
+## Vision
+
+**No more memorizing commands. Just express your intent.**
+**No more guessing tools. Intelligent matching finds the best.**
+**No more learning platforms. Master them all at once.**
+
+---
+
+## What is VibeSOP?
+
+**VibeSOP is a Skill Operating System — managing the full lifecycle of skills:**
+
+### Skill Lifecycle Management
+
+- **Discovery & Installation** — one-click install, auto security audit, zero config
+
+- **Intelligent Routing** — understand intent, match the best skill from 14 built-in
+  workflow skills plus installable skill packs (superpowers, omx, gstack, ...)
+
+- **Task Orchestration** — decompose complex requests, generate serial/grouped execution plans
+
+- **Lifecycle Management** — enable/disable, scope isolation, quality evaluation, auto-deprecation
+
+- **Cross-Platform** — one skill definition, per-platform config generation
+
+**Note**: VibeSOP is a Skill Operating System with lightweight guided execution. It manages the **full skill lifecycle**: discovery → installation → routing →
+orchestration → evaluation → retention/deprecation. Simple tasks are handled end-to-end by VibeSOP (route → inject → guide execution); complex tasks are delegated to AI Agents
+(Claude Code, Cursor, OpenCode).
+
+📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) (中文)
+
+🎯 **See real use cases**: [docs/USE_CASES.en.md](docs/USE_CASES.en.md) (English) | [docs/USE_CASES.md](docs/USE_CASES.md) (中文) — 12 concrete scenarios with pain → approach → commands → expected output
+
+---
+
+## Core Values
+
+### Discovery over Execution
+
+**Finding the right tool is more important than executing it.** AI tools are already powerful enough. The real problem is: **finding the right tool**.
+
+### Orchestration over Single-Skill
+
+**Real-world requests are composite.** VibeSOP decomposes complex intents and orchestrates multiple skills working together.
+
+### Lifecycle over Accumulation
+
+**Skills should be managed, not infinitely accumulated.** Enable/disable, scope isolation, quality evaluation, auto-deprecation — keeping the skill ecosystem healthy.
+
+### Matching over Guessing
+
+**Understanding intent is more important than memorizing commands.** You can't memorize every skill's commands, but you can naturally express what you want to do.
+
+### Open over Closed
+
+**An open ecosystem is more valuable than a closed system.** VibeSOP doesn't lock you to a single agent — it generates per-platform configs for every supported agent.
+
+---
+
+## Quick Start
+
+### 5-Minute Setup
+
+```bash
+# 1. Install globally (Windows: add %USERPROFILE%\.local\bin to your PATH)
+pipx install vibesop   # or: uv tool install vibesop
+
+# 2. Interactive setup wizard (platform config, skill packs)
+vibe quickstart
+
+# 3. Configure your platform (Grok Build / Claude Code)
 vibe build grok-build --output ~/.grok
 # vibe build claude-code --output ~/.claude
 
-# 5. 配置 API Key（选择一个）
-# Claude
+# 4. (Optional) Configure an LLM API key — see "LLM Configuration" below
 export ANTHROPIC_API_KEY="sk-ant-..."
-# 或 OpenAI
-export OPENAI_API_KEY="sk-..."
 
-# 6. 重启 AI Agent，然后测试
-vibe route "帮我调试代码"
+# 5. Restart your AI Agent, then test
+vibe route "help me debug this code"
 ```
 
-✅ **完成！** VibeSOP 现在已全局可用，支持 90+ 技能智能路由。
+✅ **Done!** VibeSOP is now globally available with 14 built-in workflow skills,
+extensible via skill packs (`vibe install mattpocock`, `vibe install gstack`, ...).
 
 ---
 
-### 🚀 一键安装技能（核心特性）
+### One-Click Skill Installation (Core Feature)
 
-**从 8 个手动步骤 → 1 条命令，98% 时间节省！**
+**From 8 manual steps → 1 command!**
 
 ```bash
-# 安装技能 - 自动配置，零学习曲线
+# Install a skill - auto-configured, zero learning curve
 vibe skills add tushare
 
-# 系统自动完成：
-# ✅ 检测技能类型
-# ✅ 安全审计
-# ✅ 智能配置路由规则
-# ✅ 自动设置优先级
-# ✅ 验证和同步
+# The system auto-completes:
+# ✅ Detect skill type
+# ✅ Security audit
+# ✅ Smart configure routing rules
+# ✅ Auto-set priority
+# ✅ Verify and sync
 
-# 立即开始使用
+# Start using immediately
 vibe route "帮我获取茅台最近一年的股价"
-# → AI 自动匹配到 tushare 技能（95% 置信度）
+# → AI automatically matches to tushare skill (95% confidence)
 ```
 
-**对比旧流程**：
-- ❌ 旧方式：30-60 分钟，8+ 手动步骤，40% 错误率
-- ✅ 新方式：1-2 分钟，1 条命令，<5% 错误率
+**Comparison with old workflow**:
+- ❌ Old way: 30-60 min, 8+ manual steps, 40% error rate
+- ✅ New way: 1-2 min, 1 command, <5% error rate
 
-详见：[智能技能安装文档](docs/QUICKSTART_SKILL_INSTALLATION.md)
+See: [Smart Skill Installation Guide](docs/QUICKSTART_SKILL_INSTALLATION.md)
 
 ---
 
-### 安装 VibeSOP
+### First Use
 
-**方式一：全局安装（推荐）** - 在任何项目中使用 VibeSOP
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/nehcuh/vibesop-py.git
-cd vibesop-py
-
-# 2. Build wheel
-uv build
-
-# 3. Install as global tool
-uv tool install .
-
-# 4. 验证安装
-vibe --version
-
-# 5. 部署到你的 AI Agent 平台（以 Claude Code 为例）
-vibe build claude-code --output ~/.claude
-```
-
-**方式二：项目级安装** - 仅在当前项目中使用
-
-```bash
-# Clone the repository
-git clone https://github.com/nehcuh/vibesop-py.git
-cd vibesop-py
-
-# Install with uv (recommended - 10-100x faster than pip)
-uv sync
-
-# 激活虚拟环境后，使用 uv run vibe 命令
-source .venv/bin/activate  # Linux/Mac
-# 或
-.venv\Scripts\activate     # Windows
-```
-
-### 第一次使用
-
-**1. 验证安装**
-
-```bash
-# 检查版本
-vibe --version
-# 输出: VibeSOP v8.1.1
-
-# 检查环境
-vibe doctor
-```
-
-**2. 测试路由**
+Both examples below run on a fresh install with no API key (keyword/scenario layers):
 
 ```bash
 # Single intent - routes to best skill
-$ vibe route "帮我调试这个错误"
+$ vibe route "帮我深入诊断并优化这个性能问题"
 
-🔍 Routing Summary
-─────────────────────────────
-Selected     systematic-debugging
-Confidence   95%
-Layer        scenario
-Duration     12.3ms
+🔍 Routing Decision Report
+Selected: builtin/deep-diagnosis-optimization (confidence: 82%)
 
-💡 Alternatives:
-   • mattpocock/diagnose (82%)
-   • superpowers/debug (75%)
+# Session lifecycle intent
+$ vibe route "wrap up the session"
+
+🔍 Routing Decision Report
+Selected: builtin/session-end (confidence: 95%)
 ```
 
-> 💡 VibeSOP 路由到技能并把指令注入你的 AI Agent（Claude Code / OpenCode）的上下文，由 Agent 负责实际执行。运行 `vibe doctor` 查看哪些 Agent 可用。
+> 💡 VibeSOP routes to a skill and injects instructions into your AI Agent's context; the Agent does the actual execution. Run `vibe doctor` to see which Agents are available.
 
 ```bash
 # Multi intent - automatically orchestrates
+# (requires LLM routing configured + community packs installed, e.g.
+#  vibe install superpowers — skill names below come from installed packs)
 $ vibe route "分析架构并生成测试"
 
 🔍 Routing Summary
@@ -212,21 +184,21 @@ Steps        2
 Strategy     sequential
 
 Plan:
-  1. riper-workflow — 架构分析
-  2. superpowers/test — 测试生成
+  1. riper-workflow — Architecture Analysis
+  2. superpowers/test — Test Generation
 
 [✅ Confirm] [✏️ Edit] [🔀 Single skill] [📝 Skip]
 ```
 
-**就这么简单！** VibeSOP 理解你的意图——无论是单一任务还是复杂多步骤请求。
+**That's it!** VibeSOP understands your intent — whether it's a single task or a complex multi-step request.
 
 ---
 
-### 配置 AI Agent 平台
+### Configure AI Agent Platforms
 
-安装完成后，需要部署配置到你的 AI Agent。VibeSOP 支持以下平台：
+After installation, deploy the config to your AI Agent. VibeSOP supports:
 
-| 平台 | 命令 |
+| Platform | Command |
 |------|------|
 | **Claude Code** | `vibe build claude-code --output ~/.claude` |
 | **Grok Build** | `vibe build grok-build --output ~/.grok` |
@@ -236,10 +208,10 @@ Plan:
 | **Cursor** | `vibe build cursor --output ~/.cursor` |
 
 ```bash
-# 示例：为 Claude Code 配置
+# Example: configure Claude Code
 vibe build claude-code --output ~/.claude
 
-# 输出示例：
+# Sample output:
 # ✓ Build complete!
 # Files created:
 #   📄 ~/.claude/CLAUDE.md
@@ -250,137 +222,144 @@ vibe build claude-code --output ~/.claude
 # Restart Claude Code to apply changes.
 ```
 
-> **重要**: 部署完成后，**重启你的 AI Agent** 才能生效。
+> **Important**: After deploying, **restart your AI Agent** for changes to take effect.
 
 ---
 
-## 配置 LLM API
+## LLM Configuration
 
-> 💡 **Agent 开发者可跳过本节**：如果你的 Agent 以 Python 库形式集成 VibeSOP（进程内），`AgentRouter.set_llm()` 可直接复用宿主 Agent 的 LLM，无需任何 API key——见 **[Agent 集成指南](docs/agent-integration.md)**。以下配置仅适用于 CLI 子进程路径（`vibe route`）。
+> 💡 **Agent developers can skip this section**: if your Agent integrates VibeSOP
+> in-process as a Python library, `AgentRouter.set_llm()` can reuse the host Agent's
+> LLM directly — no API key needed. See the
+> **[Agent Integration Guide](docs/agent-integration.md)**. The configuration below
+> only applies to the CLI subprocess path (`vibe route`).
 
-CLI 路径下 VibeSOP 需要自己的 LLM 配置（子进程无法复用 Agent 的内部 LLM）：
+On the CLI path, VibeSOP needs its own LLM configuration (a subprocess cannot reuse
+the Agent's internal LLM):
 
 **Linux / macOS:**
 ```bash
-# Anthropic Claude（推荐）
+# Anthropic Claude (recommended)
 export ANTHROPIC_API_KEY="sk-ant-..."
 
-# 或 OpenAI
+# or OpenAI
 export OPENAI_API_KEY="sk-..."
 
-# 或本地 Ollama（零成本，数据不出机器）
+# or local Ollama (zero cost, no data leaving your machine)
 export VIBE_LLM_PROVIDER=ollama
 export OLLAMA_BASE_URL=http://localhost:11434/v1
 export OLLAMA_MODEL=qwen3:35b-a3b-mlx
 
-# 持久化（添加到 ~/.bashrc 或 ~/.zshrc）
+# Persist (add to ~/.bashrc or ~/.zshrc)
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
 ```
 
 **Windows:**
 ```cmd
-# 临时设置（当前会话）
+# Temporary (current session)
 set ANTHROPIC_API_KEY=sk-ant-...
 set OPENAI_API_KEY=sk-...
 
-# 永久设置（系统环境变量）
+# Permanent (user environment variable)
 setx ANTHROPIC_API_KEY "sk-ant-..."
 setx OPENAI_API_KEY "sk-..."
 
-# 或通过 PowerShell
+# Or via PowerShell
 $env:ANTHROPIC_API_KEY="sk-ant-..."
 [System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', 'sk-ant-...', 'User')
 ```
 
-> **提示**: 在 PowerShell 中，环境变量设置仅对当前进程生效。使用 GUI 方式可永久设置：
-> - Windows 设置 → 系统 → 关于 → 高级系统设置 → 环境变量
-> - 添加用户变量 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY`
+> **Tip**: In PowerShell, environment variables set in-session only apply to the current process. To persist, use the GUI:
+> - Windows Settings → System → About → Advanced system settings → Environment Variables
+> - Add user variable `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
 
 ---
 
-## 为什么选择 VibeSOP？
+## The Problem VibeSOP Solves
 
-### 问题
+### The Problem
 
-AI 辅助开发工具正在爆发：
+AI-assisted development tools are exploding:
 - Claude Code, Cursor, Continue.dev, Aider...
-- 每个工具都有自己的命令和技能
-- superpowers, mattpocock, omx 等技能包蓬勃发展
-- **你不知道该用哪个**
+- Each tool has its own commands and skills
+- Skill packs like superpowers, mattpocock, omx are booming
+- **You don't know which one to use**
 
-### 解决方案
+### The Solution
 
 ```bash
-# Just say what you want (自然语言输入)
-vibe route "debug this database error"
-# → Routes to: systematic-debugging (95% confidence)
+# Just say what you want (natural language input)
+vibe route "帮我深入诊断并优化这个性能问题"
+# → Routes to: builtin/deep-diagnosis-optimization (82% confidence)
 
-vibe route "帮我扫描安全漏洞"
-# → Routes to: mattpocock/diagnose (88% confidence)
-
-vibe route "review my PR"
-# → Routes to: mattpocock/tdd (92% confidence)
+vibe route "wrap up the session"
+# → Routes to: builtin/session-end (95% confidence)
 ```
 
+With community packs installed (`vibe install superpowers`), their skills join the
+same routing pool — one syntax, every source.
+
 VibeSOP:
-1. **理解你的意图** (自然语言，支持中英文)
-2. **找到正确的技能** (从 50+ 技能中选择)
-3. **学习你的偏好** (越用越准确)
-4. **跨平台通用** (Claude Code, Cursor, Continue.dev 等)
+1. **Understands your intent** (natural language, English + Chinese)
+2. **Finds the right skill** (from 14 built-in skills plus installable skill packs)
+3. **Learns your preferences** (gets better over time)
+4. **Works across AI coding agents** (hook injection on Claude Code / Grok Build;
+   config generation for OpenCode, Cursor, Kimi CLI, Pi)
 
 ---
 
-## 核心功能
+## Core Features
 
-### 🚀 一键智能安装
+### One-Click Smart Installation
 
-**从 8 步手动配置 → 1 条命令，AI 自动完成所有配置**
+**From 8 manual steps → 1 command, AI auto-completes all configuration**
 
 ```bash
-# 安装任何技能，零配置
+# Install any skill, zero config
 vibe skills add tushare
 vibe skills add git-helper
 vibe skills add code-reviewer
 
-# 系统自动完成：
-# ✅ 检测技能类型和元数据
-# ✅ 运行安全审计
-# ✅ 询问安装范围（项目/全局）
-# ✅ AI 智能配置路由规则
-# ✅ 自动计算优先级
-# ✅ 验证和同步到平台
+# The system auto-completes:
+# ✅ Detect skill type and metadata
+# ✅ Run security audit
+# ✅ Ask install scope (project/global)
+# ✅ AI smart configures routing rules
+# ✅ Auto-calculate priority
+# ✅ Verify and sync to platform
 ```
 
-**对比传统方式**：
+**Comparison**:
 
-| 特性 | 传统方式 | VibeSOP |
-|------|---------|---------|
-| 安装步骤 | 8+ 手动步骤 | 1 条命令 |
-| 时间成本 | 30-60 分钟 | 1-2 分钟 |
-| 配置文件 | 3-4 个手动编辑 | 0 个（AI 生成） |
-| 错误率 | 40% | <5% |
-| 学习曲线 | 陡峭 | 平缓 |
+| Feature | Traditional | VibeSOP |
+|---------|-------------|---------|
+| Install Steps | 8+ manual steps | 1 command |
+| Time Cost | 30-60 min | 1-2 min |
+| Config Files | 3-4 manual edits | 0 (AI generated) |
+| Error Rate | 40% | <5% |
+| Learning Curve | Steep | Gentle |
 
-**智能特性**：
-- 🤖 **AI 配置引擎** - 分析技能描述，自动生成最优配置
-- 🎯 **智能路由** - 提取关键词，自动生成正则表达式
-- ⚡ **优先级计算** - 基于技能类别自动设定优先级
-- 🔒 **安全审计** - 自动扫描，风险分级，交互式确认
-- 💬 **友好向导** - 清晰的进度展示和错误提示
+**Smart Features**:
+- 🤖 **AI Config Engine** - Analyzes skill descriptions, auto-generates optimal config
+- 🎯 **Smart Routing** - Extracts keywords, auto-generates regex
+- ⚡ **Priority Calculation** - Auto-sets priority based on skill category
+- 🔒 **Security Audit** - Auto-scans, risk grading, interactive confirmation
+- 💬 **Friendly Wizard** - Clear progress display and error prompts
 
-[完整文档](docs/QUICKSTART_SKILL_INSTALLATION.md) | [.skill 格式规范](docs/skill-format-spec.md)
+[Full documentation](docs/QUICKSTART_SKILL_INSTALLATION.md) | [.skill format spec](docs/skill-format-spec.md)
 
 ---
 
-### 🎯 95% 路由准确率
+### Routing Accuracy (~90% internal estimate)
 
-基于 4 阶段路由级联，结合 AI 语义分析和场景知识：
+Based on a 4-stage routing cascade combining AI semantic analysis and scenario knowledge
+(see the [Performance Metrics](#performance-metrics) table for provenance):
 
 - **Stage 1**: Explicit override — exact skill ID match (e.g. `/review`), immediate dispatch
 - **Stage 2**: Scenario + Semantic Index — predefined scenarios + skill semantic index
   (token-overlap + embedding), best-of-N selection
-- **Stage 3**: AI Semantic Triage — LLM intent understanding (95% accuracy, complex /
-  long queries)
+- **Stage 3**: AI Semantic Triage — LLM intent understanding (~95% on sampled
+  validation, complex / long queries)
 - **Stage 4**: Matcher aggregation — keyword, TF-IDF, embedding, and fuzzy matchers run
   in parallel; highest-confidence candidate wins (not serial fallback)
 
@@ -388,108 +367,108 @@ Terminal states (not routing layers):
 - **No Match**: all candidates below the minimum confidence threshold
 - **Fallback LLM**: last-resort raw LLM routing
 
-### 🛒 技能市场 (v5.2.0+)
+### Skill Market (v5.2.0+)
 
-发现、安装公共生态中的技能：
+Discover and install skills from the public ecosystem:
 
 ```bash
-# 搜索 GitHub 公共技能生态（agent-skills 等 topic + curated awesome lists）
+# Search GitHub public skill ecosystem (agent-skills topic + curated awesome lists)
 vibe market search "debug"
 
-# 按分类查看热门技能（分类映射到 GitHub topic，按 stars 排序）
+# View trending skills by category (mapped to GitHub topics, sorted by stars)
 vibe market trending agent
 
-# 从市场安装技能
+# Install skills from the market
 vibe market install user/repo
 ```
 
-搜索结果按信任级别排序：官方（内置可信包）→ 已策展（awesome list）→ 未验证来源，同级按 stars 降序。
+Search results are sorted by trust level: official (built-in trusted packages) → curated (awesome list) → unverified sources, with stars descending within each tier.
 
 ```bash
-# 安装到当前项目（仅 .vibe/skills/，全链路安全审计）
+# Install to current project (.vibe/skills/ only, full-chain security audit)
 vibe market install user/repo --scope project
 
-# 查看分类趋势
+# View category trends
 vibe market trending agent
 ```
 
-**智能建议反馈环**（v8.0）：未命中查询会被本地匿名计数（仅存哈希），重复未命中时给出搜索建议；编排确认流与 Claude Code 工具钩子会学习你的重复工作流，`vibe skills suggestions` 统一收件，`vibe skills distill` 一键蒸馏为项目级技能（LLM 生成 + 全文审定 + 安全审计）。
+**Smart Suggestion Feedback Loop** (v8.0): Unmatched queries are locally counted anonymously (hash only). Repeated misses trigger search suggestions. The orchestration confirmation flow and Claude Code tool hooks learn your repeat workflows. `vibe skills suggestions` provides a unified inbox, and `vibe skills distill` distills them into project-level skills in one click (LLM generation + full review + security audit).
 
-### 📉 智能降级 (v5.2.0+)
+### Degradation (v5.2.0+)
 
-4 级置信度降级，替代二元 fallback：
+4-tier confidence degradation replacing binary fallback:
 
 ```
->= 0.6 → 自动选择    (AUTO)
->= 0.4 → 建议确认    (SUGGEST)
->= 0.2 → 降级警告    (DEGRADE)
-< 0.2  → 原始 LLM   (FALLBACK)
+>= 0.6 → Auto-select    (AUTO)
+>= 0.4 → Suggest        (SUGGEST)
+>= 0.2 → Degrade        (DEGRADE)
+< 0.2  → Raw LLM       (FALLBACK)
 ```
 
-所有阈值可配置。用户显式指定的技能不受降级影响。
+All thresholds are configurable. User-explicitly specified skills are unaffected by degradation.
 
-### 🔍 主动发现 (v5.2.0+)
+### Proactive Discovery (v5.2.0+)
 
-每次路由后自动推荐尚未使用但匹配当前工作流的技能，标记为 `[DISCOVER]`。让你持续发现生态中适合你的技能。
+After every route, skills not yet used but matching the current workflow are automatically suggested, marked `[DISCOVER]`. Continuously discover skills in the ecosystem that fit your needs.
 
-### 🔁 任务记忆与本能学习 (v8.0+)
+### Task Memory & Instinct Learning (v8.0+)
 
-VibeSOP 观测你的真实工作流，把重复模式沉淀为可复用资产：
+VibeSOP observes your real workflows and distills repeat patterns into reusable assets:
 
 ```bash
-# 语义检索过往任务轨迹（embedding 相似度，跨项目可信池可选）
-vibe recall "上次怎么修的 Windows 路径 bug"
+# Semantic recall of past task traces (embedding similarity, optional cross-project trust pool)
+vibe recall "how did I fix that Windows path bug last time"
 
-# 查看路由观测：span 追踪、回放与指标
+# Routing observability: span tracing, replay, and metrics
 vibe trace metrics
 vibe trace replay <trace-id>
 
-# 本能学习：从会话工具序列中挖掘技能候选
+# Instinct learning: mine skill candidates from session tool sequences
 vibe analyze session
 vibe instinct eval
 
-# 技能蒸馏队列：重复任务 → 候选 → 人工 promote / dismiss
+# Skill distillation queue: repeated tasks → candidates → manual promote / dismiss
 vibe skill scan-candidates
 vibe skill promote <candidate-id>
 ```
 
-- **Task-memory loop**：query → task_id 派生 → trace 聚类 → gold 判定 → `vibe recall` 语义召回
-- **Instinct learning**：工具序列模式挖掘 + launchd 后台采集，成熟候选经 `vibe instinct eval` 晋升
-- **Discovery 队列**：候选簇带评分/来源/行为标签（含 agent-echo 识别），promote 附 shadow verifier 徽章（PASS/WARN，永不阻断）
-- **跨项目池**：`vibe pool` 管理可信项目，`vibe recall --cross-project` 复用其他项目沉淀的经验
-- **Conversation mirror**：主会话与 sub-agent 内部过程（thinking/tool_calls/usage）全量镜像，供 dashboard 与回放
+- **Task-memory loop**: query → task_id derivation → trace clustering → gold status → `vibe recall` semantic recall
+- **Instinct learning**: tool-sequence pattern mining + launchd background collection; mature candidates are promoted via `vibe instinct eval`
+- **Discovery queue**: candidate clusters carry score/source/behavior tags (including agent-echo detection); promote attaches a shadow verifier badge (PASS/WARN, never blocks)
+- **Cross-project pool**: `vibe pool` manages trusted projects; `vibe recall --cross-project` reuses experience distilled in other projects
+- **Conversation mirror**: main session and sub-agent internals (thinking/tool_calls/usage) are fully mirrored for dashboard and replay
 
-### 🧠 偏好学习
+### Preference Learning
 
-VibeSOP 会记住你的选择：
+VibeSOP remembers your choices:
 
 ```bash
 # First time
-$ vibe route "debug this"
-→ systematic-debugging (85%)
+$ vibe route "帮我深入诊断并优化这个性能问题"
+→ builtin/deep-diagnosis-optimization (82%)
 
 # You use it and it works
-$ vibe feedback record "debug this" "systematic-debugging" --correct
+$ vibe feedback record "帮我深入诊断并优化这个性能问题" "builtin/deep-diagnosis-optimization" --correct
 
 # Next time
-$ vibe route "debug this"
-→ systematic-debugging (92%) ← Boosted!
+$ vibe route "帮我深入诊断并优化这个性能问题"
+→ builtin/deep-diagnosis-optimization (89%) ← Boosted!
 ```
 
-### 🔓 开放生态
+### Open Ecosystem
 
-不绑定任何平台，支持所有 AI 工具：
+No platform lock-in — one skill definition, deployed per agent:
 
-- ✅ Claude Code（hooks 自动注入）
-- ✅ Grok Build（hooks 自动注入）
-- ✅ Kimi CLI（config 自动注入）
-- ✅ Pi Agent（extensions 自动注入）
-- ✅ Cursor / OpenCode（配置生成）
-- ✅ Continue.dev / Aider / Any tool that supports SKILL.md
+- ✅ Claude Code (hooks auto-injection)
+- ✅ Grok Build (hooks auto-injection)
+- ✅ Kimi CLI (config auto-injection)
+- ✅ Pi Agent (extensions auto-injection)
+- ✅ Cursor / OpenCode (config generation)
+- ✅ Any agent that reads SKILL.md (bring your own wiring)
 
-### 🛡️ 安全审计
+### Security Audit
 
-每个外部技能都会经过安全扫描：
+Every external skill is security-scanned:
 
 - ✅ Prompt injection detection
 - ✅ Command injection detection
@@ -499,18 +478,21 @@ $ vibe route "debug this"
 
 ---
 
-## 使用示例
+## Usage Examples
 
-### 调试错误
+> Examples marked with a community skill id (e.g. `mattpocock/tdd`) assume that pack
+> is installed (`vibe install mattpocock`). Builtin examples run on a fresh install.
+
+### Debugging Errors
 
 ```bash
-$ vibe route "database connection failed after deployment"
+$ vibe route "帮我深入诊断并优化这个性能问题"
 
-✅ Matched: systematic-debugging
+✅ Matched: builtin/deep-diagnosis-optimization
    Rationale: Error detected → Use debugging workflow
 ```
 
-### 代码审查
+### Code Review
 
 ```bash
 $ vibe route "review my changes before pushing"
@@ -519,7 +501,7 @@ $ vibe route "review my changes before pushing"
    Confidence: 93%
 ```
 
-### 中文查询
+### Chinese Queries
 
 ```bash
 $ vibe route "帮我重构这个函数"
@@ -533,7 +515,7 @@ $ vibe route "代码覆盖率太低怎么办"
    Confidence: 91%
 ```
 
-### 头脑风暴
+### Brainstorming
 
 ```bash
 $ vibe route "I need ideas for a new feature"
@@ -545,43 +527,43 @@ $ vibe route "I need ideas for a new feature"
 
 ---
 
-## 谁应该使用 VibeSOP？
+## Who Should Use VibeSOP?
 
-### 👨‍💻 开发者
+### Developers
 
-你正在使用 AI 辅助开发工具，但：
+You're using AI-assisted development tools, but:
 
-- ❌ 记不住那么多命令
-- ❌ 不知道哪个技能最适合当前场景
-- ❌ 想要在不同工具间切换而不失去技能
+- ❌ Can't remember all the commands
+- ❌ Don't know which skill fits the current scenario
+- ❌ Want to switch tools without losing skills
 
-**VibeSOP 为你解决这些问题！**
+**VibeSOP solves these problems for you!**
 
-### 🏢 团队
+### Teams
 
-你们正在采用 AI 辅助开发，但：
+You're adopting AI-assisted development, but:
 
-- ❌ 团队成员使用不同的技能
-- ❌ 缺乏统一的技能管理
-- ❌ 难以跟踪和分享最佳实践
+- ❌ Team members use different skills
+- ❌ Lack unified skill management
+- ❌ Hard to track and share best practices
 
-**VibeSOP 提供统一的技能管理和路由！**
+**VibeSOP provides unified skill management and routing!**
 
-### 🌐 开源社区
+### Open Source Community
 
-你正在维护 AI 辅助开发工具，但：
+You're maintaining AI-assisted development tools, but:
 
-- ❌ 技能格式不统一
-- ❌ 难以集成外部技能
-- ❌ 缺乏跨平台支持
+- ❌ Inconsistent skill formats
+- ❌ Hard to integrate external skills
+- ❌ Lack cross-platform support
 
-**VibeSOP 提供标准的 SKILL.md 格式和跨平台支持！**
+**VibeSOP provides standard SKILL.md format and cross-platform support!**
 
 ---
 
-## CLI 命令参考
+## CLI Reference
 
-### 核心命令
+### Core Commands
 
 ```bash
 # Route query to best skill
@@ -606,7 +588,7 @@ vibe install <url-or-name>
 vibe doctor
 ```
 
-### 技能管理
+### Skills Management
 
 ```bash
 # List installed skills
@@ -623,29 +605,29 @@ vibe install https://github.com/user/skills
 vibe skills sync claude-code
 ```
 
-### 跨域工作流 (v7.0)
+### Cross-Cutting Workflows (v7.0)
 
-跨域工作流把多个技能编排成一条完整的开发流水线（如"诊断 → 实现 → 验证 → 审查"）。VibeSOP 内置的 `prompt-chain-validator` 工作流为本仓库验证过的"动态提示词链 + 容器端到端验证"模式：
+Cross-cutting workflows orchestrate multiple skills into a complete development pipeline (e.g. "diagnose → implement → verify → review"). VibeSOP's built-in `prompt-chain-validator` workflow implements a validated "dynamic prompt chain + container end-to-end verification" pattern for this repository:
 
 ```bash
-# 列出所有跨域工作流
+# List all cross-cutting workflows
 vibe workflows list-workflows
 
-# 查看工作流详情
+# Show workflow details
 vibe workflows show prompt-chain-validator
 
-# 一站式：诊断 → 生成分阶段提示词 → 容器验证
-vibe prompt-chain run "为 VibeSOP 增加 Multi-Agent Squad 能力"
+# One-stop: diagnose → generate phased prompts → container verify
+vibe prompt-chain run "Add Multi-Agent Squad capability to VibeSOP"
 
-# 分步执行
+# Step-by-step execution
 vibe prompt-chain diagnose "Multi-Agent Squad" --files="src/core/*.py"
 vibe prompt-chain generate "Multi-Agent Squad" --output ./prompts
 vibe prompt-chain validate --container orbstack --json
 ```
 
-`vibe prompt-chain generate` 输出 7 个 `.md` 提示词文件（Phase 0 扇出诊断 → Phase 1-5 分阶段实现 → Final 端到端验证），每个文件可独立喂给 Claude Code。`vibe prompt-chain validate` 在 Linux 容器（orbstack/docker/lima 自动检测，或 `--container local` 走宿主机）中跑完整验证流水线，输出 JSON 报告。
+`vibe prompt-chain generate` outputs 7 `.md` prompt files (Phase 0 fan-out diagnosis → Phase 1-5 phased implementation → Final end-to-end verification), each independently feedable to Claude Code. `vibe prompt-chain validate` runs the full verification pipeline in a Linux container (orbstack/docker/lima auto-detected, or `--container local` for host), outputting a JSON report.
 
-### 反馈收集
+### Feedback Collection
 
 ```bash
 # Record correct routing
@@ -658,41 +640,41 @@ vibe feedback record "<query>" "<skill>" --wrong "<actual-skill>"
 vibe feedback report
 ```
 
-### 任务记忆与观测 (v8.0+)
+### Task Memory & Observability (v8.0+)
 
 ```bash
-# 语义检索过往任务轨迹
+# Semantic recall of past task traces
 vibe recall "<query>"
-vibe recall "<query>" --cross-project   # 跨可信项目池召回
+vibe recall "<query>" --cross-project   # recall across trusted project pool
 
-# 路由观测：指标与回放
+# Routing observability: metrics and replay
 vibe trace metrics
 vibe trace replay <trace-id>
 
-# 本能学习：工具序列挖掘与晋升
+# Instinct learning: tool-sequence mining and promotion
 vibe analyze session
 vibe instinct eval
 vibe instinct status
 
-# 技能蒸馏队列（候选 → 人工 promote/dismiss，附 shadow verifier 徽章）
+# Skill distillation queue (candidates → manual promote/dismiss, with shadow verifier badge)
 vibe skill scan-candidates
 vibe skill promote <candidate-id>
 vibe skill dismiss <candidate-id>
 
-# 跨项目可信池管理
+# Cross-project trust pool management
 vibe pool add / list / remove
 ```
 
-### 会话智能路由
+### Session Intelligent Routing
 
-> **⚠️ 默认开启**：会话智能追踪默认**开启**（`routing.session_aware: true`），自动记录会话状态并支持多轮对话重路由。
+> **⚠️ Enabled by default**: Session-aware tracking is **on** by default (`routing.session_aware: true`), automatically recording session state and supporting multi-turn conversation re-routing.
 >
-> **为什么可以关闭？**
-> - **性能**：部分用户希望零开销
-> - **隐私**：不希望记录工具使用历史
-> - **控制**：完全由用户决定是否启用
+> **Why you might want to disable it?**
+> - **Performance**: Some users want zero overhead
+> - **Privacy**: Don't want to record tool usage history
+> - **Control**: Fully user-decided whether to enable
 >
-> 如需关闭：
+> To disable:
 > ```bash
 > vibe config set routing.session_aware false
 > ```
@@ -711,15 +693,15 @@ vibe session check-reroute "design new architecture" --skill "systematic-debuggi
 vibe session summary
 ```
 
-完整命令参考: [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md)
+Full CLI reference: [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md)
 
 ---
 
-## 配置
+## Configuration
 
-### 项目级配置
+### Project-Level Config
 
-创建 `.vibe/config.toml`：
+Create `.vibe/config.toml`:
 
 ```yaml
 # .vibe/config.toml
@@ -730,7 +712,7 @@ routing:
   enable_ai_triage: true
   enable_embedding: false
   max_candidates: 3
-  confirmation_mode: ambiguous_only  # ambiguous_only（默认）| always | never
+  confirmation_mode: ambiguous_only  # ambiguous_only (default) | always | never
   keyword_match_max_chars: 5  # max chars for keyword routing (0=always LLM, 200=always keyword)
 
   # Degradation: confidence-gated layered fallback (v5.2.0)
@@ -752,9 +734,12 @@ skills:
     - omx
 ```
 
-#### 用户确认模式
+#### User Confirmation Mode
 
-默认 `ambiguous_only`：置信度 ≥ `auto_select_threshold`（0.6）的路由自动放行（阈值默认与降级梯度 AUTO 档一致，但二者独立可调），只在置信度不足或多意图编排存在分歧时弹出确认：
+Default `ambiguous_only`: routes with confidence ≥ `auto_select_threshold` (0.6) pass
+through automatically (the threshold matches the degradation AUTO tier by default, but
+the two are independently configurable). Confirmation is only prompted when confidence
+is low or a multi-intent orchestration has disagreements:
 
 ```bash
 $ vibe route "帮我 review 代码"
@@ -762,26 +747,30 @@ $ vibe route "帮我 review 代码"
 │ Selected: mattpocock/tdd (confidence: 87%)      │
 │ ...                                            │
 ╰────────────────────────────────────────────────╯
-（≥ 0.6：自动选择，直接继续）
+（≥ 0.6: auto-selected, continues directly）
 
-$ vibe route "这个查询有点含糊"
+$ vibe route "this query is a bit ambiguous"
 How would you like to proceed?
   ✅ Confirm selected skill
   🔀 Choose a different skill
   📝 Skip skill, use raw LLM
 ```
 
-调整方式：
+Adjust it:
 
-- **每次都确认**：`routing.confirmation_mode = "always"`（旧版默认值）
-- **临时跳过**：`vibe route "query" --yes` 或 `-y`
-- **完全关闭**：在 `~/.vibe/config.toml` 中设置 `routing.confirmation_mode = "never"`
+- **Confirm every time**: `routing.confirmation_mode = "always"` (the old default)
+- **Temporary skip**: `vibe route "query" --yes` or `-y`
+- **Fully off**: set `routing.confirmation_mode = "never"` in `~/.vibe/config.toml`
 
-> 💡 **为什么改默认**：`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」相抵触——每条路由都要人点一次头，系统本身就成了瓶颈。`ambiguous_only` 把人工关口保留给真正模糊的决策。
+> 💡 **Why the default changed**: `always` conflicted with the fifth tenet of our
+> philosophy — "Continuity > Startup / the bottleneck is the human, not the system."
+> Requiring a manual confirmation on every route makes the system itself the
+> bottleneck. `ambiguous_only` reserves the human gate for genuinely ambiguous
+> decisions.
 
-### 全局配置
+### Global Config
 
-创建 `~/.vibe/config.toml`：
+Create `~/.vibe/config.toml`:
 
 ```yaml
 # ~/.vibe/config.toml
@@ -798,7 +787,7 @@ preferences:
 
 ---
 
-## 集成
+## Integrations
 
 ### Claude Code
 
@@ -838,28 +827,28 @@ vibe build grok-build --output ~/.grok
 
 ### Workflow Engine (v6.2.0+)
 
-VibeSOP 的动态工作流引擎支持 6 种编排模式，自动分类用户意图并选择最佳执行策略。
+VibeSOP's dynamic workflow engine supports 6 orchestration patterns, automatically classifying user intent and selecting the best execution strategy.
 
-**6 种工作流模式：**
+**6 Workflow Patterns:**
 
-| 模式 | 用途 |
-|-------------|--------------|
-| `SEQUENTIAL` | 线性依赖链 |
-| `PARALLEL` | 独立并发任务 |
-| `FAN_OUT` | 一对多分发 |
-| `ADVERSARIAL` | 独立验证 |
-| `LOOP_UNTIL_DRY` | 迭代到无新发现 |
-| `TOURNAMENT` | 最佳选择 |
+| Pattern | Use Case |
+|---------|----------|
+| `SEQUENTIAL` | Linear dependency chain |
+| `PARALLEL` | Independent concurrent tasks |
+| `FAN_OUT` | One-to-many distribution |
+| `ADVERSARIAL` | Independent critic verification |
+| `LOOP_UNTIL_DRY` | Iterate until no new findings |
+| `TOURNAMENT` | Best-of-N pairwise comparison |
 
 ```bash
-# 强制指定工作流模式
-vibe route --pattern fan_out "分析架构并优化性能"
+# Force workflow pattern
+vibe route --pattern fan_out "analyze architecture and optimize performance"
 
-# 启用对抗式验证
-vibe route --verify "重构认证模块"
+# Enable adversarial verification
+vibe route --verify "refactor auth module"
 ```
 
-**平台支持：**
+**Platform Support:**
 
 | Platform | Workflow | Native Parallel | Trigger |
 |----------|----------|-----------------|---------|
@@ -871,7 +860,7 @@ vibe route --verify "重构认证模块"
 
 ---
 
-## 架构
+## Architecture
 
 VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
 
@@ -883,10 +872,10 @@ VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic 
 
 ```
 ┌─────────────────────────────────────────────────┐
-│               AI Agent (执行层)                  │
+│               AI Agent (Execution Layer)         │
 │    Claude Code / Cursor / OpenCode / etc.        │
 └────────────────────┬────────────────────────────┘
-                     │ 执行技能
+                     │ Execute skills
 ┌────────────────────▼────────────────────────────┐
 │              VibeSOP SkillOS                     │
 │                                                  │
@@ -896,122 +885,122 @@ VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic 
 │  └────────────────────┬─────────────────────┘   │
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
-│  │          UnifiedRouter (路由层)           │   │
+│  │          UnifiedRouter (Routing Layer)    │   │
 │  │   4-Stage Cascade:                        │   │
 │  │   Explicit → Scenario+Index → AI Triage   │   │
 │  │   → Matcher Aggregation → Fallback        │   │
 │  └────────────────────┬─────────────────────┘   │
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
-│  │       TaskOrchestrator (编排层)           │   │
-│  │   多意图检测 → 任务分解 → 执行计划生成    │   │
+│  │       TaskOrchestrator (Orchestration)    │   │
+│  │   Multi-intent → Decompose → Plan         │   │
 │  └────────────────────┬─────────────────────┘   │
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
-│  │      Skill Lifecycle Manager (管理层)      │   │
-│  │   启禁用 │ 作用域 │ 质量评估 │ 保留淘汰   │   │
+│  │      Skill Lifecycle Manager              │   │
+│  │   Enable │ Scope │ Quality │ Retain/Depr  │   │
 │  └────────────────────┬─────────────────────┘   │
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
-│  │        Integration Layer (适配层)          │   │
+│  │        Integration Layer (Adapters)        │   │
 │  │   Claude Code │ OpenCode │ Kimi CLI       │   │
 │  └──────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
 ```
 
-详细架构文档: [docs/architecture/](docs/architecture/)
+Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 ---
 
-## 文档
+## Documentation
 
-**📚 完整文档索引**: [docs/INDEX.md](docs/INDEX.md)
+**📚 Complete Documentation Index**: [docs/INDEX.md](docs/INDEX.md)
 
-### 核心文档
+### Core Documentation
 
-- [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) - 核心哲学和使命
-- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - 系统架构
-- [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) - 项目背景
-- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - 项目状态
+- [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) - Core philosophy and mission (中文)
+- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - System architecture
+- [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) - Project context
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - Project status
 
-### 用户指南
+### User Guides
 
-- **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南
-  - 50+ 个技能详解
-  - 4 阶段路由级联
-  - 优先级决策机制
-  - 手动切换技能
-- **🆕 [docs/agent-integration.md](docs/agent-integration.md)** - Agent 进程内集成指南
-  - `AgentRouter.set_llm()` 复用宿主 Agent 的 LLM，无需 API key
-  - 多轮对话 reroute / 置信度感知
-- [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门
-- [docs/QUICKSTART_DEVELOPERS.md](docs/QUICKSTART_DEVELOPERS.md) - 开发者快速入门
-- [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md) - CLI 命令参考
-- [docs/EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - 外部技能开发
+- **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - Complete skills ecosystem guide
+  - 14 built-in + community pack skills explained (superpowers, omx, gstack)
+  - 4-stage routing cascade
+  - Priority decision mechanism
+  - How to switch skills
+- **🆕 [docs/agent-integration.md](docs/agent-integration.md)** - In-process Agent integration guide
+  - `AgentRouter.set_llm()` reuses the host Agent's LLM, no API key needed
+  - Multi-turn reroute / confidence awareness
+- [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - User quick start
+- [docs/QUICKSTART_DEVELOPERS.md](docs/QUICKSTART_DEVELOPERS.md) - Developer quick start
+- [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md) - CLI command reference
+- [docs/EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - External skill development
 
-### 技能包指南
+### Skill Pack Guides
 
-- **[docs/OMX_GUIDE.md](docs/OMX_GUIDE.md)** - oh-my-codex (OMX) 完整指南
+- **[docs/OMX_GUIDE.md](docs/OMX_GUIDE.md)** - oh-my-codex (OMX) complete guide
   - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
-  - 使用场景和最佳实践
+  - Usage scenarios and best practices
 
-### 开发者文档
+### Developer Documentation
 
-- [docs/dev/CONTRIBUTING.md](docs/dev/CONTRIBUTING.md) - 贡献指南
-- [docs/ROADMAP.md](docs/ROADMAP.md) - 路线图
-- [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md) - 行为准则
-- [docs/SECURITY.md](docs/SECURITY.md) - 安全政策
-
----
-
-## 性能指标
-
-### 路由准确率
-
-| 指标 | 值 | 说明 |
-|-----------|---------|----------|
-| **总体准确率** | **~90%** | 基于内部测试集估算，非标准化基准 |
-| **AI Triage 准确率** | **~95%** | 基于抽样验证估算 |
-| **场景匹配准确率** | **~90%** | 基于关键词匹配估算 |
-| **语义歧义准确率** | **~90%** | 基于 LLM 评估估算 |
-
-### 响应时间
-
-| 操作 | 时间 | 说明 |
-|--------------|----------|----------|
-| **简单路由** (缓存命中) | ~10-50ms | P50 估算值，受硬件影响 |
-| **复杂路由** (多层) | ~200-300ms | 含 LLM Triage |
-| **AI Triage** | ~200-300ms | 取决于 LLM 提供商和网络 |
-
-> ⚠️ **性能声明说明**：以上数据为设计目标和内部估算值，非标准化基准测试结果。实际性能因硬件、网络、LLM 提供商和技能数量而异。标准化基准测试套件正在建设中。
+- [docs/dev/CONTRIBUTING.md](docs/dev/CONTRIBUTING.md) - Contributing guide
+- [docs/ROADMAP.md](docs/ROADMAP.md) - Roadmap
+- [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md) - Code of conduct
+- [docs/SECURITY.md](docs/SECURITY.md) - Security policy
 
 ---
 
-## 对比
+## Performance Metrics
 
-### 与其他工具对比
+### Routing Accuracy
+
+| Metric | Value | Note |
+|--------|-------|------|
+| **Overall Accuracy** | **~90%** | Estimated from internal test set, not a standardized benchmark |
+| **AI Triage Accuracy** | **~95%** | Estimated from sampled validation |
+| **Scenario Matching Accuracy** | **~90%** | Estimated from keyword matching |
+| **Semantic Ambiguity Accuracy** | **~90%** | Estimated from LLM evaluation |
+
+### Response Time
+
+| Operation | Time | Note |
+|-----------|------|------|
+| **Simple Routing** (cache hit) | ~10-50ms | P50 estimate, varies by hardware |
+| **Complex Routing** (multi-layer) | ~200-300ms | Includes LLM Triage |
+| **AI Triage** | ~200-300ms | Depends on LLM provider and network |
+
+> ⚠️ **Performance Note**: The above figures are design targets and internal estimates, not standardized benchmark results. Actual performance varies by hardware, network, LLM provider, and skill count. A standardized benchmark suite is under construction.
+
+---
+
+## Comparison
+
+### vs Other Tools
 
 | Feature | VibeSOP | Cursor | Continue.dev | Aider |
 |---------|---------|--------|--------------|-------|
 | **Routing** | 4-stage cascade routing | Built-in commands | Extension-based | CLI flags |
 | **Orchestration** | Multi-skill composition | No | No | No |
 | **Lifecycle Mgmt** | Enable/disable, scope, evaluate | No | No | No |
-| **Skills** | 50+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
+| **Skills** | 14 built-in + community skill packs | Built-in features | Community extensions | Built-in workflows |
 | **Learning** | Preference learning | Fixed | No | No |
-| **Cross-Platform** | ✅ Works with any AI tool | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
+| **Cross-Platform** | ✅ Per-agent config generation | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
 | **Open Ecosystem** | ✅ Any SKILL.md | ❌ Closed | ⚠️ Extension API | ❌ Closed |
 | **Security Audit** | ✅ Before loading skills | N/A | ⚠️ User discretion | N/A |
 
-### 为什么选择 VibeSOP？
+### Why Choose VibeSOP?
 
-1. **不绑定单一工具** — 从 Cursor 切换到 Claude Code？你的技能跟着你走
-2. **发现你不知道存在的技能** — "我能做什么？" → `vibe skills available`
-3. **越来越聪明** — 记住什么对你有效
-4. **开放可扩展** — 用简单的 markdown 文件创建自己的技能
+1. **Not tied to one tool** — Switch from Cursor to Claude Code? Your skills come with you
+2. **Discovers skills you didn't know existed** — "What can I do?" → `vibe skills available`
+3. **Gets smarter over time** — Remembers what worked for you
+4. **Open & extensible** — Create your own skills with a simple markdown file
 
 ---
 
-## 开发
+## Development
 
 ```bash
 # Type checking
@@ -1035,79 +1024,94 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ---
 
-## 路线图
+## Roadmap
 
-已完成里程碑（v4.0–v6.2 等）的完整清单见 [docs/ROADMAP.md](docs/ROADMAP.md)（历史版本记录）。
-
-详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/archive/version_05.md)
+For the full version history see [docs/ROADMAP.md](docs/ROADMAP.md)
+(historical record) and the [version_05.md ADR](docs/archive/version_05.md).
 
 ---
 
-## 许可证
+## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
-## 致谢
+## Acknowledgments
 
-VibeSOP 站在巨人的肩膀上，整合了社区优秀的 AI 工程实践：
+VibeSOP stands on the shoulders of giants, integrating excellent AI engineering practices from the community:
 
-### 🔗 社区项目集成
+### Community Integration
 
-VibeSOP 内置了对以下社区技能包的支持，并提供统一的智能路由：
+VibeSOP provides built-in support and intelligent routing for the following community skill packs:
 
 - **[mattpocock/skills](https://github.com/mattpocock/skills)** by [@mattpocock](https://github.com/mattpocock)
-  - 🎯 **定位**: 高质量工程技能 — TDD、诊断、架构改进、代码审查
-  - 📦 **技能数**: 6+ 个技能 (tdd, diagnose, grill-with-docs, improve-codebase-architecture, handoff, grill-me)
-  - 🎨 **特点**: `.claude-plugin/plugin.json` 注册表格式，专注技能设计范式
-  - ⚡ **默认安装**: `vibe install` 自动安装
+  - 🎯 **Positioning**: High-quality engineering skills — TDD, diagnosis, architecture improvement, code review
+  - 📦 **Skills**: 6+ skills (tdd, diagnose, grill-with-docs, improve-codebase-architecture, handoff, grill-me)
+  - 🎨 **Features**: `.claude-plugin/plugin.json` registry format, focused skill design paradigm
+  - ⚡ **Default install**: `vibe install` auto-installs
 
 - **[superpowers](https://github.com/obra/superpowers)** by [@obra](https://github.com/obra)
-  - 🎯 **定位**: 基础开发工作流 - TDD、重构、调试、优化
-  - 📦 **技能数**: 7 个技能 (tdd, refactor, debug, optimize, architect, review, brainstorm)
-  - 🎨 **特点**: 开发最佳实践，red-green-refactor 循环
-  - 💡 **适用**: 日常开发任务，个人工作流优化
+  - 🎯 **Positioning**: Foundational development workflows — TDD, refactoring, debugging, optimization
+  - 📦 **Skills**: 7 skills (tdd, refactor, debug, optimize, architect, review, brainstorm)
+  - 🎨 **Features**: Development best practices, red-green-refactor cycle
+  - 💡 **Best for**: Daily development tasks, personal workflow optimization
 
 - **[oh-my-codex (OMX)](https://github.com/Yeachan-Heo/oh-my-codex)** by [@Yeachan-Heo](https://github.com/Yeachan-Heo)
-  - 🎯 **定位**: 高级工程方法论 - 结构化思维和系统化执行
-  - 📦 **技能数**: 7 个技能 (deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa)
-  - 🎨 **特点**: 需求澄清、持久执行、共识规划、多代理并行
-  - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (完整使用指南)
+  - 🎯 **Positioning**: Advanced engineering methodologies — structured thinking and systematic execution
+  - 📦 **Skills**: 7 skills (deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa)
+  - 🎨 **Features**: Requirements clarification, persistent execution, consensus planning, multi-agent parallelism
+  - 📖 **Docs**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (complete usage guide)
 
 - **[gstack](https://github.com/anthropics/gstack)** by [@brandonrobertz](https://github.com/brandonrobertz)
-  - 🎯 **定位**: 虚拟工程团队 - 工程技能和浏览器自动化
-  - 📦 **技能数**: 19 个技能 (review, qa, ship, office-hours, browse, etc.)
-  - 🎨 **特点**: 角色-based 技能 (产品、工程、设计、QA)
-  - 💡 **适用**: 需显式安装 `vibe install gstack`（非默认）
+  - 🎯 **Positioning**: Virtual engineering team — engineering skills and browser automation
+  - 📦 **Skills**: 19 skills (review, qa, ship, office-hours, browse, etc.)
+  - 🎨 **Features**: Role-based skills (product, engineering, design, QA)
+  - 💡 **Best for**: Requires explicit install `vibe install gstack` (not default)
 
-### 🏗️ 核心技术基础
+### Core Technologies
 
 - **[Claude Code](https://github.com/anthropics/claude-code)** by Anthropic
-  - 📋 **贡献**: SKILL.md 规范标准
-  - 🔧 **集成**: VibeSOP 完全兼容 SKILL.md 规范
-  - 📚 **文档**: [SKILL.md Specification](docs/EXTERNAL_SKILLS_GUIDE.md)
+  - 📋 **Contribution**: SKILL.md specification standard
+  - 🔧 **Integration**: VibeSOP is fully compatible with the SKILL.md spec
+  - 📚 **Docs**: [SKILL.md Specification](docs/EXTERNAL_SKILLS_GUIDE.md)
 
-### 🎯 VibeSOP 独特价值
+### VibeSOP Unique Value
 
-VibeSOP 不仅仅是这些技能包的集合，而是一个**统一的智能路由层**：
+VibeSOP is not just a collection of these skill packs, but a **Skill Operating System (SkillOS)** that provides:
 
-- 🧠 **智能路由** (94% 准确率) - 自动选择最合适的技能
-- 🔄 **统一管理** - 一个工具管理所有技能包
-- 🛡️ **安全审计** - 所有外部技能经过安全扫描
-- 📚 **跨平台** - 在 Claude Code、Cursor、Continue.dev 等平台使用
-- 🎓 **偏好学习** - 记住你的选择，越来越准确
+- 🧠 **Intelligent Routing** (~90% internal estimate) — Auto-selects the most suitable skill
+- 🔄 **Unified Management** — One tool to manage all skill packs
+- 🛡️ **Security Audit** — All external skills are security-scanned
+- 📚 **Cross-Platform** — Use across Claude Code, Cursor, Continue.dev, and more
+- 🎓 **Preference Learning** — Remembers your choices, gets more accurate over time
 
-### 📊 技能选择指南
+### Skill Selection Guide
 
-**详细对比**: 请参考 [OMX_GUIDE.md](docs/OMX_GUIDE.md#与其他技能包的区别)
+**Detailed comparison**: See [OMX_GUIDE.md](docs/OMX_GUIDE.md#differences-from-other-skill-packs)
 
 ```
-需求不明确？ → OMX deep-interview (深度澄清)
-TDD 开发？ → mattpocock/tdd (red-green-refactor)
-代码审查？ → mattpocock/grill-me (深度审视)
-调试错误？ → mattpocock/diagnose (系统化诊断)
-架构改进？ → mattpocock/improve-codebase-architecture (领域驱动重构)
+Unclear requirements? → OMX deep-interview (deep clarification)
+TDD development? → mattpocock/tdd (red-green-refactor)
+Code review? → mattpocock/grill-me (deep scrutiny)
+Debug errors? → mattpocock/diagnose (systematic diagnosis)
+Architecture improvement? → mattpocock/improve-codebase-architecture (domain-driven refactor)
+Documentation design? → mattpocock/grill-with-docs (domain model challenge)
+Full implementation? → OMX ralph (persistent execution + deslop)
+Team decisions? → OMX ralplan (consensus planning + ADR)
+Parallel tasks? → OMX team (multi-agent collaboration)
+QA testing? → OMX ultraqa (architecture-driven)
+Session handoff? → mattpocock/handoff (session transfer)
 ```
 
-> 📖 [English version](README.en.md)
+---
+
+## Contact
+
+**Built with ❤️ for AI-native developer workflows**
+
+[GitHub](https://github.com/nehcuh/vibesop-py) • [Issues](https://github.com/nehcuh/vibesop-py/issues) • [Discussions](https://github.com/nehcuh/vibesop-py/discussions)
+
+---
+
+> 📖 [中文文档](README.zh-CN.md)

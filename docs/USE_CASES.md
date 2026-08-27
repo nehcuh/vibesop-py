@@ -12,7 +12,7 @@
 
 如果你遇到过下面任何一个，VibeSOP 就是为你的：
 
-- "我知道 superpowers / gstack / omx 这些 skill pack 很强，但**记不住 50+ 个命令**"
+- "我知道 superpowers / gstack / omx 这些 skill pack 很强，但**记不住几十个命令**"
 - "我在 Claude Code 装了技能，**切到 Cursor 又得重装一遍**"
 - "团队 5 个人，每个人都各自摸索同样的工作流，**重复造轮子**"
 - "下班后 CI 红了没人管，**第二天上班才发现**昨晚的 build 挂了 8 小时"
@@ -372,7 +372,7 @@ vibe instinct status                   # 模式学习
 
 ## 下一步
 
-- **想装技能**：[`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) 详解 50+ 内置技能
+- **想装技能**：[`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) 详解 14 个内置技能 + 社区技能包
 - **想跨平台**：[`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) 安装指南
 - **想做 loop**：[`loop-setup-guide.md`](loop-setup-guide.md) 24 小时部署
 - **想理解原理**：[`PHILOSOPHY.md`](PHILOSOPHY.md) 设计哲学
