@@ -46,6 +46,7 @@ class QuickstartRunner:
         self,
         project_path: Path | None = None,
         platform: str | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         result: dict[str, Any] = {
             "success": False,
@@ -68,40 +69,64 @@ class QuickstartRunner:
             console.print(f"📁 Project Path: {project_path}")
             console.print()
 
-            config = self._ask_install_type(project_path)
-            result["config"] = config
-
-            if platform:
-                if platform not in self._supported_platforms:
+            if force:
+                # Non-interactive (--force / CI): every question takes its
+                # default. Must never reach input() — piped-stdin automation
+                # dies on any unexpected prompt.
+                resolved_platform = platform or "claude-code"
+                if resolved_platform not in self._supported_platforms:
                     msg = (
-                        f"Unknown platform: {platform}. "
+                        f"Unknown platform: {resolved_platform}. "
                         f"Supported: {', '.join(self._supported_platforms)}"
                     )
                     console.print(f"❌ {msg}")
                     result["errors"].append(msg)
                     return result
-                config.platform = platform
-            elif config.platform == "ask":
-                config.platform = self._ask_platform()
-            console.print()
-
-            if config.install_integrations is None:
-                config.install_integrations = self._ask_yes_no(
-                    "Install skill pack integrations (superpowers, omx)?",
-                    default=True,
+                config = QuickstartConfig(
+                    platform=resolved_platform,
+                    install_integrations=False,
+                    install_hooks=True,
+                    project_path=Path.home(),
+                    global_install=True,
                 )
-            console.print()
+                result["config"] = config
+            else:
+                config = self._ask_install_type(project_path)
+                result["config"] = config
 
-            if config.install_hooks is None:
-                config.install_hooks = self._ask_yes_no("Install platform hooks?", default=True)
-            console.print()
+                if platform:
+                    if platform not in self._supported_platforms:
+                        msg = (
+                            f"Unknown platform: {platform}. "
+                            f"Supported: {', '.join(self._supported_platforms)}"
+                        )
+                        console.print(f"❌ {msg}")
+                        result["errors"].append(msg)
+                        return result
+                    config.platform = platform
+                elif config.platform == "ask":
+                    config.platform = self._ask_platform()
+                console.print()
 
-            self._show_summary(config)
-            console.print()
+                if config.install_integrations is None:
+                    config.install_integrations = self._ask_yes_no(
+                        "Install skill pack integrations (superpowers, omx)?",
+                        default=True,
+                    )
+                console.print()
 
-            if not self._ask_yes_no("Proceed with installation?", default=True):
-                console.print("Installation cancelled.")
-                return result
+                if config.install_hooks is None:
+                    config.install_hooks = self._ask_yes_no(
+                        "Install platform hooks?", default=True
+                    )
+                console.print()
+
+                self._show_summary(config)
+                console.print()
+
+                if not self._ask_yes_no("Proceed with installation?", default=True):
+                    console.print("Installation cancelled.")
+                    return result
 
             result["success"] = self._execute_installation(config)
             result["steps_completed"] = [
@@ -320,11 +345,13 @@ class QuickstartRunner:
             console.print(f"  Synced {total} skill(s) to {platform}")
 
     def _run_route_demo(self, config: QuickstartConfig) -> None:
-        """Keyless routing demo — first value moment before any configuration.
+        """Keyless routing demo + injection preview — the aha moment.
 
         LightweightRouter does keyword/scenario routing only (no LLM, no API
-        key), so the demo works on a fresh install. Queries are verified
-        against the builtin pool: slash-list and session-end both hit.
+        key), so the demo works on a fresh install. Queries are the verified
+        block-2 demo pairs (see tests/core/routing/test_demo_skills.py).
+        The inject preview then replays the winning query through the REAL
+        hook pipeline so the user sees what their agent will receive.
         """
         import contextlib
         import logging
@@ -339,8 +366,10 @@ class QuickstartRunner:
         unified_logger = logging.getLogger("vibesop.core.routing.unified")
         saved_level = unified_logger.level
         unified_logger.setLevel(logging.ERROR)
+        demo_pair = ("help me write a commit message", "帮我写提交信息")
+        won_query = ""
         try:
-            for query in ("show me all the skills", "wrap up the session", "今天就到这里，收工"):
+            for query in demo_pair:
                 try:
                     result = router.route(query)
                 except Exception:
@@ -348,6 +377,8 @@ class QuickstartRunner:
                 skill = result.get("skill_id") or ""
                 confidence = result.get("confidence") or 0.0
                 if skill and not skill.startswith("fallback"):
+                    if not won_query:
+                        won_query = query
                     console.print(
                         f'   vibe route "{query}" → [green]{skill}[/green] ({confidence:.0%})'
                     )
@@ -356,7 +387,70 @@ class QuickstartRunner:
         finally:
             with contextlib.suppress(Exception):
                 unified_logger.setLevel(saved_level)
-        console.print()
+        console.print("   [dim]↑ same skill, both languages[/dim]\n")
+        if won_query:
+            self._run_inject_preview(config, won_query)
+
+    def _run_inject_preview(self, config: QuickstartConfig, query: str) -> None:
+        """Replay a query through the real hook pipeline and show the context
+        the user's agent would receive (Claude Code / Grok Build hook layer).
+
+        Gate46 v2 A2: the aha must happen in the user's own terminal, not
+        only in a GIF. Degrades to a one-line notice — never blocks quickstart.
+        """
+        import json
+
+        from vibesop.agent.runtime import AgentRuntime
+
+        console.print("[bold cyan]💉 Injection preview — what your agent receives[/bold cyan]")
+        console.print(f'   Replaying "{query}" through the hook pipeline:\n')
+        try:
+            platform = (
+                config.platform
+                if config.platform in ("claude-code", "grok-build")
+                else "claude-code"
+            )
+            out = AgentRuntime(project_root=config.project_path).handle_query_for_hook(
+                query,
+                platform=platform,
+                hook_event_name="UserPromptSubmit",
+                include_additional_context=True,
+                no_match_message=True,
+            )
+            data = json.loads(out)
+            context_text = (data.get("hookSpecificOutput") or {}).get("additionalContext") or ""
+            # Show the skill's workflow, not its YAML metadata: cut the
+            # frontmatter block (banner precedes it) so the line budget
+            # reaches the first heading (gate46 dual-review P1).
+            lines = context_text.splitlines()
+            try:
+                open_fence = next(i for i, ln in enumerate(lines) if ln.strip() == "---")
+                close_fence = next(
+                    i for i in range(open_fence + 1, len(lines)) if lines[i].strip() == "---"
+                )
+                lines = lines[:open_fence] + lines[close_fence + 1 :]
+            except StopIteration:
+                pass
+            shown = 0
+            for line in lines:
+                if not line.strip():
+                    continue
+                console.print("   [dim]│[/dim] ", end="")
+                # markup=False on the content line: skill bodies contain
+                # lowercase-bracket markdown that Rich would swallow as tags.
+                console.print(line, markup=False, highlight=False)
+                shown += 1
+                if shown >= 10:
+                    console.print("   [dim]│ …[/dim]")
+                    break
+            if not shown:
+                raise RuntimeError("empty additionalContext")
+        except Exception:
+            console.print("   [yellow]⊘ preview unavailable on this machine[/yellow]")
+        console.print(
+            "\n   👆 Claude Code / Grok Build receive this automatically once hooks"
+            " are installed.\n"
+        )
 
     def _show_next_steps(self, config: QuickstartConfig) -> None:
         console.print("\n[bold]📚 Next Steps:[/bold]\n")
@@ -378,7 +472,9 @@ class QuickstartRunner:
             else:
                 console.print(f"1. Run: [cyan]vibe build {config.platform}[/cyan]")
             console.print('2. Run: [cyan]vibe route "your query"[/cyan] to find skills')
-            console.print("3. Run: [cyan]vibe skills list[/cyan] to see available skills")
+            # `skills list` shows only materialized/pack installs (0 on a
+            # fresh machine); `skills available` includes wheel builtins.
+            console.print("3. Run: [cyan]vibe skills available[/cyan] to see all skills")
             console.print(
                 "4. Later, add community packs: [cyan]vibe install superpowers[/cyan]"
             )

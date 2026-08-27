@@ -71,10 +71,11 @@ def quickstart(
     runner = QuickstartRunner()
 
     if force:
-        # Non-interactive mode
+        # Non-interactive mode: defaults for every question, zero input() —
+        # safe for CI and piped automation (gate46 v2 A4).
         result = runner.run(
-            project_path=Path(),
             platform=platform,
+            force=True,
         )
 
         if result.get("success"):
