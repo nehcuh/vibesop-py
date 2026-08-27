@@ -493,6 +493,12 @@ def route(
         "(deployed as the grok UserPromptSubmit JSON hook — gate33). "
         "Prints the hook response envelope and always exits 0.",
     ),
+    hook_platform: str = typer.Option(
+        "grok-build",
+        "--platform",
+        help="Hook mode only: platform whose injection format to use. "
+        "Also readable from the stdin JSON 'platform' field (flag wins).",
+    ),
     min_confidence: float | None = typer.Option(
         None,
         "--min-confidence",
@@ -646,10 +652,18 @@ def route(
         # envelope — the hook contract (never block the host) wins over
         # surfacing the error.
         root = _resolve_hook_project_root(None, payload if isinstance(payload, dict) else {})
+        # gate46 dual-review: platform is parameterizable (CLI flag > JSON
+        # envelope field > grok-build default) so the dual-platform probe
+        # exercises two real platform strings, not one path twice.
+        platform = hook_platform
+        if isinstance(payload, dict):
+            env_platform = payload.get("platform")
+            if hook_platform == "grok-build" and isinstance(env_platform, str) and env_platform.strip():
+                platform = env_platform.strip()
         try:
             out = AgentRuntime(project_root=root).handle_query_for_hook(
                 hook_query,
-                platform="grok-build",
+                platform=platform,
                 hook_event_name="UserPromptSubmit",
                 include_additional_context=True,
                 no_match_message=True,
