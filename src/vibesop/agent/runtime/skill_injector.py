@@ -31,6 +31,7 @@ class PlatformType(StrEnum):
     """Supported AI agent platforms."""
 
     CLAUDE_CODE = "claude-code"
+    GROK_BUILD = "grok-build"
     OPENCODE = "opencode"
     KIMI_CLI = "kimi-cli"
     PI = "pi"
@@ -148,7 +149,9 @@ class SkillInjector:
             skill_content = skill_content[: self.MAX_INJECT_LENGTH]
             truncated = True
 
-        if platform == PlatformType.CLAUDE_CODE:
+        if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
+            # Grok Build's UserPromptSubmit hook envelope is Claude-shaped
+            # (hookSpecificOutput.additionalContext) — same payload format.
             return self._inject_claude_code(skill_id, skill_content, truncated)
         elif platform == PlatformType.OPENCODE:
             return self._inject_opencode(skill_id, skill_content, truncated)
@@ -247,28 +250,41 @@ class SkillInjector:
         # Strategy 0 (builtin skills only): strip namespace prefix.
         # SKILL.md frontmatter carries namespaced ids like "builtin/xxx",
         # but on-disk layout is flat (no "builtin/" segment, no "builtin-"
-        # prefix). Three locations carry builtin skills, tried in order:
+        # prefix). Four locations carry builtin skills, tried in order:
         #
         #   1. Dev repo:        <project_root>/core/skills/{name}/SKILL.md
         #       (when running inside the vibesop-py repo itself)
-        #   2. Editable bundle: <sys.path entry>/vibesop/builtin_skills/{name}/SKILL.md
-        #       (force-include data per commit 185dfe4; lives next to the
-        #        installed package, NOT under __file__/src/vibesop/ —
-        #        PEP 660 editable wheels keep code in src/ and data in
-        #        site-packages, so __file__ can't reach the data)
-        #   3. Wheel bundle:    <site-packages>/vibesop/builtin_skills/{name}/SKILL.md
-        #       (same as #2; sys.path scan already covers it)
+        #   2. Wheel bundle:    <pkg-dir>/vibesop/builtin_skills/{name}/SKILL.md
+        #       (force-include data per commit 185dfe4; resolved via
+        #        bundled_path/__file__ — covers pipx/uv-tool installs)
+        #   3. Repo derivation: <repo>/core/skills (editable/dev installs,
+        #       __file__-based, works even when the venv is not on sys.path)
+        #   4. sys.path scan:   <sys.path entry>/vibesop/builtin_skills/...
+        #       (legacy fallback for exotic layouts)
         #
         # External packs (gstack/yyy) are NOT stripped here — they keep
         # pack-prefixed flat dirs (Strategy 1/2 below).
         if "/" in skill_id:
             name_only = skill_id.split("/", 1)[1]
             strip_bases: list[Path] = [self.project_root / "core" / "skills"]
+            # Wheel-bundled copy: <pkg>/vibesop/builtin_skills (force-include).
+            # __file__-based, so it works even when the venv is not on sys.path
+            # in the usual way (quickstart in-process calls).
+            from vibesop.utils.bundled import bundled_path
+
+            strip_bases.append(bundled_path("builtin_skills"))
+            # Dev-repo derivation: src-layout checkout has no bundle; the
+            # repo's core/skills sits two levels above the package. Without
+            # this, a dev machine injecting into a NON-repo project (e.g.
+            # quickstart demo with project_root elsewhere) finds nothing.
+            import sys
+
+            repo_core = Path(sys.modules["vibesop"].__file__).parent.parent.parent / "core" / "skills"
+            if repo_core.exists():
+                strip_bases.append(repo_core)
             # Scan sys.path for bundled builtin_skills data dirs. This finds
             # both uv-tool installs and editable installs where data lives
             # in site-packages alongside the .pth pointer.
-            import sys
-
             for path_entry in sys.path:
                 if not path_entry:
                     continue

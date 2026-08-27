@@ -197,6 +197,24 @@ class AgentRuntimeResult:
                 import sys
 
                 builtin_candidates = [user_root / "core" / "skills" / bare_name / "SKILL.md"]
+                # Same resolution ladder as skill_injector._load_skill_content
+                # Strategy 0: wheel bundle via __file__, then dev-repo core/.
+                from vibesop.utils.bundled import bundled_path
+
+                bundled_file = bundled_path("builtin_skills") / bare_name / "SKILL.md"
+                if bundled_file not in builtin_candidates:
+                    builtin_candidates.append(bundled_file)
+                import vibesop as _vibesop
+
+                repo_file = (
+                    Path(_vibesop.__file__).parent.parent.parent
+                    / "core"
+                    / "skills"
+                    / bare_name
+                    / "SKILL.md"
+                )
+                if repo_file not in builtin_candidates:
+                    builtin_candidates.append(repo_file)
                 for path_entry in sys.path:
                     if not path_entry:
                         continue
@@ -250,11 +268,17 @@ class AgentRuntimeResult:
         resp: dict[str, Any] = {"systemMessage": system_message}
 
         if include_additional_context and self.skill_content:
-            additional_context = (
-                f"[ACTIVE SKILL: {self.skill_id}]\n"
-                "You MUST follow this skill's workflow. Do not skip steps.\n\n"
-                f"{self.skill_content[:3000]}"
-            )
+            # The claude-code/grok-build injectors already open with the
+            # [ACTIVE SKILL] banner — wrapping again duplicated it (gate46
+            # dual-review P1: double banner ate the preview's line budget).
+            if "[ACTIVE SKILL:" in self.skill_content:
+                additional_context = self.skill_content[:3000]
+            else:
+                additional_context = (
+                    f"[ACTIVE SKILL: {self.skill_id}]\n"
+                    "You MUST follow this skill's workflow. Do not skip steps.\n\n"
+                    f"{self.skill_content[:3000]}"
+                )
             hook_output: dict[str, Any] = {
                 "additionalContext": additional_context,
             }

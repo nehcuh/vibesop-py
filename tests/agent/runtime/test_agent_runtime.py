@@ -143,6 +143,15 @@ class TestAgentRuntimeHookResponseHintPath:
         bundled.parent.mkdir(parents=True)
         bundled.write_text("# bundled", encoding="utf-8")
         monkeypatch.syspath_prepend(str(site_packages))
+        # The higher-priority lanes (wheel bundle via __file__, dev-repo
+        # derivation) must miss here, so this pins the sys.path scan fallback:
+        # point __file__ at a fake package location with no bundle and no
+        # repo core/ above it.
+        fake_pkg = tmp_path / "fake-vibesop" / "vibesop"
+        fake_pkg.mkdir(parents=True)
+        import vibesop as _vibesop
+
+        monkeypatch.setattr(_vibesop, "__file__", str(fake_pkg / "__init__.py"))
 
         from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
 

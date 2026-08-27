@@ -367,8 +367,16 @@ class TestSkillInjector:
         bundled.mkdir(parents=True)
         (bundled / "SKILL.md").write_text("# Bundled builtin via sys.path scan", encoding="utf-8")
 
-        # Make sys.path include the fake site-packages entry.
+        # Make sys.path include the fake site-packages entry, and point the
+        # package __file__ there too — a wheel install has vibesop.__file__
+        # inside site-packages, so the bundled_path lane (priority 2) resolves
+        # to this bundle and the dev-repo derivation lane (priority 3) misses.
         monkeypatch.syspath_prepend(str(site_packages))
+        import vibesop as _vibesop
+
+        fake_init = site_packages / "vibesop" / "__init__.py"
+        fake_init.write_text("", encoding="utf-8")
+        monkeypatch.setattr(_vibesop, "__file__", str(fake_init))
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("builtin/deep-diagnosis-optimization")
