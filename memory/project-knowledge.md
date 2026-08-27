@@ -2,6 +2,14 @@
 
 ## Technical Pitfalls
 
+### `ExternalSkillLoader.EXTERNAL_PATHS` is import-time-bound to real `Path.home()` — env HOME patch silently no-ops (2026-08-27)
+
+**Issue**: 测试隔离 HOME 时 patch `os.environ["HOME"]` + `monkeypatch.setattr(Path, "home", ...)` 都不够——`EXTERNAL_PATHS` 是 ClassVar，import 时就用真 `Path.home()` 求值完毕。后果是测试**静默空转**成无 pack 重跑（fixture pack 根本没进池），双态测试假绿。gate46 R7 双态测试踩坑，靠"非空调转守卫"（断言 `superpowers/*`、`omx/*` 确实在 candidate pool 里）才暴露。
+
+**Solution**: 隔离必须 patch 类变量本身：`monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [scratch/".claude"/"skills"])`。且任何依赖"fixture 数据在池里"的测试都应加非空调转守卫——隔离 bug 的失败模式是静默减配，不是显式报错。
+
+**Files**: `tests/core/routing/test_demo_skills.py` (`_isolate_home` + `_router_with_packs` 守卫)
+
 ### `shlex.split(posix=False)` honors quotes but KEEPS them — token-shape intuitions fail (2026-08-27)
 
 **Issue**: 解析 settings.json hook command 时，"引号会切成 3 token" 和 "shlex 会剥引号" 两个直觉全错。`posix=False` 认 `'`/`"`（含空格路径仍是 1 token）但**引号字符保留在 token 里**——win32 规范形态 `"C:/Users/First Last/.../x.sh"` 恰好 1 个带引号 token，basename 提取会带尾引号 miss 白名单。

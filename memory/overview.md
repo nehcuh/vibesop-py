@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-27 (S49 — pull-20260827 三路评审 M1/M2 hook 修复 `574349c`/`8304e9a`)
+**Last Updated**: 2026-08-27 (S50 — gate46 块2 quickstart 双平台 aha 8 commits `d47f386`→`30a4bb7` 待 push；adoption 块0 已 push)
 
 ---
 
@@ -8,7 +8,10 @@
 
 ### Current Week (August 23-29, 2026)
 
-1. **v8.1.1 Windows grok-build 宿主部署 + 平台不变量** ✅ (Completed - Aug 26, push `8af7546`)
+1. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0 4 commits 已 push，块2 8 commits `d47f386`→`30a4bb7` 待授权 push)
+   - 4 演示技能 keyless 双语路由 + 注入预览 + 双平台探针（`route --hook --platform`）；双路实施复审 P1 全清；CI quickstart-e2e Linux+Windows workflow（Windows lane 首跑待验）
+   - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
+2. **v8.1.1 Windows grok-build 宿主部署 + 平台不变量** ✅ (Completed - Aug 26, push `8af7546`)
    - quickstart 纳入 grok-build；YAML 静默跳过；hooks 一次安装；`_is_configured` 只认 VibeSOP 标记
    - 本机部署 `~/.grok/hooks` + User PATH `~\.local\bin`；`vibe verify grok-build` 5/5；教训 `docs/dev/platform-invariants.md`
 2. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
