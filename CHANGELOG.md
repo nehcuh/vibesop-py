@@ -23,6 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WindowsApps` aliases.
 - **Docs**: `SessionStart:startup` Store-python errors are project/plugin
   hooks (not `vibesop-route.sh` / UserPromptSubmit). See troubleshooting.
+- **Claude Code settings rewrite (M1)**: `vibe build` rewrote hook commands
+  that merely *mentioned* a vibesop script path — mangling user-authored
+  entries (e.g. `my-vibesop-route.sh`) and converting Windows-form commands
+  to `bash <path>` on non-Windows hosts. The rewrite is now gated by a
+  strict `<bash> <script>` parser (`vibesop.utils.hook_commands`) plus an
+  explicit legacy signal; everything else is preserved byte-for-byte.
+  Known issue: rebuild still drops user entries whose command contains a
+  vibesop substring (the preserve-matcher is substring-based) — fix planned
+  for 8.1.2.
+- **`vibe verify` false positives (M2)**: the Git-Bash-safety scan now
+  covers only vibesop hook commands (token-basename classification,
+  quoting- and platform-agnostic) instead of every command in
+  settings.json — user commands such as PowerShell hooks no longer fail
+  verification. Non-win32 hosts additionally surface Windows-form vibesop
+  commands (drive-letter paths) that previously passed silently.
 
 ## [8.1.1] — 2026-08-26
 
