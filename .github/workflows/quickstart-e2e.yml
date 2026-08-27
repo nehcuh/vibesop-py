@@ -1,0 +1,141 @@
+# Quickstart e2e — the adoption cold-start gate (gate46 block 2, W3).
+#
+# Simulates the freshest possible user on Linux + Windows: build the wheel,
+# install it with uv tool (no dev checkout, no HF model cache), then run
+# `vibe quickstart --force` and assert the keyless demo lands — routing pair
+# + real injection preview — with zero network and zero prompts.
+#
+# Dual-review hardening: HOME is redirected to a scratch dir (--force always
+# installs globally into Path.home()), the demo assertions pin the skill id
+# (not just any [ACTIVE SKILL:]), and both platform lanes deploy + verify
+# their hook registration (claude-code shell script / grok JSON hook).
+name: Quickstart E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  UV_VERSION: "0.8.17"
+  # Prove the demo has no embedding dependency: fresh machines have no
+  # MiniLM cache, and the demo queries must hit KEYWORD/SCENARIO offline.
+  HF_HUB_OFFLINE: "1"
+
+jobs:
+  quickstart-e2e:
+    name: Quickstart E2E (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Install wheel as a tool (fresh-user layout)
+        run: |
+          uv tool install --no-cache --force ./dist/vibesop-*.whl
+          uv tool list
+
+      # --force installs into Path.home() regardless of cwd — isolate it so
+      # the job never mutates the runner's real home (self-hosted safe).
+      - name: Quickstart --force (claude-code lane)
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+          VIBE_E2E_OUTPUT: ${{ runner.temp }}/quickstart-claude.txt
+        run: |
+          mkdir -p "$HOME"
+          set -o pipefail
+          vibe quickstart --force < /dev/null 2>&1 | tee "$VIBE_E2E_OUTPUT"
+
+      - name: Quickstart --force (grok-build lane)
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+          VIBE_E2E_OUTPUT: ${{ runner.temp }}/quickstart-grok.txt
+        run: |
+          set -o pipefail
+          vibe quickstart --force --platform grok-build < /dev/null 2>&1 | tee "$VIBE_E2E_OUTPUT"
+
+      - name: Assert keyless demo landed (route pair + injection preview)
+        env:
+          CLAUDE_OUT: ${{ runner.temp }}/quickstart-claude.txt
+          GROK_OUT: ${{ runner.temp }}/quickstart-grok.txt
+        run: |
+          fail=0
+          check() { # file label pattern
+            if grep -qF "$3" "$1"; then echo "  ok: $2"; else
+              echo "  MISSING: $2 (pattern: $3) in $1"; fail=1; fi
+          }
+          echo "Asserting quickstart demo markers (claude lane):"
+          check "$CLAUDE_OUT" "same skill, both languages" "same skill, both languages"
+          check "$CLAUDE_OUT" "injection preview header"   "Injection preview"
+          check "$CLAUDE_OUT" "pinned skill marker"        "[ACTIVE SKILL: builtin/commit-message]"
+          check "$CLAUDE_OUT" "preview reaches skill body" "# Commit Message"
+          echo "Asserting quickstart demo markers (grok lane):"
+          check "$GROK_OUT" "same skill, both languages" "same skill, both languages"
+          check "$GROK_OUT" "pinned skill marker"        "[ACTIVE SKILL: builtin/commit-message]"
+          for f in "$CLAUDE_OUT" "$GROK_OUT"; do
+            if grep -qF "preview unavailable" "$f"; then
+              echo "  FAIL: preview degraded in $f"; fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "--- quickstart output tails ---"
+            tail -40 "$CLAUDE_OUT"; tail -40 "$GROK_OUT"
+            exit 1
+          fi
+          echo "QUICKSTART E2E PASSED"
+
+      - name: Assert hook registration on both platforms
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+        run: |
+          fail=0
+          # claude-code: shell hook script deployed under ~/.claude
+          claude_hook="$HOME/.claude/hooks/vibesop-route.sh"
+          if [ -f "$claude_hook" ]; then echo "  ok: claude-code hook script ($claude_hook)"
+          else echo "  MISSING: $claude_hook"; fail=1; fi
+          # grok-build: JSON hook config referencing `vibe route --hook`
+          grok_hook_found=0
+          for cand in "$HOME/.grok/hooks/"*.json "$HOME/.grok/"*.json; do
+            [ -f "$cand" ] || continue
+            if grep -qF "vibe route --hook" "$cand"; then
+              echo "  ok: grok-build JSON hook ($cand)"; grok_hook_found=1; break
+            fi
+          done
+          [ "$grok_hook_found" -eq 1 ] || { echo "  MISSING: grok JSON hook referencing 'vibe route --hook'"; fail=1; }
+          [ "$fail" -eq 0 ] || exit 1
+
+      - name: Dual-platform injection probe (claude-code vs grok-build)
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+        run: |
+          VIBE_BIN="vibe" "$GITHUB_WORKSPACE/scripts/demo/probe-inject.sh" \
+            "help me write a commit message" "builtin/commit-message"
