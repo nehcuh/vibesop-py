@@ -707,3 +707,71 @@ skills:
       pi: prompt-template
     command: "/vibe-help"
     safety_level: trusted_builtin
+
+
+  # --- Demo skills (block 2, adoption design): general-purpose workflow demos,
+  # hittable by natural language on a fresh keyless install. ---
+
+  - id: systematic-debugging
+    namespace: builtin
+    entrypoint: skills/systematic-debugging/SKILL.md
+    intent: Debug a defect by forming and verifying hypotheses about the root cause, instead of patching symptoms.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
+
+  - id: test-generation
+    namespace: builtin
+    entrypoint: skills/test-generation/SKILL.md
+    intent: Generate focused, deterministic unit tests for a target function or module, golden path before edge cases.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Write
+    safety_level: trusted_builtin
+
+  - id: code-review
+    namespace: builtin
+    entrypoint: skills/code-review/SKILL.md
+    intent: Review pending changes against a structured checklist before pushing, reporting findings by severity.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
+
+  - id: commit-message
+    namespace: builtin
+    entrypoint: skills/commit-message/SKILL.md
+    intent: Draft a conventional-format commit message from the staged diff, explaining why the change was made.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
