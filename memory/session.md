@@ -7,8 +7,8 @@
 - 双路实施复审均 NEEDS_FIX：探针假双平台（--hook 写死 grok-build）/ R7 双态缺失 / 预览双 banner+frontmatter 吃光 / 14→18 残留 / `write tests` 误伤面。P1 全清或裁决（synthesis: 5 条 declined 有记录）
 - 关键修：injector builtin 四级解析阶梯（project_root→wheel bundle→repo 推导→sys.path，修 quickstart 用户注入 not found）；`route --hook --platform` 参数化；tags/triggers 分层（triggers 只进 explicit 层防 keyword 抢道）
 - 验证：6416 passed / 0 failed；wheel e2e 隔离 HOME 全绿（4/4 演示标记、0 降级、探针双 lane、banner=1）；local CI 彩排双 lane 过
-- 8 commits `d47f386`→`30a4bb7` **未 push**（等授权）；push 后 `gh run view --json jobs` 查 job 级（quickstart-e2e Windows lane 首跑）
-- Key: EXTERNAL_PATHS ClassVar import 时绑死真 HOME，隔离必须 patch 类变量+非空守卫；grok UserPromptSubmit 信封是 Claude 形状
+- **Push + CI 闭环（续）**：push 后 babysit 3 轮——R1 Lint 红（UP017 `timezone.utc`→`UTC`，我只 lint 了 src 没 lint tests）；R2 Lint 又红（`ruff format --check .`，本地验证命令与 CI 不同构；含块 0 存量 2 文件——块 0 push 时 CI 实为红 run 33052791115 被漏看）；R3 全量 format 后 **run 级 + job 级全绿**：CI 9/9 job、Quickstart E2E 双平台（Windows lane 首跑即绿）、CodeQL。终态 `2fbd8f6`
+- Key: EXTERNAL_PATHS ClassVar import 时绑死真 HOME，隔离必须 patch 类变量+非空守卫；grok UserPromptSubmit 信封是 Claude 形状；CI Lint = `ruff check .` + `ruff format --check .` 两条
 - Next: 授权 push + CI 验证；GIF 录制（W5 发布 gate，docs/demo-recording-guide.md，probe 兜底）；recall 演示 defer 独立 mini-gate
 - Recorded: yes — EXTERNAL_PATHS ClassVar 坑 → project-knowledge.md
 
@@ -40,7 +40,6 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **gate46 块2 push + CI 验证**（active）— 8 commits `d47f386`→`30a4bb7` 未 push。next_action: 用户授权后 push，`gh run view --json jobs` 查 job 级绿灯（quickstart-e2e Windows lane 首跑，gate44 教训 job 级）。updated: 2026-08-27
 - **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 

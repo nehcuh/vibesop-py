@@ -2,6 +2,18 @@
 
 ## Technical Pitfalls
 
+### CI Lint = `ruff check .` + `ruff format --check .` — 本地只跑 `ruff check src/ tests/` 是不同构验证 (2026-08-27)
+
+**Issue**: push 后 CI Lint 两轮红。R1：修复文件只 lint 了 src 没 lint tests（UP017 `timezone.utc` 应为 `UTC` 别名）。R2：CI 还有第二条 `ruff format --check .`，本地惯例命令 `ruff check` 不覆盖 format 漂移——8 文件漂移（含块 0 存量 2 个，块 0 push 时 CI run 33052791115 实为 failure 被漏看）。
+
+**Solution**: push 前本地验证必须与 CI 同构：`uv run ruff check . && uv run ruff format --check .`。push 后必须以 `gh run list`/`gh run view --json jobs` 核对每一轮结论——"已 push"不等于"CI 绿"（gate44 教训的 format 版）。
+
+### 钉死绝对时间戳的测试是时间炸弹 — 相对 now 生成 fixture 时间 (2026-08-27)
+
+**Issue**: `test_recall_cli` fixture 钉死 `2026-07-28T12:00Z`，recall 默认 `days=30` 窗口，2026-08-27 滑出 cutoff，2 个 with-matches 测试开始失败——写于 07-29、绿了一个月后无预警爆炸。
+
+**Solution**: 时间窗内 fixture 一律 `now - timedelta` 相对生成；排查特征：本地隔离单测通过率与时刻相关、全量套件时好时坏。
+
 ### `ExternalSkillLoader.EXTERNAL_PATHS` is import-time-bound to real `Path.home()` — env HOME patch silently no-ops (2026-08-27)
 
 **Issue**: 测试隔离 HOME 时 patch `os.environ["HOME"]` + `monkeypatch.setattr(Path, "home", ...)` 都不够——`EXTERNAL_PATHS` 是 ClassVar，import 时就用真 `Path.home()` 求值完毕。后果是测试**静默空转**成无 pack 重跑（fixture pack 根本没进池），双态测试假绿。gate46 R7 双态测试踩坑，靠"非空调转守卫"（断言 `superpowers/*`、`omx/*` 确实在 candidate pool 里）才暴露。
