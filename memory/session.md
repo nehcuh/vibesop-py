@@ -1,6 +1,17 @@
 
 ## Current Session
 
+### S49 (2026-08-27) [vibesop-py] pull-20260827 三路评审 → M1/M2 修复闭环（rewrite 保守化 + verify 收窄）
+
+- 拉取 `f1f34de..e286e67`（v8.1.1 上游）三路独立评审出 M1（rebuild rewrite 破坏用户 hook 条目）/ M2（verify 把用户 PowerShell 命令误报 unsafe）
+- fix-plan 4 轮 pi+grok 双路（v1/v2 双 REJECT → v3 pi 拆分架构 → v4 双 APPROVE-WITH-NITS）→ v4.1 实施：新 `utils/hook_commands.py` 单一事实源——宽松 classify 服务 verify、strict parse + legacy-signal 只服务 rewrite
+- omx 双 lane（code-reviewer REQUEST CHANGES + architect WATCH）清 3 条一行级：HIGH-1 darwin monkeypatch / C4 basename `.lower()` / MEDIUM-1 check 描述
+- push `574349c`（代码+测试，58 定向 + 1312 波及全绿）+ `8304e9a`（CHANGELOG 回填 + 8.1.2 已知问题）
+- 重部署 `~/.claude` 全量 + `~/.grok` 仅 rules+hooks（grok 12G 是宿主数据勿全拷）：UPS route 复活 + route hook 实测点火 exit 0 + 双平台 verify 全绿
+- Key: shlex posix=False 认引号但保留引号字符；识别器与生成器必须同构；双 APPROVE 后 NIT 按处方折叠不再送审
+- Next: 8.1.2 待办 C1（白名单 canary 测试）/ C2（preserve-matcher substring → 精确匹配）；等 CI run 结果
+- Recorded: yes — 2 pitfalls（shlex posix=False / 识别器同构）→ project-knowledge.md
+
 ### S48 (2026-08-26) [vibesop-py] Claude Code Windows hook — POSIX command + uv-tool Python
 
 - 中断续作：`efcd0cf` 的 Git-bash.exe 包装仍 127（`Program Files` 被 `bash -c` 拆开）。改为 quoted POSIX path；`vibe verify claude-code` 加 `route_hook_command`。push `e467519`
@@ -18,8 +29,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **Claude Code Windows hook**（active）— POSIX command `e467519` + uv-tool Python `2c72fd7` 已部署 `~/.claude`。next_action: 用户重启 Claude Code，确认不再报路径 127 或商店 python3。updated: 2026-08-26
-- **Grok 真实会话 probe**（active）— hooks 在 `~/.grok`；本会话 Grok PowerShell PATH 无 `~\.local\bin`（注册表 User PATH 有），`vibe route --hook` 可能没注入。next_action: 查 Grok 进程 PATH / 考虑 JSON hook 写绝对路径。updated: 2026-08-26
+- **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量

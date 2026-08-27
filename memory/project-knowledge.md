@@ -2,6 +2,18 @@
 
 ## Technical Pitfalls
 
+### `shlex.split(posix=False)` honors quotes but KEEPS them — token-shape intuitions fail (2026-08-27)
+
+**Issue**: 解析 settings.json hook command 时，"引号会切成 3 token" 和 "shlex 会剥引号" 两个直觉全错。`posix=False` 认 `'`/`"`（含空格路径仍是 1 token）但**引号字符保留在 token 里**——win32 规范形态 `"C:/Users/First Last/.../x.sh"` 恰好 1 个带引号 token，basename 提取会带尾引号 miss 白名单。
+
+**Solution**: 按失败方向选宽严。宽松口径（服务 verify）用 `split()` + `strip("'\"")` 过剥引号 + `.lower()`——fail-safe，只会多扫不会漏扫。严格口径（服务 rewrite）`shlex posix=False` + `unwrap_token` 只剥成对双引号，任何不确定返回 None = 不动用户配置。
+
+### Hook-command 识别器与生成器口径不同构 = 全部评审 BLOCKER 的共同根源 (2026-08-27)
+
+**Issue**: pull-20260827 修复 4 轮双路评审的每个 BLOCKER（win32 规范 1-token / 含空格用户名 / 平台门位置 / token 化假 basename）都是同一疾病：识别器（classify/parse/verify）与生成器出口（win32 引号 1-token、非 win32 `bash <posix>`）不同构。
+
+**Solution**: 动 hook 命令解析时，生成器出口与识别器逐形态核对；win32 规范形态、含空格用户名、大写盘符变体是必测形态。宽松 classify 服务 verify（漏扫 = 绿灯掩盖），strict parse 服务 rewrite（误判 = 破坏用户配置）。共享模块 `utils/hook_commands.py` 是单一事实源。
+
 ### Wrapping `Git/bin/bash.exe` does not fix Claude Code Windows hooks (2026-08-26)
 
 **Issue**: UserPromptSubmit 报 `bash: C:UsersHuChen.claudehooks/vibesop-route.sh: No such file`（反斜杠被吃）。`efcd0cf` 改成 `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"` 后**仍然 127**：`C:/Program: No such file`。
