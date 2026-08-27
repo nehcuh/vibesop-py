@@ -37,7 +37,7 @@
 ```
 VibeSOP 技能生态
 │
-├─ 📦 Builtin (14 个)    - 内置核心技能（meta/slash/workflow 类）
+├─ 📦 Builtin (18 个)    - 内置核心技能（meta/slash/workflow 类）
 ├─ 📦 Superpowers (7 个) - 基础开发工作流（默认安装）
 ├─ 📦 OMX (7 个)         - 高级工程方法论（默认安装）
 ├─ 📦 Project (自定义)   - 项目特定技能
@@ -75,9 +75,9 @@ VibeSOP 技能生态
 - ✅ VibeSOP 维护
 
 **示例**:
-- `systematic-debugging` - 系统化调试（P0 强制）
-- `verification-before-completion` - 完成前验证（P0 强制）
 - `session-end` - 会话结束处理（P0 强制）
+- `systematic-debugging` - 系统化调试（P1 建议）
+- `commit-message` - 提交信息起草（P1 建议）
 
 #### 2. Superpowers (基础工作流)
 
@@ -141,7 +141,7 @@ VibeSOP 技能生态
 
 | 触发模式 | 说明 | 示例 |
 |----------|------|------|
-| **mandatory** | 强制触发，无法关闭 | `systematic-debugging`, `verification-before-completion` |
+| **mandatory** | 强制触发，无法关闭 | `session-end` |
 | **suggest** | 自动建议，可选择 | `riper-workflow`, `gstack/review` |
 | **manual** | 仅手动调用 | `omx/team`, `gstack/browse` |
 
@@ -151,7 +151,7 @@ VibeSOP 技能生态
 
 | 优先级 | 说明 | 技能数量 |
 |--------|------|----------|
-| **P0** | 强制触发，最高优先级 | 3 个（mandatory） |
+| **P0** | 强制触发，最高优先级 | 1 个（mandatory） |
 | **P1** | 核心技能，自动建议 | 30+ 个 |
 | **P2** | 辅助技能，手动或建议 | 10+ 个 |
 
@@ -318,27 +318,31 @@ Query: "debub"  # 拼写错误
 
 ## 所有技能列表
 
-### Builtin Skills (17 个)
+### Builtin Skills (18 个)
 
 #### P0 Mandatory Skills (强制触发)
 
 | 技能 ID | 用途 | 触发条件 |
 |---------|------|----------|
-| `systematic-debugging` | 系统化调试，先找根因再修复 | 检测到错误/失败 |
-| `verification-before-completion` | 完成前必须验证 | 会话结束前 |
 | `session-end` | 会话结束处理 | 检测到退出信号 |
 
 #### P1 Core Skills (自动建议)
 
 | 技能 ID | 用途 | 触发条件 |
 |---------|------|----------|
+| `systematic-debugging` | 系统化调试，先复现再定位根因（6 阶段循环） | 排查/根因类查询 |
+| `test-generation` | 按行为意图生成测试（先失败再实现） | 写测试/用例类查询 |
+| `code-review` | push 前结构化代码审查 | review/审查类查询 |
+| `commit-message` | 从 staged diff 起草约定式提交信息 | 提交信息类查询 |
 | `riper-workflow` | 结构化 5 阶段开发工作流 (Research→Innovate→Plan→Execute→Review) | 复杂任务 fallback |
 | `experience-evolution` | 捕获可重用的经验和模式 | 重复工作模式 |
 | `instinct-learning` | 自动提取会话模式 | 会话结束时 |
-| `riper-workflow` | 5 阶段开发工作流 | 复杂项目开发 |
-| `using-git-worktrees` | Git worktree 并行隔离 | 需要并行分支 |
+| `deep-diagnosis-optimization` | 多代理深度诊断编排 | 深度诊断任务 |
+| `instinct` | instinct 循环系统内部技能 | launchd/loop 内部 |
 | `autonomous-experiment` | 自主实验循环 | 优化和迭代任务 |
 | `skill-craft` | 自动检测模式生成技能 | 检测到重复模式 |
+
+另有 6 个 `slash-*` 元命令技能（route/list/help/install/evaluate/orchestrate），由 `/vibe-*` 快捷命令触发。
 
 ---
 
@@ -477,8 +481,7 @@ Layer 0-6: 路由分析
 │    - 强制使用指定技能            │
 ├─────────────────────────────────┤
 │ 3. 检查 Mandatory Skills        │ ← P0 强制
-│    - systematic-debugging       │
-│    - verification-before-completion
+│    - session-end                │
 ├─────────────────────────────────┤
 │ 4. 场景匹配 + 冲突解决          │ ← 核心决策
 │    - 场景 → 主技能               │
@@ -504,7 +507,7 @@ Layer 0-6: 路由分析
 | **重构** | superpowers/refactor | gstack/review | - | 代码质量 |
 | **持久执行** | omx/ralph | riper-workflow | - | 完整实现 |
 | **共识规划** | omx/ralplan | riper-workflow | gstack/plan-eng-review | 团队决策 |
-| **并行执行** | omx/team | omx/ultrawork | using-git-worktrees | 并行任务 |
+| **并行执行** | omx/team | omx/team | riper-workflow | 并行任务 |
 | **QA 循环** | omx/ultraqa | gstack/qa | gstack/qa-only | 测试循环 |
 
 ### 冲突解决策略
@@ -668,7 +671,6 @@ disabled = [
 ├─ 需要并行？
 │  ├─ 多代理协作 → omx/team ⭐
 │  ├─ 层级任务 → omx/ultrawork
-│  └─ Git worktree → using-git-worktrees
 │
 ├─ 需要测试？
 │  ├─ 浏览器测试 → gstack/qa ⭐
@@ -782,7 +784,7 @@ vibe route "并行修复这 10 个独立的 bug"
 
 → Layer 2: 匹配场景 "parallel_execution"
 → 推荐技能: omx/team (87% 置信度)
-→ 备选方案: omx/ultrawork (75%), using-git-worktrees (70%)
+→ 备选方案: omx/ultrawork (75%), riper-workflow (70%)
 ```
 
 **手动调用** (team 是 manual 模式):

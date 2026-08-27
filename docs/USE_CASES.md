@@ -372,7 +372,7 @@ vibe instinct status                   # 模式学习
 
 ## 下一步
 
-- **想装技能**：[`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) 详解 14 个内置技能 + 社区技能包
+- **想装技能**：[`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) 详解 18 个内置技能 + 社区技能包
 - **想跨平台**：[`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) 安装指南
 - **想做 loop**：[`loop-setup-guide.md`](loop-setup-guide.md) 24 小时部署
 - **想理解原理**：[`PHILOSOPHY.md`](PHILOSOPHY.md) 设计哲学
