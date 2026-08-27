@@ -164,7 +164,8 @@ Then read the matched skill's SKILL.md and follow its instructions.
 
 1. You type a request in Grok Build.
 2. The `vibesop-route` hook intercepts it via `UserPromptSubmit`.
-3. `vibe route` matches the best skill from 50+ available.
+3. `vibe route` matches the best skill from the built-in pool (14 skills; grows
+   with `vibe install <pack>`).
 4. The skill's instructions are injected into your context.
 
 ## Supported Commands
