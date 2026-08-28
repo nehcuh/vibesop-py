@@ -92,6 +92,42 @@ class TestProjectRouting:
         assert result[0]["id"] == "global1"
         assert result[1]["id"] == "project1"
 
+    def test_merge_scenarios_with_null_list_keys(self):
+        """Keys present but null (YAML empty) must coalesce to empty, not crash.
+
+        Regression: ``vibe init`` writes ``disabled_scenarios:`` etc. with only
+        commented examples, which parses as explicit None. ``set(None)`` raised
+        TypeError and every first route in a fresh project degraded to
+        "No matching skill found" — found via docker A/B treatment probe
+        (2026-08-28).
+        """
+        global_scenarios = [{"id": "test1", "skill_id": "skill1"}]
+        project_routing = {
+            "disabled_scenarios": None,
+            "scenario_overrides": None,
+            "scenario_patterns": None,
+        }
+
+        result = merge_scenarios(global_scenarios, project_routing)
+
+        assert result == global_scenarios
+
+    def test_init_template_null_keys_end_to_end(self):
+        """The real init template must route-merge without crashing."""
+        from vibesop.core.routing.project_config import get_project_routing_hints
+
+        with tempfile.TemporaryDirectory() as tmp:
+            assert create_default_project_routing(tmp) is not None
+            loaded = load_project_routing(tmp)
+            # Membership + None pins "key present, value null" — a plain
+            # ``.get(k) is None`` would stay green if the keys were deleted.
+            for key in ("disabled_scenarios", "scenario_overrides", "scenario_patterns"):
+                assert key in loaded and loaded[key] is None
+
+            result = merge_scenarios([{"id": "g1", "skill_id": "s1"}], loaded)
+            assert [s["id"] for s in result] == ["g1"]
+            assert get_project_routing_hints(tmp) == []
+
     def test_merge_scenario_keywords(self):
         """Test merging global keywords with project overrides."""
         global_keywords = {"debugging": ["debug", "bug"], "planning": ["plan"]}

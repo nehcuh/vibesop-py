@@ -131,14 +131,15 @@ def merge_scenarios(
     # Start with a copy of global scenarios
     merged = list(global_scenarios)
 
-    # Get disabled scenarios
-    disabled = set(project_routing.get("disabled_scenarios", []))
+    # ``or []`` coalesces YAML null (key present, no value) — ``.get(k, [])``
+    # does not default on explicit None.
+    disabled = set(project_routing.get("disabled_scenarios") or [])
 
     # Filter out disabled scenarios
     merged = [s for s in merged if s.get("name") not in disabled and s.get("id") not in disabled]
 
     # Apply scenario overrides
-    overrides = project_routing.get("scenario_overrides", [])
+    overrides = project_routing.get("scenario_overrides") or []
     for override in overrides:
         if not isinstance(override, dict):
             continue
@@ -159,7 +160,7 @@ def merge_scenarios(
             merged.append(override)
 
     # Add project-specific scenarios
-    project_scenarios = project_routing.get("scenario_patterns", [])
+    project_scenarios = project_routing.get("scenario_patterns") or []
     for scenario in project_scenarios:
         if isinstance(scenario, dict) and "id" in scenario:
             merged.append(cast("dict[str, Any]", scenario))
@@ -208,7 +209,8 @@ def get_project_routing_hints(project_root: str | Path = ".") -> list[dict[str, 
         List of routing hints from project config
     """
     project_routing = load_project_routing(project_root)
-    return project_routing.get("routing_hints", [])
+    # YAML null coalesce — see merge_scenarios for the template rationale.
+    return project_routing.get("routing_hints") or []
 
 
 def create_default_project_routing(project_root: str | Path = ".") -> Path | None:
