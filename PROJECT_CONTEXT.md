@@ -3,39 +3,34 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-08-27 S50 [vibesop-py] gate46 块2 quickstart 双平台 aha — 8 commits 待 push
+### 2026-08-28 S52b [vibesop-py] Claude Code 2.1.220 hook 形态翻转 → PR #115 merged
 
 **Session Summary**:
-- 标准门流程全闭环：设计稿 → grok+claude-pi 双路确认（v2.1 PASS）→ 实施 → 双路实施复审（均 NEEDS_FIX）→ P1 全清/裁决 → 8 原子提交 `d47f386`→`30a4bb7`
-- 交付：4 演示技能（commit-message/test-generation/code-review/systematic-debugging，双语 keyless，无 LLM/无 embedding 命中）+ quickstart 双语路由演示与注入预览（剥 frontmatter、单 banner）+ `vibe route --hook --platform` 参数化 + 双平台探针脚本 + CI quickstart-e2e（Linux+Windows 矩阵）+ docs 14→18 口径清零
-- 关键修复：injector builtin 四级解析阶梯（project_root→wheel bundle→repo 推导→sys.path——修 project_root 非 vibesop 仓库时注入 not found）；`write tests` 从 tags 移入 triggers（triggers 只参与 explicit 层，防 builtin 在 pack 机器 keyword 抢 superpowers/TDD）
-- 验证：6416 passed / 0 failed；wheel e2e（隔离 HOME + offline）全绿；复审裁决记录 `.omx/artifacts/gate46-impl-review-synthesis.md`
+- 用户报告 S51 修复后 hook 仍每条 prompt 127。实机探针（`claude -p` + `--settings` + 探针脚本分文件落日志，4 形态对照）证实 2.1.220 宿主改为 `bash -c` + **会话 CWD** spawn hooks——config-relative `hooks/<name>.sh` 按 CWD 解析，S51 依赖的 path-join 行为已消失
+- 修复 PR #115（`f981aac` → merged `f6f32c6`）：生成器两平台统一 `bash <posix-abs>`（唯一新旧宿主双稳形态）；rewrite 升级 legacy 形态（config-relative 需 config_dir 推导）；verify 判定反转（config-relative 全平台 unsafe）；e2e 形态断言收紧
+- 验证：全量 6386 passed；真机外部 CWD 点火零报错 + route/mirror exit 0；PR CI 11/11 job 绿（Windows lane 首跑即绿）；本机 `~/.claude` 已重部署
+- 教训入 project-knowledge.md（08-26 quoted-POSIX 条目标注已证伪）
 
 **Key Decisions**:
-- 拒绝 --force→installer force=True（静默覆盖已装 hooks 是破坏性语义扩张，CI HOME 隔离已消实际风险）
-- R7 双态测试带非空调转守卫：`ExternalSkillLoader.EXTERNAL_PATHS` 是 import 时绑死真 HOME 的 ClassVar，只 patch env HOME 测试会静默空转成无 pack 重跑
-- grok UserPromptSubmit 信封是 Claude 形状（`PlatformType.GROK_BUILD` 映射 `_inject_claude_code`）；levenshtein 0.3-0.5 兜底层重排属存量噪音，不动模糊层排序
+- 唯一跨版本稳形态 = 无引号 `bash <posix-abs>`；引号形态虽在 2.1.220 可跑但仍拒绝（老宿主 path-join 未灭绝 + 与最稳形态不一致）
+- config-relative 无 config_dir 推不出绝对路径 → 保持字节原样（低置信不动用户配置），由 verify 标记
+- 规范形态必须对用户实际版本实机探针钉死；hook 修复验证必须「外部 CWD」真实点火
 
 **Next Steps**:
-1. 用户授权 push → `gh run view --json jobs` 查 job 级绿灯（quickstart-e2e Windows lane 首跑）
-2. GIF 录制（W5 发布 gate；`docs/demo-recording-guide.md`，probe 输出兜底）
-3. recall 演示 defer 独立 mini-gate（关键词降级文案 + 播种命令 + span schema 对齐）
+1. main post-merge CI 3 run 收尾（CI/E2E/CodeQL @ `f6f32c6`，后台监控中）
+2. S52 深度治理主线：六路诊断（分支已建；存量 skill_auditor 1 fail 在该分支）
+3. Dependabot 9 PR：小版本批量合，openai/anthropic major 单独评估
 
-### 2026-08-27 S49 [vibesop-py] pull-20260827 三路评审 → M1/M2 hook 修复闭环
+### 2026-08-27 S50 [vibesop-py] gate46 块2 quickstart 双平台 aha — 已 push CI 全绿
 
 **Session Summary**:
-- 拉取 `f1f34de..e286e67`（v8.1.1 上游）三路评审出 M1（rebuild rewrite 破坏用户 hook 条目）/ M2（verify 误报用户 PowerShell 命令）
-- fix-plan 4 轮 pi+grok 双路（双 REJECT×2 → 拆分架构 → v4 双 APPROVE）→ v4.1 实施 `utils/hook_commands.py`：宽松 classify 服务 verify、strict parse + legacy-signal 只服务 rewrite
-- omx 双 lane 清 3 条一行级；push `574349c`（代码）+ `8304e9a`（CHANGELOG 回填）
-- 重部署 `~/.claude` + `~/.grok`(rules+hooks)：UPS route 复活 + route hook 实测点火 exit 0 + 双平台 verify 全绿
-
-**Key Decisions**:
-- 识别器与生成器必须同构（win32 规范 1-token / 含空格用户名 / 大写盘符是必测形态）
-- shlex `posix=False` 认引号但保留引号字符——宽松口径过剥 fail-safe，严格口径不确定即 None
-- 双 APPROVE 后 NIT 按处方折叠不再送审（防无限轮）
+- 标准门流程全闭环：设计稿 → grok+claude-pi 双路确认（v2.1 PASS）→ 实施 → 双路实施复审（均 NEEDS_FIX）→ P1 全清/裁决 → 8 原子提交
+- 交付：4 演示技能（双语 keyless）+ quickstart 双语路由演示与注入预览 + `vibe route --hook --platform` 参数化 + CI quickstart-e2e（Linux+Windows 矩阵）
+- 关键修复：injector builtin 四级解析阶梯；`write tests` 从 tags 移入 triggers
+- 验证：6416 passed / 0 failed；wheel e2e（隔离 HOME + offline）全绿；CI 双 workflow 全绿（run 33082003477/33082003560）
 
 **Next Steps**:
-1. 8.1.2 待办：C1 白名单 canary 测试；C2 preserve-matcher substring → `command_basenames` 精确匹配
-2. 等 CI run 结果（Ubuntu + Windows 矩阵验证 HIGH 修复）
-3. Grok 真实会话 probe（gate42/43 cron 8-31 / 9-7）
+1. GIF 录制（W5 发布 gate；`docs/demo-recording-guide.md`，probe 输出兜底）
+2. recall 演示 defer 独立 mini-gate
+3. W1 test.pypi 发版无限期 defer
 <!-- handoff:end -->

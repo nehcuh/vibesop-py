@@ -2,6 +2,16 @@
 
 ## Technical Pitfalls
 
+### Claude Code hook command 的「安全形态」随宿主版本翻转 — 规范必须靠实机探针钉死 (2026-08-28)
+
+**Issue**: 08-26/27 两轮修复钉死的规范形态（先 quoted POSIX、后 config-relative `hooks/<name>.sh`）在 Claude Code **自动升级到 2.1.220** 后全部失效，用户每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`（127）。当时基于「宿主把非绝对 command path-join 到 `~/.claude\`」的修复前提，在新宿主上不存在了。
+
+**Root Cause** [executed，4 形态对照探针,`claude -p` + `--settings` + 分文件落日志]：2.1.220 宿主 spawn hooks 改为 `bash -c <command>` 且 **工作目录 = 会话启动 CWD**。相对形态按 CWD 解析（全局/项目级 settings 都一样，`~/.claude` 里那份脚本从不执行）；老版本宿主行为在版本间无公告地变了。形态矩阵：相对 ❌ / 不带引号绝对（无空格）✅ / 带引号绝对 ✅ / `bash <posix-abs>` ✅（唯一新旧宿主双稳形态）。
+
+**Solution**: ① 唯一跨版本稳形态 = `bash <posix-abs-path>`（不带引号）——生成器、rewrite、verify、e2e 断言四层统一到它（PR #115）。② **规范形态不能靠文档或上一轮修复的记忆，必须对用户实际版本做实机探针**；verify 的「Git-Bash-safe」绿灯语义要跟版本走。③ 验证 hook 修复必须在「外部 CWD」真实点火 `claude -p`，且探针脚本要分文件落日志才能区分哪份配置被执行——S51 的 verify（字符串形状检查）+ 可解析目录内 smoke 恰好盖不住这个盲区。④ 宿主自动升级 = 无公告的行为变更源；hook 类集成要有 canary（e2e 形态断言收紧后 Windows lane 红灯即是回归信号）。
+
+**Files**: `adapters/claude_code.py` (`bash_hook_command`/`_rewrite_legacy_hook_entry`)、`cli/commands/verify.py` (`_vibesop_command_unsafe_reason`)、`.github/workflows/quickstart-e2e.yml` (shape assertion)、PR #115 (merged f6f32c6)
+
 ### CI Lint = `ruff check .` + `ruff format --check .` — 本地只跑 `ruff check src/ tests/` 是不同构验证 (2026-08-27)
 
 **Issue**: push 后 CI Lint 两轮红。R1：修复文件只 lint 了 src 没 lint tests（UP017 `timezone.utc` 应为 `UTC` 别名）。R2：CI 还有第二条 `ruff format --check .`，本地惯例命令 `ruff check` 不覆盖 format 漂移——8 文件漂移（含块 0 存量 2 个，块 0 push 时 CI run 33052791115 实为 failure 被漏看）。
@@ -45,8 +55,7 @@
 脚本本身 `bash /c/Users/.../x.sh` 能跑；settings.json 里的 command 字符串才是故障面。文件存在 / chmod 检查覆盖不到。
 
 **Solution**: Windows 只写带引号 POSIX 路径：`"C:/Users/.../hooks/vibesop-route.sh"`。Unix 保持 `bash <posix>`。`vibe verify claude-code` 拒绝 `\` 和 `bash.exe` / `Program Files`。烟雾测试必须是 `bash -c <settings.json 里那一整段 command>` + stdin JSON，不是直接 `bash script.sh`。
-
-**Files**: `adapters/claude_code.py` (`bash_hook_command`)、`cli/commands/verify.py` (`route_hook_command`)
+**[2026-08-28 已证伪]**: quoted 形态只在当时宿主版本可跑;2.1.220 起唯一稳形态是无引号 `bash <posix-abs>`,见上方 08-28 条目。本条的反斜杠/bash.exe 包装分析仍有效。
 
 ### Route hook defaulted to Microsoft Store `python3` despite `uv` (2026-08-26)
 

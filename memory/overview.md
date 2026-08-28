@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-27 (S50 — gate46 块2 quickstart 双平台 aha 8 commits `d47f386`→`30a4bb7` 待 push；adoption 块0 已 push)
+**Last Updated**: 2026-08-28 (S52b — Claude Code 2.1.220 hook 形态翻转探针+修复 PR #115 merged `f6f32c6`)
 
 ---
 
@@ -8,21 +8,16 @@
 
 ### Current Week (August 23-29, 2026)
 
-1. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0 4 commits 已 push，块2 8 commits `d47f386`→`30a4bb7` 待授权 push)
-   - 4 演示技能 keyless 双语路由 + 注入预览 + 双平台探针（`route --hook --platform`）；双路实施复审 P1 全清；CI quickstart-e2e Linux+Windows workflow（Windows lane 首跑待验）
+1. **Claude Code 2.1.220 hook 形态修复** ✅ (Completed - Aug 28, PR #115 merged `f6f32c6`)
+   - 实机探针证伪 S51 前提（宿主改 `bash -c` + 会话 CWD spawn）；生成器/rewrite/verify/e2e 四层统一 `bash <posix-abs>`；CI 11/11 job 绿；本机 `~/.claude` 已重部署
+   - 教训入 project-knowledge：hook 规范形态必须对用户实际版本实机探针钉死
+2. **S52 深度治理主线**（in progress）— 分支 `governance/s52-deep-clean` 已建，Phase 1 六路对抗诊断未跑
+3. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
-2. **v8.1.1 Windows grok-build 宿主部署 + 平台不变量** ✅ (Completed - Aug 26, push `8af7546`)
-   - quickstart 纳入 grok-build；YAML 静默跳过；hooks 一次安装；`_is_configured` 只认 VibeSOP 标记
-   - 本机部署 `~/.grok/hooks` + User PATH `~\.local\bin`；`vibe verify grok-build` 5/5；教训 `docs/dev/platform-invariants.md`
-2. **EvoTrace 吸收路线 gate34-36** ✅ (Completed - Aug 23, push `af1b680`/`2359026`/`a59eb13`)
-3. **gate42 幻影 reask 治理 + v8.1.0 发布** ✅ (Completed - Aug 24, tag `v8.1.0` @ `18be788`)
-4. **gate44 Windows 存量清零 + job 转正** ✅ (Completed - Aug 25, push `675a786`→`7af8959`)
-5. **Claude Code Windows hook** ✅ (Completed - Aug 27, pull-20260827 M1/M2 加固 `574349c`：rewrite 保守化 + verify 收窄 + 重部署实测点火；上游 `e467519`/`2c72fd7`)
-5. **grok 真实会话 probe**（hooks 已部署；本会话 Grok shell PATH 仍无 `~\.local\bin`，JSON hook 可能没注入）
-5. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
-6. **M3 阈值复检**（数据触发）：候选簇 ≥2 条工具序列 trace 后跑 calibrate_behavior_threshold.py
-7. **留存池复挖**（时间触发）：2026-09-19 到期前对比形状规则命中率再 purge
-8. **gate42/43 后续验收**（cron 触发，2026-08-25 已排程）：8-25 T+24h / 8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
+4. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
+5. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
+6. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
+7. **gate42/43 后续验收**（cron 触发）：8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
 
 ### Previous Weeks (July 26 - August 16, 2026) — Completed
 
@@ -116,7 +111,7 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.1.1 (Windows 宿主部署 + 平台不变量 + hook 命令 M1/M2 加固；CI Windows 为 required gate)
+**Status**: v8.1.1+ (hook 命令规范 `bash <posix-abs>` 四层统一 PR #115；CI Windows 为 required gate)
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
 **Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
@@ -126,6 +121,11 @@
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
+
+**Recent Changes** (2026-08-28):
+- ✅ Claude Code 2.1.220 hook 形态翻转修复：实机探针（4 形态对照）证伪 S51 config-relative 前提
+- ✅ PR #115 merged：生成器/rewrite/verify/e2e 断言四层统一 `bash <posix-abs>`；CI 11/11 绿
+- ✅ 本机 `~/.claude` 重部署为绝对形态；project-knowledge 08-26 旧条目标注已证伪
 
 **Recent Changes** (2026-07-18):
 - ✅ Fanout 六路诊断 → 全部问题收口：CI 转绿、release 管线修复（workflow_call）、pip-audit 全 extras 覆盖

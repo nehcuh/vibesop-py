@@ -1,6 +1,24 @@
 
 ## Current Session
 
+### S52b (2026-08-28) [vibesop-py] Claude Code 2.1.220 hook 127 根因探针 + 产品侧修复 → PR #115 merged
+
+- 用户报告 S51 修复后仍每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`
+- **根因 [executed]**:4 形态对照探针（`claude -p` + `--settings` 探针脚本分文件落日志）证实 2.1.220 宿主已改为 `bash -c` + **会话 CWD** spawn hooks——相对 `hooks/x.sh` 按 CWD 解析（全局/项目级都一样,`~/.claude` 那份从不执行）;S51 依赖的「path-join 到 `~/.claude\`」行为已消失。唯一跨版本稳形态 = 不带引号 `bash <posix-abs>`
+- 修复:生成器两平台统一 `bash <posix-abs>`;rewrite 升级 legacy 形态(config-relative 需 config_dir 推导,无则原样);verify 判定反转(config-relative 全平台 unsafe);e2e 形态断言收紧
+- 验证:全量 6386 passed（1 fail 为 S52 分支存量 skill_auditor,stash 验证与本次无关）;ruff 双条 CI 命令全绿;真机闭环外部 CWD `claude -p` 零 hook 错误 + route/mirror 点火 exit 0;**PR #115 CI 11/11 job 全绿(含 Windows lane 首跑即绿)→ 已 merge `f6f32c6`,分支已删**
+- 教训:宿主行为探针必须打真版本;hook 修复必须在「外部 CWD」真实点火;已写入 project-knowledge.md（08-26 旧条目标注已证伪）
+- Next: main post-merge CI 3 run 收尾监控(后台);S52 深度治理主线待续;Dependabot 9 PR 积压(openai/anthropic major 需单独评估)
+- Recorded: yes — 宿主版本翻转 + 探针方法论 → project-knowledge.md
+
+### S52 (2026-08-27) [vibesop-py] 深度治理 — 多路独立对抗诊断 → 分批修复(独立分支)
+
+- 分支 `governance/s52-deep-clean`(自 main e9b52dc),**不动 main**;每个 commit 附充分理由
+- 路由:用户点名 fuck-my-shit-mountain,S51 已证磁盘无 SKILL.md,按既有 deep-diagnosis-optimization workflow 走
+- 环境偏差:本机 Windows 无 docker(技能 Phase 2 的容器 e2e 不可用)→ 以主机全量 pytest + 定向验证替代,终验明示
+- Phase 1: 6 lane 并行诊断(correctness/security/architecture/robustness/tests/windows)+ 对 critical/high 逐条对抗验证(skeptic 默认反驳,预算 9)
+- 待办: 合成 P0/P1/P2 → 分批修复(每批:实现→独立审查→pytest→原子 commit)→ 终验
+
 ### S51 (2026-08-27) [vibesop-py] pull + 三路独立对抗评审（gate45/46 落地窗）
 
 - 拉取：`e286e67` → `f6a90fd`（ff-only，22 commits，63 files +3237/−1736）
@@ -10,8 +28,8 @@
 - 产物：`docs/decisions/_review-s51-gate45-46-{brief,merged}.md` + `_review-s51-lane-{correctness,architecture,invariants}.md`
 - Next: 用户贴了 Windows `command not found: ~/.claude\\"C:/Users/Huchen/..."`。quoted POSIX 被否证。M1 改为 `hooks/<name>.sh`；本机 settings 已改并 `vibe build claude-code -o ~/.claude`。M1–M7 已落地（plan v1 双路 REJECT，按 v1.1 锁点实施）。
 - 验证：[executed] `ruff check src/ tests/` pass；`ruff format --check src/ tests/` 717 files already formatted；定向 194 passed / 1 skipped
-- Next: 原子提交 + push origin main
-- Recorded: no（push 后再写 project-knowledge）
+- CI babysit: E2E 双 job 红在 Claude host smoke（python|bash pipefail 120）；Ubuntu 测试 7 fail（SkillLoader 漏进 repo 18 builtins）。已修 `1e53e2e` 再 push。盯 job 级不是 run 级。
+- Recorded: no
 
 ### S50 (2026-08-27) [vibesop-py] gate46 块2 quickstart 双平台 aha — 全流程闭环（设计→双路确认→实施→双路复审→P1 清零→8 commits）
 
@@ -52,6 +70,8 @@
 
 ## In-Flight Tasks (Cross-Session)
 
+- **S52 深度治理主线**（active）— 分支 `governance/s52-deep-clean` 已建（= e9b52dc），Phase 1 六路对抗诊断未跑。next_action: 六 lane 诊断 → 合成 P0/P1/P2 → 分批修复；已知存量:`tests/security/test_skill_auditor.py::test_pack_audit_detects_python_json_ts_rce` 在该分支失败。updated: 2026-08-28
+- **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
 - **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
 
