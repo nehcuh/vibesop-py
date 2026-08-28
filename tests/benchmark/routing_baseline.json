@@ -1,0 +1,391 @@
+{
+  "version": 1,
+  "fingerprint": {
+    "version": 1,
+    "sha": "0ce5a8e195e1f48edd2aadd472a0a6a44ff8ddedee329bd32ef4d266a7fb29d3",
+    "inputs": {
+      "registry.yaml": "a567f17924325a5c164ad3d14d8b85f01ad8fce1305a97d6830a80fa33235642",
+      "dataset": "00713f5cac1997cce6d61c2f24e06f73016af62ec88d6ea312cd4129c9db9587",
+      "posture": {
+        "enable_embedding": false,
+        "enable_ai_triage": false,
+        "enable_external": false,
+        "strict_search_paths": true,
+        "load_sentence_transformer": "patched-to-null",
+        "scenario_layer": "disabled",
+        "cwd": "tmp",
+        "project_root": "tmp",
+        "home_env": "tmp"
+      },
+      "skills:builtin": {
+        "autonomous-experiment/SKILL.md": "750b78e615ae5b1d13109473fbb947915cce5aa3ad1e2d3da841779ac014431d",
+        "code-review/SKILL.md": "e851866cfc71ece1256853c3f6afafa0b390ad560678756cc4dab71f053d4e1c",
+        "commit-message/SKILL.md": "63ba1c61aa15983078ba4dba3dd62d12476431713b7be8f8b58ec06b7f51b8c4",
+        "deep-diagnosis-optimization/SKILL.md": "27e55b1109ff813e9fa775b62ef256d8a3b719ee898b4c3fa8d291d69cf6edb8",
+        "experience-evolution/SKILL.md": "d1ac91aa722f689d71a1b3b28c60e899dfd7f724be64b996ad2e879ea7a0d309",
+        "instinct-learning/SKILL.md": "fbea172b82e0f0b1b483bfd1666fb4fc42e1f9da99546b3d726c5485f671cb25",
+        "instinct/SKILL.md": "9f11fee06a8918d704b2ee6cfdb48261f6673d6b51187f9d35655bfb64243bdb",
+        "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
+        "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
+        "skill-craft/SKILL.md": "c17c6b459e4114f123e26923281d52a709b45384e9d1cd4fc72e6f2b8af559d5",
+        "slash-evaluate/SKILL.md": "384a98208975a213021bd3e628ef2164f4ad837d2ad6a865950be971c17ae8e4",
+        "slash-help/SKILL.md": "840a51bd44cfb6eaf591594e552e1445e6e4528f149d2043f5f08ecf7a2586a9",
+        "slash-install/SKILL.md": "b7c7b9234e2c5668d250d709f2c1eab96bbc2e3de0a4dc6d5f9a2bc7f2e5f8ab",
+        "slash-list/SKILL.md": "9936dbdf12832ed71d50eeec0a8375497680e090eb98e50c1b5e9fa8fb961789",
+        "slash-orchestrate/SKILL.md": "3ce061d4bac4d3cf012cf0903ee71e0f5ffb2380135fee91a6f03d2f66a5b27c",
+        "slash-route/SKILL.md": "e1a1dbd413fa45f3a28c332ad85ff48c4c1d9e1eba2ed4b649f6cb90636a7a80",
+        "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
+        "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279"
+      },
+      "skills:benchmark-pack": {
+        "quokka-todo/SKILL.md": "e4626d7cda6ee9f13754e7e2a1acc1a5992dbe5149a0cadfc3ef7c2277486843",
+        "wombat-snapshot/SKILL.md": "eb8a545ca202af39e4b57c2d0a1223126a0ba560364ab587f4a8c523ecb096f7"
+      }
+    }
+  },
+  "entries": [
+    {
+      "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": false
+    },
+    {
+      "query": "run a deep diagnosis of the codebase and suggest optimizations",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "builtin/deep-diagnosis-optimization",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "全面审查这个仓库的代码质量",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "builtin/deep-diagnosis-optimization",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "让 agent 自主运行一组实验并汇报评估结果",
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "reject": [],
+      "primary": "builtin/autonomous-experiment",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "start an autonomous experiment loop with prediction evaluation",
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "reject": [],
+      "primary": "builtin/autonomous-experiment",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "把最近踩过的坑沉淀下来，以后别再犯了",
+      "expect": [
+        "builtin/experience-evolution"
+      ],
+      "reject": [],
+      "primary": "builtin/experience-evolution",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "accumulate what we learned from practice into project knowledge",
+      "expect": [
+        "builtin/experience-evolution"
+      ],
+      "reject": [],
+      "primary": "builtin/experience-evolution",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "查看一下我的 instinct 学习状态",
+      "expect": [
+        "builtin/instinct",
+        "builtin/instinct-learning"
+      ],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "layer": "levenshtein",
+      "ok1": true
+    },
+    {
+      "query": "show my coding instincts and their confidence",
+      "expect": [
+        "builtin/instinct",
+        "builtin/instinct-learning"
+      ],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "从我的工作流里学习一个新的本能模式",
+      "expect": [
+        "builtin/instinct-learning",
+        "builtin/instinct"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": false
+    },
+    {
+      "query": "用 RIPER 流程来做这个功能",
+      "expect": [
+        "builtin/riper-workflow"
+      ],
+      "reject": [],
+      "primary": "builtin/riper-workflow",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "run the riper workflow for this feature",
+      "expect": [
+        "builtin/riper-workflow"
+      ],
+      "reject": [],
+      "primary": "builtin/riper-workflow",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "收工了",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "that's all for now, heading out",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "今天就到这里，保存一下进度",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "把这段对话提炼成一个新技能",
+      "expect": [
+        "builtin/skill-craft"
+      ],
+      "reject": [],
+      "primary": "builtin/skill-craft",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "craft a new skill from this session's patterns",
+      "expect": [
+        "builtin/skill-craft"
+      ],
+      "reject": [],
+      "primary": "builtin/skill-craft",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "评估一下这些技能的使用质量和效果",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-evaluate",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "which skills are performing well and which need attention",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": false
+    },
+    {
+      "query": "/help",
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-help",
+      "layer": "explicit",
+      "ok1": true
+    },
+    {
+      "query": "vibe 这个工具怎么用",
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-help",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "/install superpowers",
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-install",
+      "layer": "explicit",
+      "ok1": true
+    },
+    {
+      "query": "帮我安装一个技能包",
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-install",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "/list",
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-list",
+      "layer": "explicit",
+      "ok1": true
+    },
+    {
+      "query": "列出所有可用技能",
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-list",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "/orchestrate 同时做安全审查和补测试",
+      "expect": [
+        "builtin/slash-orchestrate"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-orchestrate",
+      "layer": "explicit",
+      "ok1": true
+    },
+    {
+      "query": "/route 这个查询到合适的技能",
+      "expect": [
+        "builtin/slash-route"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-route",
+      "layer": "explicit",
+      "ok1": true
+    },
+    {
+      "query": "来一次全维度代码库审计",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": false
+    },
+    {
+      "query": "help me write a unit test for this function",
+      "expect": [],
+      "reject": [
+        "builtin/slash-help"
+      ],
+      "primary": "builtin/test-generation",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "help me fix this bug in the login flow",
+      "expect": [],
+      "reject": [
+        "builtin/slash-help"
+      ],
+      "primary": "builtin/systematic-debugging",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "审计一下第三方依赖的供应链安全",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": false
+    },
+    {
+      "query": "xyzq 什么都不相关的乱码查询 blargh",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true
+    },
+    {
+      "query": "add this to the quokka-todo list before we forget",
+      "expect": [
+        "benchpack/quokka-todo"
+      ],
+      "reject": [],
+      "primary": "benchpack/quokka-todo",
+      "layer": "keyword",
+      "ok1": true
+    },
+    {
+      "query": "take a wombat-snapshot of the workspace before the risky edit",
+      "expect": [
+        "benchpack/wombat-snapshot"
+      ],
+      "reject": [],
+      "primary": "benchpack/wombat-snapshot",
+      "layer": "keyword",
+      "ok1": true
+    }
+  ]
+}

@@ -123,10 +123,12 @@
 - query: 这个 bug 在 router.py 第 123 行，修复它并验证
   expect:
   - kimi-gated-fix
+  requires_packs: [external]
   category: cross_cutting
 - query: 验证这个 prompt chain 各阶段是否符合规范
   expect:
   - prompt-chain-validator
+  requires_packs: [external]
   category: cross_cutting
 - query: help me write a unit test for this function
   expect: []
@@ -148,3 +150,15 @@
   expect: []
   category: adversarial
   note: 应 no-match / fallback
+
+# In-universe external-pack load (gate45 P1): the checked-in
+# tests/fixtures/benchmark-pack exercises pack-shaped skills inside the
+# pinned hermetic universe — scored everywhere, never skipped_env.
+- query: add this to the quokka-todo list before we forget
+  expect:
+  - benchpack/quokka-todo
+  category: benchmark_pack
+- query: take a wombat-snapshot of the workspace before the risky edit
+  expect:
+  - benchpack/wombat-snapshot
+  category: benchmark_pack

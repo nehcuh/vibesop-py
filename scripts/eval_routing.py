@@ -29,9 +29,31 @@ Entry semantics:
                                requires_packs with expect: [] never skips —
                                reject/no-match assertions stay scored.
 
+Hermetic mode (gate45 P1) pins the routed universe so numbers are
+machine-independent and CI can gate routing quality:
+    uv run python scripts/eval_routing.py --hermetic --check
+    uv run python scripts/eval_routing.py --hermetic --update-baseline
+The router runs with cwd/project_root/HOME all pinned to a tmp dir (no
+~/.vibe config or skill-index leak, no repo .vibe/ leak), embedding + AI
+triage off, the SCENARIO layer pinned empty (install-mode-independent),
+load_sentence_transformer patched to null (kills warm-HF-cache
+divergence), and the candidate universe pinned to checkout builtins +
+tests/fixtures/benchmark-pack. --update-baseline refuses to absorb ok1
+true→false flips vs the old baseline unless --force is passed and every
+flip is justified in the PR.
+
+Baseline gate exit codes (--hermetic --check):
+    0 — no new top-1 fails (primary/layer drift on passing entries warns)
+    1 — new top-1 fail(s): an entry that passed in the baseline now fails
+    3 — stale baseline: missing/unreadable/schema-version mismatch, or the
+        content fingerprint changed (registry/skills/dataset/posture) —
+        refresh with --update-baseline instead of comparing across universes
+
 Usage:
     uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
                                           [--json-out PATH]
+    uv run python scripts/eval_routing.py --hermetic [--check | --update-baseline]
+                                          [--baseline PATH]
 """
 
 from __future__ import annotations
@@ -47,7 +69,91 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from vibesop.core.routing.benchmark import (  # noqa: E402
+    HERMETIC_POSTURE,
+    check_update_absorption,
+    compute_fingerprint,
+    evaluate_against_baseline,
+    write_baseline,
+)
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+
+
+def _build_hermetic_router() -> tuple[UnifiedRouter, dict[str, Path], set[str]]:
+    """Machine-independent router + pinned candidate universe (gate45 P1).
+
+    Order matters:
+    1. chdir to a fresh tmp — InstinctLearner and other stores resolve
+       ``.vibe/*`` against the process cwd, and the repo root carries a
+       real ``.vibe/`` that must not leak into the benchmark. The tmp dir
+       is intentionally left for OS cleanup: atexit flushes may still
+       reference it during interpreter shutdown.
+    2. Pin HOME/USERPROFILE to the same tmp. Two home-dependent readers
+       would otherwise diverge between a developer machine and CI:
+       the INDEX layer merges the GLOBAL skill index at
+       ``Path.home()/.vibe/skill-index.json`` (locally built, absent on
+       CI), and config/external discovery consults ``~``. Both
+       ``Path.home()`` and ``expanduser()`` read the env at call time, so
+       setting the env var covers both mechanisms.
+    3. Null out load_sentence_transformer — machines with a warm HF cache
+       would activate the semantic_index embedding fallback that CI (no
+       cache) can never take; null forces the deterministic TFIDF path.
+    4. RoutingConfig with every layer toggle explicit — CLI-override
+       semantics mean unset fields could otherwise leak from ~/.vibe/config.
+    5. Pin the SCENARIO layer empty (router._scenario_cache = {}): editable
+       installs read it empty by accident (bundled registry only exists in
+       wheels); pinning keeps a wheel-installed env from silently
+       regenerating the baseline into a different universe.
+    6. pin_search_paths pins the universe to checkout builtins + the
+       checked-in benchmark fixture pack: no user/project/external
+       discovery, no candidates disk cache.
+
+    Returns (router, skill_roots-for-fingerprint, resolvable-skill-ids).
+    """
+    import os
+    import tempfile
+
+    import vibesop.core.embedding_loader as embedding_loader_module
+    from vibesop.core.config import RoutingConfig
+    from vibesop.core.skills import SkillLoader
+    from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+    tmp_root = Path(tempfile.mkdtemp(prefix="vibe-routing-bench-"))
+    os.chdir(tmp_root)
+    os.environ["HOME"] = str(tmp_root)
+    os.environ["USERPROFILE"] = str(tmp_root)
+
+    def _no_model(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    embedding_loader_module.load_sentence_transformer = _no_model  # type: ignore[assignment]
+
+    router = UnifiedRouter(
+        project_root=tmp_root,
+        config=RoutingConfig(enable_embedding=False, enable_ai_triage=False),
+    )
+    # Pin the SCENARIO layer empty. In an editable install it reads empty
+    # by accident (the bundled registry only exists in wheels), but a
+    # wheel-installed env would activate it and silently regenerate the
+    # baseline into a different universe — pin it so the posture is
+    # explicit and install-mode-independent (review F-3/MINOR-3).
+    router._scenario_cache = {}
+
+    skill_roots = {
+        "builtin": resolve_builtin_skills_dir(ROOT),
+        "benchmark-pack": ROOT / "tests" / "fixtures" / "benchmark-pack",
+    }
+    router._candidate_manager.pin_search_paths(list(skill_roots.values()), enable_external=False)
+
+    # Resolvability check for requires_packs entries must use the pinned
+    # universe, not ExternalSkillLoader discovery (machine-dependent).
+    pinned = SkillLoader(
+        project_root=tmp_root,
+        search_paths=list(skill_roots.values()),
+        enable_external=False,
+        strict_search_paths=True,
+    )
+    return router, skill_roots, set(pinned.discover_all())
 
 
 def _builtin_skill_ids() -> set[str]:
@@ -114,17 +220,67 @@ def main() -> int:
         help="eval dataset YAML; relative paths resolve against the repo root "
         "(default: tests/benchmark/routing_eval.yaml)",
     )
+    parser.add_argument(
+        "--hermetic",
+        action="store_true",
+        help="pin the routed universe (tmp cwd/project_root, embedding+AI-triage "
+        "off, builtin+benchmark-pack only) for reproducible, CI-gateable numbers",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="compare against the baseline (requires --hermetic): exit 0 ok / "
+        "1 new top-1 fail / 3 stale baseline",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="(re)write the baseline from this run (requires --hermetic); refuses "
+        "to absorb ok1 true→false flips vs the old baseline unless --force",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="with --update-baseline: knowingly absorb regressions the old "
+        "baseline recorded as passing (every flip must be justified in the PR)",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=ROOT / "tests" / "benchmark" / "routing_baseline.json",
+        help="baseline file for --check/--update-baseline "
+        "(default: tests/benchmark/routing_baseline.json)",
+    )
     args = parser.parse_args()
+
+    if (args.check or args.update_baseline) and not args.hermetic:
+        parser.error("--check/--update-baseline require --hermetic")
+    if args.check and args.update_baseline:
+        parser.error("--check and --update-baseline are mutually exclusive")
+    if args.hermetic and args.record:
+        parser.error("--record is incompatible with --hermetic (no repo-side writes)")
+
+    # Normalize every output path BEFORE a possible chdir into the hermetic
+    # tmp — relative paths would otherwise land inside the scratch dir.
+    json_out = args.json_out.resolve() if args.json_out else None
+    baseline_path = args.baseline.resolve()
 
     eval_file = args.file if args.file.is_absolute() else ROOT / args.file
     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
-    router = UnifiedRouter(project_root=ROOT)
-    builtin_ids, external_ids = _load_resolvable_ids()
+
+    skill_roots: dict[str, Path] | None = None
+    if args.hermetic:
+        router, skill_roots, pinned_ids = _build_hermetic_router()
+        builtin_ids = external_ids = pinned_ids
+    else:
+        router = UnifiedRouter(project_root=ROOT)
+        builtin_ids, external_ids = _load_resolvable_ids()
 
     skipped_env_count = 0
     hits1 = hits3 = 0
     errors: list[dict] = []
     per_query: list[dict] = []
+    baseline_records: list[dict] = []
     for e in entries:
         query = e["query"]
         expect: list[str] = e.get("expect", [])
@@ -173,6 +329,16 @@ def main() -> int:
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3
+        baseline_records.append(
+            {
+                "query": query,
+                "expect": expect,
+                "reject": reject,
+                "primary": primary,
+                "layer": layer,
+                "ok1": bool(ok1),
+            }
+        )
         per_query.append(
             {
                 "query": query[:80],
@@ -227,8 +393,8 @@ def main() -> int:
                 err["recorded_at"] = datetime.now(UTC).isoformat()
                 f.write(json.dumps(err, ensure_ascii=False) + "\n")
 
-    if args.json_out:
-        out = args.json_out
+    if json_out:
+        out = json_out
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(
             json.dumps(
@@ -261,6 +427,81 @@ def main() -> int:
                 print(f"  {n}x  {pair}")
         else:
             print("No misroutes.")
+
+    if args.update_baseline:
+        assert skill_roots is not None  # guarded by argparse above
+        fingerprint = compute_fingerprint(
+            registry_file=ROOT / "core" / "registry.yaml",
+            skill_roots=skill_roots,
+            dataset_file=eval_file,
+            posture=HERMETIC_POSTURE,
+        )
+        # Absorption guard (review F-1): refreshing after a fingerprint
+        # change must not silently fold regressions into the new baseline.
+        guard = None if args.force else check_update_absorption(baseline_path, baseline_records)
+        if guard is not None and guard.exit_code == 1:
+            print(
+                f"\nREFUSED: writing {baseline_path} would absorb "
+                f"{len(guard.new_fails)} regression(s) the old baseline "
+                "recorded as passing:",
+                file=sys.stderr,
+            )
+            for nf in guard.new_fails:
+                print(
+                    f"  {nf['query'][:60]!r}: {nf['baseline']} -> {nf['current']}",
+                    file=sys.stderr,
+                )
+            print(
+                "Fix the regression, or re-run with --force and justify every flip in the PR.",
+                file=sys.stderr,
+            )
+            return 1
+        write_baseline(baseline_path, fingerprint, baseline_records)
+        print(f"\nbaseline written -> {baseline_path}")
+        print(
+            f"  entries: {len(baseline_records)}  "
+            f"fingerprint: {fingerprint['sha'][:16]}  "
+            f"top-1: {hits1}/{total}"
+        )
+        if guard is not None:
+            for np_entry in guard.new_passes:
+                print(f"  newly passing: {np_entry['query'][:60]!r} -> {np_entry['primary']}")
+        return 0
+
+    if args.check:
+        assert skill_roots is not None  # guarded by argparse above
+        fingerprint = compute_fingerprint(
+            registry_file=ROOT / "core" / "registry.yaml",
+            skill_roots=skill_roots,
+            dataset_file=eval_file,
+            posture=HERMETIC_POSTURE,
+        )
+        outcome = evaluate_against_baseline(baseline_path, fingerprint, baseline_records)
+        status = {0: "OK", 1: "NEW FAILS", 3: "STALE"}.get(outcome.exit_code, "?")
+        # Gate verdict goes to stderr: stdout stays parseable for --json
+        # consumers even when combined with --check (review NIT-4).
+        say = lambda *a: print(*a, file=sys.stderr)  # noqa: E731
+        say(f"\n=== Routing Baseline Check: {status} (exit {outcome.exit_code}) ===")
+        say(f"baseline: {baseline_path}")
+        say(
+            f"entries matched: {outcome.matched_entries} | new-fails: "
+            f"{len(outcome.new_fails)} | new-passes: {len(outcome.new_passes)} | "
+            f"drift: {len(outcome.drift_warnings)} | known-fails: {outcome.known_fails}"
+        )
+        say(outcome.reason)
+        for nf in outcome.new_fails:
+            say(f"  FAIL {nf['query'][:60]!r}")
+            say(f"       expect:  {nf['expect'] or '<no-match>'}")
+            say(f"       baseline: {nf['baseline']}  current: {nf['current']}")
+        for np_entry in outcome.new_passes:
+            say(
+                f"  PASS(new) {np_entry['query'][:60]!r} -> {np_entry['primary']}"
+                "  (refresh recommended)"
+            )
+        for warning in outcome.drift_warnings:
+            say(f"  drift: {warning}")
+        return outcome.exit_code
+
     return 0
 
 
