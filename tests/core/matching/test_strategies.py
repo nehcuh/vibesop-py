@@ -13,6 +13,7 @@ from vibesop.core.matching.base import (
 )
 from vibesop.core.matching.lazy_matcher import LazyEmbeddingMatcher
 from vibesop.core.matching.strategies import (
+    LEVENSHTEIN_EXCLUDED_SKILL_IDS,
     EmbeddingMatcher,
     KeywordMatcher,
     LevenshteinMatcher,
@@ -262,6 +263,27 @@ class TestLevenshteinMatcher:
     def test_init(self):
         m = LevenshteinMatcher()
         assert m._config.min_confidence == 0.3
+
+    def test_excluded_ids_are_archived_steals_not_demo_set(self):
+        """The exclusion is per-archived-incident (S51 M4), not per-demo-set.
+        systematic-debugging must stay OUT: its keyless demo floor
+        ("why is this broken") routes via this fuzzy layer — excluding it
+        drops the demo query to fallback-llm (empirically verified when a
+        derivation-based fix was attempted and the routing floor failed).
+        """
+        assert (
+            frozenset(
+                {
+                    "builtin/commit-message",
+                    "builtin/code-review",
+                    "builtin/test-generation",
+                    "commit-message",
+                    "code-review",
+                    "test-generation",
+                }
+            )
+            == LEVENSHTEIN_EXCLUDED_SKILL_IDS
+        )
 
     def test_match_typo_correction(self):
         m = LevenshteinMatcher(MatcherConfig(min_confidence=0.0))

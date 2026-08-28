@@ -28,9 +28,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   （含空白时加引号）为唯一绿灯形态;quickstart e2e 的形态断言同步收紧,
   并新增带空格 HOME 下部署 + `bash -c` 真执行部署命令的步骤
   （CI runner HOME 无空格,该缺陷类此前结构性测不到）。
+- **Grok Build 执行计划注入走错分支**：`inject_execution_plan` 只把
+  CLAUDE_CODE 路由到 `hookSpecificOutput.additionalContext` 信封,
+  GROK_BUILD 落到 generic TEXT 分支。Grok Build 的 UserPromptSubmit
+  钩子信封与 Claude Code 同构,已并入同一分支（单技能注入早已如此）。
+- **编排计划合成步骤 confidence=0.0 卡死 auto-proceed**：
+  synthesise/verify/judge/squad 步骤缺 confidence,`_needs_confirmation`
+  的全置信折叠永远为 False——`ambiguous_only` 对这些计划形态永不自动
+  放行。模式强制步骤现携带 0.99 哨兵值（结构强制,非路由推导）,
+  workflow-engine 追加步骤携带真实路由置信度。
+- **builtin 解析残留 reader 绕过身份门控**：`grok_build` 的内置技能
+  计数、`SkillHealthMonitor` 的 builtin 回退/收集、`RegistrySync` 的
+  默认 skills_dir 仍直接读 cwd/project-root 相对 `core/skills`——
+  uv tool 安装下外部目录可遮蔽（或隐藏）真实内置技能。统一改走
+  `resolve_builtin_skills_dir`,foreign-shadow 覆盖进 test_bundled。
+- **Levenshtein 排除列表注释与内容不符**：排除集是按 S51 M4 归档事故
+  （3 个 demo 技能抢包属短语）手工列的,注释却写成「demo builtins」。
+  实测把第 4 个 demo 技能 `systematic-debugging` 也排除会使其 keyless
+  演示底线（"why is this broken"）跌到 fallback-llm——该 query 靠模糊层
+  命中。已改注释为归档口径并用测试钉死「systematic-debugging 必须留在
+  模糊层」。
 
 ### Changed
 
+- **产品决策记录：四个 demo 内置技能保持 always-on（S51 M4 采 option 2）**：
+  `systematic-debugging` / `test-generation` / `code-review` /
+  `commit-message` 随 wheel 强制内置且默认参与路由（不设 `--demos` 开关）。
+  理由：keyless aha 时刻与 gate46 验证的免 key 路由底线依赖它们常开；
+  opt-in 默认关会让 fresh install 的 aha 演示失效。代价（路由胜者变化，
+  按 minor 而非 patch 对待）与缓解（steal tags/triggers 已剥离、
+  Levenshtein 兜底层排除 demo 技能、SKILLS_GUIDE 定位为 P1 aha 而非
+  P0 必须）随决策一并落地。完整裁决表见
+  `docs/decisions/_fix-s51-m1-m7.md`。
 - **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度
   ≥ `auto_select_threshold`（0.6）的路由自动放行，仅低置信度/编排分歧时弹出
   确认。`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」

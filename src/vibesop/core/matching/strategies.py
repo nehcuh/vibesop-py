@@ -705,8 +705,13 @@ class EmbeddingMatcher:
         }
 
 
-# Aha demo builtins must not win pack-owned phrases via last-resort fuzzy
-# match (`write tests` → commit-message, `review my changes` → code-review).
+# Archived S51 M4 fuzzy-steal ids, not "all demo builtins": these three had
+# recorded incidents of winning pack-owned phrases via last-resort fuzzy
+# match (`write tests` → commit-message, `review my changes` → code-review),
+# and their keyless demo queries route via keyword layers, so excluding them
+# from fuzzy costs nothing. `systematic-debugging` is deliberately NOT here:
+# its keyless demo floor ("why is this broken") routes via the fuzzy layer
+# (pinned by test_demo_skills.py's routing-floor tests).
 LEVENSHTEIN_EXCLUDED_SKILL_IDS = frozenset(
     {
         "builtin/commit-message",

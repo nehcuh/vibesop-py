@@ -128,9 +128,10 @@ class TestAgentRuntimeHookResponseHintPath:
     def test_hint_path_for_builtin_uses_absolute_path_from_bundle(
         self, tmp_path, monkeypatch
     ) -> None:
-        """When project_root/core/skills/ is absent, hint must point to the
-        bundled data dir via sys.path scan — and be absolute so Claude can
-        Read it from any CWD."""
+        """When project_root is not a VibeSOP checkout, hint must point to the
+        wheel-bundled skills dir (resolve_builtin_skills_dir: identity-gated
+        project_root, then wheel) — and be absolute so Claude can Read it
+        from any CWD."""
 
         fake_pkg = tmp_path / "fake-vibesop" / "vibesop"
         fake_pkg.mkdir(parents=True)
