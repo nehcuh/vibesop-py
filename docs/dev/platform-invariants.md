@@ -51,17 +51,33 @@ and Grok JSON hooks could not find `vibe` on PATH.
    `agents_md` / `extensions_dir` in `PLATFORM_CONFIGS` without a
    matching `check_id` branch in `_check_platform` is a silent all-FAIL.
 
-5. **Claude Code Windows `command` is config-relative `hooks/<script>.sh`.**
-   The host treats `command` as a filesystem path and prepends
-   `~/.claude\\` when `path.win32.isAbsolute(command)` is false. A
-   quoted POSIX absolute (`"C:/Users/.../x.sh"`) is not absolute, which
-   produces `C:\Users\...\.claude\"C:/Users/.../x.sh"` (command not
-   found). Also still fail:
-   - `bash C:\Users\...` → `C:Users...` (Git Bash eats `\\`)
+5. **Claude Code hook `command` is `bash <posix-abs-path>`, quoted when
+   the path has whitespace — and the canonical form must be re-probed
+   per host version.** Probed live on Claude Code 2.1.220 (2026-08-28):
+   the host spawns hooks via `bash -c` with the session CWD, so
+   config-relative `hooks/<script>.sh` resolves against that CWD and
+   127s from any other directory, and an unquoted spaced path
+   (`bash C:/Users/First Last/.../x.sh`) word-splits into 127. The
+   canonical form quotes the script as one bash word iff it contains
+   whitespace: `bash "C:/Users/First Last/.../x.sh"`. Generator
+   (`bash_hook_command`), parser (`parse_hook_script_command`), verify,
+   and the legacy rewrite must stay isomorphic — the parser accepts the
+   generator's own output, verify certifies exactly that form. Also
+   fail:
+   - `bash C:\Users\...` → `C:Users...` (Git Bash eats `\`)
    - `"C:/Program Files/Git/bin/bash.exe" "C:/.../x.sh"` → `C:/Program:`
-   - `bash bash x.sh` (host prepends bash onto a `bash ` prefix)
-   File-existence checks do not catch this. `vibe verify claude-code`
-   must inspect `settings.json` commands.
+   - bare `"C:/Users/.../x.sh"` (pre-2.1 hosts path-joined
+     `~/.claude\` onto non-`win32.isAbsolute` commands — join behavior
+     observed gone in 2.1.220, kept rejected as legacy)
+   Historical: pre-2.1.x hosts prepended `~/.claude\` to non-absolute
+   commands; the S51 window briefly shipped config-relative as canonical
+   on that basis. 2.1.220 replaced it with `bash -c` + session CWD.
+   Because the spawn model changed across minor host versions, treat
+   "canonical command form" as probe-derived, not stable API.
+   File-existence checks do not catch any of this. `vibe verify
+   claude-code` must inspect `settings.json` commands, and CI must
+   execute the deployed command via `bash -c` under a home containing a
+   space (runner homes never have one).
 
 6. **Route-hook Python is the uv-tool interpreter, never Store
    `python3`.** On Windows, `python`/`python3` on PATH is often

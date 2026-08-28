@@ -18,12 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude Code 都报 `bash: hooks/vibesop-route.sh: No such file or
   directory`（127）。S51 依赖的「宿主把非绝对 command path-join 到
   `~/.claude\`」行为在版本间已消失。修复:两平台统一为
-  `bash <posix-abs-path>`（`bash_hook_command`）;rebuild 把 legacy
-  形态（config-relative/引号/反斜杠/bash.exe 包装）升级为绝对形态,
-  config-relative 需 config_dir 推导目标,无 config_dir 时保持原样;
-  `vibe verify claude-code` 反转判定——config-relative 全平台标记
-  unsafe,绝对 POSIX + bash 前缀为唯一绿灯形态;quickstart e2e 的形态
-  断言同步收紧。
+  `bash <posix-abs-path>`（`bash_hook_command`）,路径含空白时整体加双引号
+  （`bash -c` 下未引号的带空格路径分词成 127——`C:/Users/First Last/`
+  用户群,生成/解析/verify/rewrite 四处同构）;rebuild 在 win32 把 legacy
+  形态（config-relative/引号/反斜杠/bash.exe 包装）升级为绝对形态
+  （非 win32 仅升级反斜杠形态）,config-relative 需 config_dir 推导目标,
+  无 config_dir 时保持原样;`vibe verify claude-code` 反转判定——
+  config-relative 与未引号带空格路径全平台标记 unsafe,`bash <posix-abs>`
+  （含空白时加引号）为唯一绿灯形态;quickstart e2e 的形态断言同步收紧,
+  并新增带空格 HOME 下部署 + `bash -c` 真执行部署命令的步骤
+  （CI runner HOME 无空格,该缺陷类此前结构性测不到）。
 
 ### Changed
 
@@ -58,12 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vibe route --help` 与 CLI_REFERENCE 沿用旧默认文案**：docstring 仍称
   「默认每次确认」，与新默认 `ambiguous_only` 矛盾，两处已改。
 
-- **Claude Code Windows hook command**: quoted POSIX absolute
-  (`"C:/Users/.../vibesop-tool-seq.sh"`) is not `path.win32.isAbsolute`,
-  so Claude joins `~/.claude\\` onto it (`command not found:
-  C:\\Users\\...\\.claude\\"C:/Users/..."`). Canonical form is
-  config-relative `hooks/<script>.sh`. Rebuild rewrites the quoted
-  legacy form. `vibe verify claude-code` flags quoted paths as unsafe.
+- **Claude Code Windows hook command（S51 时期结论,已被上方 2.1.220 探针
+  条目取代）**: 8.1.2 pre-release 曾短暂以 config-relative
+  `hooks/<script>.sh` 为规范形态,依据是旧版宿主把非绝对 command
+  path-join 到 `~/.claude\`（quoted POSIX 在那些版本被 join 出
+  `command not found`）。2.1.220 实测该 join 行为已消失,现行规范形态
+  见上方 Fixed 首条;`vibe verify` 现将 config-relative 全平台标记为
+  unsafe。
 - **Claude Code Windows hook Python**: after the path fix, the script still
   defaulted to `python3` (Microsoft Store stub) because uv-tool lookup only
   checked `~/.local/share/uv/tools/vibesop/bin/python`. Also search
