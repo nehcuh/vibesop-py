@@ -248,6 +248,28 @@ class TestHookInstallerIntegration:
         verify_results = installer.verify_hooks("claude-code", tmp_path)
         assert all(verify_results.values())
 
+    def test_fallback_stub_does_not_clobber_existing_script(self, tmp_path: Path) -> None:
+        """No template exists for route-interceptor, so only the fallback
+        stub is available — it must never overwrite the real script a
+        higher-fidelity writer already put on disk. Production sequence
+        (`vibe quickstart`): adapter render_config_only writes the real
+        vibesop-route.sh first, HookInstaller runs second."""
+        installer = HookInstaller()
+        real = tmp_path / "hooks" / "vibesop-route.sh"
+        real.parent.mkdir(parents=True)
+        real.write_text(
+            "#!/bin/bash\n# real adapter-rendered route hook\nexec vibe route --hook\n",
+            encoding="utf-8",
+        )
+
+        results = installer.install_hooks("claude-code", tmp_path)
+
+        assert results.get("route-interceptor") is True
+        assert "exec vibe route --hook" in real.read_text(encoding="utf-8")
+
+        # Templated hooks still install normally alongside the preserved file.
+        assert (tmp_path / "hooks" / "pre-tool-use.sh").exists()
+
     def test_multiple_platforms(self, tmp_path: Path) -> None:
         """Test installing hooks for multiple platforms."""
         installer = HookInstaller()

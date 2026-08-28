@@ -196,6 +196,16 @@ class HookInstaller:
                 platform,
                 hook_point,
             )
+            if hook_content is None:
+                # No template for this hook point — only the fallback stub
+                # is available. A stub must never overwrite a script already
+                # on disk: `vibe quickstart` renders the real hooks first
+                # (adapter render_config_only) and HookInstaller runs after,
+                # so the fallback used to clobber the working vibesop-route.sh
+                # with a 3-line echo stub, silently killing routing.
+                if hook_path.exists():
+                    return True
+                hook_content = self._get_default_hook_content(platform, hook_point)
 
             # Ensure parent directory exists
             hook_path.parent.mkdir(parents=True, exist_ok=True)
@@ -290,7 +300,7 @@ class HookInstaller:
         self,
         platform: str,
         hook_point: HookPoint,
-    ) -> str:
+    ) -> str | None:
         """Render hook template.
 
         Args:
@@ -298,7 +308,9 @@ class HookInstaller:
             hook_point: HookPoint to render
 
         Returns:
-            Rendered hook script content
+            Rendered hook script content, or None when no template exists
+            for this hook point (caller decides between the fallback stub
+            and leaving an existing file untouched).
         """
         # Try to load template
         template_name = f"{hook_point.value}.sh.j2"
@@ -310,8 +322,7 @@ class HookInstaller:
                 hook_point=hook_point.value,
             )
         except (jinja2.TemplateNotFound, jinja2.TemplateError):
-            # Fallback to default hook content
-            return self._get_default_hook_content(platform, hook_point)
+            return None
 
     def _get_default_hook_content(
         self,
