@@ -189,20 +189,20 @@ jobs:
           test -f "$settings"
           # JSON-level extraction (escaped \" quotes make sed/grep fragile).
           cmd=$(uv run --no-project python -c '
-import json, sys
-data = json.load(open(sys.argv[1], encoding="utf-8"))
-stack, out = [data], ""
-while stack:
-    node = stack.pop()
-    if isinstance(node, dict):
-        stack += list(node.values())
-    elif isinstance(node, list):
-        stack += node
-    elif isinstance(node, str) and "vibesop-route.sh" in node and node.lstrip().startswith("bash"):
-        out = node
-        break
-print(out)
-' "$settings")
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          stack, out = [data], ""
+          while stack:
+              node = stack.pop()
+              if isinstance(node, dict):
+                  stack += list(node.values())
+              elif isinstance(node, list):
+                  stack += node
+              elif isinstance(node, str) and "vibesop-route.sh" in node and node.lstrip().startswith("bash"):
+                  out = node
+                  break
+          print(out)
+          ' "$settings")
           [ -n "$cmd" ] || { echo "FAIL: no vibesop-route.sh command found in $settings"; exit 1; }
           echo "deployed command: $cmd"
           path_part=${cmd#bash }
