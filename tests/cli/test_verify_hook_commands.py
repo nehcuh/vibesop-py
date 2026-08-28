@@ -4,8 +4,10 @@ Matrix updated 2026-08-28 after probing Claude Code 2.1.220 live: hooks
 spawn via ``bash -c`` with the session CWD, so config-relative
 ``hooks/<name>.sh`` (the S51 canonical form) 127s from any other
 directory. The healthy win32 form is now the same as Unix:
-``bash <posix-abs-path>``. Quoted POSIX stays rejected (pre-2.1 hosts
-path-join configDir onto it).
+``bash <posix-abs-path>``, quoted as one bash word when the path contains
+whitespace (unquoted spaced paths word-split under ``bash -c`` — the
+``C:/Users/First Last/`` class). Bare quoted POSIX (no ``bash`` prefix)
+stays rejected: pre-2.1 hosts path-join configDir onto it.
 """
 
 from __future__ import annotations
@@ -106,6 +108,41 @@ def test_win32_quoted_spaced_username_fails(tmp_path, monkeypatch) -> None:
         "win32",
     )
     assert not result["pass"], result["detail"]
+
+
+def test_win32_unquoted_spaced_path_fails(tmp_path, monkeypatch) -> None:
+    """M1 class: `bash -c` word-splits an unquoted spaced path into 127."""
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        ["bash C:/Users/First Last/.claude/hooks/vibesop-route.sh", USER_POWERSHELL],
+        "win32",
+    )
+    assert not result["pass"], result["detail"]
+
+
+def test_win32_quoted_spaced_canonical_passes(tmp_path, monkeypatch) -> None:
+    """Generator output for spaced homes: `bash "<posix-abs>"` is one bash word."""
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        ['bash "C:/Users/First Last/.claude/hooks/vibesop-route.sh"', USER_POWERSHELL],
+        "win32",
+    )
+    assert result["pass"], result["detail"]
+
+
+def test_bash_prefixed_config_relative_fails_both_platforms(tmp_path, monkeypatch) -> None:
+    """The hooks/ check must see through a ``bash `` prefix: word-level, not
+    whole-command — ``bash hooks/<name>.sh`` 127s exactly like the bare form."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy, "bash hooks/vibesop-tool-seq.sh"],
+            platform,
+        )
+        assert not result["pass"], (platform, result["detail"])
 
 
 def test_nonwin32_config_relative_form_surfaces(tmp_path, monkeypatch) -> None:

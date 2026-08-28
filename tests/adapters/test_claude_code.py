@@ -1,6 +1,7 @@
 """Tests for Claude Code adapter."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -46,6 +47,46 @@ class TestBashHookCommand:
         assert "Program Files" not in cmd
         assert "bash.exe" not in cmd
         assert not cmd.startswith('"')
+
+    def test_spaced_path_command_is_quoted_single_word(self, tmp_path: Path) -> None:
+        script = tmp_path / "First Last" / "hooks" / "vibesop-route.sh"
+        script.parent.mkdir(parents=True)
+        script.write_text("#!/bin/bash\n", encoding="utf-8")
+        cmd = bash_hook_command(script)
+        assert cmd == f'bash "{script.resolve().as_posix()}"'
+
+    def test_generator_output_parses_back(self, tmp_path: Path) -> None:
+        """Isomorphism: the strict parser must accept the generator's output."""
+        for name in ("plainhome", "First Last"):
+            script = tmp_path / name / "hooks" / "vibesop-route.sh"
+            script.parent.mkdir(parents=True)
+            script.write_text("#!/bin/bash\n", encoding="utf-8")
+            cmd = bash_hook_command(script)
+            assert parse_hook_script_command(cmd) == script.resolve().as_posix()
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="posix bash -c semantics; win32 covered by e2e"
+    )
+    def test_deployed_command_executes_under_bash_c(self, tmp_path: Path) -> None:
+        """M1 regression: a spaced home must yield a command `bash -c` can run.
+
+        Unquoted spaced paths word-split into 127 — the exact
+        ``C:/Users/First Last/`` class — so the generator quotes them.
+        """
+        script = tmp_path / "First Last" / "hooks" / "vibesop-route.sh"
+        script.parent.mkdir(parents=True)
+        script.write_text("#!/bin/bash\necho HOOK-RAN-OK\n", encoding="utf-8")
+        cmd = bash_hook_command(script)
+        proc = subprocess.run(
+            ["bash", "-c", cmd], capture_output=True, text=True, timeout=10, check=False
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "HOOK-RAN-OK" in proc.stdout
+        unquoted = f"bash {script.resolve().as_posix()}"
+        bad = subprocess.run(
+            ["bash", "-c", unquoted], capture_output=True, text=True, timeout=10, check=False
+        )
+        assert bad.returncode == 127
 
 
 class TestRewriteLegacyHookEntry:
@@ -141,7 +182,7 @@ class TestRewriteLegacyHookEntry:
         )
         rewritten = _rewrite_legacy_hook_entry(entry)
         assert rewritten["hooks"][0]["command"] == (
-            "bash C:/Users/First Last/.claude/hooks/vibesop-mirror-prompt.sh"
+            'bash "C:/Users/First Last/.claude/hooks/vibesop-mirror-prompt.sh"'
         )
 
     def test_noop_quoted_posix_without_signal(self) -> None:

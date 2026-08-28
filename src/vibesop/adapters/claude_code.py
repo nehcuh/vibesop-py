@@ -13,7 +13,7 @@ from typing import Any
 
 from vibesop.adapters.hook_based import HookBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
-from vibesop.utils.hook_commands import parse_hook_script_command
+from vibesop.utils.hook_commands import format_bash_hook_command, parse_hook_script_command
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +24,18 @@ _MIRROR_PROMPT_HOOK_MARKER = "vibesop-mirror-prompt.sh"
 def bash_hook_command(script: Path) -> str:
     """Build a hook ``command`` that the host can actually spawn.
 
-    Unix: ``bash <posix-path>``.
-
-    Windows: ``bash <posix-path>`` too (probed live on Claude Code
-    2.1.220, 2026-08-28): the host spawns hooks via ``bash -c`` with the
-    session CWD as working directory, so a config-relative
+    Unix and Windows alike: ``bash <posix-path>`` (probed live on Claude
+    Code 2.1.220, 2026-08-28): the host spawns hooks via ``bash -c`` with
+    the session CWD as working directory, so a config-relative
     ``hooks/<name>.sh`` resolves against *that* CWD — not ``~/.claude`` —
     and fails with 127 everywhere except a directory that happens to
-    contain ``hooks/``. Absolute POSIX paths run from any CWD. No
-    surrounding quotes: an unquoted path is one bash word only when the
-    path has no spaces, and ``bash <script>`` re-quotes nothing.
+    contain ``hooks/``. Absolute POSIX paths run from any CWD. The path is
+    double-quoted iff it contains whitespace: under ``bash -c`` an
+    unquoted spaced path word-splits into 127 (the
+    ``C:/Users/First Last/`` class), while a space-free path stays
+    unquoted to keep the probed form byte-identical.
     """
-    return f"bash {Path(script).resolve().as_posix()}"
+    return format_bash_hook_command(Path(script).resolve().as_posix())
 
 
 def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
@@ -50,7 +50,7 @@ def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
     resolve against the session CWD on 2.1.220 and must be upgraded.
     """
     if sys.platform == "win32":
-        return cmd.strip() != f"bash {norm}"
+        return cmd.strip() != format_bash_hook_command(norm)
     return bool("\\" in cmd and not norm.startswith("/"))
 
 
@@ -81,7 +81,7 @@ def _rewrite_legacy_hook_entry(entry: Any, config_dir: Path | None = None) -> An
             if norm is not None and not (norm.startswith("hooks/") and config_dir is None):
                 if norm.startswith("hooks/"):
                     norm = (config_dir / norm).as_posix()
-                new_cmd = f"bash {norm}"
+                new_cmd = format_bash_hook_command(norm)
                 if new_cmd != cmd and _legacy_rewrite_signal(cmd, norm):
                     logger.warning("upgraded legacy vibesop hook command: %r -> %r", cmd, new_cmd)
                     upgraded = {**item, "command": new_cmd}

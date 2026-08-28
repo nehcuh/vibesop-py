@@ -15,6 +15,7 @@ __all__ = [
     "VIBESOP_HOOK_SCRIPT_BASENAMES",
     "classify_vibesop_hook_command",
     "command_basenames",
+    "format_bash_hook_command",
     "parse_hook_script_command",
     "unwrap_token",
 ]
@@ -60,6 +61,21 @@ def command_basenames(cmd: str) -> set[str]:
 def classify_vibesop_hook_command(cmd: str) -> bool:
     """True when any token basename is a vibesop hook script (platform-agnostic)."""
     return bool(command_basenames(cmd) & VIBESOP_HOOK_SCRIPT_BASENAMES)
+
+
+def format_bash_hook_command(script: str) -> str:
+    """Canonical ``bash <script>`` command; double-quoted iff the path has whitespace.
+
+    Single source for the generator (``bash_hook_command``), the legacy
+    rewrite, and the shape ``vibe verify`` certifies. The host spawns hooks
+    via ``bash -c``, where an unquoted spaced path word-splits into exit
+    127 (the M1 ``C:/Users/First Last/`` class); a space-free path stays
+    unquoted to keep the probed 2.1.220 form byte-identical. Double quotes
+    (never shell-single) match what ``parse_hook_script_command`` unwraps.
+    """
+    if any(ch.isspace() for ch in script):
+        return f'bash "{script}"'
+    return f"bash {script}"
 
 
 def _is_double_quoted(tok: str) -> bool:

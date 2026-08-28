@@ -27,6 +27,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import Manifest, RenderResult
+from vibesop.utils.hook_commands import format_bash_hook_command
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ class HookBasedAdapter(PlatformAdapter):
                 "hooks": [
                     {
                         "type": "command",
-                        "command": f"bash {hooks_dir}/vibesop-route.sh",
+                        "command": format_bash_hook_command(f"{hooks_dir}/vibesop-route.sh"),
                     }
                 ],
             }

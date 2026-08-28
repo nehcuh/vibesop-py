@@ -169,6 +169,68 @@ jobs:
           cat "$out" || true
           grep -qF "[ACTIVE SKILL: builtin/commit-message]" "$out"
 
+      # M1 class: a home containing a space (Windows "First Last" users).
+      # Deploys under a spaced scratch HOME, asserts the generated command
+      # is one bash word per token, and executes the deployed settings.json
+      # command via `bash -c` from a non-home CWD — the exact 2.1.220 spawn
+      # model. CI runner homes have no spaces, so without this step the
+      # unquoted-spaced-path 127 class is structurally untestable.
+      - name: Spaced-home deploy + execute deployed hook command (M1 class)
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch home
+          USERPROFILE: ${{ runner.temp }}/scratch home
+        run: |
+          mkdir -p "$HOME"
+          vibe quickstart --force < /dev/null > "$PWD/spaced-quickstart.txt" 2>&1 || {
+            echo "FAIL: quickstart under spaced home"; tail -40 "$PWD/spaced-quickstart.txt"; exit 1
+          }
+          settings="$HOME/.claude/settings.json"
+          test -f "$settings"
+          # JSON-level extraction (escaped \" quotes make sed/grep fragile).
+          cmd=$(uv run --no-project python -c '
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+stack, out = [data], ""
+while stack:
+    node = stack.pop()
+    if isinstance(node, dict):
+        stack += list(node.values())
+    elif isinstance(node, list):
+        stack += node
+    elif isinstance(node, str) and "vibesop-route.sh" in node and node.lstrip().startswith("bash"):
+        out = node
+        break
+print(out)
+' "$settings")
+          [ -n "$cmd" ] || { echo "FAIL: no vibesop-route.sh command found in $settings"; exit 1; }
+          echo "deployed command: $cmd"
+          path_part=${cmd#bash }
+          if [ "$path_part" != "${path_part// /}" ]; then
+            case "$path_part" in
+              '"'*'"') ;;
+              *) echo "FAIL: spaced script path must be quoted as one bash word: $cmd"; exit 1 ;;
+            esac
+          else
+            case "$path_part" in
+              '"'*) echo "FAIL: space-free path must stay unquoted: $cmd"; exit 1 ;;
+            esac
+          fi
+          printf '%s\n' '{"prompt":"help me write a commit message","session_id":"e2e-spaced"}' > "$PWD/spaced-in.json"
+          rc=0
+          bash -c "$cmd" < "$PWD/spaced-in.json" > "$PWD/spaced-out.txt" 2>&1 || rc=$?
+          echo "----- spaced-home hook output (rc=$rc) -----"
+          cat "$PWD/spaced-out.txt" || true
+          if [ "$rc" -eq 127 ] || grep -qi "No such file or directory" "$PWD/spaced-out.txt"; then
+            echo "FAIL: deployed command 127s under a spaced home (M1 class)"; exit 1
+          fi
+          vibe verify claude-code --verbose > "$PWD/spaced-verify.txt" 2>&1 || true
+          if grep -qi "unsafe" "$PWD/spaced-verify.txt"; then
+            echo "FAIL: vibe verify flags the spaced-home deployment"
+            cat "$PWD/spaced-verify.txt"; exit 1
+          fi
+          echo "SPACED-HOME E2E PASSED"
+
       - name: Dual-platform injection probe (claude-code vs grok-build)
         working-directory: ${{ runner.temp }}
         env:

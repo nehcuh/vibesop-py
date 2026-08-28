@@ -20,9 +20,11 @@ Examples:
 """
 
 import json
+import shlex
 import shutil
 import string
 import sys
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +33,10 @@ from rich.console import Console
 from rich.table import Table
 
 from vibesop.utils.hook_commands import (
+    VIBESOP_HOOK_SCRIPT_BASENAMES,
     classify_vibesop_hook_command,
     command_basenames,
+    parse_hook_script_command,
     unwrap_token,
 )
 
@@ -171,29 +175,65 @@ def _windows_drive_token(command: str) -> str | None:
     return None
 
 
+def _unquoted_spaced_script_reason(command: str) -> str | None:
+    """The M1 word-split signature: a vibesop script token starting mid-path.
+
+    ``bash C:/Users/First Last/…/vibesop-route.sh`` tokenizes so the
+    basename lands on a *relative-looking* fragment (``Last/…``) preceded
+    by a path fragment — under the host's ``bash -c`` spawn that command
+    exits 127. Complete script tokens (absolute, drive, ``hooks/``, or
+    quoted) and benign extras (flags, URLs) are left alone.
+    """
+    try:
+        raw = shlex.split(command, posix=False)
+    except ValueError:
+        return None
+    for prev, tok in pairwise(raw):
+        if tok.startswith(("-", '"', "'")):
+            continue
+        inner = unwrap_token(tok).replace("\\", "/")
+        if inner.rsplit("/", 1)[-1].lower() not in VIBESOP_HOOK_SCRIPT_BASENAMES:
+            continue
+        if inner.startswith(("/", "hooks/")):
+            continue
+        if (
+            len(inner) >= 3
+            and inner[0] in string.ascii_letters
+            and inner[1] == ":"
+            and inner[2] == "/"
+        ):
+            continue
+        prev_n = unwrap_token(prev).replace("\\", "/").lower()
+        if prev_n in ("bash", "bash.exe") or prev_n.endswith("/bash.exe"):
+            continue
+        return 'unquoted space in script path (bash -c word-splits into 127) - use bash "<posix-abs-path>"'
+    return None
+
+
 def _vibesop_command_unsafe_reason(command: str) -> str | None:
     """Why a vibesop hook command is unsafe on this host (None = safe).
 
-    Both platforms converge on ``bash <posix-abs-path>``: the 2.1.220
-    host spawns hooks with ``bash -c`` and the session CWD, so a
-    config-relative ``hooks/<name>.sh`` (the S51 canonical form) resolves
-    against that CWD and 127s — on every platform, so it is rejected
-    unconditionally.
+    Both platforms converge on ``bash <posix-abs-path>`` — quoted as one
+    bash word when the path contains whitespace: the 2.1.220 host spawns
+    hooks with ``bash -c`` and the session CWD, so a config-relative
+    ``hooks/<script>.sh`` resolves against that CWD and 127s (rejected
+    unconditionally on every platform), and an unquoted spaced path
+    word-splits under ``bash -c`` into 127.
     """
     reason = unsafe_windows_hook_command_reason(command)
     if reason:
         return reason
-    token = unwrap_token(command.strip()).replace("\\", "/")
-    if token.startswith("hooks/") and "/" not in token[6:]:
+    norm = parse_hook_script_command(command)
+    if norm is not None and norm.startswith("hooks/") and "/" not in norm[6:]:
         return "config-relative hooks/<script>.sh resolves against the session CWD (127)"
     if sys.platform == "win32":
         if not command.lstrip().lower().startswith(("bash ", "bash\t")):
             return "Windows Claude Code needs bash <posix-abs-path>"
-        return None
-    drive = _windows_drive_token(command)
-    if drive:
-        return f"drive-letter token ({drive}) - Windows form on a non-win32 host"
-    return None
+    else:
+        drive = _windows_drive_token(command)
+        if drive:
+            return f"drive-letter token ({drive}) - Windows form on a non-win32 host"
+    return _unquoted_spaced_script_reason(command)
 
 
 console = Console()
