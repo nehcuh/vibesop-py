@@ -139,10 +139,13 @@ def collect_settings_hook_commands(settings: dict[str, Any]) -> list[str]:
 def unsafe_windows_hook_command_reason(command: str) -> str | None:
     """Why a Claude Code hook command will fail on Windows.
 
-    Returns None when the command is safe (config-relative ``hooks/*.sh``,
-    no wrapper, no quotes). Quoted POSIX paths are *not* safe: Claude Code
-    path-joins ``~/.claude\\`` onto them because a leading quote makes
-    ``path.win32.isAbsolute`` false.
+    Returns None when the command is safe (``bash <posix-abs-path>``, no
+    wrapper, no quotes). Probed live on Claude Code 2.1.220 (2026-08-28):
+    the host spawns hooks via ``bash -c`` with the session CWD as working
+    directory, so a config-relative ``hooks/<name>.sh`` resolves against
+    that CWD and fails with 127 from anywhere else. Quoted paths also
+    failed on hosts with the older path-join behavior (pre-2.1.x), so
+    they stay rejected.
     """
     stripped = command.lstrip()
     if stripped.startswith(('"', "'")):
@@ -169,17 +172,24 @@ def _windows_drive_token(command: str) -> str | None:
 
 
 def _vibesop_command_unsafe_reason(command: str) -> str | None:
-    """Why a vibesop hook command is unsafe on this host (None = safe)."""
+    """Why a vibesop hook command is unsafe on this host (None = safe).
+
+    Both platforms converge on ``bash <posix-abs-path>``: the 2.1.220
+    host spawns hooks with ``bash -c`` and the session CWD, so a
+    config-relative ``hooks/<name>.sh`` (the S51 canonical form) resolves
+    against that CWD and 127s — on every platform, so it is rejected
+    unconditionally.
+    """
     reason = unsafe_windows_hook_command_reason(command)
     if reason:
         return reason
+    token = unwrap_token(command.strip()).replace("\\", "/")
+    if token.startswith("hooks/") and "/" not in token[6:]:
+        return "config-relative hooks/<script>.sh resolves against the session CWD (127)"
     if sys.platform == "win32":
-        if command.lstrip().lower().startswith(("bash ", "bash\t")):
-            return "bash prefix double-wraps (win32 host provides bash)"
-        token = unwrap_token(command.strip()).replace("\\", "/")
-        if token.startswith("hooks/") and "/" not in token[6:]:
-            return None
-        return "Windows Claude Code needs config-relative hooks/<script>.sh"
+        if not command.lstrip().lower().startswith(("bash ", "bash\t")):
+            return "Windows Claude Code needs bash <posix-abs-path>"
+        return None
     drive = _windows_drive_token(command)
     if drive:
         return f"drive-letter token ({drive}) - Windows form on a non-win32 host"
