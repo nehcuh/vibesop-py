@@ -135,7 +135,9 @@ class TestBuiltinReadersIdentityGated:
         assert adapter._count_builtin_skills() == 1
         assert resolve_builtin_skills_dir(foreign) == fake_pkg / "builtin_skills"
 
-    def test_health_monitor_builtin_fallback_ignores_foreign_root(self, tmp_path, monkeypatch) -> None:
+    def test_health_monitor_builtin_fallback_ignores_foreign_root(
+        self, tmp_path, monkeypatch
+    ) -> None:
         from vibesop.integrations.health_monitor import SkillHealthMonitor
 
         self._fake_wheel(tmp_path, monkeypatch)
