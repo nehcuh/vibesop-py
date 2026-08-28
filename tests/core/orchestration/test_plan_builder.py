@@ -610,6 +610,42 @@ class TestPlanBuilderSquadIntegration:
         roles = [s.assigned_role for s in plan.steps]
         assert roles.index("implementer") < roles.index("red_team")
 
+    @pytest.mark.parametrize(
+        ("pattern", "roles", "protocol"),
+        [
+            (WorkflowPattern.AGENT_SQUAD, ["architect", "red_team"], "red_team"),
+            (WorkflowPattern.DEBATE, ["debater"], "debate"),
+            (WorkflowPattern.RED_TEAM, ["implementer", "red_team"], "red_team"),
+        ],
+    )
+    def test_squad_steps_carry_confidence_sentinel(self, pattern, roles, protocol) -> None:
+        """P1-2 direct squad test (pull-20260828): squad steps are structurally
+        mandated, so every one carries the 0.99 sentinel — without it,
+        _needs_confirmation's all_confident fold is always False for squad
+        plans and ambiguous_only auto-proceed never fires."""
+        router = self._make_router_with_skills()
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="multi_agent",
+            facets=["architecture", "security"],
+            squad_needed=True,
+            suggested_roles=roles,
+            collaboration_protocol=protocol,
+            per_agent_skills={role: ["code-review"] for role in roles},
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "design and audit",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=pattern,
+            metadata={"intent_analysis": analysis},
+        )
+
+        assert plan.steps, pattern
+        for step in plan.steps:
+            assert step.confidence == 0.99, (pattern, step.assigned_role, step.confidence)
+
     def test_squad_step_dependencies_wired(self) -> None:
         router = self._make_router_with_skills()
         builder = PlanBuilder(router)
