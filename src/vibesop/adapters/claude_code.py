@@ -26,23 +26,16 @@ def bash_hook_command(script: Path) -> str:
 
     Unix: ``bash <posix-path>``.
 
-    Windows: config-relative ``hooks/<basename>.sh``. Claude Code treats
-    ``command`` as a filesystem path and prepends ``~/.claude\\`` when
-    ``path.win32.isAbsolute(command)`` is false. A quoted POSIX absolute
-    (``"C:/Users/.../x.sh"``) is not absolute, which produces
-    ``C:\\Users\\...\\.claude\\"C:/Users/.../x.sh"`` — command not found.
-    Relative ``hooks/<name>.sh`` joins to the real script and has no
-    spaces even when the username does.
+    Windows: ``bash <posix-path>`` too (probed live on Claude Code
+    2.1.220, 2026-08-28): the host spawns hooks via ``bash -c`` with the
+    session CWD as working directory, so a config-relative
+    ``hooks/<name>.sh`` resolves against *that* CWD — not ``~/.claude`` —
+    and fails with 127 everywhere except a directory that happens to
+    contain ``hooks/``. Absolute POSIX paths run from any CWD. No
+    surrounding quotes: an unquoted path is one bash word only when the
+    path has no spaces, and ``bash <script>`` re-quotes nothing.
     """
-    name = Path(script).name
-    if sys.platform != "win32":
-        return f"bash {Path(script).resolve().as_posix()}"
-    return f"hooks/{name}"
-
-
-def _windows_canonical_hook_command(norm: str) -> str:
-    """Config-relative command Claude Code on Windows can spawn."""
-    return f"hooks/{Path(norm).name}"
+    return f"bash {Path(script).resolve().as_posix()}"
 
 
 def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
@@ -52,14 +45,22 @@ def _legacy_rewrite_signal(cmd: str, norm: str) -> bool:
     resolve churn on already-canonical forms). The backslash clause is
     gated on a non-POSIX normalized path so literal-backslash POSIX
     filenames (legal on mac) are never rewritten to a different file.
+    On win32 any unequal command is a legacy marker: the config-relative
+    ``hooks/<name>.sh`` and bare-script forms that earlier builds wrote
+    resolve against the session CWD on 2.1.220 and must be upgraded.
     """
     if sys.platform == "win32":
-        return cmd.strip() != _windows_canonical_hook_command(norm)
+        return cmd.strip() != f"bash {norm}"
     return bool("\\" in cmd and not norm.startswith("/"))
 
 
-def _rewrite_legacy_hook_entry(entry: Any) -> Any:
-    """Upgrade preserved hook commands to the current Git-Bash-safe form."""
+def _rewrite_legacy_hook_entry(entry: Any, config_dir: Path | None = None) -> Any:
+    """Upgrade preserved hook commands to the current Git-Bash-safe form.
+
+    ``config_dir`` (the settings.json directory) resolves the legacy
+    config-relative ``hooks/<name>.sh`` form — whose target depends on
+    the host CWD — into the absolute path it was meant to name.
+    """
     if not isinstance(entry, dict):
         return entry
     hooks = entry.get("hooks")
@@ -74,12 +75,13 @@ def _rewrite_legacy_hook_entry(entry: Any) -> Any:
         upgraded = item
         if isinstance(cmd, str):
             norm = parse_hook_script_command(cmd)
-            if norm is not None:
-                new_cmd = (
-                    _windows_canonical_hook_command(norm)
-                    if sys.platform == "win32"
-                    else f"bash {norm}"
-                )
+            # A config-relative target needs config_dir to become absolute;
+            # without it there is no correct rewrite (``bash hooks/x.sh``
+            # would still resolve against the session CWD) — leave as-is.
+            if norm is not None and not (norm.startswith("hooks/") and config_dir is None):
+                if norm.startswith("hooks/"):
+                    norm = (config_dir / norm).as_posix()
+                new_cmd = f"bash {norm}"
                 if new_cmd != cmd and _legacy_rewrite_signal(cmd, norm):
                     logger.warning("upgraded legacy vibesop hook command: %r -> %r", cmd, new_cmd)
                     upgraded = {**item, "command": new_cmd}
@@ -529,7 +531,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                         prompt_hooks = existing_hooks.get("UserPromptSubmit")
                         if isinstance(prompt_hooks, list):
                             preserved_prompt_hooks = [
-                                _rewrite_legacy_hook_entry(entry)
+                                _rewrite_legacy_hook_entry(entry, config_dir=output_dir)
                                 for entry in prompt_hooks
                                 if not _hook_entry_matches(entry, _ROUTE_HOOK_MARKER)
                             ]

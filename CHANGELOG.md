@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Claude Code Windows hook command（S51 M1 形态在 2.1.220 上翻转）**:
+  实机探针（2026-08-28, Claude Code 2.1.220）证实宿主已改为 `bash -c` +
+  会话 CWD spawn hooks——S51 的规范形态 config-relative
+  `hooks/<name>.sh` 按启动目录解析而非 `~/.claude`,从任何其他目录启动
+  Claude Code 都报 `bash: hooks/vibesop-route.sh: No such file or
+  directory`（127）。S51 依赖的「宿主把非绝对 command path-join 到
+  `~/.claude\`」行为在版本间已消失。修复:两平台统一为
+  `bash <posix-abs-path>`（`bash_hook_command`）;rebuild 把 legacy
+  形态（config-relative/引号/反斜杠/bash.exe 包装）升级为绝对形态,
+  config-relative 需 config_dir 推导目标,无 config_dir 时保持原样;
+  `vibe verify claude-code` 反转判定——config-relative 全平台标记
+  unsafe,绝对 POSIX + bash 前缀为唯一绿灯形态;quickstart e2e 的形态
+  断言同步收紧。
+
 ### Changed
 
 - **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度

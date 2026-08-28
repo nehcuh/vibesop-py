@@ -54,7 +54,8 @@ def test_unsafe_hook_command_detects_backslash_and_git_bash_wrapper() -> None:
         '"C:/Program Files/Git/bin/bash.exe" "C:/Users/x/.claude/hooks/x.sh"'
     )
     assert unsafe_windows_hook_command_reason('"C:/Users/x/.claude/hooks/x.sh"')
-    assert unsafe_windows_hook_command_reason("hooks/vibesop-route.sh") is None
+    # absolute POSIX under bash is the one canonical safe form (2026-08-28 probe)
+    assert unsafe_windows_hook_command_reason("bash C:/Users/x/.claude/hooks/x.sh") is None
 
 
 def test_collect_settings_hook_commands_walks_nested_hooks() -> None:

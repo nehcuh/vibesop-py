@@ -18,7 +18,12 @@ from vibesop.utils.hook_commands import parse_hook_script_command
 
 
 class TestBashHookCommand:
-    """Windows hook commands must be config-relative, not quoted POSIX."""
+    """Hook commands must be absolute POSIX under ``bash`` on every platform.
+
+    Probed live on Claude Code 2.1.220 (2026-08-28): hooks spawn via
+    ``bash -c`` with the session CWD, so config-relative ``hooks/x.sh``
+    resolves against that CWD and 127s from any other directory.
+    """
 
     def test_posix_path_is_unquoted_bash(self, tmp_path: Path, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "linux")
@@ -30,15 +35,13 @@ class TestBashHookCommand:
         assert "\\" not in cmd
         assert cmd.endswith("vibesop-route.sh")
 
-    def test_windows_command_is_config_relative_hooks_script(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_windows_command_is_absolute_posix_bash(self, tmp_path: Path, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
         script = tmp_path / "hooks" / "vibesop-route.sh"
         script.parent.mkdir()
         script.write_text("#!/bin/bash\n", encoding="utf-8")
         cmd = bash_hook_command(script)
-        assert cmd == "hooks/vibesop-route.sh"
+        assert cmd == f"bash {script.resolve().as_posix()}"
         assert "\\" not in cmd
         assert "Program Files" not in cmd
         assert "bash.exe" not in cmd
@@ -74,32 +77,61 @@ class TestRewriteLegacyHookEntry:
         )
         rewritten = _rewrite_legacy_hook_entry(entry)
         cmd = rewritten["hooks"][0]["command"]
-        assert cmd == "hooks/vibesop-mirror-prompt.sh"
+        assert cmd == "bash C:/Users/HuChen/.claude/hooks/vibesop-mirror-prompt.sh"
 
     def test_rewrites_backslash_form_on_windows(self, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
         entry = self._entry(r"bash C:\Users\h\.claude\hooks\vibesop-mirror-prompt.sh")
         rewritten = _rewrite_legacy_hook_entry(entry)
-        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-mirror-prompt.sh"
+        assert (
+            rewritten["hooks"][0]["command"]
+            == "bash C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"
+        )
 
     def test_rewrites_bash_prefix_posix_form_on_windows(self, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
         entry = self._entry("bash C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh")
         rewritten = _rewrite_legacy_hook_entry(entry)
-        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-mirror-prompt.sh"
+        assert (
+            rewritten["hooks"][0]["command"]
+            == "bash C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"
+        )
 
     def test_rewrites_casefolded_tab_prefix_on_windows(self, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
         entry = self._entry("BASH\tC:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh")
         rewritten = _rewrite_legacy_hook_entry(entry)
-        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-mirror-prompt.sh"
+        assert (
+            rewritten["hooks"][0]["command"]
+            == "bash C:/Users/h/.claude/hooks/vibesop-mirror-prompt.sh"
+        )
 
     def test_rewrites_quoted_posix_one_token_on_windows(self, monkeypatch) -> None:
-        """Quoted POSIX is not path.win32.isAbsolute — Claude joins configDir."""
+        """Quoted POSIX failed on pre-2.1 hosts (configDir+quote join)."""
         monkeypatch.setattr(sys, "platform", "win32")
         entry = self._entry('"C:/Users/HuChen/.claude/hooks/vibesop-tool-seq.sh"')
         rewritten = _rewrite_legacy_hook_entry(entry)
-        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-tool-seq.sh"
+        assert rewritten["hooks"][0]["command"] == (
+            "bash C:/Users/HuChen/.claude/hooks/vibesop-tool-seq.sh"
+        )
+
+    def test_rewrites_config_relative_form_on_windows(self, monkeypatch, tmp_path) -> None:
+        """S51 canonical hooks/<name>.sh resolves against the session CWD on
+        2.1.220 — with config_dir the rewrite upgrades it to the absolute
+        path under that settings.json directory."""
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry("hooks/vibesop-mirror-prompt.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry, config_dir=tmp_path / ".claude")
+        assert rewritten["hooks"][0]["command"] == (
+            f"bash {(tmp_path / '.claude' / 'hooks' / 'vibesop-mirror-prompt.sh').as_posix()}"
+        )
+
+    def test_config_relative_form_without_config_dir_stays(self, monkeypatch) -> None:
+        """No config_dir → no absolute target derivable → byte-identical."""
+        monkeypatch.setattr(sys, "platform", "win32")
+        entry = self._entry("hooks/vibesop-mirror-prompt.sh")
+        rewritten = _rewrite_legacy_hook_entry(entry)
+        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-mirror-prompt.sh"
 
     def test_rewrites_quoted_spaced_home_on_windows(self, monkeypatch) -> None:
         monkeypatch.setattr(sys, "platform", "win32")
@@ -108,7 +140,9 @@ class TestRewriteLegacyHookEntry:
             '"C:/Users/First Last/.claude/hooks/vibesop-mirror-prompt.sh"'
         )
         rewritten = _rewrite_legacy_hook_entry(entry)
-        assert rewritten["hooks"][0]["command"] == "hooks/vibesop-mirror-prompt.sh"
+        assert rewritten["hooks"][0]["command"] == (
+            "bash C:/Users/First Last/.claude/hooks/vibesop-mirror-prompt.sh"
+        )
 
     def test_noop_quoted_posix_without_signal(self) -> None:
         entry = self._entry('bash "/abs/vibesop-route.sh"')

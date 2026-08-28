@@ -1,10 +1,11 @@
 """M2: verify route_hook_command — lenient classify + full unsafe rules.
 
-Matrix from the pull-20260827 fix plan (v4.1): route existence uses
-token basenames (not whole-command substrings), the unsafe scan covers
-only vibesop commands, win32 accepts canonical 1-token forms (including
-spaced usernames), and non-win32 surfaces Windows-form commands instead
-of ignoring them.
+Matrix updated 2026-08-28 after probing Claude Code 2.1.220 live: hooks
+spawn via ``bash -c`` with the session CWD, so config-relative
+``hooks/<name>.sh`` (the S51 canonical form) 127s from any other
+directory. The healthy win32 form is now the same as Unix:
+``bash <posix-abs-path>``. Quoted POSIX stays rejected (pre-2.1 hosts
+path-join configDir onto it).
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from typing import Any
 from vibesop.cli.commands.verify import PLATFORM_CONFIGS, _check_platform
 
 HEALTHY_MAC_ROUTE = "bash /Users/h/.claude/hooks/vibesop-route.sh"
-HEALTHY_WIN_ROUTE = "hooks/vibesop-route.sh"
+HEALTHY_WIN_ROUTE = "bash C:/Users/h/.claude/hooks/vibesop-route.sh"
 USER_POWERSHELL = r"powershell.exe -File C:\Users\x\hook.ps1"
 
 
@@ -53,7 +54,7 @@ def test_user_command_mentioning_basename_is_not_route(tmp_path, monkeypatch) ->
     assert result["pass"], result["detail"]
 
 
-def test_win32_canonical_relative_passes(tmp_path, monkeypatch) -> None:
+def test_win32_absolute_posix_bash_passes(tmp_path, monkeypatch) -> None:
     result = _route_hook_result(
         tmp_path,
         monkeypatch,
@@ -61,6 +62,30 @@ def test_win32_canonical_relative_passes(tmp_path, monkeypatch) -> None:
         "win32",
     )
     assert result["pass"], result["detail"]
+
+
+def test_win32_config_relative_fails(tmp_path, monkeypatch) -> None:
+    """S51 canonical form resolves against the session CWD on 2.1.220."""
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        ["hooks/vibesop-route.sh", USER_POWERSHELL],
+        "win32",
+    )
+    assert not result["pass"], result["detail"]
+    assert "CWD" in result["detail"]
+
+
+def test_win32_bare_script_fails(tmp_path, monkeypatch) -> None:
+    """A bare absolute script (no bash prefix) relies on shebang handling
+    that older hosts lack — keep requiring the bash prefix."""
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        ["C:/Users/h/.claude/hooks/vibesop-route.sh", USER_POWERSHELL],
+        "win32",
+    )
+    assert not result["pass"], result["detail"]
 
 
 def test_win32_quoted_posix_fails(tmp_path, monkeypatch) -> None:
@@ -83,14 +108,16 @@ def test_win32_quoted_spaced_username_fails(tmp_path, monkeypatch) -> None:
     assert not result["pass"], result["detail"]
 
 
-def test_win32_bash_prefix_fails(tmp_path, monkeypatch) -> None:
-    result = _route_hook_result(tmp_path, monkeypatch, ["bash C:/x/vibesop-route.sh"], "win32")
-    assert not result["pass"]
-
-
-def test_win32_tab_bash_prefix_fails(tmp_path, monkeypatch) -> None:
-    result = _route_hook_result(tmp_path, monkeypatch, ["bash\tC:/x/vibesop-route.sh"], "win32")
-    assert not result["pass"]
+def test_nonwin32_config_relative_form_surfaces(tmp_path, monkeypatch) -> None:
+    """The S51 config-relative form is surfaced as a Windows-form command
+    on non-win32 hosts too (it cannot work there either)."""
+    result = _route_hook_result(
+        tmp_path,
+        monkeypatch,
+        [HEALTHY_MAC_ROUTE, "hooks/vibesop-tool-seq.sh"],
+        "darwin",
+    )
+    assert not result["pass"], result["detail"]
 
 
 def test_nonwin32_backslash_tool_seq_fails(tmp_path, monkeypatch) -> None:

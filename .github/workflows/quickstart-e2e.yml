@@ -145,10 +145,10 @@ jobs:
         run: |
           script="$HOME/.claude/hooks/vibesop-route.sh"
           test -f "$script"
-          # Pin the generated command shape (Windows: config-relative;
-          # Unix: bash <abs>). Quoted POSIX is the live join-bug.
-          if grep -qF '"command": "hooks/vibesop-route.sh"' "$HOME/.claude/settings.json" \
-             || grep -qE '"command": "bash [^"]+vibesop-route.sh"' "$HOME/.claude/settings.json"; then
+          # Pin the generated command shape: bash <posix-abs-path> on both
+          # platforms. Config-relative hooks/<name>.sh and quoted POSIX are
+          # both live failure modes (2.1.220 CWD resolution / pre-2.1 join).
+          if grep -qE '"command": "bash [^"]+vibesop-route\.sh"' "$HOME/.claude/settings.json"; then
             echo "ok: settings.json hook command shape"
           else
             echo "BAD command in settings.json:"
