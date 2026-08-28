@@ -52,10 +52,21 @@ jobs:
       - name: Build wheel
         run: uv build
 
-      - name: Install wheel as a tool (fresh-user layout)
+      # grok F3 (pull-20260828): the install used to run under the runner's
+      # real HOME — mutating it, and leaving the deployed .sh unable to find
+      # its uv-tool python under the scratch home (the smoke had to bypass
+      # the script via `vibe` on PATH). Installing under the scratch home
+      # makes the deployed artifact genuinely executable.
+      - name: Install wheel as a tool (fresh-user layout, scratch home)
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
         run: |
+          mkdir -p "$HOME"
           uv tool install --no-cache --force ./dist/vibesop-*.whl
           uv tool list
+          # Later steps resolve `vibe` from the scratch-home shim.
+          uv tool dir --bin >> "$GITHUB_PATH"
 
       # --force installs into Path.home() regardless of cwd — isolate it so
       # the job never mutates the runner's real home (self-hosted safe).
@@ -155,18 +166,19 @@ jobs:
             grep '"command"' "$HOME/.claude/settings.json" || true
             exit 1
           fi
-          # uv tool was installed BEFORE HOME redirect. The .sh script
-          # only searches $HOME for uv-tool python, so under scratch-home
-          # it prints {} in ~20ms. Smoke the injection path with `vibe`
-          # which remains on PATH. Files live in $PWD (working-directory
-          # is runner.temp) — do not use RUNNER_TEMP, whose Windows value
-          # contains `\t` (tab-expanded in bash double quotes).
+          # The tool now lives under the scratch home (install-time HOME
+          # redirect above), so the deployed script finds its uv-tool
+          # python — execute the artifact itself, not a PATH-side bypass,
+          # with no || true masking the exit code. Files live in $PWD
+          # (working-directory is runner.temp) — do not use RUNNER_TEMP,
+          # whose Windows value contains `\t` (tab-expanded in bash
+          # double quotes).
           payload="$PWD/claude-hook-in.json"
           out="$PWD/claude-hook-out.txt"
           printf '%s\n' '{"prompt":"help me write a commit message","session_id":"e2e-claude"}' > "$payload"
-          vibe route --hook --platform claude-code < "$payload" > "$out" || true
-          echo "----- hook stdout -----"
-          cat "$out" || true
+          bash "$script" < "$payload" > "$out"
+          echo "----- deployed script stdout -----"
+          cat "$out"
           grep -qF "[ACTIVE SKILL: builtin/commit-message]" "$out"
 
       # M1 class: a home containing a space (Windows "First Last" users).
