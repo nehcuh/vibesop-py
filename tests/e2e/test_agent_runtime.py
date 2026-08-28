@@ -597,7 +597,7 @@ class TestCrossPlatformConsistency:
             "kimi README": KimiCliAdapter()._generate_readme(kimi_manifest),
             "slim AGENTS.md (hook)": generate_slim_agents_index(hook_routing=True),
             "docs/routing.md (hook)": generate_docs_routing(hook_routing=True),
-            "grok routing rule": GrokBuildAdapter._render_routing_rule(),
+            "grok routing rule": GrokBuildAdapter()._render_routing_rule(),
         }
         fingerprints = (
             "VibeSOP routed:",

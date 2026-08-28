@@ -10,9 +10,14 @@ class TestRegistrySyncInit:
     """Test initialization."""
 
     def test_default_paths(self):
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
+
         sync = RegistrySync()
         assert sync.registry_path == Path("core/registry.yaml")
-        assert sync.skills_dir == Path("core/skills")
+        # Identity-gated default: resolves to the real builtin dir (repo
+        # checkout when run from one, wheel bundle otherwise) instead of a
+        # bare cwd-relative path a foreign tree could shadow.
+        assert sync.skills_dir == resolve_builtin_skills_dir()
 
     def test_custom_paths(self, tmp_path: Path):
         sync = RegistrySync(

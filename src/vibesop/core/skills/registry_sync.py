@@ -17,8 +17,15 @@ class RegistrySync:
     """Synchronize registry.yaml with discovered builtin skills."""
 
     def __init__(self, registry_path: Path | None = None, skills_dir: Path | None = None) -> None:
+        # Read side is identity-gated: a foreign cwd/core/skills must not
+        # shadow the real builtin source. registry_path stays an explicit
+        # write target (repo-root relative by convention).
+        if skills_dir is None:
+            from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+            skills_dir = resolve_builtin_skills_dir()
         self.registry_path = registry_path or Path("core/registry.yaml")
-        self.skills_dir = skills_dir or Path("core/skills")
+        self.skills_dir = skills_dir
         self.yaml = YAML()
         self.yaml.preserve_quotes = True
         self.yaml.width = 4096

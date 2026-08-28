@@ -88,7 +88,7 @@ class TestRenderDocsFilesBundleCallPoint:
 
 class TestGrokRoutingRule:
     def test_conditional_grok_variant(self) -> None:
-        text = GrokBuildAdapter._render_routing_rule()
+        text = GrokBuildAdapter()._render_routing_rule()
         # Old unconditional imperative is gone
         assert "Before every non-trivial task" not in text
         # Conditional copy: automatic routing + this-turn hook injection

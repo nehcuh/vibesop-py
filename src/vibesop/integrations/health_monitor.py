@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from vibesop.core.skills.loader import SkillLoader
+from vibesop.utils.bundled import resolve_builtin_skills_dir
 
 
 @dataclass
@@ -94,10 +95,12 @@ class SkillHealthMonitor:
                 break
 
         # Special case: builtin skills live directly in core/skills/
-        # (each subdirectory is a skill, not under a builtin/ folder)
+        # (each subdirectory is a skill, not under a builtin/ folder).
+        # Identity-gated resolution: a foreign project_root/core/skills must
+        # not shadow the real builtin dir (identified checkout or wheel).
         if not pack_dir and skill_pack == "builtin":
-            fallback = self.project_root / "core" / "skills"
-            if fallback.exists():
+            fallback = resolve_builtin_skills_dir(self.project_root)
+            if fallback.is_dir():
                 pack_dir = fallback
 
         if not pack_dir:
@@ -119,9 +122,10 @@ class SkillHealthMonitor:
             if skills_subdir.exists():
                 skill_files.extend(list(skills_subdir.glob("*/SKILL.md")))
 
-        # For builtin pack under core/skills/, exclude subdirectories that are
-        # themselves known packs (e.g., omx) to avoid double-counting.
-        if skill_pack == "builtin" and pack_dir == self.project_root / "core" / "skills":
+        # For builtin pack under the resolved builtin dir, exclude
+        # subdirectories that are themselves known packs (e.g., omx) to avoid
+        # double-counting.
+        if skill_pack == "builtin" and pack_dir == resolve_builtin_skills_dir(self.project_root):
             known_pack_dirs = {"superpowers", "gstack"}
             skill_files = [f for f in skill_files if f.parent.name not in known_pack_dirs]
 
@@ -225,7 +229,8 @@ class SkillHealthMonitor:
 
         # Build set of builtin skill names to avoid double-counting individual
         # skills that were synced to ~/.config/skills/.
-        builtin_skills_dir = self.project_root / "core" / "skills"
+        # Identity-gated: same resolution policy as check_local_health.
+        builtin_skills_dir = resolve_builtin_skills_dir(self.project_root)
         builtin_skill_names: set[str] = set()
         if builtin_skills_dir.exists():
             for d in builtin_skills_dir.iterdir():
