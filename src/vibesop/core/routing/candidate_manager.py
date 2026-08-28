@@ -42,6 +42,7 @@ class CandidateManager:
         self._usage_flush_count: int = 0
         self._USAGE_FLUSH_INTERVAL: int = 10
         self._path_mtimes: dict[str, float] = {}
+        self._disk_cache_bypassed: bool = False
 
     @property
     def _disk_cache_path(self) -> Path:
@@ -79,6 +80,8 @@ class CandidateManager:
 
     def _load_from_disk_cache(self, search_paths: list[Path]) -> list[dict[str, Any]] | None:
         """Try loading candidates from persistent disk cache."""
+        if self._disk_cache_bypassed:
+            return None
         cache_path = self._disk_cache_path
         if not cache_path.exists():
             return None
@@ -93,6 +96,8 @@ class CandidateManager:
 
     def _save_to_disk_cache(self, candidates: list[dict[str, Any]], paths_hash: str) -> None:
         """Persist candidates to disk cache."""
+        if self._disk_cache_bypassed:
+            return
         cache_path = self._disk_cache_path
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         with contextlib.suppress(OSError):
@@ -109,6 +114,44 @@ class CandidateManager:
             )
 
     MANAGEMENT_SKILL_PREFIXES = ("slash-", "builtin/slash-", "builtin-slash-")
+
+    def pin_search_paths(
+        self,
+        search_paths: list[Path],
+        *,
+        enable_external: bool = False,
+    ) -> None:
+        """Pin the candidate universe to exactly ``search_paths``.
+
+        Hermetic-benchmark seam (gate45 P1): replaces the default
+        multi-source discovery (project/user skill dirs, external packs)
+        with a fixed, reproducible universe and drops every cached pool.
+        The disk cache is bypassed too — a pinned pool must never be
+        silently served from (or persisted into) a stale
+        ``candidates_v2.json`` left by a different universe.
+
+        IRREVERSIBLE for this instance: there is no un-pin path (the disk
+        cache stays bypassed and the loader stays strict). Benchmark-only —
+        never call from long-lived or production processes.
+        """
+        if not search_paths:
+            raise ValueError(
+                "pin_search_paths requires at least one search path — an empty "
+                "pin would silently fall back to default multi-source discovery"
+            )
+        from vibesop.core.skills import SkillLoader
+
+        self._search_paths = [Path(p) for p in search_paths]
+        self._skill_loader = SkillLoader(
+            project_root=self.project_root,
+            search_paths=self._search_paths,
+            enable_external=enable_external,
+            strict_search_paths=True,
+        )
+        self._candidates_cache = None
+        self._last_reload_check = 0.0
+        self._path_mtimes = {}
+        self._disk_cache_bypassed = True
 
     def get_candidates(self) -> list[dict[str, Any]]:
         """Discover and return all skill candidates.

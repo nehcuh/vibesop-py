@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -116,6 +117,88 @@ class TestManagementOnlyMarking:
                 assert c["management_only"] is True, f"{c['id']} should be management_only"
             else:
                 assert c["management_only"] is False, f"{c['id']} should NOT be management_only"
+
+
+class TestPinSearchPaths:
+    """Hermetic-universe seam (gate45 P1): pin_search_paths pins discovery."""
+
+    @staticmethod
+    def _write_skill(root: Path, skill_id: str, name: str) -> Path:
+        skill_dir = root / skill_id.replace("/", "-")
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\n"
+            f"id: {skill_id}\n"
+            f"name: {name}\n"
+            f"description: {name} fixture skill\n"
+            "tags: [test]\n"
+            "version: 1.0.0\n"
+            "intent: test fixture\n"
+            "namespace: bench\n"
+            "type: prompt\n"
+            "---\n"
+            "# test\n",
+            encoding="utf-8",
+        )
+        return skill_dir.parent
+
+    def test_empty_pin_is_rejected(self, tmp_path: Path) -> None:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        cm = CandidateManager(project_root=tmp_path)
+        with pytest.raises(ValueError, match="empty pin"):
+            cm.pin_search_paths([])
+
+    def test_pins_universe_and_never_persists_disk_cache(self, tmp_path: Path) -> None:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        universe = tmp_path / "universe"
+        universe.mkdir()
+        self._write_skill(universe, "bench/alpha", "alpha")
+        self._write_skill(universe, "bench/beta", "beta")
+
+        cm = CandidateManager(project_root=tmp_path)
+        cm.pin_search_paths([universe])
+
+        # get_cached_candidates is the real read path (router/eval use it);
+        # get_candidates alone never touches the disk cache, so asserting
+        # only on it would pin nothing (review MINOR-2: the earlier version
+        # stayed green with the bypass flag mutated off).
+        candidates = cm.get_cached_candidates()
+        ids = {c["id"] for c in candidates}
+        # Exactly the pinned universe — no project/user/external discovery,
+        # no defaults leaking through the append path.
+        assert ids == {"bench/alpha", "bench/beta"}
+
+        # Write side: a pinned pool is never persisted.
+        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
+        assert not cache_path.exists()
+
+    def test_disk_cache_with_matching_hash_is_ignored_on_read_path(self, tmp_path: Path) -> None:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        universe = tmp_path / "universe"
+        universe.mkdir()
+        self._write_skill(universe, "bench/alpha", "alpha")
+
+        cm = CandidateManager(project_root=tmp_path)
+        cm.pin_search_paths([universe])
+
+        # Plant a stale cache whose paths_hash REALLY matches the pinned
+        # universe — exactly what a leftover from a pre-pin run looks like.
+        # Without the bypass flag the reload path serves the ghost
+        # (mutation-verified by review).
+        real_hash = cm._compute_paths_hash([universe])
+        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
+        cache_path.parent.mkdir(parents=True)
+        cache_path.write_text(
+            json.dumps({"paths_hash": real_hash, "candidates": [{"id": "stale/ghost"}]}),
+            encoding="utf-8",
+        )
+
+        ids = {c["id"] for c in cm.get_cached_candidates()}
+        assert "stale/ghost" not in ids
+        assert ids == {"bench/alpha"}
 
 
 class TestTriagePrefilterExclusion:

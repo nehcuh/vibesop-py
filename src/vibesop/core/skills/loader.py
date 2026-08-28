@@ -78,15 +78,22 @@ class SkillLoader:
         search_paths: Sequence[str | Path] | None = None,
         enable_external: bool = True,
         require_audit: bool = True,
+        strict_search_paths: bool = False,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self._project_hash = self._compute_project_hash()
-        self._search_paths = self._default_search_paths()
-        if search_paths:
-            for p in search_paths:
-                path = Path(p)
-                if path not in self._search_paths:
-                    self._search_paths.append(path)
+        if strict_search_paths:
+            # Exactly the given paths — the hermetic routing benchmark pins
+            # its universe this way; appending defaults would reintroduce
+            # machine-dependent discovery (gate45 P1).
+            self._search_paths = [Path(p) for p in (search_paths or [])]
+        else:
+            self._search_paths = self._default_search_paths()
+            if search_paths:
+                for p in search_paths:
+                    path = Path(p)
+                    if path not in self._search_paths:
+                        self._search_paths.append(path)
 
         self._skill_cache: dict[str, LoadedSkill] = {}
         self._enable_external = enable_external
