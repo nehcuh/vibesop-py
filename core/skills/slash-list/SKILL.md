@@ -19,7 +19,7 @@ Browse all installed skills and available skill packs.
 ## Execution
 
 ```bash
-vibe list
+vibe route --slash "/vibe-list"    # installed skills + available packs
 ```
 
 ## Examples

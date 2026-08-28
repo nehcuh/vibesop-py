@@ -33,6 +33,6 @@ vibe orchestrate "<QUERY>" --verbose
 
 - Detected intents (sub-tasks)
 - Execution strategy (sequential/parallel/hybrid)
-- Each step with matched skill and confidence
+- Each step with matched skill and intent
 
-After orchestration, run `vibe route --execute` for interactive step-by-step.
+After orchestration, run `vibe route "<QUERY>" --guided` for interactive step-by-step execution.

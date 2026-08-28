@@ -103,6 +103,9 @@ htmlcov/
 .vibe/experiment.yaml
 .vibe/execution_plans.jsonl
 
+# Autonomous-experiment worktree + metadata (never commit experiment artifacts)
+.experiment/
+
 # VibeSOP Loop System (v8.0) — autonomous scheduled tasks
 # spec.json 是用户可编辑的定义，可版本控制；state.json 是自动生成的运行历史，含
 # 路由决策与可能的 LLM 输出片段，不应提交。

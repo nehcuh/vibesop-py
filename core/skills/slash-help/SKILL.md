@@ -19,7 +19,7 @@ Show all available slash commands and usage.
 ## Execution
 
 ```bash
-vibe help
+vibe route --slash "/vibe-help"
 ```
 
 ## Examples
@@ -30,10 +30,14 @@ vibe help
 
 ## All Available Commands
 
-- **/route** — Force trigger skill routing with transparency
-- **/install** — Install skill packs (gstack, superpowers, omx)
-- **/analyze** — Deep project architecture analysis
-- **/evaluate** — Evaluate skill quality and usage
-- **/orchestrate** — Multi-skill orchestration for complex tasks
-- **/list** — List installed skills and available packs
-- **/instinct** — Instinct learning system (learn, eval, status, export, import, evolve)
+Run `/vibe-help` for the live list. Registered slash commands (prefix `/vibe-`):
+
+- **/vibe-route** — Force trigger skill routing with transparency
+- **/vibe-install** — Install skill packs
+- **/vibe-analyze** — Deep project architecture analysis
+- **/vibe-evaluate** — Evaluate skill quality and usage
+- **/vibe-orchestrate** — Multi-skill orchestration for complex tasks
+- **/vibe-list** — List installed skills and available packs
+- **/vibe-help** — This reference
+
+**/instinct** (learn, eval, status, export, import, evolve) works through skill routing, not the `/vibe-` registry — see `vibe instinct --help`.

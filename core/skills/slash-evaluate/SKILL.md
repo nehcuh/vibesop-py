@@ -19,14 +19,14 @@ Checks skill quality scores, usage statistics, and identifies underperforming sk
 ## Execution
 
 ```bash
-vibe evaluate
-# Evaluate a specific skill:
-vibe evaluate --skill <skill-id>
+vibe route --slash "/vibe-evaluate"                          # grade + quality summary
+vibe route --slash "/vibe-evaluate --skill <skill-id>"       # one skill
+vibe skill outcomes                                          # hit outcomes (reask / moved-on / expired)
 ```
 
 ## Examples
 
 ```
 /evaluate
-/evaluate --skill gstack/review
+/evaluate --skill builtin/commit-message
 ```

@@ -2,7 +2,7 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "0ce5a8e195e1f48edd2aadd472a0a6a44ff8ddedee329bd32ef4d266a7fb29d3",
+    "sha": "b97e66d8ef96ae9df76489870ee05aee23a4014162658ebf913a37c70695a809",
     "inputs": {
       "registry.yaml": "a567f17924325a5c164ad3d14d8b85f01ad8fce1305a97d6830a80fa33235642",
       "dataset": "00713f5cac1997cce6d61c2f24e06f73016af62ec88d6ea312cd4129c9db9587",
@@ -18,7 +18,7 @@
         "home_env": "tmp"
       },
       "skills:builtin": {
-        "autonomous-experiment/SKILL.md": "750b78e615ae5b1d13109473fbb947915cce5aa3ad1e2d3da841779ac014431d",
+        "autonomous-experiment/SKILL.md": "c7c87ae2bb489e3db0e5879a5e735ffa167e3fd899b0d203d1efed510557d938",
         "code-review/SKILL.md": "e851866cfc71ece1256853c3f6afafa0b390ad560678756cc4dab71f053d4e1c",
         "commit-message/SKILL.md": "63ba1c61aa15983078ba4dba3dd62d12476431713b7be8f8b58ec06b7f51b8c4",
         "deep-diagnosis-optimization/SKILL.md": "27e55b1109ff813e9fa775b62ef256d8a3b719ee898b4c3fa8d291d69cf6edb8",
@@ -28,11 +28,11 @@
         "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
         "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
         "skill-craft/SKILL.md": "c17c6b459e4114f123e26923281d52a709b45384e9d1cd4fc72e6f2b8af559d5",
-        "slash-evaluate/SKILL.md": "384a98208975a213021bd3e628ef2164f4ad837d2ad6a865950be971c17ae8e4",
-        "slash-help/SKILL.md": "840a51bd44cfb6eaf591594e552e1445e6e4528f149d2043f5f08ecf7a2586a9",
+        "slash-evaluate/SKILL.md": "03ec2764a2fa5d1f338b9235ba148f6d76e997539240960bf9f9188076499f1f",
+        "slash-help/SKILL.md": "385a269b499f9a87db72c03296c24f681de05c90ff80e7008e580e58cdbaffd7",
         "slash-install/SKILL.md": "b7c7b9234e2c5668d250d709f2c1eab96bbc2e3de0a4dc6d5f9a2bc7f2e5f8ab",
-        "slash-list/SKILL.md": "9936dbdf12832ed71d50eeec0a8375497680e090eb98e50c1b5e9fa8fb961789",
-        "slash-orchestrate/SKILL.md": "3ce061d4bac4d3cf012cf0903ee71e0f5ffb2380135fee91a6f03d2f66a5b27c",
+        "slash-list/SKILL.md": "5bd9fba9ee97a1407c9d7728156fcf9b95842d01aeb81e0ed5050cae6a2207b3",
+        "slash-orchestrate/SKILL.md": "3a42b575cc20a09e75499f86cb747d29c5b82ea1fe4c3e59e5c759956ac585cf",
         "slash-route/SKILL.md": "e1a1dbd413fa45f3a28c332ad85ff48c4c1d9e1eba2ed4b649f6cb90636a7a80",
         "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
         "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279"

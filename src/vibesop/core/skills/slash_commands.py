@@ -192,7 +192,7 @@ class SlashCommandHandler:
                 name="/vibe-evaluate",
                 description="Evaluate skill quality and usage statistics",
                 handler=self._handle_evaluate,
-                args_schema=["--skill", "--report"],
+                args_schema=["--skill"],
                 examples=["/vibe-evaluate", "/vibe-evaluate --skill gstack/review"],
             )
         )
