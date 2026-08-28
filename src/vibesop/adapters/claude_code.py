@@ -13,7 +13,11 @@ from typing import Any
 
 from vibesop.adapters.hook_based import HookBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
-from vibesop.utils.hook_commands import format_bash_hook_command, parse_hook_script_command
+from vibesop.utils.hook_commands import (
+    command_basenames,
+    format_bash_hook_command,
+    parse_hook_script_command,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +94,31 @@ def _rewrite_legacy_hook_entry(entry: Any, config_dir: Path | None = None) -> An
 
 
 def _hook_entry_matches(entry: Any, marker: str) -> bool:
-    """Return True if any hook command in a settings.json entry contains marker."""
+    """True if any hook command in a settings.json entry invokes the script
+    whose basename is exactly ``marker``.
+
+    Basename-equality, not substring: a user's own ``my-vibesop-route.sh``
+    contains the substring ``vibesop-route.sh`` but must never be captured
+    by VibeSOP's preserve-filter/strip paths — substring matching silently
+    deleted it from ``preserved`` on rebuild while ``vibe verify`` (exact
+    basename) called it healthy (C2, pull-20260827). Same quote/case
+    tolerance as the verify scan via :func:`command_basenames`.
+
+    Known residual, deliberate: a command that merely mentions a bare script
+    name (``grep vibesop-route.sh /var/log/hooks.log``) still matches — the
+    mention token's basename equals the marker. Narrowing one side would fork
+    this matcher from the verify scan (the exact C2 bug class); if it ever
+    needs tightening, both sides must change together.
+    """
     if not isinstance(entry, dict):
         return False
     hooks = entry.get("hooks")
     if not isinstance(hooks, list):
         return False
-    return any(isinstance(hook, dict) and marker in str(hook.get("command", "")) for hook in hooks)
+    return any(
+        isinstance(hook, dict) and marker in command_basenames(str(hook.get("command", "")))
+        for hook in hooks
+    )
 
 
 def strip_route_hook_from_layer(

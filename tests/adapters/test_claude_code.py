@@ -11,11 +11,19 @@ import pytest
 
 from vibesop.adapters.claude_code import (
     ClaudeCodeAdapter,
+    _hook_entry_matches,
     _rewrite_legacy_hook_entry,
     bash_hook_command,
 )
 from vibesop.adapters.models import Manifest
-from vibesop.utils.hook_commands import parse_hook_script_command
+from vibesop.builder import QuickBuilder
+from vibesop.hooks import HookInstaller
+from vibesop.hooks.points import HOOK_DEFINITIONS
+from vibesop.utils.hook_commands import (
+    VIBESOP_HOOK_SCRIPT_BASENAMES,
+    command_basenames,
+    parse_hook_script_command,
+)
 
 
 class TestBashHookCommand:
@@ -640,6 +648,72 @@ class TestRouteHookLayerMutualExclusion:
         assert len(self._entries_with(hooks, "vibesop-mirror-prompt.sh")) == 1
         assert result.warnings == []
 
+    @staticmethod
+    def _layer_basenames(settings: dict) -> list[str]:
+        return [
+            b
+            for entries in settings.get("hooks", {}).values()
+            for entry in entries
+            for hook in entry.get("hooks", [])
+            for b in command_basenames(str(hook.get("command", "")))
+        ]
+
+    def test_hook_entry_matches_is_basename_exact(self):
+        """C2: substring matching captured a user's own my-vibesop-route.sh
+        into the preserve-filter/strip paths; matching must be basename-equal
+        (same tolerance as verify: quotes, backslashes, case)."""
+        ours = _hook_entry('bash "C:/Users/First Last/.claude/hooks/vibesop-route.sh"')
+        theirs = _hook_entry("bash /home/u/.claude/hooks/my-vibesop-route.sh")
+        assert _hook_entry_matches(ours, "vibesop-route.sh") is True
+        assert _hook_entry_matches(theirs, "vibesop-route.sh") is False
+        # malformed shapes stay False, never raise
+        assert _hook_entry_matches({"hooks": "not-a-list"}, "vibesop-route.sh") is False
+        assert _hook_entry_matches({"hooks": [{"command": None}]}, "vibesop-route.sh") is False
+
+    def test_user_prefixed_script_survives_same_layer_rebuild(self, home, project_root):
+        """C2 regression: rebuild must NOT delete a user's own
+        my-vibesop-route.sh UserPromptSubmit entry from preserved."""
+        output_dir = project_root / ".claude"
+        output_dir.mkdir(parents=True)
+        user_cmd = f"bash {output_dir}/hooks/my-vibesop-route.sh"
+        (output_dir / "settings.json").write_text(
+            json.dumps({"hooks": {"UserPromptSubmit": [_hook_entry(user_cmd)]}}),
+            encoding="utf-8",
+        )
+
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        self._render(adapter, output_dir)
+
+        basenames = self._layer_basenames(self._read_settings(output_dir / "settings.json"))
+        assert basenames.count("vibesop-route.sh") == 1
+        assert basenames.count("my-vibesop-route.sh") == 1
+
+    def test_user_prefixed_script_not_stripped_from_other_layer(self, home, project_root):
+        """C2 regression: the dual-registration strip removes only the exact
+        vibesop-route.sh entry; the user's similarly-named script stays."""
+        user_dir = home / ".claude"
+        user_dir.mkdir(parents=True)
+        (user_dir / "settings.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "UserPromptSubmit": [
+                            _hook_entry(f"bash {user_dir}/hooks/my-vibesop-route.sh"),
+                            _hook_entry(f"bash {user_dir}/hooks/vibesop-route.sh"),
+                        ]
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        self._render(adapter, project_root / ".claude")
+
+        basenames = self._layer_basenames(self._read_settings(user_dir / "settings.json"))
+        assert basenames.count("vibesop-route.sh") == 0
+        assert basenames.count("my-vibesop-route.sh") == 1
+
     def test_other_layer_bad_json_does_not_crash(self, home, project_root):
         """Unparseable other-layer settings.json: warn, leave file untouched."""
         user_dir = home / ".claude"
@@ -830,3 +904,124 @@ class TestDeployStripSkippedCopyGuard:
         deploy.execute_deploy("claude-code")
 
         assert (project_layer / "settings.json").read_bytes() == before
+
+
+class TestGeneratorAllowlistCanary:
+    """C1 (pull-20260827): every hook script the generator emits must be in
+    VIBESOP_HOOK_SCRIPT_BASENAMES. Outside the allowlist, a command silently
+    skips both the verify unsafe scan and the legacy rewrite — a new script
+    must fail HERE, loudly, not in the field.
+
+    Generator sources covered: every .sh.j2 template in the package (by
+    filename, any template root), the settings.json commands from an
+    all-features render via the public render_config_only, every .sh file
+    the adapter render/install paths write to disk (inline
+    pre-session-end.sh, the _shared route hook, template-rendered scripts),
+    and every .sh HookInstaller writes across all platforms (the `vibe
+    quickstart` fourth generator).
+    """
+
+    @pytest.fixture
+    def home(self, monkeypatch, tmp_path):
+        home = tmp_path / "fake_home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+        return home
+
+    @pytest.fixture
+    def project_root(self, tmp_path):
+        root = tmp_path / "proj"
+        root.mkdir()
+        return root
+
+    def test_template_filenames_are_allowlisted(self) -> None:
+        import vibesop
+
+        pkg = Path(vibesop.__file__).parent
+        templates = sorted((pkg / "adapters" / "templates").rglob("*.sh.j2"))
+        templates += sorted((pkg / "hooks" / "templates").glob("*.sh.j2"))
+        # The canary must follow the templates if they move or a new template
+        # root appears — silence here would mean the guard rots.
+        assert templates, "no .sh.j2 templates under any generator root; canary needs updating"
+        for tpl in templates:
+            script_name = tpl.name[: -len(".j2")]
+            assert script_name in VIBESOP_HOOK_SCRIPT_BASENAMES, (
+                f"template {tpl.name} deploys a script outside the allowlist"
+            )
+
+    def test_all_feature_render_is_allowlisted(self, home, project_root, monkeypatch) -> None:
+        """Full-feature render via the public entry point: every .sh
+        referenced by a settings command and every .sh file written must be
+        allowlisted. Public entry (not the private _render_* subset) so a
+        future _render_new_hook lands inside this net automatically."""
+        monkeypatch.setattr(
+            ClaudeCodeAdapter,
+            "_conversation_mirror_enabled",
+            lambda self: True,
+        )
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        output_dir = project_root / ".claude"
+        manifest = QuickBuilder.default(platform="claude-code")
+        result = adapter.render_config_only(manifest, output_dir)
+        assert result.success, f"render_config_only failed: {result.errors}"
+
+        settings = json.loads((output_dir / "settings.json").read_text(encoding="utf-8"))
+        command_bns = {
+            b
+            for entries in settings.get("hooks", {}).values()
+            for entry in entries
+            for hook in entry.get("hooks", [])
+            for b in command_basenames(str(hook.get("command", "")))
+            if b.endswith(".sh")
+        }
+        # The all-features render must actually exercise the known surface;
+        # a silently-skipped feature would hollow out the canary.
+        assert {"vibesop-route.sh", "vibesop-tool-seq.sh"} <= command_bns
+        assert {"vibesop-mirror-prompt.sh", "vibesop-mirror-session-end.sh"} <= command_bns
+        assert command_bns <= VIBESOP_HOOK_SCRIPT_BASENAMES
+
+        sh_files = sorted(output_dir.rglob("*.sh"))
+        assert sh_files, "render wrote no hook scripts; canary needs updating"
+        assert {"vibesop-route.sh", "vibesop-tool-seq.sh", "vibesop-track.sh"} <= {
+            f.name for f in sh_files
+        }
+        for f in sh_files:
+            assert f.name in VIBESOP_HOOK_SCRIPT_BASENAMES, (
+                f"{f.name} written outside the allowlist"
+            )
+
+    def test_install_hooks_scripts_are_allowlisted(self, tmp_path) -> None:
+        """install_hooks (quickstart path) writes scripts directly — the
+        inline pre-session-end.sh lives only here, not in any template."""
+        adapter = ClaudeCodeAdapter()
+        results = adapter.install_hooks(tmp_path)
+        assert results.get("pre-session-end") is True
+        assert results.get("vibesop-route") is True
+        assert results.get("vibesop-track") is True
+
+        sh_files = sorted(tmp_path.rglob("*.sh"))
+        assert sh_files, "install_hooks wrote no scripts; canary needs updating"
+        for f in sh_files:
+            assert f.name in VIBESOP_HOOK_SCRIPT_BASENAMES, (
+                f"{f.name} installed outside the allowlist"
+            )
+
+    def test_hook_installer_scripts_are_allowlisted(self, tmp_path) -> None:
+        """HookInstaller is a fourth generator (`vibe quickstart` →
+        VibeSOPInstaller.install → install_hooks): every .sh it writes on
+        every platform must be allowlisted. Platforms that deploy only .ts
+        extensions (pi) are out of the bash-command domain."""
+        installer = HookInstaller()
+        for platform, defs in HOOK_DEFINITIONS.items():
+            target = tmp_path / platform
+            results = installer.install_hooks(platform, target)
+            assert results, f"{platform}: HookInstaller installed nothing; canary needs updating"
+            sh_files = sorted(target.rglob("*.sh"))
+            expects_sh = any(str(d.get("file", "")).endswith(".sh") for d in defs.values())
+            if expects_sh:
+                assert sh_files, f"{platform}: expected .sh output; canary needs updating"
+            for f in sh_files:
+                assert f.name in VIBESOP_HOOK_SCRIPT_BASENAMES, (
+                    f"{platform}: {f.name} installed outside the allowlist"
+                )

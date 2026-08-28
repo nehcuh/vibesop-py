@@ -27,6 +27,18 @@ VIBESOP_HOOK_SCRIPT_BASENAMES = frozenset(
         "vibesop-track.sh",
         "vibesop-mirror-prompt.sh",
         "vibesop-mirror-session-end.sh",
+        # Deployed by HookInstaller.install_hooks from hooks/templates/*.sh.j2
+        # (live via `vibe quickstart` → VibeSOPInstaller.install); pre-session-end.sh
+        # also has an inline twin in ClaudeCodeAdapter.install_hooks. No settings.json
+        # command today, but the moment one lands it must be inside the unsafe scan
+        # and the legacy rewrite — outside the allowlist it would silently skip both
+        # (C1 class, pull-20260827). These names lack the vibesop- prefix, so they
+        # claim filenames a user might legitimately own; the collision direction is
+        # fail-noisy (verify flags the form) or rewrite-to-our-copy, never silent
+        # deletion. Long-term fix is renaming the deployed scripts (backlog).
+        "pre-session-end.sh",
+        "pre-tool-use.sh",
+        "post-session-start.sh",
     }
 )
 
