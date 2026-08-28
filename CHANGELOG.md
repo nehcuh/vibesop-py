@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **builtin 技能死命令引用 → `/vibe-*` registry 正源**: 用户实机发现
+  `vibe evaluate` 不存在（slash-evaluate SKILL.md 引用死命令）。全量审计
+  5 处:`vibe evaluate`/`vibe list`/`vibe help`（slash-evaluate/list/help）、
+  `vibe route --execute`（slash-orchestrate,真实 flag 是 `--guided`）、
+  `vibe experiment start/results/apply`（autonomous-experiment,从未实现
+  过——旧 experiment_cmd.py 是 A/B 测试用途且已删除）。修复采用正源镜像:
+  slash-* SKILL.md 的 Execution 统一指 SlashCommandRegistry
+  （`vibe route --slash "/vibe-*"`）,`--skill <id>` 单技能语义随之恢复;
+  slash-help 正文列表对齐 registry 实际注册的 7 条命令（含活着的
+  `/vibe-analyze`）。autonomous-experiment 改为直接 git worktree 指令并补
+  Phase 2 worktree 纪律（`git -C .experiment/worktree`、beliefs.md 路径、
+  `add -A` 防 untracked 漏提交）,`.gitignore` 增加 `.experiment/`。
+  registry `_handle_evaluate` 的 args_schema 清掉 handler 不认的 `--report`。
+  路由基线随内容刷新（entries 零翻转）。验证:Docker ubuntu:22.04 命令电池
+  实测全部新引用通过、5 个旧死引用仍被 "No such command" 拒绝;grok+claude
+  双路独立复审 PASS_WITH_NITS 全落地。
+
 - **Claude Code Windows hook command（S51 M1 形态在 2.1.220 上翻转）**:
   实机探针（2026-08-28, Claude Code 2.1.220）证实宿主已改为 `bash -c` +
   会话 CWD spawn hooks——S51 的规范形态 config-relative
