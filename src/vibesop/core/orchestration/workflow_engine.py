@@ -604,10 +604,12 @@ class WorkflowEngine:
         for task in new_sub_tasks:
             intent = task.get("intent", "")
             query = task.get("query", "")
+            skill_id, routed_confidence = self._route_appended_skill(query, intent)
             step = ExecutionStep(
                 step_id=str(uuid.uuid4())[:8],
                 step_number=next_number,
-                skill_id=self._route_appended_skill(query, intent),
+                skill_id=skill_id,
+                confidence=routed_confidence,
                 intent=intent,
                 input_query=query,
                 original_query_segment=plan.original_query,
@@ -623,13 +625,15 @@ class WorkflowEngine:
 
         return steps
 
-    def _route_appended_skill(self, query: str, intent: str) -> str:
+    def _route_appended_skill(self, query: str, intent: str) -> tuple[str, float]:
         """Route an appended sub-task to a real skill via the configured router.
 
-        Falls back to ``builtin/slash-orchestrate`` when no router is configured
-        or routing fails, matching the prior hard-coded behaviour.
+        Returns ``(skill_id, confidence)``. Falls back to
+        ``builtin/slash-orchestrate`` with the pre-assigned sentinel
+        confidence when no router is configured or routing fails, matching
+        the prior hard-coded behaviour.
         """
-        default = "builtin/slash-orchestrate"
+        default = ("builtin/slash-orchestrate", 0.99)
         route_method = getattr(self._router, "_single_skill_route", None) if self._router else None
         if route_method is None:
             return default
@@ -638,8 +642,9 @@ class WorkflowEngine:
             primary = getattr(route, "primary", None)
             skill_id = getattr(primary, "skill_id", None) if primary else None
             if skill_id:
+                confidence = float(getattr(primary, "confidence", 0.0))
                 logger.info("APPEND step routed to %s for intent=%s", skill_id, intent)
-                return skill_id
+                return skill_id, confidence
         except Exception as e:
             logger.warning("APPEND step routing failed for intent=%s: %s", intent, e)
         return default

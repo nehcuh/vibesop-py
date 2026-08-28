@@ -93,6 +93,24 @@ class TestPlanBuilderPatternAware:
         # Single task: no synthesise step added
         assert len(plan.steps) == 1
 
+    @pytest.mark.parametrize(
+        "pattern",
+        [WorkflowPattern.FAN_OUT, WorkflowPattern.ADVERSARIAL, WorkflowPattern.TOURNAMENT],
+    )
+    def test_every_step_carries_confidence_for_auto_proceed(self, pattern):
+        """M2 residual: synthetic steps (synthesise/verify/judge) defaulted to
+        confidence=0.0, so `_needs_confirmation`'s all_confident fold was always
+        False for these plan shapes and ambiguous_only auto-proceed never fired."""
+        builder = self._make_builder()
+        sub_tasks = [
+            SubTask(intent="task A", query="do A"),
+            SubTask(intent="task B", query="do B"),
+        ]
+        plan = builder.build_plan("test query", sub_tasks, workflow_pattern=pattern)
+        assert plan.steps, pattern
+        for step in plan.steps:
+            assert step.confidence >= 0.6, (pattern, step.step_id, step.confidence)
+
     def test_adversarial_adds_verify_step(self):
         builder = self._make_builder()
         sub_tasks = [

@@ -639,6 +639,7 @@ class PlanBuilder:
                     assigned_role=squad_step.role_id,
                     agent_squad_id=squad.squad_id,
                     role_skills=squad_step.skill_ids,
+                    confidence=0.99,  # structurally mandated, not routing-derived
                 )
             )
 
@@ -757,6 +758,7 @@ class PlanBuilder:
             status=StepStatus.PENDING,
             dependencies=[s.step_id for s in steps],
             can_parallel=False,
+            confidence=0.99,  # pattern-mandated step, not routing-derived
         )
         steps.append(synthesise_step)
         return steps
@@ -793,6 +795,7 @@ class PlanBuilder:
             can_parallel=False,
             is_verification_step=True,  # Mark as verification step for Phase 2
             trust_level=TrustLevel.QUARANTINE,  # Verifier runs in quarantine mode
+            confidence=0.99,  # pattern-mandated verifier, not routing-derived
         )
         steps.append(verify_step)
         return steps
@@ -865,6 +868,7 @@ class PlanBuilder:
             can_parallel=False,
             is_verification_step=True,
             trust_level=TrustLevel.QUARANTINE,
+            confidence=0.99,  # pattern-mandated judge, not routing-derived
         )
         tournament_steps.append(judge_step)
         return tournament_steps
