@@ -178,7 +178,10 @@ class SkillInjector:
         """
         plan_content = self._format_execution_plan(plan)
 
-        if platform == PlatformType.CLAUDE_CODE:
+        if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
+            # Grok Build's UserPromptSubmit hook envelope is Claude-shaped
+            # (hookSpecificOutput.additionalContext) — same as single-skill
+            # injection above.
             return InjectionResult(
                 method=InjectionMethod.ADDITIONAL_CONTEXT,
                 payload={"additionalContext": f"\n\n[VibeSOP Execution Plan]\n{plan_content}\n"},

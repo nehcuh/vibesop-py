@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from vibesop.agent.runtime.skill_injector import (
     InjectionMethod,
     PlatformType,
@@ -148,7 +150,9 @@ class TestSkillInjector:
         payload_dict = result.payload
         assert len(payload_dict["additionalContext"]) < 200  # includes wrapper
 
-    def test_execution_plan_claude_code(self, tmp_path) -> None:
+    @pytest.mark.parametrize("platform", [PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD])
+    def test_execution_plan_claude_code(self, tmp_path, platform) -> None:
+        """Both platforms share the Claude-shaped additionalContext envelope."""
         injector = SkillInjector(project_root=tmp_path)
 
         plan = ExecutionPlan(
@@ -176,7 +180,7 @@ class TestSkillInjector:
             execution_mode=ExecutionMode.SEQUENTIAL,
         )
 
-        result = injector.inject_execution_plan(plan, PlatformType.CLAUDE_CODE)
+        result = injector.inject_execution_plan(plan, platform)
 
         assert result.method == InjectionMethod.ADDITIONAL_CONTEXT
         assert "Execution Plan" in str(result.payload)
