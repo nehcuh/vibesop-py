@@ -444,7 +444,9 @@ class TestUnstructuredReplies:
     """Routing-precision audit 2026-08-29: unstructured triage replies must
     not inject a route nor poison the persistent cache."""
 
-    def test_bare_token_reply_no_result_no_store(self, tmp_path) -> None:
+    def test_bare_token_reply_no_result_negative_store(self, tmp_path) -> None:
+        """Round-2: the drop itself is cached as a no-match so the repeat
+        query skips the LLM (hook traffic is negative-dominated)."""
         cache = TriageCache(tmp_path)
         service = _make_service(cache)
         service._llm.call.return_value = MagicMock(
@@ -453,12 +455,9 @@ class TestUnstructuredReplies:
 
         result = service.try_ai_triage("hello world", _CANDIDATES)
         assert result is None
-        data = (
-            json.loads(cache.cache_path.read_text(encoding="utf-8"))
-            if cache.cache_path.exists()
-            else {}
-        )
-        assert data == {}
+        fresh, _ = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is not None
+        assert fresh["skill_id"] is None
 
     def test_structured_reply_still_stores(self, tmp_path) -> None:
         cache = TriageCache(tmp_path)
@@ -521,3 +520,93 @@ class TestSchemaVersionGate:
         data = json.loads(cache.cache_path.read_text(encoding="utf-8"))
         entry = data[TriageCache.key_for("hello world")]
         assert entry["v"] == TriageCache.SCHEMA_VERSION
+
+
+class TestNegativeCaching:
+    """Round-2 review: repeat negative queries must not re-pay the LLM call
+    (hook traffic is negative-dominated; pre-fix only (wrong) matches were
+    cached)."""
+
+    def _store_negative(self, cache: TriageCache, query: str = "hello world") -> None:
+        cache.store(
+            query,
+            _CANDIDATES,
+            {"skill_id": None, "confidence": 0.0, "source": "", "description": ""},
+        )
+
+    def test_negative_fresh_within_short_ttl(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        self._store_negative(cache)
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is not None
+        assert fresh["skill_id"] is None
+        assert stale is None
+
+    def test_negative_expires_at_6h_even_under_72h_ttl(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        self._store_negative(cache)
+        data = json.loads(cache.cache_path.read_text(encoding="utf-8"))
+        data[TriageCache.key_for("hello world")]["ts"] = time.time() - 7 * 3600
+        cache.cache_path.write_text(json.dumps(data), encoding="utf-8")
+
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is None
+        # Expired negatives are NOT kept as last-good either.
+        assert stale is None or stale["skill_id"] is None
+
+    def test_structured_none_reply_negative_hit_skips_llm(self, tmp_path) -> None:
+        """A cached no-match short-circuits before the LLM call."""
+        cache = TriageCache(tmp_path)
+        service = _make_service(cache)
+        service._llm.call.return_value = MagicMock(
+            content='{"skill_id": null}', model="test", input_tokens=5, output_tokens=5
+        )
+        assert service.try_ai_triage("hello world", _CANDIDATES) is None  # stores negative
+
+        service2 = _make_service(cache)
+        service2._llm.call.side_effect = AssertionError("must not call LLM on negative hit")
+        assert service2.try_ai_triage("hello world", _CANDIDATES) is None
+
+    def test_unstructured_drop_also_caches_negative(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        service = _make_service(cache)
+        service._llm.call.return_value = MagicMock(
+            content="skill-a", model="test", input_tokens=5, output_tokens=5
+        )
+        assert service.try_ai_triage("hello world", _CANDIDATES) is None
+        fresh, _ = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is not None
+        assert fresh["skill_id"] is None
+
+    def test_version_mismatch_evicts_legacy_entry(self, tmp_path) -> None:
+        """Lookup self-heals: incompatible entries are removed, not left to
+        squat in the file forever."""
+        cache = TriageCache(tmp_path)
+        key = TriageCache.key_for("hello world")
+        data = {
+            key: {
+                "skill_id": "skill-a",
+                "confidence": 0.82,
+                "candidates_hash": TriageCache.candidates_hash(_CANDIDATES),
+                "ts": time.time(),
+            }
+        }
+        cache.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache.cache_path.write_text(json.dumps(data), encoding="utf-8")
+
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is None
+        assert stale is None
+        after = json.loads(cache.cache_path.read_text(encoding="utf-8"))
+        assert key not in after
+
+    def test_negative_entry_never_resurrects_as_last_good(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        self._store_negative(cache)
+        # Make it stale (skill set changed).
+        changed = [*_CANDIDATES, {"id": "skill-c", "intent": "new"}]
+        service = _make_service(cache)
+        service._llm.call.side_effect = RuntimeError("LLM down")
+
+        result = service.try_ai_triage("hello world", changed)
+        assert result is None

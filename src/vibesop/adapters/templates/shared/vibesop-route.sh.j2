@@ -12,27 +12,34 @@ INPUT=$(cat); QUERY=""; SESSION_ID=""
 # prompt. Try them in order; fall back to raw stdin if none match (or if jq
 # is not installed, or if the input is plain text rather than JSON).
 # Some agents (kimi -p) send the prompt as a content-block ARRAY
-# ([{"type": "text", "text": ...}]) — unpack those to the joined text;
-# passing the raw blob through made the multi-intent detector fire on
-# envelope noise ("type": "text" tokens).
+# ([{"type": "text", "text": ...}]), some as a single block OBJECT — unpack
+# both to the text; passing the raw blob through made the multi-intent
+# detector fire on envelope noise ("type": "text" tokens). An envelope that
+# unpacks to EMPTY must not fall back to the raw blob (that would revive
+# the bug for image-only blocks): it degrades to a blank query instead.
+# printf (not echo) so leading "-n"/"-e" and backslashes in the payload
+# survive verbatim.
 if command -v jq &> /dev/null; then
-    QUERY=$(echo "$INPUT" | jq -r '
+    QUERY=$(printf '%s' "$INPUT" | jq -r '
+        def text_only:
+            if type == "string" then .
+            elif type == "object" then (.text | if type == "string" then . else "" end)
+            else "" end;
         def unblocks:
-            if type == "array"
-            then (map(if type == "string" then .
-                      elif type == "object" then (.text // empty)
-                      else empty end) | join("\n"))
-            else .
-            end;
+            if type == "array" then (map(text_only) | join("\n"))
+            elif type == "object" then (.text | if type == "string" then . else "" end)
+            else . end;
         if type == "object"
-        then (.prompt // .user_prompt // .query // .message // .text // empty | unblocks)
+        then (.prompt // .user_prompt // .query // .message // .text // empty
+              | unblocks
+              | if . == "" then " " else . end)
         else empty
         end' 2>/dev/null || true)
     # Forward the platform session id so route spans carry the real session
     # and can join with tool-call telemetry captured under it (M12 M1);
     # without this the Python side mints a fresh UUID per invocation and the
     # join key breaks. Claude Code / Kimi CLI payloads use "session_id".
-    SESSION_ID=$(echo "$INPUT" | jq -r '
+    SESSION_ID=$(printf '%s' "$INPUT" | jq -r '
         if type == "object"
         then (.session_id // .sessionId // empty)
         else empty

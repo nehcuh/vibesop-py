@@ -140,7 +140,7 @@ class TestRouteHookSessionForwarding:
         )
         # jq extraction from the hook payload (both casings tolerated)
         assert ".session_id // .sessionId" in result
-        assert 'SESSION_ID=$(echo "$INPUT" | jq -r' in result
+        assert "SESSION_ID=$(printf '%s' \"$INPUT\" | jq -r" in result
         # forwarded into handle_query_for_hook as the second positional arg
         assert "session_id=(sys.argv[2] if len(sys.argv) > 2 else '') or None" in result
         assert '"$QUERY" "$SESSION_ID"' in result
@@ -298,3 +298,45 @@ class TestRouteHookSessionForwarding:
         assert "STUBARGS:" in out
         assert "windows uv tool" in out
         assert "s-win" in out
+
+    def test_rendered_script_empty_block_array_degrades_to_blank(self, tmp_path) -> None:
+        import json
+
+        """[] unpacks to blank (routed as a no-op), never back to the blob."""
+        out = self._run_rendered_script(tmp_path, json.dumps({"prompt": []}))
+        assert '"type"' not in out
+        assert "STUBARGS:" in out
+
+    def test_rendered_script_image_only_array_degrades_to_blank(self, tmp_path) -> None:
+        import json
+
+        """Non-text blocks unpack to blank; the blob must not leak back via
+        the raw-stdin fallback (routing-precision audit round 2)."""
+        out = self._run_rendered_script(
+            tmp_path, json.dumps({"prompt": [{"type": "image", "source": {"id": "x"}}]})
+        )
+        assert '"type"' not in out
+        assert "STUBARGS:" in out
+
+    def test_rendered_script_object_prompt_unpacks_text(self, tmp_path) -> None:
+        import json
+
+        """A single content-block OBJECT envelope extracts .text too."""
+        out = self._run_rendered_script(
+            tmp_path, json.dumps({"prompt": {"type": "text", "text": "fix this bug"}})
+        )
+        assert "fix this bug" in out
+        assert '"type"' not in out
+
+    def test_rendered_script_object_prompt_without_text_degrades_to_blank(self, tmp_path) -> None:
+        import json
+
+        out = self._run_rendered_script(tmp_path, json.dumps({"prompt": {"type": "image"}}))
+        assert '"type"' not in out
+        assert "STUBARGS:" in out
+
+    def test_rendered_script_preserves_leading_dash_payload(self, tmp_path) -> None:
+        """Plain-text payloads starting with -n survive printf (echo would
+        eat the flag and truncate the query)."""
+        out = self._run_rendered_script(tmp_path, "-n hello plain text")
+        assert "-n hello plain text" in out

@@ -92,6 +92,9 @@ class TriageService:
         self._config = config
         self._cost_tracker = cost_tracker
         self._prefilter = prefilter
+        # Consecutive unstructured-reply drops (reset on any structured
+        # reply); drives the "provider format incompatible" warning.
+        self._unstructured_drops = 0
         # Retained for backward compatibility and to locate the .vibe dir
         # below; triage results are no longer cached via CacheManager (the
         # persistent TriageCache is the single triage cache).
@@ -198,6 +201,12 @@ class TriageService:
                 augmented_query, candidates, self._cache_ttl_hours()
             )
             if fresh_entry is not None:
+                if not fresh_entry.get("skill_id"):
+                    # Negative hit: this exact query (under this candidate
+                    # set) was already triaged to no-match within the
+                    # negative TTL — skip the LLM call entirely.
+                    logger.debug("Persistent triage negative hit; skipping LLM call")
+                    return None
                 try:
                     skill_id = str(fresh_entry["skill_id"])
                     # Session-end guard, same criterion as the LLM path below:
@@ -351,9 +360,21 @@ class TriageService:
                 # prompts (routing-precision audit 2026-08-29: 5/7
                 # negatives misrouted at a hardcoded 82%). Demote to
                 # no-match and let the remaining layers decide.
+                self._unstructured_drops += 1
+                if self._unstructured_drops % 10 == 0:
+                    # Distinct from a proper NONE decline: a provider that
+                    # systematically replies unstructured silently paralyzes
+                    # this layer while looking "successful" to the breaker.
+                    logger.warning(
+                        "AI triage dropped %d consecutive unstructured replies — "
+                        "provider output format is incompatible with the parser",
+                        self._unstructured_drops,
+                    )
                 logger.debug(
                     "AI triage reply was unstructured; dropping weak signal (query hash hidden)"
                 )
+                if self._triage_cache is not None:
+                    self._store_negative(augmented_query, candidates)
                 return None
 
             if skill_id:
@@ -385,6 +406,7 @@ class TriageService:
                     confidence = 0.88
                     if (
                         isinstance(parsed_confidence, (int, float))
+                        and not isinstance(parsed_confidence, bool)
                         and 0.0 <= float(parsed_confidence) <= 1.0
                     ):
                         confidence = float(parsed_confidence)
@@ -406,7 +428,14 @@ class TriageService:
                         # Hash the full candidate set so a later lookup can
                         # run before the prefilter (see lookup above).
                         self._triage_cache.store(augmented_query, candidates, result.to_dict())
+                    self._unstructured_drops = 0
                     return LayerResult(match=result, layer=RoutingLayer.AI_TRIAGE)
+
+            # Structured reply with no usable skill (explicit null / NONE
+            # verdict): a definitive no-match — cache it negatively so
+            # repeat queries skip the LLM call.
+            if parsed.get("structured") and self._triage_cache is not None:
+                self._store_negative(augmented_query, candidates)
         except Exception as e:
             latency_ms = (time.perf_counter() - start_time) * 1000
             logger.debug(f"AI triage failed, falling through to next layer: {e}")
@@ -665,7 +694,7 @@ class TriageService:
 
     def build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
         if self._prompt_builder is not None:
-            version = getattr(self._config, "ai_triage_prompt_version", "v2")
+            version = getattr(self._config, "ai_triage_prompt_version", "v1")
             return self._prompt_builder(query, skills_summary, version)
         # Minimal fallback (no prompt_builder injected): must carry the same
         # JSON-match / NONE-decline contract as the registry prompts — a
@@ -755,6 +784,22 @@ class TriageService:
         ttl = getattr(self._config, "triage_cache_ttl_hours", 72)
         return float(ttl) if isinstance(ttl, (int, float)) else 72.0
 
+    def _store_negative(self, query: str, candidates: list[dict[str, Any]]) -> None:
+        """Persist a definitive no-match so repeat queries skip the LLM call
+        (negatives dominate hook traffic; TTL is capped in TriageCache)."""
+        if self._triage_cache is None:
+            return
+        self._triage_cache.store(
+            query,
+            candidates,
+            {
+                "skill_id": None,
+                "confidence": 0.0,
+                "source": "",
+                "description": "",
+            },
+        )
+
     def _recall_min_similarity(self) -> float:
         """Embedding-recall similarity floor; tolerant of mocks/bad config."""
         value = getattr(self._config, "ai_triage_recall_min_similarity", None)
@@ -823,7 +868,7 @@ class TriageService:
         not auto-execute. The ``last_good`` metadata flag lets downstream
         consumers distinguish it from a fresh result.
         """
-        if not stale_entry:
+        if not stale_entry or not stale_entry.get("skill_id"):
             return None
         try:
             skill_id = str(stale_entry["skill_id"])

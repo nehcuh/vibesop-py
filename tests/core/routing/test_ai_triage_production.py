@@ -184,6 +184,37 @@ class TestUnifiedRouterAIBudget:
         assert stats["total_calls"] == 1
         assert stats["total_tokens"] == 100
 
+    def test_router_level_bare_token_reply_yields_no_route(self, tmp_path) -> None:
+        """Round-2 review: pin the invariant at the ROUTER level too — an
+        unstructured reply must not produce an AI_TRIAGE LayerResult (the hook
+        path has no confirmation gate; any injected route fires directly)."""
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        mock_llm = MagicMock()
+        mock_llm.configured.return_value = True
+        mock_llm.call.return_value = LLMResponse(
+            content="systematic-debugging",
+            model="claude-3-5-haiku-20241022",
+            provider="Anthropic",
+            tokens_used=100,
+            input_tokens=60,
+            output_tokens=40,
+        )
+        router._llm = mock_llm
+
+        result = router._try_ai_triage(
+            "debug this strange error please", [{"id": "systematic-debugging", "intent": "debug"}]
+        )
+        assert result is None
+
+    def test_routing_config_default_prompt_version_is_v1(self) -> None:
+        """Anchor the production default — it must stay in lockstep with the
+        getattr fallback in TriageService.build_ai_triage_prompt (the audit's
+        3-defaults inconsistency finding)."""
+        assert RoutingConfig().ai_triage_prompt_version == "v1"
+        assert TriagePromptRegistry.DEFAULT_VERSION == "v3"
+
     def test_get_ai_triage_stats_includes_budget(self, tmp_path) -> None:
         config = RoutingConfig(ai_triage_budget_monthly=5.0)
         router = UnifiedRouter(project_root=tmp_path, config=config)

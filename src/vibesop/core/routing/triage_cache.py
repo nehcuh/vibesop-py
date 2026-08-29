@@ -39,6 +39,11 @@ class TriageCache:
     # fresh hits or last-good fallbacks.
     SCHEMA_VERSION = 2
 
+    # No-match entries (skill_id None) amortize repeat LLM calls for the
+    # chat/QA traffic that dominates hook queries, but stale negatives are
+    # cheap to re-derive — cap them well below the positive TTL.
+    NEGATIVE_TTL_HOURS = 6.0
+
     def __init__(self, storage_dir: str | Path = ".vibe") -> None:
         self.cache_path = Path(storage_dir) / "triage_cache.json"
         self.lock_path = Path(storage_dir) / "triage_cache.lock"
@@ -87,8 +92,14 @@ class TriageCache:
             if not isinstance(entry, dict):
                 return None, None
             if entry.get("v") != self.SCHEMA_VERSION:
+                # Self-heal: evict the incompatible entry instead of letting
+                # it squat in the file forever (it can never hit again).
+                data.pop(self.key_for(query), None)
+                self._write(data)
                 return None, None
             age_seconds = time.time() - float(entry.get("ts", 0))
+            if not entry.get("skill_id"):
+                ttl_hours = min(ttl_hours, self.NEGATIVE_TTL_HOURS)
             fresh = (
                 entry.get("candidates_hash") == self.candidates_hash(candidates)
                 and age_seconds <= ttl_hours * 3600

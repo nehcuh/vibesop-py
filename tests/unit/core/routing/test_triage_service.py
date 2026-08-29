@@ -1188,3 +1188,26 @@ class TestNoMatchExit:
         prompt = service.build_ai_triage_prompt("test query", "- skill-a: test")
         assert '"skill_id"' in prompt
         assert "NONE" in prompt
+
+    def test_boolean_confidence_is_rejected(self) -> None:
+        """JSON true/false are int subclasses; true must not become 1.0."""
+        service = self._service_with_reply('{"skill_id": "skill-a", "confidence": true}')
+        result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
+        assert result is not None
+        assert result.match.confidence == 0.88
+
+    def test_prompt_declined_formats_round_trip_to_no_match(self) -> None:
+        """Contract: every prompt version's DECLINED output format parses to
+        no-match — pins prompt↔parser against drift (v4 must be added here)."""
+        declined_formats = {
+            "v1": "NONE",
+            "v2": '{"skill_id": null}',
+            "v3": '{"skill_id": null}',
+        }
+        service = _make_service()
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+        for version in TriagePromptRegistry.VERSIONS:
+            assert version in declined_formats, f"add declined format for {version}"
+            parsed = service.parse_ai_triage_response(declined_formats[version])
+            assert parsed["skill_id"] is None, version
