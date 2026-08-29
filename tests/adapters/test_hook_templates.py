@@ -176,9 +176,12 @@ class TestRouteHookSessionForwarding:
         stub.chmod(0o755)
 
         script = tmp_path / "vibesop-route.sh"
+        # newline="\n": vibe build writes LF; CRLF would smuggle \r into the
+        # inline jq programs and the python -c code.
         script.write_text(
             render_route_hook(platform="claude-code", platform_name="Claude Code"),
             encoding="utf-8",
+            newline="\n",
         )
         result = subprocess.run(
             [bash, str(script)],
@@ -187,7 +190,11 @@ class TestRouteHookSessionForwarding:
             cwd=tmp_path,
             env={
                 "HOME": str(home),
-                "PATH": f"/usr/bin:/bin:{Path(jq).parent}",
+                # as_posix(): a Windows backslash PATH entry (C:\Program
+                # Files\jq) is not resolvable by Git Bash, which silently
+                # skips jq extraction — the tests then "pass" via the raw
+                # blob substring falling back into QUERY.
+                "PATH": f"/usr/bin:/bin:{Path(jq).parent.as_posix()}",
             },
             timeout=60,
             check=False,
@@ -204,6 +211,9 @@ class TestRouteHookSessionForwarding:
         assert "STUBARGS:" in out
         assert "abc-123-session" in out
         assert "hello stub test" in out
+        # Extraction really ran — the raw blob must not have fallen back
+        # into QUERY (it would contain all substrings above).
+        assert '"prompt"' not in out
 
     def test_rendered_script_without_session_id_passes_empty(self, tmp_path) -> None:
         """Payloads without session_id forward an empty string -> None."""
@@ -212,6 +222,7 @@ class TestRouteHookSessionForwarding:
         out = self._run_rendered_script(tmp_path, json.dumps({"prompt": "hello no session"}))
         assert "STUBARGS:" in out
         assert "hello no session" in out
+        assert '"prompt"' not in out
 
     def test_rendered_script_unpacks_content_block_array(self, tmp_path) -> None:
         """kimi -p sends the prompt as a content-block array; the extracted
@@ -279,6 +290,7 @@ class TestRouteHookSessionForwarding:
         script.write_text(
             render_route_hook(platform="claude-code", platform_name="Claude Code"),
             encoding="utf-8",
+            newline="\n",
         )
         result = subprocess.run(
             [bash, str(script)],
@@ -288,7 +300,7 @@ class TestRouteHookSessionForwarding:
             env={
                 "HOME": str(home),
                 "APPDATA": str(appdata),
-                "PATH": f"/usr/bin:/bin:{Path(jq).parent}",
+                "PATH": f"/usr/bin:/bin:{Path(jq).parent.as_posix()}",
             },
             timeout=60,
             check=False,
@@ -298,6 +310,7 @@ class TestRouteHookSessionForwarding:
         assert "STUBARGS:" in out
         assert "windows uv tool" in out
         assert "s-win" in out
+        assert '"prompt"' not in out
 
     def test_rendered_script_empty_block_array_degrades_to_blank(self, tmp_path) -> None:
         import json
