@@ -213,6 +213,36 @@ class TestRouteHookSessionForwarding:
         assert "STUBARGS:" in out
         assert "hello no session" in out
 
+    def test_rendered_script_unpacks_content_block_array(self, tmp_path) -> None:
+        """kimi -p sends the prompt as a content-block array; the extracted
+        query must be the joined text, not the raw JSON blob (routing-
+        precision audit 2026-08-29: the blob made the multi-intent detector
+        fire on envelope noise like "type": "text")."""
+        import json
+
+        payload = json.dumps(
+            {"prompt": [{"type": "text", "text": "评审这份设计文档"}], "session_id": "s-arr"}
+        )
+        out = self._run_rendered_script(tmp_path, payload)
+        assert "评审这份设计文档" in out
+        assert '"type"' not in out
+
+    def test_rendered_script_joins_multiple_text_blocks(self, tmp_path) -> None:
+        import json
+
+        payload = json.dumps(
+            {
+                "prompt": [
+                    {"type": "text", "text": "first block"},
+                    {"type": "text", "text": "second block"},
+                ]
+            }
+        )
+        out = self._run_rendered_script(tmp_path, payload)
+        assert "first block" in out
+        assert "second block" in out
+        assert '"type"' not in out
+
     def test_template_discovers_windows_uv_tool_python(self) -> None:
         result = render_route_hook(platform="claude-code", platform_name="Claude Code")
         assert "Scripts/python.exe" in result

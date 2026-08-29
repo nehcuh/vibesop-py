@@ -33,6 +33,12 @@ _HASH_LENGTH = 16
 class TriageCache:
     """File-backed cache of triage results keyed by normalized query hash."""
 
+    # Entries missing this version (or carrying a different one) were written
+    # under older semantics — notably pre-2026-08-29 entries may encode the
+    # unstructured forced-match false positives — and must not surface as
+    # fresh hits or last-good fallbacks.
+    SCHEMA_VERSION = 2
+
     def __init__(self, storage_dir: str | Path = ".vibe") -> None:
         self.cache_path = Path(storage_dir) / "triage_cache.json"
         self.lock_path = Path(storage_dir) / "triage_cache.lock"
@@ -80,6 +86,8 @@ class TriageCache:
             entry = data.get(self.key_for(query))
             if not isinstance(entry, dict):
                 return None, None
+            if entry.get("v") != self.SCHEMA_VERSION:
+                return None, None
             age_seconds = time.time() - float(entry.get("ts", 0))
             fresh = (
                 entry.get("candidates_hash") == self.candidates_hash(candidates)
@@ -103,6 +111,7 @@ class TriageCache:
             with cross_process_lock(self.lock_path, blocking=False):
                 data = self._read() or {}
                 data[self.key_for(query)] = {
+                    "v": self.SCHEMA_VERSION,
                     "skill_id": route["skill_id"],
                     "confidence": route["confidence"],
                     "source": route.get("source", ""),

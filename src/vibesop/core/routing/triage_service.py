@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 # with a fresh LLM result at full weight.
 LAST_GOOD_CONFIDENCE_DECAY = 0.7
 
+# Tokens the model may use to decline a match ("no skill fits this prompt").
+_NONE_TOKENS = frozenset({"none", "null", "n/a", "no-match", "nomatch", "no_match"})
+
 
 def _resolve_vibe_dir(cache_dir: str | Path) -> Path:
     """Locate the .vibe dir from a cache dir.
@@ -340,6 +343,19 @@ class TriageService:
             self._circuit_breaker.record_success(latency_ms)
             self._circuit_breaker.maybe_trip_on_latency()
 
+            if not parsed.get("structured"):
+                # Unstructured replies (bare token / regex-scraped) carry no
+                # usable confidence signal, and the hook path has no
+                # confirmation gate — stamping them with a fixed high
+                # confidence silently injected skills into non-coding
+                # prompts (routing-precision audit 2026-08-29: 5/7
+                # negatives misrouted at a hardcoded 82%). Demote to
+                # no-match and let the remaining layers decide.
+                logger.debug(
+                    "AI triage reply was unstructured; dropping weak signal (query hash hidden)"
+                )
+                return None
+
             if skill_id:
                 candidate = next((c for c in triage_candidates if c["id"] == skill_id), None)
                 if candidate is None:
@@ -364,8 +380,9 @@ class TriageService:
                         return None
 
                     source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
-                    # Dynamic confidence: structured JSON gets higher trust than regex fallback
-                    confidence = 0.88 if parsed.get("structured") else 0.82
+                    # Structured-only path: trust the model's bounded
+                    # self-reported confidence, else default to 0.88.
+                    confidence = 0.88
                     if (
                         isinstance(parsed_confidence, (int, float))
                         and 0.0 <= float(parsed_confidence) <= 1.0
@@ -695,9 +712,10 @@ class TriageService:
             try:
                 data = json.loads(cleaned)
                 if isinstance(data, dict):
-                    result["skill_id"] = (
-                        data.get("skill_id") if isinstance(data.get("skill_id"), str) else None
-                    )
+                    raw_id = data.get("skill_id")
+                    if isinstance(raw_id, str) and raw_id.strip().lower() in _NONE_TOKENS:
+                        raw_id = None
+                    result["skill_id"] = raw_id if isinstance(raw_id, str) else None
                     result["confidence"] = data.get("confidence")
                     result["structured"] = True
                     return result
@@ -706,11 +724,15 @@ class TriageService:
 
         # Regex fallback
         if match := re.search(r"```(?:json)?\s*([\w/-]+)```", response):
-            result["skill_id"] = match.group(1).strip()
+            token = match.group(1).strip()
+            if token.lower() not in _NONE_TOKENS:
+                result["skill_id"] = token
             return result
         _MARKDOWN_FENCE_KEYWORDS = {"json", "yaml", "yml", "python", "py", "text", "markdown", "md"}
         if match := re.search(r"^[\w/-]{3,}$", response.strip(), re.MULTILINE):
             candidate = match.group(0).strip()
+            if candidate.lower() in _NONE_TOKENS:
+                return result
             if candidate.lower() not in _MARKDOWN_FENCE_KEYWORDS:
                 result["skill_id"] = candidate
                 return result

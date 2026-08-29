@@ -1092,3 +1092,81 @@ class TestExplicitGuardedSkillMatch:
         service = _make_service()
         candidates = [dict(self._SESSION_END), dict(self._OTHER)]
         assert service.explicit_guarded_skill_match("switch to RIPER please", candidates) is None
+
+
+class TestNoMatchExit:
+    """Routing-precision audit 2026-08-29: AI triage must have a usable
+    no-match exit and unstructured replies must never auto-inject.
+
+    The hook path has no interactive confirmation gate — min_confidence
+    (0.3) is the only injection gate — so a bare-token reply stamped with
+    a fixed 0.82 silently injected skills into non-coding prompts
+    (audit: 5/7 negatives misrouted). Unstructured replies are now a
+    no-match; only structured JSON can produce a SkillRoute.
+    """
+
+    def _service_with_reply(self, content: str) -> TriageService:
+        service = _make_service()
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+        service._llm.call.return_value = MagicMock(
+            content=content, model="test", tokens_used=10, input_tokens=5, output_tokens=5
+        )
+        return service
+
+    def test_bare_skill_id_reply_is_dropped(self) -> None:
+        """Unstructured bare-token reply -> no auto-inject."""
+        service = self._service_with_reply("skill-a")
+        result = service.try_ai_triage("explain the GIL", [{"id": "skill-a", "intent": "test"}])
+        assert result is None
+
+    def test_fenced_skill_id_reply_is_dropped(self) -> None:
+        """Unstructured fenced reply -> no auto-inject."""
+        service = self._service_with_reply("```skill-a```")
+        result = service.try_ai_triage("translate this", [{"id": "skill-a", "intent": "test"}])
+        assert result is None
+
+    def test_structured_null_skill_id_is_no_match(self) -> None:
+        """Structured {"skill_id": null} -> no match."""
+        service = self._service_with_reply('{"skill_id": null}')
+        result = service.try_ai_triage("explain the GIL", [{"id": "skill-a", "intent": "test"}])
+        assert result is None
+
+    def test_structured_match_honors_parsed_confidence(self) -> None:
+        service = self._service_with_reply('{"skill_id": "skill-a", "confidence": 0.93}')
+        result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
+        assert result is not None
+        assert result.match.confidence == 0.93
+
+    def test_structured_match_default_confidence(self) -> None:
+        """Structured reply without a valid confidence defaults to 0.88."""
+        service = self._service_with_reply('{"skill_id": "skill-a"}')
+        result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
+        assert result is not None
+        assert result.match.confidence == 0.88
+
+    def test_parse_bare_none_tokens(self) -> None:
+        """NONE/null bare tokens parse to skill_id None, not a skill."""
+        service = _make_service()
+        for token in ("NONE", "none", "null", "NULL", "N/A", "no-match"):
+            assert service.parse_ai_triage_response(token)["skill_id"] is None, token
+
+    def test_parse_fenced_none_token(self) -> None:
+        service = _make_service()
+        assert service.parse_ai_triage_response("```NONE```")["skill_id"] is None
+
+    def test_parse_json_string_none(self) -> None:
+        """A JSON "NONE" string normalizes to null."""
+        service = _make_service()
+        result = service.parse_ai_triage_response('{"skill_id": "NONE"}')
+        assert result["skill_id"] is None
+        assert result["structured"] is True
+
+    def test_all_prompt_versions_have_no_match_exit(self) -> None:
+        """Every registered prompt must tell the model how to say 'no match'
+        — v1 and v3 shipped without one, forcing a skill on any prompt."""
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+        for version, template in TriagePromptRegistry.VERSIONS.items():
+            lower = template.lower()
+            assert "no skill matches" in lower, f"prompt {version} lacks a no-match exit"

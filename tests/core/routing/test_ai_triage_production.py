@@ -165,7 +165,7 @@ class TestUnifiedRouterAIBudget:
         mock_llm = MagicMock()
         mock_llm.configured.return_value = True
         mock_llm.call.return_value = LLMResponse(
-            content="systematic-debugging",
+            content='{"skill_id": "systematic-debugging"}',
             model="claude-3-5-haiku-20241022",
             provider="Anthropic",
             tokens_used=100,

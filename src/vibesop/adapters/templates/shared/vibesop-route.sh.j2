@@ -11,10 +11,21 @@ INPUT=$(cat); QUERY=""; SESSION_ID=""
 # Different agents use different JSON envelope field names for the user's
 # prompt. Try them in order; fall back to raw stdin if none match (or if jq
 # is not installed, or if the input is plain text rather than JSON).
+# Some agents (kimi -p) send the prompt as a content-block ARRAY
+# ([{"type": "text", "text": ...}]) — unpack those to the joined text;
+# passing the raw blob through made the multi-intent detector fire on
+# envelope noise ("type": "text" tokens).
 if command -v jq &> /dev/null; then
     QUERY=$(echo "$INPUT" | jq -r '
+        def unblocks:
+            if type == "array"
+            then (map(if type == "string" then .
+                      elif type == "object" then (.text // empty)
+                      else empty end) | join("\n"))
+            else .
+            end;
         if type == "object"
-        then (.prompt // .user_prompt // .query // .message // .text // empty)
+        then (.prompt // .user_prompt // .query // .message // .text // empty | unblocks)
         else empty
         end' 2>/dev/null || true)
     # Forward the platform session id so route spans carry the real session

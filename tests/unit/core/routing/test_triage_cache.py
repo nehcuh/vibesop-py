@@ -221,7 +221,7 @@ class TestServiceIntegration:
         cache = TriageCache(tmp_path)
         service = _make_service(cache)
         service._llm.call.return_value = MagicMock(
-            content="skill-a", model="test", input_tokens=5, output_tokens=5
+            content='{"skill_id": "skill-a"}', model="test", input_tokens=5, output_tokens=5
         )
 
         result = service.try_ai_triage("hello world", _CANDIDATES)
@@ -382,7 +382,7 @@ class TestServiceIntegration:
         cache = TriageCache(tmp_path)
         service = _make_service(cache)  # ai_triage_max_skills = 10
         service._llm.call.return_value = MagicMock(
-            content="skill-a", model="test", input_tokens=5, output_tokens=5
+            content='{"skill_id": "skill-a"}', model="test", input_tokens=5, output_tokens=5
         )
         # 12 candidates -> the prefilter window (10) is smaller than the set;
         # pin the window deterministically via a mocked recall.
@@ -438,3 +438,86 @@ class TestServiceIntegration:
     def test_last_good_decay_constant(self) -> None:
         """The last-good decay factor is a named module constant, value 0.7."""
         assert triage_service_module.LAST_GOOD_CONFIDENCE_DECAY == 0.7
+
+
+class TestUnstructuredReplies:
+    """Routing-precision audit 2026-08-29: unstructured triage replies must
+    not inject a route nor poison the persistent cache."""
+
+    def test_bare_token_reply_no_result_no_store(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        service = _make_service(cache)
+        service._llm.call.return_value = MagicMock(
+            content="skill-a", model="test", input_tokens=5, output_tokens=5
+        )
+
+        result = service.try_ai_triage("hello world", _CANDIDATES)
+        assert result is None
+        data = (
+            json.loads(cache.cache_path.read_text(encoding="utf-8"))
+            if cache.cache_path.exists()
+            else {}
+        )
+        assert data == {}
+
+    def test_structured_reply_still_stores(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        service = _make_service(cache)
+        service._llm.call.return_value = MagicMock(
+            content='{"skill_id": "skill-a", "confidence": 0.93}',
+            model="test",
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+        result = service.try_ai_triage("hello world", _CANDIDATES)
+        assert result is not None
+        assert result.match.confidence == pytest.approx(0.93)
+        fresh, _ = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is not None
+
+
+class TestSchemaVersionGate:
+    """Entries written before the 2026-08-29 unstructured-reply fix may
+    encode forced-match false positives; they must not survive as fresh
+    hits or last-good fallbacks."""
+
+    def _write_legacy_entry(self, cache: TriageCache, query: str = "hello world") -> None:
+        key = TriageCache.key_for(query)
+        data = {
+            key: {
+                "skill_id": "skill-a",
+                "confidence": 0.82,
+                "source": "builtin/skill-a",
+                "description": "",
+                "candidates_hash": TriageCache.candidates_hash(_CANDIDATES),
+                "ts": time.time(),
+            }
+        }
+        cache.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache.cache_path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_legacy_entry_without_version_is_ignored(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        self._write_legacy_entry(cache)
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is None
+        assert stale is None
+
+    def test_wrong_version_is_ignored(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        _store(cache)
+        data = json.loads(cache.cache_path.read_text(encoding="utf-8"))
+        data[TriageCache.key_for("hello world")]["v"] = 99
+        cache.cache_path.write_text(json.dumps(data), encoding="utf-8")
+
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is None
+        assert stale is None
+
+    def test_stored_entry_carries_version(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        _store(cache)
+        data = json.loads(cache.cache_path.read_text(encoding="utf-8"))
+        entry = data[TriageCache.key_for("hello world")]
+        assert entry["v"] == TriageCache.SCHEMA_VERSION
