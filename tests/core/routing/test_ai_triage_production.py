@@ -215,6 +215,18 @@ class TestUnifiedRouterAIBudget:
         assert RoutingConfig().ai_triage_prompt_version == "v1"
         assert TriagePromptRegistry.DEFAULT_VERSION == "v3"
 
+    def test_prompt_no_match_guidance_covers_review_only(self) -> None:
+        """Held-out probe audit 2026-08-29: review-only documents were the
+        top residual FP class at the triage layer; the no-match guidance must
+        keep the review-vs-review-and-fix discriminator."""
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+        for version in ("v1", "v3"):
+            template = TriagePromptRegistry.VERSIONS[version]
+            assert "review-only" in template, version
+            assert "fix, change, or write" in template, version
+            assert "advice" in template, version
+
     def test_get_ai_triage_stats_includes_budget(self, tmp_path) -> None:
         config = RoutingConfig(ai_triage_budget_monthly=5.0)
         router = UnifiedRouter(project_root=tmp_path, config=config)

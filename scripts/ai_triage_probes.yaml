@@ -1,0 +1,78 @@
+# Held-out probe set for live AI-triage precision audits (kimi review F11).
+#
+# negatives: prompts that must NEVER inject a skill (review-only documents,
+# analysis-only, summarization, chat, concept explanations, translation,
+# reading comprehension, factual questions, advice). Same distribution as
+# the 2026-08-29 audit's N1-N7, disjoint texts.
+# positives: genuine development requests that must route (skill or plan).
+#
+# Conventions:
+# - Static content only (no dates/relative times — fixture time bombs).
+# - Keep queries >= 20 chars so the short-query bypass does not skip AI
+#   triage; the LLM path is the thing under test.
+# - >= 20 negatives keeps the one-sided 95% CI upper bound (rule of three)
+#   at ~14% for a 0-FP run.
+
+version: 1
+negatives:
+  - id: HN01
+    query: 作为外部评审，请严格评审这份 API 设计：所有端点一律返回 200，错误信息放在 body 里。只提评审意见，不要改代码。
+  - id: HN02
+    query: 帮我审阅这份测试报告还有没有遗漏的检查点，只做评审：报告覆盖了幂等性、重试和超时三方面。
+  - id: HN03
+    query: 请评审这个实验方案并只输出评审意见：单组前后测设计，没有对照组，样本量 8 人。
+  - id: HN04
+    query: 分析一下单体架构和微服务架构各自的优缺点，只要分析结论，不要动任何代码。
+  - id: HN05
+    query: 评估一下把消息队列从 Kafka 换成 RabbitMQ 的主要风险，只需要风险分析。
+  - id: HN06
+    query: 对比 Redis 和 Memcached 作为会话存储的差异，输出一份对比分析即可。
+  - id: HN07
+    query: 总结以下文档的核心观点：本文提出分层缓存策略，第一层本地 LRU，第二层分布式 Redis，并给出淘汰策略与一致性方案。
+  - id: HN08
+    query: 请把下面这段会议纪要浓缩成三句话：市场部汇报增长放缓，产品部计划简化上手流程，工程部提出重构支付模块但排期未定。
+  - id: HN09
+    query: TL;DR 一下这篇博客：先讲日志的重要性，再讲结构化日志的格式，最后给出采集与告警的落地建议。
+  - id: HN10
+    query: 嗨，刚开完会回来，今天整体进度还可以，你那边一切都顺利吗？
+  - id: HN11
+    query: 晚上不知道吃什么好，有点选择困难，帮我想想家常菜有什么推荐。
+  - id: HN12
+    query: 解释一下 TCP 三次握手为什么不能是两次，从原理层面讲清楚就行。
+  - id: HN13
+    query: 什么是幂等性？在接口设计里为什么它很重要？
+  - id: HN14
+    query: 讲讲 Docker 容器和传统虚拟机的本质区别是什么，只需要概念解释。
+  - id: HN15
+    query: 把这句话翻译成英文：我们的系统采用插件化架构，支持动态加载第三方模块。
+  - id: HN16
+    query: "Translate to Chinese: The routing engine delegates ambiguous queries to an LLM arbiter before falling back."
+  - id: HN17
+    query: 根据以下文本回答问题：谁负责上线检查？文本：发布前由运维执行检查清单，开发自测，测试回归，经理审批。
+  - id: HN18
+    query: 阅读以下描述并回答：文中提到的两个瓶颈分别是什么？描述：当前系统瓶颈在数据库慢查询和首屏静态资源体积。
+  - id: HN19
+    query: 珠穆朗玛峰的海拔是多少米？世界第二高峰又是哪座、多高？
+  - id: HN20
+    query: 光在真空中的传播速度大约是多少？换算成公里每小时呢？
+  - id: HN21
+    query: 我有三年前端经验想转后端开发，学习路线和求职方面有什么建议？
+  - id: HN22
+    query: 选购家用 NAS 主要应该看哪些参数？只想要一份建议清单。
+positives:
+  - id: HP01
+    query: 给用户模块加上邮箱验证功能并补齐对应的单元测试。
+  - id: HP02
+    query: 服务一启动就崩溃，日志信息很少，帮我系统地定位根因并修复。
+  - id: HP03
+    query: 排查这个登录接口有没有 SQL 注入风险，发现的问题直接修掉。
+  - id: HP04
+    query: 重构 payment.py，把重复出现的参数校验逻辑抽成公共函数。
+  - id: HP05
+    query: 给 CLI 新增一个 export 命令，把路由结果导出成 JSON 文件，并带测试。
+  - id: HP06
+    query: 有一个集成测试间歇性失败，帮我找出原因并让它在所有机器上稳定通过。
+  - id: HP07
+    query: 列表页接口响应要三秒，优化一下这个接口的查询性能。
+  - id: HP08
+    query: 给缓存模块写一组回归测试，覆盖并发写入和锁竞争场景。

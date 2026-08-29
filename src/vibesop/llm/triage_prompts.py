@@ -22,7 +22,10 @@ class TriagePromptRegistry:
             "4. If a skill matches, respond with ONLY a JSON object like "
             '{{"skill_id": "<selected-skill-id>"}}. No explanation. No markdown.\n'
             "5. If no skill matches the request (general questions, explanations, translation, "
-            "chat, summaries, or review-only documents), respond with exactly: NONE\n"
+            "chat, summaries, advice, or review-only content), respond with exactly: NONE. "
+            "Reviewing, evaluating, or critiquing documents, designs, reports, or plans WITHOUT "
+            "any request to change code is review-only content. A review skill may match only "
+            "when the user also asks to fix, change, or write something.\n"
             "6. ONLY select builtin/session-end if the user EXPLICITLY says they are ending the "
             "session using one of these exact phrases (or a clear synonym): 'that's all for now', "
             "'heading out', 'I'm leaving', 'I'm done', 'gotta go', '我要离开了', '先走了', '拜拜', "
@@ -64,8 +67,11 @@ class TriagePromptRegistry:
             "6. NEVER select slash-* or management skills (e.g., slash-route, slash-help). "
             "These are routing infrastructure, not user-facing skills.\n"
             "7. If no skill matches the request (general questions, explanations, translation, "
-            "chat, summaries, or review-only documents), respond with "
-            '{{"skill_id": null}}. NEVER force a match.\n\n'
+            "chat, summaries, advice, or review-only content), respond with "
+            '{{"skill_id": null}}. NEVER force a match. Reviewing, evaluating, or critiquing '
+            "documents, designs, reports, or plans WITHOUT any request to change code is "
+            "review-only content; a review skill may match only when the user also asks to "
+            "fix, change, or write something.\n\n"
             "Common patterns:\n"
             "- 'review code', 'check PR' → gstack/review or superpowers/review\n"
             "- 'test this', 'QA' → gstack/qa (for browser testing) or superpowers/tdd (for test-writing)\n"

@@ -705,8 +705,9 @@ class TriageService:
             "Select the single best-matching skill and respond with ONLY a JSON "
             'object {"skill_id": "<selected-skill-id>"}. '
             "If no skill matches the request (general questions, explanations, "
-            "translation, chat, summaries, or review-only documents), respond "
-            "with exactly: NONE"
+            "translation, chat, summaries, advice, or review-only content — "
+            "reviewing/critiquing documents, designs, or plans without changing "
+            "code), respond with exactly: NONE"
         )
 
     def init_llm_client(self) -> Any | None:
