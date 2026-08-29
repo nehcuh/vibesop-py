@@ -1428,8 +1428,12 @@ class TestParallelism:
         import threading
         import time
 
-        # 8 skills × 50ms each. Serial ≥ 400ms, parallel (8 workers) ≈ 50–100ms.
-        # We assert against a generous bound (250ms) to stay deflakey on slow CI.
+        # 8 skills × 120ms each. Serial ≥ 960ms; parallel (8 workers) ≈ 120ms
+        # sleeps + ~250ms fixed overhead observed on 2-core CI runners
+        # (2026-08-29: 0.31-0.32s for 8×50ms). The 600ms bound keeps margin
+        # on BOTH sides: genuinely parallel stays well under, serial lands far
+        # above — a bare bound bump to just-under-serial would be flake-prone
+        # again as runner speed drifts.
         skills = {}
         for i in range(8):
             sid = f"g/{i}"
@@ -1446,7 +1450,7 @@ class TestParallelism:
             with lock:
                 active += 1
                 max_concurrent = max(max_concurrent, active)
-            time.sleep(0.05)
+            time.sleep(0.12)
             with lock:
                 active -= 1
             return _make_profile(loaded.metadata.id)  # type: ignore[attr-defined]
@@ -1469,9 +1473,9 @@ class TestParallelism:
 
         assert result.success is True
         assert result.indexed_count == 8
-        # Serial would be ~400ms; parallel with 8 workers ≈ 50ms.
-        # Generous bound to absorb scheduling + GIL noise.
-        assert elapsed < 0.25, f"Indexer not parallelizing: 8×50ms slept took {elapsed:.3f}s"
+        # Serial would be ~960ms; parallel with 8 workers ≈ 120ms + overhead.
+        # Bound chosen for margin on both sides (see comment above).
+        assert elapsed < 0.60, f"Indexer not parallelizing: 8×120ms slept took {elapsed:.3f}s"
         assert max_concurrent > 1, "Expected concurrent _analyze_skill executions"
 
     def test_analyze_failure_in_one_thread_doesnt_kill_others(
