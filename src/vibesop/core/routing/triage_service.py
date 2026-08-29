@@ -667,7 +667,18 @@ class TriageService:
         if self._prompt_builder is not None:
             version = getattr(self._config, "ai_triage_prompt_version", "v2")
             return self._prompt_builder(query, skills_summary, version)
-        return f"Query: {query}\nSkills:\n{skills_summary}\nSelect best skill."
+        # Minimal fallback (no prompt_builder injected): must carry the same
+        # JSON-match / NONE-decline contract as the registry prompts — a
+        # forced-match fallback reintroduces the audit's false-positive
+        # channel on routers built without a prompt_builder.
+        return (
+            f"Query: {query}\nSkills:\n{skills_summary}\n"
+            "Select the single best-matching skill and respond with ONLY a JSON "
+            'object {"skill_id": "<selected-skill-id>"}. '
+            "If no skill matches the request (general questions, explanations, "
+            "translation, chat, summaries, or review-only documents), respond "
+            "with exactly: NONE"
+        )
 
     def init_llm_client(self) -> Any | None:
         if os.getenv("VIBE_AI_TRIAGE_ENABLED", "").lower() in ("0", "false", "no"):

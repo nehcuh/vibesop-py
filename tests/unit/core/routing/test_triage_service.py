@@ -1170,3 +1170,21 @@ class TestNoMatchExit:
         for version, template in TriagePromptRegistry.VERSIONS.items():
             lower = template.lower()
             assert "no skill matches" in lower, f"prompt {version} lacks a no-match exit"
+
+    def test_all_prompt_versions_request_json_match_exit(self) -> None:
+        """A bare-ID match exit would be silently dropped by the
+        unstructured gate (positive-recall hole): every prompt must ask
+        for the JSON form on matches."""
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+        for version, template in TriagePromptRegistry.VERSIONS.items():
+            assert '"skill_id"' in template, f"prompt {version} lacks a JSON match exit"
+
+    def test_minimal_fallback_prompt_carries_json_and_none_contract(self) -> None:
+        """The no-prompt_builder fallback must match the registry prompts'
+        JSON-match / NONE-decline contract — a forced-match fallback
+        reintroduces the false-positive channel on builder-less routers."""
+        service = _make_service()
+        prompt = service.build_ai_triage_prompt("test query", "- skill-a: test")
+        assert '"skill_id"' in prompt
+        assert "NONE" in prompt

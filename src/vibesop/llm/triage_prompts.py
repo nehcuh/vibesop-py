@@ -19,7 +19,8 @@ class TriagePromptRegistry:
             "1. Read the user request carefully.\n"
             "2. Consider the intent, not just keywords.\n"
             "3. Select the skill that best matches the request.\n"
-            "4. Return ONLY the skill ID. No explanation. No markdown.\n"
+            "4. If a skill matches, respond with ONLY a JSON object like "
+            '{{"skill_id": "<selected-skill-id>"}}. No explanation. No markdown.\n'
             "5. If no skill matches the request (general questions, explanations, translation, "
             "chat, summaries, or review-only documents), respond with exactly: NONE\n"
             "6. ONLY select builtin/session-end if the user EXPLICITLY says they are ending the "
@@ -29,7 +30,8 @@ class TriagePromptRegistry:
             "negative status, or technical questions.\n\n"
             "User request: {query}\n\n"
             "Available skills:\n{skills_summary}\n\n"
-            "Return ONLY the skill ID (e.g., gstack/review or gstack/investigate):\n"
+            "Respond with the JSON object only (e.g., "
+            '{{"skill_id": "gstack/review"}}) or NONE:\n'
         ),
         "v2": (
             "You are a skill routing assistant. Your job is to select the single most appropriate "
