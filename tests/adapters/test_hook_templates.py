@@ -11,6 +11,20 @@ import pytest
 from vibesop.adapters._shared import render_route_hook
 
 
+def _bash_path(path: Path) -> str:
+    """Native path -> colon-safe Git Bash PATH entry.
+
+    ``as_posix()`` alone is not enough on Windows: ``C:/x/y`` still contains
+    the drive-letter colon, and bash splits PATH on ``:`` — the entry
+    shatters into ``C`` and ``/x/y`` (which does not exist under the MSYS
+    root). Git Bash resolves MSYS form ``/c/x/y``.
+    """
+    s = path.resolve().as_posix()
+    if len(s) > 1 and s[1] == ":":
+        s = "/" + s[0].lower() + s[2:]
+    return s
+
+
 class TestRenderRouteHook:
     """Tests for ``render_route_hook()``."""
 
@@ -190,11 +204,11 @@ class TestRouteHookSessionForwarding:
             cwd=tmp_path,
             env={
                 "HOME": str(home),
-                # as_posix(): a Windows backslash PATH entry (C:\Program
-                # Files\jq) is not resolvable by Git Bash, which silently
-                # skips jq extraction — the tests then "pass" via the raw
-                # blob substring falling back into QUERY.
-                "PATH": f"/usr/bin:/bin:{Path(jq).parent.as_posix()}",
+                # _bash_path(): Windows drive-letter colon would split the
+                # bash PATH entry (C:/x -> "C" + "/x"); MSYS form /c/x
+                # resolves. A broken entry silently skips jq extraction and
+                # the tests then "pass" via the raw blob fallback.
+                "PATH": f"/usr/bin:/bin:{_bash_path(Path(jq).parent)}",
             },
             timeout=60,
             check=False,
@@ -300,7 +314,7 @@ class TestRouteHookSessionForwarding:
             env={
                 "HOME": str(home),
                 "APPDATA": str(appdata),
-                "PATH": f"/usr/bin:/bin:{Path(jq).parent.as_posix()}",
+                "PATH": f"/usr/bin:/bin:{_bash_path(Path(jq).parent)}",
             },
             timeout=60,
             check=False,
