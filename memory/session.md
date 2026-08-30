@@ -1,6 +1,16 @@
 
 ## Current Session
 
+### S53 (2026-08-30 15:08~) [vibesop-py] pull×2 + 多路独立对抗评审 → workflow 修复 → claude 节点复审
+
+- **评审**:pull 3c1deb6→51319ba（24 commits）后 5 路独立对抗评审 → P1×2（benchmark 指纹 CRLF 失效+可投毒 CI [三路独立实证]；HookInstaller clobber opencode/pi adapter 产物 [E2E 复现]）+ P2×8；增量 pull（05d9e29）再 2 路 → R6 A/B 报告规则 5 事后豁免（P1）+ 框架不对称 1/3 vs 0/2（P2）等
+- **修复**:5 路并行 coder（routing/hooks/orchestration/scripts+CI/omx 文档）→ 4 路独立对抗验证 → 9 项残留（含 2 项新引入：非 UTF-8 install 崩溃、verify 新误报）→ 跟进修复 → claude 5 分块终审全 APPROVE → 终审残留（.gitattributes 收窄、CRLF 测试 Windows 恒真、verify 空格形态逃逸等）清零
+- **验证**:全量 6507 passed（2 fail stash 对照证实 pre-existing flake）；本机 Windows CRLF 检出 `eval_routing --hermetic --check` 从 exit 3 STALE → exit 0 OK
+- **产出**:24 文件 +1016/−90；遗留不阻塞：marker-less 旧 hook 不再被升级/卸载（需 release note 或 `vibe hooks repair`）、installer 无 "skipped" 状态
+- **教训**:`claude -p` 大 prompt 挂死 = 工具权限阻断非 prompt 大小，`--tools ""` 立解；AGENTS.md 会被 vibe 工具链会话中再生成 → project-knowledge.md
+- Next: 24 commits（S52 遗留）+ 本轮修复待 push；本轮改动按 fix(routing)/fix(hooks)/fix(orchestration)/fix(scripts+ci)/docs(omx) 分组提交
+- Recorded: yes — claude --tools "" + AGENTS.md 再生成 → project-knowledge.md
+
 ### S52b (2026-08-28) [vibesop-py] Claude Code 2.1.220 hook 127 根因探针 + 产品侧修复 → PR #115 merged
 
 - 用户报告 S51 修复后仍每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`

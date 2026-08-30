@@ -2,6 +2,20 @@
 
 ## Technical Pitfalls
 
+### `claude -p` 大 prompt 无声挂死 — 挂点不是 prompt 大小而是工具权限阻断；`--tools ""` 立解 (2026-08-30)
+
+**Issue**: 用 `claude -p --output-format text < prompt.md`（stdin 传入 13KB+ 评审 prompt）做外部复审时，进程零输出挂死直到超时（20–30 分钟，5 路并行与单路串行同现）；同 CLI 小 prompt 秒回。Git Bash 下 `$(<file)` 传参另有 `Argument list too long`（~54KB 即触发），须走 stdin。
+
+**Root Cause** [executed，对照实验]：挂点不是 prompt 大小也不是限流（429 会显式报错退出）——`-p` 模式默认挂全套工具，模型一旦决定调工具（评审 diff 时几乎必然想去 Read/Grep 仓库）就撞上无人值守的权限提示，永久阻塞。加 `--tools ""` 禁掉全部工具后同一 prompt 正常出评审。
+
+**Solution**: 无人值守调 `claude -p` 做纯文本评审/咨询时，永远带 `--tools ""`；大 prompt 走 stdin 重定向而非命令行参数；并发 >2 路会撞账号 429（`API Error: Request rejected (429)`），失败重跑即可。
+
+### vibe 工具链会在会话中静默再生成 AGENTS.md — 评审/提交前必须 `git status` 复查 (2026-08-30)
+
+**Issue**: 会话期间 AGENTS.md 被反复改写（`Platform: Multi` → `Pi Coding Agent` 整体再生成、Generated 日期清空、丢末尾换行），mtime 与子代理跑 `vibe`/`uv run` 的时间重合；`git status` 显示 ` M AGENTS.md`，与手头任务完全无关。
+
+**Solution**: 这是项目自身 CLI 的再生成行为，不是编辑器改动。任何 diff 评审/commit 分组前把 AGENTS.md 列入显式排除清单，或 `git checkout -- AGENTS.md` 还原；多路并行子代理场景下它会被多次再生，收尾时再还原一次。
+
 ### Claude Code hook command 的「安全形态」随宿主版本翻转 — 规范必须靠实机探针钉死 (2026-08-28)
 
 **Issue**: 08-26/27 两轮修复钉死的规范形态（先 quoted POSIX、后 config-relative `hooks/<name>.sh`）在 Claude Code **自动升级到 2.1.220** 后全部失效，用户每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`（127）。当时基于「宿主把非绝对 command path-join 到 `~/.claude\`」的修复前提，在新宿主上不存在了。
