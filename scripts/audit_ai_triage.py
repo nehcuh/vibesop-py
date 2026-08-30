@@ -124,7 +124,18 @@ def run_probe(query: str, timeout: int = 120) -> str:
 
 
 def park_cache() -> bool:
-    """Move the triage cache aside; returns True if it existed."""
+    """Move the triage cache aside; returns True if it existed.
+
+    A leftover ``.audit-bak`` means a previous run was killed mid-flight:
+    recover it first (or refuse when both files exist) so the old backup is
+    never silently clobbered by a fresh park."""
+    if CACHE_BACKUP.exists():
+        if CACHE_PATH.exists():
+            raise RuntimeError(
+                f"leftover backup {CACHE_BACKUP} and cache {CACHE_PATH} both "
+                "exist — resolve manually before re-running"
+            )
+        CACHE_BACKUP.replace(CACHE_PATH)
     if CACHE_PATH.exists():
         CACHE_PATH.replace(CACHE_BACKUP)
         return True
@@ -132,8 +143,12 @@ def park_cache() -> bool:
 
 
 def restore_cache(parked: bool) -> None:
+    """Undo park_cache. With no pre-existing cache, delete whatever the
+    probes just wrote so the audit leaves no trace in .vibe/."""
     if parked:
         CACHE_BACKUP.replace(CACHE_PATH)
+    else:
+        CACHE_PATH.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -152,11 +167,16 @@ def main() -> int:
 
     parked = False
     if not args.no_fresh:
-        parked = park_cache()
+        try:
+            parked = park_cache()
+        except RuntimeError as e:
+            print(f"cache error: {e}", file=sys.stderr)
+            return 2
 
     fp: list[str] = []
     misses: list[str] = []
     unknown: list[str] = []
+    unknown_positives: list[str] = []
     try:
         for probe in negatives:
             v = classify(run_probe(probe.query))
@@ -173,19 +193,27 @@ def main() -> int:
                 misses.append(probe.id)
             elif v.outcome == "unknown":
                 unknown.append(probe.id)
+                unknown_positives.append(probe.id)
             print(f"{probe.id} [pos] {mark} {v.detail}")
     except subprocess.TimeoutExpired:
         print("probe timed out", file=sys.stderr)
         return 1
+    except FileNotFoundError:
+        print("env error: 'uv' not found on PATH", file=sys.stderr)
+        return 2
     finally:
-        restore_cache(parked)
+        if not args.no_fresh:
+            restore_cache(parked)
 
     n_neg = len(negatives)
     print("\n==== SUMMARY ====")
     print(f"negative false-positives: {len(fp)}/{n_neg} {fp}")
     if not fp:
         print(f"one-sided 95% FP upper bound: {fp_upper_bound(n_neg):.1%}")
-    print(f"positive routed: {len(positives) - len(misses)}/{len(positives)} {misses}")
+    routed = len(positives) - len(misses) - len(unknown_positives)
+    print(f"positive routed: {routed}/{len(positives)} {misses}")
+    if unknown_positives:
+        print(f"positive unparseable: {unknown_positives}")
     if unknown:
         print(f"unparseable: {unknown}")
 

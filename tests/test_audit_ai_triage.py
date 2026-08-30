@@ -118,3 +118,53 @@ class TestDataset:
         bad.write_text(body, encoding="utf-8")
         with pytest.raises(ValueError, match="duplicate"):
             audit.load_probes(bad)
+
+
+class TestCacheParking:
+    """park_cache/restore_cache must never clobber a leftover backup and
+    must leave no trace when there was no cache before the run."""
+
+    @pytest.fixture()
+    def cache_paths(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+        cache = tmp_path / "triage_cache.json"
+        backup = tmp_path / "triage_cache.json.audit-bak"
+        monkeypatch.setattr(audit, "CACHE_PATH", cache)
+        monkeypatch.setattr(audit, "CACHE_BACKUP", backup)
+        return cache, backup
+
+    def test_existing_cache_parked_and_restored(self, cache_paths: tuple[Path, Path]) -> None:
+        cache, backup = cache_paths
+        cache.write_text("{}", encoding="utf-8")
+        assert audit.park_cache() is True
+        assert not cache.exists() and backup.exists()
+        audit.restore_cache(parked=True)
+        assert cache.exists() and not backup.exists()
+
+    def test_leftover_backup_recovered_before_park(self, cache_paths: tuple[Path, Path]) -> None:
+        """A killed run leaves only the backup; the next run must recover it
+        instead of ignoring it."""
+        cache, backup = cache_paths
+        backup.write_text("{}", encoding="utf-8")
+        assert audit.park_cache() is True  # recovered, then parked again
+        assert backup.exists() and not cache.exists()
+        audit.restore_cache(parked=True)
+        assert cache.read_text(encoding="utf-8") == "{}"
+
+    def test_leftover_backup_with_cache_refuses(self, cache_paths: tuple[Path, Path]) -> None:
+        """Both files present is ambiguous — parking would clobber the old
+        backup, so it must refuse."""
+        cache, backup = cache_paths
+        cache.write_text("{}", encoding="utf-8")
+        backup.write_text("{}", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="resolve manually"):
+            audit.park_cache()
+        assert cache.exists() and backup.exists()  # untouched
+
+    def test_no_prior_cache_leaves_no_trace(self, cache_paths: tuple[Path, Path]) -> None:
+        """With no cache before the run, the probes' freshly written cache
+        must be deleted afterwards."""
+        cache, _ = cache_paths
+        assert audit.park_cache() is False
+        cache.write_text("{}", encoding="utf-8")  # written by the probes
+        audit.restore_cache(parked=False)
+        assert not cache.exists()
