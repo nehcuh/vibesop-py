@@ -15,6 +15,7 @@ import concurrent.futures
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -33,6 +34,12 @@ from vibesop.core.orchestration.collaboration_protocol import (
     HandoffPayload,
     ReviewVerdict,
     create_protocol,
+)
+from vibesop.core.orchestration.events import (
+    PlanEventLog,
+    PlanEventType,
+    plan_snapshot_projection,
+    step_transition_payload,
 )
 
 if TYPE_CHECKING:
@@ -133,6 +140,7 @@ class WorkflowEngine:
         llm_client: Any = None,
         prompt_chain_output_dir: str = ".vibe/prompts",
         router: Any = None,
+        event_log: PlanEventLog | None = None,
     ):
         """Initialize the workflow engine.
 
@@ -141,11 +149,14 @@ class WorkflowEngine:
             llm_client: LLM client for re-orchestration analysis and squad reviews
             prompt_chain_output_dir: Output directory for prompt chain files
             router: Optional router for routing appended steps to real skills
+            event_log: Optional plan event log (side-panel task list contract).
+                When None, all event emission is a zero-overhead no-op.
         """
         self._config = config or WorkflowEngineConfig()
         self._llm = llm_client
         self._prompt_chain_output_dir = prompt_chain_output_dir
         self._router = router
+        self._events = event_log
         self._start_time: float = 0.0
 
     @staticmethod
@@ -177,6 +188,105 @@ class WorkflowEngine:
         if has_error:
             return "partial"
         return "completed"
+
+    # ── Plan event emission (side-panel task list contract) ────────────────
+    # All helpers no-op when no event log is injected. Emission points are
+    # additive only: they never alter execution flow or return structures.
+
+    def _begin_plan_events(self, plan: ExecutionPlan) -> None:
+        """Register the plan and emit the initial ``plan_snapshot``.
+
+        The engine (not ``on_plan_ready``) owns the initial snapshot: it is
+        the single writer of every later step transition, and only here is
+        the plan already ACTIVE. The plan object is mutated in place during
+        execution, so one ``update_plan`` keeps log snapshots current.
+        """
+        if self._events is None:
+            return
+        self._events.update_plan(plan)
+        self._events.append(
+            plan.plan_id,
+            PlanEventType.PLAN_SNAPSHOT,
+            {"plan": plan_snapshot_projection(plan)},
+        )
+
+    def _emit_step_transition(
+        self,
+        plan_id: str,
+        step: ExecutionStep,
+        *,
+        error: str | None = None,
+    ) -> None:
+        """Emit a ``step_transition`` event for the step's current state."""
+        if self._events is None:
+            return
+        self._events.append(
+            plan_id,
+            PlanEventType.STEP_TRANSITION,
+            step_transition_payload(step, error=error),
+        )
+
+    def _emit_plan_mutated(self, plan_id: str, payload: dict[str, Any]) -> None:
+        """Emit a ``plan_mutated`` event for a reorchestration decision."""
+        if self._events is None:
+            return
+        self._events.append(plan_id, PlanEventType.PLAN_MUTATED, payload)
+
+    def _emit_plan_terminal(
+        self,
+        plan: ExecutionPlan,
+        *,
+        final_status: str,
+        total_steps_executed: int,
+        reorchestration_rounds: int = 0,
+        error: str | None = None,
+        escalation_message: str | None = None,
+    ) -> None:
+        """Emit the ``plan_terminal`` event closing a run.
+
+        ``final_status`` covers the full terminal vocabulary of the contract
+        (completed/partial/failed/terminated_early), which is wider than
+        ``DynamicExecutionResult.final_status`` — the result model is left
+        unchanged and keeps deriving from ``_compute_final_status``.
+        ``error`` is set only for crash-terminated runs; ``escalation_message``
+        only when an escalate decision ended the run.
+        """
+        if self._events is None:
+            return
+        payload: dict[str, Any] = {
+            "final_status": final_status,
+            "total_steps_executed": total_steps_executed,
+            "reorchestration_rounds": reorchestration_rounds,
+        }
+        if error is not None:
+            payload["error"] = error
+        if escalation_message is not None:
+            payload["escalation_message"] = escalation_message
+        self._events.append(plan.plan_id, PlanEventType.PLAN_TERMINAL, payload)
+
+    def _run_guarded(
+        self,
+        plan: ExecutionPlan,
+        run_fn: Callable[..., Any],
+        *args: Any,
+    ) -> Any:
+        """Run an execution path; on escape, emit a failed plan_terminal first.
+
+        Step-level failures are handled inside each path (step marked failed,
+        loop breaks) and never reach this guard — only unexpected crashes do.
+        The exception is re-raised unchanged after the terminal event so
+        callers observe exactly the same failure as without an event log.
+        """
+        try:
+            return run_fn(plan, *args)
+        except Exception as e:
+            self._emit_plan_terminal(
+                plan,
+                final_status="failed",
+                total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
+                error=str(e),
+            )
+            raise
 
     def run(
         self,
@@ -213,14 +323,18 @@ class WorkflowEngine:
                 raise
 
         if plan.workflow_pattern == WorkflowPattern.LOOP_UNTIL_DRY:
-            return self._run_loop_until_dry(plan, executor)
+            self._begin_plan_events(plan)
+            return self._run_guarded(plan, self._run_loop_until_dry, executor)
         if plan.workflow_pattern == WorkflowPattern.TOURNAMENT:
-            return self._run_tournament(plan, executor)
+            self._begin_plan_events(plan)
+            return self._run_guarded(plan, self._run_tournament, executor)
         if plan.workflow_pattern == WorkflowPattern.PROMPT_CHAIN:
-            return self._run_prompt_chain(plan)
+            self._begin_plan_events(plan)
+            return self._run_guarded(plan, self._run_prompt_chain)
 
         # Fallback: treat as sequential
-        return self._run_sequential(plan, executor)
+        self._begin_plan_events(plan)
+        return self._run_guarded(plan, self._run_sequential, executor)
 
     async def run_async(
         self,
@@ -241,14 +355,25 @@ class WorkflowEngine:
         plan.status = PlanStatus.ACTIVE
         plan.is_dynamic = True
         context = context or {}
+        # Squad entry point: emits the initial snapshot here so run()->run_async
+        # does not double-emit (run() only snapshots the non-squad paths).
+        self._begin_plan_events(plan)
 
         pattern = plan.workflow_pattern
-        if pattern == WorkflowPattern.AGENT_SQUAD:
-            return await self._run_agent_squad(plan, context, executor)
-        if pattern == WorkflowPattern.DEBATE:
-            return await self._run_debate(plan, context, executor)
-        if pattern == WorkflowPattern.RED_TEAM:
-            return await self._run_red_team(plan, context, executor)
+        try:
+            if pattern == WorkflowPattern.AGENT_SQUAD:
+                return await self._run_agent_squad(plan, context, executor)
+            if pattern == WorkflowPattern.DEBATE:
+                return await self._run_debate(plan, context, executor)
+            if pattern == WorkflowPattern.RED_TEAM:
+                return await self._run_red_team(plan, context, executor)
+        except Exception as e:
+            # Crash inside a squad run: close the event stream with a failed
+            # terminal before the exception propagates (M3).
+            self._emit_plan_terminal(
+                plan, final_status="failed", total_steps_executed=0, error=str(e)
+            )
+            raise
 
         raise ValueError(f"Pattern {pattern.value} is not a squad pattern")
 
@@ -280,6 +405,8 @@ class WorkflowEngine:
         accumulated: dict[str, str] = {}
         dry_count = 0
         round_count = 0
+        terminated_early = False
+        escalation_message: str | None = None
         history: list[dict[str, Any]] = []
         if degraded:
             history.append(
@@ -295,12 +422,18 @@ class WorkflowEngine:
         while step_idx < len(plan.steps):
             step = plan.steps[step_idx]
             if step.is_verification_step:
+                # Verification steps are not executed in this loop. Mark and
+                # emit them as skipped so observers see an explicit
+                # transition instead of a silent gap in the step list.
+                step.status = StepStatus.SKIPPED
+                self._emit_step_transition(plan.plan_id, step)
                 step_idx += 1
                 continue
 
             # Execute step
             step.status = StepStatus.IN_PROGRESS
             step.dynamic_status = DynamicNodeStatus.RUNNING
+            self._emit_step_transition(plan.plan_id, step)
 
             try:
                 output = executor(step)
@@ -308,11 +441,13 @@ class WorkflowEngine:
                 step.dynamic_status = DynamicNodeStatus.COMPLETED
                 results[step.step_id] = output
                 accumulated[step.output_as] = str(output) if output else ""
+                self._emit_step_transition(plan.plan_id, step)
             except Exception as e:
                 step.status = StepStatus.FAILED
                 step.dynamic_status = DynamicNodeStatus.FAILED
                 results[step.step_id] = {"error": str(e)}
                 logger.warning("Dynamic step %s failed: %s", step.step_id, e)
+                self._emit_step_transition(plan.plan_id, step, error=str(e))
                 break
 
             # Re-orchestrate after each step
@@ -332,10 +467,28 @@ class WorkflowEngine:
 
                 if analysis.decision == ReorchestrationDecision.TERMINATE_EARLY:
                     logger.info("Loop-until-dry: terminating early after round %d", round_count)
+                    terminated_early = True
+                    self._emit_plan_mutated(
+                        plan.plan_id,
+                        {
+                            "decision": analysis.decision.value,
+                            "remaining_step_ids": [
+                                s.step_id for s in plan.steps if s.status == StepStatus.PENDING
+                            ],
+                        },
+                    )
                     break
 
                 if analysis.decision == ReorchestrationDecision.ESCALATE:
                     logger.info("Loop-until-dry: escalating at round %d", round_count)
+                    escalation_message = analysis.escalation_message
+                    self._emit_plan_mutated(
+                        plan.plan_id,
+                        {
+                            "decision": analysis.decision.value,
+                            "escalation_message": analysis.escalation_message,
+                        },
+                    )
                     break
 
                 if analysis.decision == ReorchestrationDecision.APPEND_STEPS:
@@ -343,6 +496,20 @@ class WorkflowEngine:
                     new_steps = self._create_steps_from_analysis(plan, analysis.new_sub_tasks)
                     plan.steps.extend(new_steps)
                     logger.info("Appended %d new steps at round %d", len(new_steps), round_count)
+                    self._emit_plan_mutated(
+                        plan.plan_id,
+                        {
+                            "decision": analysis.decision.value,
+                            "added_steps": [
+                                {
+                                    "step_id": s.step_id,
+                                    "step_number": s.step_number,
+                                    "intent": s.intent,
+                                }
+                                for s in new_steps
+                            ],
+                        },
+                    )
 
                 elif analysis.decision == ReorchestrationDecision.LOOP_BACK:
                     dry_count = 0
@@ -370,6 +537,17 @@ class WorkflowEngine:
                             target_id,
                             target_step.loop_iteration,
                         )
+                        self._emit_plan_mutated(
+                            plan.plan_id,
+                            {
+                                "decision": analysis.decision.value,
+                                "loop_back_step_id": target_id,
+                            },
+                        )
+                        # The rewind is itself a step transition: the target
+                        # step goes back to pending/looping with a bumped
+                        # loop_iteration.
+                        self._emit_step_transition(plan.plan_id, target_step)
                     else:
                         logger.warning(
                             "LOOP_BACK to step %s skipped (not found, ahead of cursor, "
@@ -399,6 +577,16 @@ class WorkflowEngine:
                             "reasoning": "degraded goals-met (no LLM)",
                         }
                     )
+                    terminated_early = True
+                    self._emit_plan_mutated(
+                        plan.plan_id,
+                        {
+                            "decision": ReorchestrationDecision.TERMINATE_EARLY.value,
+                            "remaining_step_ids": [
+                                s.step_id for s in plan.steps if s.status == StepStatus.PENDING
+                            ],
+                        },
+                    )
                     break
                 dry_count += 1
                 if dry_count >= plan.dry_threshold:
@@ -410,10 +598,27 @@ class WorkflowEngine:
         plan.status = PlanStatus.COMPLETED
         plan.reorchestration_history = history
 
+        total_executed = sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED)
+        # Escalation ends the run awaiting human intervention; map it to
+        # "terminated_early" (the contract has no separate escalate terminal)
+        # and carry the message so the UI can force-expand the panel.
+        final_status = (
+            "terminated_early"
+            if terminated_early or escalation_message is not None
+            else self._compute_final_status(results)
+        )
+        self._emit_plan_terminal(
+            plan,
+            final_status=final_status,
+            total_steps_executed=total_executed,
+            reorchestration_rounds=round_count,
+            escalation_message=escalation_message,
+        )
+
         return DynamicExecutionResult(
             plan_id=plan.plan_id,
             pattern=WorkflowPattern.LOOP_UNTIL_DRY,
-            total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
+            total_steps_executed=total_executed,
             reorchestration_rounds=round_count,
             final_status=self._compute_final_status(results),
             results=results,
@@ -443,14 +648,18 @@ class WorkflowEngine:
             """Execute one contestant; mutate its status, propagate errors."""
             step.status = StepStatus.IN_PROGRESS
             step.dynamic_status = DynamicNodeStatus.RUNNING
+            # Thread-safe: PlanEventLog serializes seq allocation under a lock.
+            self._emit_step_transition(plan.plan_id, step)
             try:
                 output = executor(step)
                 step.status = StepStatus.COMPLETED
                 step.dynamic_status = DynamicNodeStatus.COMPLETED
+                self._emit_step_transition(plan.plan_id, step)
                 return output
-            except Exception:
+            except Exception as e:
                 step.status = StepStatus.FAILED
                 step.dynamic_status = DynamicNodeStatus.FAILED
+                self._emit_step_transition(plan.plan_id, step, error=str(e))
                 raise
 
         # Execute all contestants in parallel; each worker mutates its own step.
@@ -486,12 +695,17 @@ class WorkflowEngine:
 
         plan.status = PlanStatus.COMPLETED
 
+        total_executed = sum(1 for s in contestant_steps if s.status == StepStatus.COMPLETED)
+        self._emit_plan_terminal(
+            plan,
+            final_status=self._compute_final_status(results),
+            total_steps_executed=total_executed,
+        )
+
         return DynamicExecutionResult(
             plan_id=plan.plan_id,
             pattern=WorkflowPattern.TOURNAMENT,
-            total_steps_executed=sum(
-                1 for s in contestant_steps if s.status == StepStatus.COMPLETED
-            ),
+            total_steps_executed=total_executed,
             reorchestration_rounds=0,
             final_status=self._compute_final_status(results),
             champion_index=(tournament_result.champion_index if any(contestant_outputs) else None),
@@ -542,6 +756,9 @@ class WorkflowEngine:
             llm_client=self._llm,
             output_dir=self._prompt_chain_output_dir,
         )
+        # Note: no plan_terminal here — "prompts_generated" is outside the
+        # terminal vocabulary of the plan event contract; only the initial
+        # snapshot is emitted for this pattern.
         prompt_files = generator.generate(plan)
         written = generator.write_files(prompt_files)
 
@@ -573,21 +790,31 @@ class WorkflowEngine:
 
         for step in plan.steps:
             step.status = StepStatus.IN_PROGRESS
+            self._emit_step_transition(plan.plan_id, step)
             try:
                 output = executor(step)
                 step.status = StepStatus.COMPLETED
                 results[step.step_id] = output
+                self._emit_step_transition(plan.plan_id, step)
             except Exception as e:
                 step.status = StepStatus.FAILED
                 results[step.step_id] = {"error": str(e)}
+                self._emit_step_transition(plan.plan_id, step, error=str(e))
                 break
 
         plan.status = PlanStatus.COMPLETED
 
+        total_executed = sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED)
+        self._emit_plan_terminal(
+            plan,
+            final_status=self._compute_final_status(results),
+            total_steps_executed=total_executed,
+        )
+
         return DynamicExecutionResult(
             plan_id=plan.plan_id,
             pattern=plan.workflow_pattern,
-            total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
+            total_steps_executed=total_executed,
             final_status=self._compute_final_status(results),
             results=results,
         )
@@ -731,6 +958,17 @@ class WorkflowEngine:
             round_num += 1
 
         plan.status = PlanStatus.COMPLETED
+
+        # Plan-level terminal event (squad members are SquadStep objects, out
+        # of step_transition scope — see events.py module docstring).
+        # Reaching this point means no member crashed (those propagate), so
+        # the run completed.
+        self._emit_plan_terminal(
+            plan,
+            final_status="completed",
+            total_steps_executed=len(outputs),
+            reorchestration_rounds=round_num,
+        )
 
         return SquadExecutionResult(
             squad=squad,
