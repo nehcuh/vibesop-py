@@ -6,18 +6,21 @@
 
 ## Goals
 
-### Current Week (August 23-29, 2026)
+### Current Week (August 23-30, 2026)
 
 1. **Claude Code 2.1.220 hook 形态修复** ✅ (Completed - Aug 28, PR #115 merged `f6f32c6`)
    - 实机探针证伪 S51 前提（宿主改 `bash -c` + 会话 CWD spawn）；生成器/rewrite/verify/e2e 四层统一 `bash <posix-abs>`；CI 11/11 job 绿；本机 `~/.claude` 已重部署
    - 教训入 project-knowledge：hook 规范形态必须对用户实际版本实机探针钉死
-2. **S52 深度治理主线**（in progress）— 分支 `governance/s52-deep-clean` 已建，Phase 1 六路对抗诊断未跑
-3. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
+2. **A/B 效果验证系列 R1-R6 收官** ✅ (Completed - Aug 29-30，`855de0a`+`05d9e29` push CI 全绿)
+   - 强模型四连平手 → harness 假说（结构层赢提示词层）；R6 弱模型：treatment 22/25 vs control 零产物×2，但路由 2/2 no-match 零技能消费——**路由层是弱模型第一瓶颈**；公众号深度调研报告已成稿
+   - 待办：R5 第二轮人评（8801/8802，封盘前最后一步）
+3. **S52 深度治理主线**（in progress）— 分支 `governance/s52-deep-clean` 已建，Phase 1 六路对抗诊断未跑
+4. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
-4. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
-5. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
-6. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
-7. **gate42/43 后续验收**（cron 触发）：8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
+5. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
+6. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
+7. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
+8. **gate42/43 后续验收**（cron 触发）：8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
 
 ### Previous Weeks (July 26 - August 16, 2026) — Completed
 

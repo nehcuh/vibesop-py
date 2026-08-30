@@ -2,6 +2,16 @@
 
 ## Technical Pitfalls
 
+### 弱模型 agentic 实验三坑：截断即错误 / 思考循环 / 处理静默丢失 (2026-08-29, R6)
+
+**Issue**: R6 弱模型 A/B（27B via oMLX）连续 3 次 treatment 尝试零产物死亡，表面全是"模型不行"，实为三个可修的基础设施问题。
+
+**Root Causes & Solutions** [executed]:
+1. **推理服务器把"超 max_tokens 截断"当错误上报**（error_kind=max_tokens_truncation）→ grok 按错误整体终止 rc=1。解法：max_completion_tokens 提到 32768。坑在"截断"与"错误"的语义合并——传统 API 截断只截不炸。
+2. **弱模型单轮思考循环**：一次观测 45 分钟、11006 个 reasoning 事件、零工具调用，直到撞帽。解法：runner 加 `--reasoning-effort low --no-plan`（11006→15 事件）。事件计数 ≠ token 数，死亡判据要看 stderr 的 promptUsage。
+3. **路由 LLM 静默丢失**：factory ollama 分支不透传 config model → 回退硬编码默认名 → 服务器上不存在 → 52ms 404 → 无声降级无 LLM 模式。**A/B 表面一切正常，公平性已被破坏**。解法：OLLAMA_MODEL env 显式指定 + span 日志验证模型名与延迟。这是"有效性三验"存在的全部意义。
+4. 附带：oMLX 内存守卫会中止超长上下文 prefill（8.1M 累计输入 tokens 处）；grok 会话取证时 events.jsonl **不存工具参数**，参数在 chat_history.jsonl 的 `tool_calls[].arguments`（JSON 字符串）。
+
 ### Claude Code hook command 的「安全形态」随宿主版本翻转 — 规范必须靠实机探针钉死 (2026-08-28)
 
 **Issue**: 08-26/27 两轮修复钉死的规范形态（先 quoted POSIX、后 config-relative `hooks/<name>.sh`）在 Claude Code **自动升级到 2.1.220** 后全部失效，用户每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`（127）。当时基于「宿主把非绝对 command path-join 到 `~/.claude\`」的修复前提，在新宿主上不存在了。

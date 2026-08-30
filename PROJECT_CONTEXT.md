@@ -3,6 +3,25 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-30 S53 [vibesop-py] R6 弱模型 A/B 全闭环 + 验证报告 push + 公众号调研报告
+
+**Session Summary**:
+- R6 弱模型 A/B（27B 双臂）收官：treatment 22/25（10 文件 2503 行、25 项物理自验全过）vs control 两次尝试零产物（思考循环撞帽 ×2）。treatment 死因为 oMLX 内存守卫中止 prefill（8.11M tokens，死前文件已齐）
+- **核心发现**：技能内容从未进入 treatment 上下文——27B 路由 2/2 no-match、0 次 SKILL.md 读取（R5 强模型 80 次）；赢因 = VibeSOP 静态脚手架 + n=1 方差。弱模型格结论：路由层是第一瓶颈，注入效果在路由质量解决前不可检验
+- 验证报告同步远程：`855de0a`（R1-R6 总报告 + R6 预注册/报告）CI 绿；连带修 CI 时序 flaky `05d9e29`（indexer 并行断言拉宽双侧裕度），双 run job 级全绿
+- 公众号深度调研报告成稿：`.omx/artifacts/ab-validation-wechat-deepdive.md`；R6 产物可访问 http://localhost:8803
+- hook 误触发第 4 例现场证据（纯写作请求被编排成 4 角色 squad）
+
+**Key Decisions**:
+- R6 treatment 死于 oMLX 中途故障但产物已齐 → 不按预注册规则 5 作废（故障未污染结果，只吞收尾说明）
+- CI 时序断言修复原则：拉宽双侧裕度（加大 sleep）而非只挪上限线
+- 弱模型格下一实验方向：路由质量，非注入效果
+
+**Next Steps**:
+1. R5 第二轮人评（用户，8801/8802）——零增益序列封盘前最后一步
+2. P3 backlog 4 项：factory ollama model 透传 / enable_orchestration hook 路径 / multi-intent 输出形状被 grok 丢弃 / cron-prompt 路由 FP
+3. 公众号发布（用户侧拿稿）
+
 ### 2026-08-28 S52b [vibesop-py] Claude Code 2.1.220 hook 形态翻转 → PR #115 merged
 
 **Session Summary**:
@@ -20,17 +39,4 @@
 1. main post-merge CI 3 run 收尾（CI/E2E/CodeQL @ `f6f32c6`，后台监控中）
 2. S52 深度治理主线：六路诊断（分支已建；存量 skill_auditor 1 fail 在该分支）
 3. Dependabot 9 PR：小版本批量合，openai/anthropic major 单独评估
-
-### 2026-08-27 S50 [vibesop-py] gate46 块2 quickstart 双平台 aha — 已 push CI 全绿
-
-**Session Summary**:
-- 标准门流程全闭环：设计稿 → grok+claude-pi 双路确认（v2.1 PASS）→ 实施 → 双路实施复审（均 NEEDS_FIX）→ P1 全清/裁决 → 8 原子提交
-- 交付：4 演示技能（双语 keyless）+ quickstart 双语路由演示与注入预览 + `vibe route --hook --platform` 参数化 + CI quickstart-e2e（Linux+Windows 矩阵）
-- 关键修复：injector builtin 四级解析阶梯；`write tests` 从 tags 移入 triggers
-- 验证：6416 passed / 0 failed；wheel e2e（隔离 HOME + offline）全绿；CI 双 workflow 全绿（run 33082003477/33082003560）
-
-**Next Steps**:
-1. GIF 录制（W5 发布 gate；`docs/demo-recording-guide.md`，probe 输出兜底）
-2. recall 演示 defer 独立 mini-gate
-3. W1 test.pypi 发版无限期 defer
 <!-- handoff:end -->

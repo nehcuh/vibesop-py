@@ -1,6 +1,24 @@
 
 ## Current Session
 
+### S53 (2026-08-29~30) [vibesop-py] R6 弱模型 A/B 全闭环 + 验证报告 push + 公众号深度调研报告
+
+- [x] **R6 弱模型 A/B 收官**：control 尝试 2 同轨迹思考循环死亡（2561s 零产物）→ 按预注册规则 4 记完成度差距。treatment 评分 **22/25**（D1 物理 5.0 / D3 教学法 5.0 满分；D4 3.5 扣 app-smoke PointerEvent 崩溃 + 构建期 npm 违离线字面；D5 4.0 扣实现说明未输出）
+- [x] **核心发现**：treatment 赢但**技能内容从未进入上下文**——27B 路由 2/2 no-match、0 次 SKILL.md 读取（R5 强模型 80 次）；赢因 = VibeSOP 静态脚手架（协议/目录/CLI）+ n=1 方差不可分离。弱模型格结论改写：**路由层是第一瓶颈，注入效果在路由质量解决前不可检验**
+- [x] **treatment 死因修正**：非回合耗尽，是 oMLX 内存守卫中止 prefill（61 turns、累计输入 8.11M tok）；死前 10 文件已全部写完 → 裁定不作废（规则 5 精神：结果未被污染）
+- [x] **报告同步远程**：`855de0a` push（R1-R6 总报告 + R6 预注册/报告），CI 绿
+- [x] **CI 时序 flaky 修复**：Test 3.13 两轮红（indexer 并行断言 0.31s vs 250ms 线）；修法 = 拉宽双侧裕度（8×50ms→120ms、上限→600ms），非只挪线；`05d9e29` push 后双 run job 级全绿
+- [x] **公众号深度调研报告**：`.omx/artifacts/ab-validation-wechat-deepdive.md`（设计目的/方法/验证/坑/结论六要素 + harness 假说；负结果叙事）
+- [x] R6 产物可访问：http://localhost:8803（8801/8802 = R5 双臂）
+- 附：hook 误触发第 4 例现场证据（写公众号总结被编排成 4 角色 squad）
+
+**Next Steps**:
+- R5 第二轮人评（用户，8801/8802）——零增益序列封盘前最后一步
+- 弱模型格下一实验：路由质量（非注入效果）；P3 backlog 4 项（factory ollama 透传 / enable_orchestration hook 路径 / multi-intent 输出形状 / cron-prompt FP）
+- 公众号发布（用户侧）
+
+**Recorded**: yes — R6 三坑 + grok 取证路径 → project-knowledge.md；R6 结论 + CI 裕度教训 → auto-memory
+
 ### S52b (2026-08-28) [vibesop-py] Claude Code 2.1.220 hook 127 根因探针 + 产品侧修复 → PR #115 merged
 
 - 用户报告 S51 修复后仍每条 prompt 报 `bash: hooks/vibesop-route.sh: No such file or directory`
