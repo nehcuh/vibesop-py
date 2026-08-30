@@ -182,7 +182,10 @@ def _unquoted_spaced_script_reason(command: str) -> str | None:
     basename lands on a *relative-looking* fragment (``Last/…``) preceded
     by a path fragment — under the host's ``bash -c`` spawn that command
     exits 127. Complete script tokens (absolute, drive, ``hooks/``, or
-    quoted) and benign extras (flags, URLs) are left alone.
+    quoted) and benign extras (flags, URLs) are left alone, as are bare
+    mentions after a non-path word (``echo vibesop-route.sh``): only a
+    path-shaped fragment in front of the basename means the script path
+    itself was word-split.
     """
     try:
         raw = shlex.split(command, posix=False)
@@ -206,8 +209,102 @@ def _unquoted_spaced_script_reason(command: str) -> str | None:
         prev_n = unwrap_token(prev).replace("\\", "/").lower()
         if prev_n in ("bash", "bash.exe") or prev_n.endswith("/bash.exe"):
             continue
+        if prev_n in ("&&", "||", "|", ";", "&"):
+            # New command word after an operator — not a path fragment.
+            continue
+        if "/" not in prev_n:
+            # Bare mention after a non-path word, not a split path tail.
+            continue
         return 'unquoted space in script path (bash -c word-splits into 127) - use bash "<posix-abs-path>"'
     return None
+
+
+def _spaced_relative_script_reason(tokens: list[str]) -> str | None:
+    """``bash My Dir/vibesop-route.sh`` — an unquoted space in a *relative*
+    script path word-splits into 3+ tokens under ``bash -c`` (127).
+
+    The quoted form (``bash "My Dir/x.sh"``) survives shlex as one token and
+    is judged by the 2-token branch of ``_cwd_relative_script_reason``; here
+    only the split form remains. Guards against the benign lookalikes:
+    ``bash -c "echo hi x.sh"`` is a command string (tokens[1] == "-c"),
+    ``echo hi x.sh`` is a bare mention (non-bash first token), and
+    ``bash /abs/x.sh vibesop-route.sh`` / ``bash C:/x.sh x.sh`` pass an
+    absolute script whose first fragment already proves the path is not
+    CWD-relative — the trailing basename is then just an argument.
+    """
+    interp = tokens[0].replace("\\", "/").lower()
+    if interp not in ("bash", "bash.exe", "sh") and not interp.endswith("/bash.exe"):
+        return None
+    if tokens[1] == "-c":
+        return None
+    frag = tokens[1].replace("\\", "/").strip("\"'")
+    if frag.startswith(("/", "~/", "$HOME/")):
+        return None
+    if len(frag) >= 3 and frag[0] in string.ascii_letters and frag[1] == ":" and frag[2] == "/":
+        return None
+    tail = tokens[-1].replace("\\", "/").strip("\"'")
+    if tail.rsplit("/", 1)[-1].lower() not in VIBESOP_HOOK_SCRIPT_BASENAMES:
+        return None
+    return (
+        "unquoted space in CWD-relative script path resolves against the "
+        'session CWD (127) - use bash "<posix-abs-path>"'
+    )
+
+
+def _cwd_relative_script_reason(command: str) -> str | None:
+    """``bash vibesop-route.sh`` / ``bash ./…`` / ``bash subdir/…`` 127 too.
+
+    The script token parses (allowlisted basename, clean characters) but is
+    neither absolute nor the exact single-level ``hooks/<script>.sh`` form
+    handled by the caller, so under the host's ``bash -c`` + session CWD
+    spawn it resolves against that CWD and exits 127 exactly like
+    ``hooks/<script>.sh`` — nested ``hooks/sub/…`` forms included. Only the
+    plain ``<bash> <script>`` / ``bash -c <script>`` / bare-script shapes
+    are judged here, plus the word-split ``bash My Dir/<script>.sh`` shape
+    (delegated to ``_spaced_relative_script_reason``); other longer
+    pipelines are left to the other checks. ``~/``
+    and ``$HOME/`` prefixes expand under ``bash -c`` and are exempt.
+    """
+    try:
+        raw_tokens = shlex.split(command, posix=False)
+    except ValueError:
+        return None
+    tokens = [unwrap_token(t) for t in raw_tokens]
+    if len(tokens) == 1:
+        script = tokens[0]
+    elif len(tokens) == 2:
+        interp = tokens[0].replace("\\", "/").lower()
+        if interp not in ("bash", "bash.exe") and not interp.endswith("/bash.exe"):
+            return None
+        script = tokens[1]
+    elif len(tokens) == 3:
+        interp = tokens[0].replace("\\", "/").lower()
+        if interp not in ("bash", "bash.exe") and not interp.endswith("/bash.exe"):
+            return None
+        if tokens[1] != "-c":
+            return _spaced_relative_script_reason(tokens)
+        # ``bash -c <cmd>``: only flagged when the whole command string
+        # (quotes unwrapped) is itself the script token — ``bash -c "echo
+        # hi"`` fails the allowlisted-basename check below and stays out.
+        script = tokens[2]
+    else:
+        return _spaced_relative_script_reason(tokens)
+    norm = script.replace("\\", "/")
+    if norm.rsplit("/", 1)[-1].lower() not in VIBESOP_HOOK_SCRIPT_BASENAMES:
+        return None
+    if norm.startswith("/"):
+        return None
+    if norm.startswith(("~/", "$HOME/")):
+        # ~ / $HOME expand under the host's bash -c spawn — the command
+        # resolves to an absolute path and works as-is.
+        return None
+    if norm.startswith("hooks/") and "/" not in norm[6:]:
+        # Exactly hooks/<script>.sh is reported by the caller's dedicated
+        # check; nested hooks/sub/… forms fall through as CWD-relative.
+        return None
+    if len(norm) >= 3 and norm[0] in string.ascii_letters and norm[1] == ":" and norm[2] == "/":
+        return None
+    return "CWD-relative script path resolves against the session CWD (127) - use bash <posix-abs-path>"
 
 
 def _vibesop_command_unsafe_reason(command: str) -> str | None:
@@ -216,9 +313,10 @@ def _vibesop_command_unsafe_reason(command: str) -> str | None:
     Both platforms converge on ``bash <posix-abs-path>`` — quoted as one
     bash word when the path contains whitespace: the 2.1.220 host spawns
     hooks with ``bash -c`` and the session CWD, so a config-relative
-    ``hooks/<script>.sh`` resolves against that CWD and 127s (rejected
-    unconditionally on every platform), and an unquoted spaced path
-    word-splits under ``bash -c`` into 127.
+    ``hooks/<script>.sh`` or any other CWD-relative form (``bash x.sh``,
+    ``bash ./x.sh``, ``bash subdir/x.sh``) resolves against that CWD and
+    127s (rejected unconditionally on every platform), and an unquoted
+    spaced path word-splits under ``bash -c`` into 127.
     """
     reason = unsafe_windows_hook_command_reason(command)
     if reason:
@@ -226,6 +324,10 @@ def _vibesop_command_unsafe_reason(command: str) -> str | None:
     norm = parse_hook_script_command(command)
     if norm is not None and norm.startswith("hooks/") and "/" not in norm[6:]:
         return "config-relative hooks/<script>.sh resolves against the session CWD (127)"
+    if norm is None:
+        relative = _cwd_relative_script_reason(command)
+        if relative:
+            return relative
     if sys.platform == "win32":
         if not command.lstrip().lower().startswith(("bash ", "bash\t")):
             return "Windows Claude Code needs bash <posix-abs-path>"

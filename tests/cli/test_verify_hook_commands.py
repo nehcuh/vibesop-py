@@ -222,3 +222,126 @@ def test_url_token_no_false_drive(tmp_path, monkeypatch) -> None:
         "darwin",
     )
     assert result["pass"], result["detail"]
+
+
+def test_trailing_basename_mention_after_healthy_route_passes(tmp_path, monkeypatch) -> None:
+    """`bash <abs> && echo vibesop-route.sh` mentions the basename as an
+    echo argument — not a word-split path tail; must not false-positive."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy + " && echo vibesop-route.sh"],
+            platform,
+        )
+        assert result["pass"], (platform, result["detail"])
+
+
+def test_operator_prefixed_basename_mention_passes(tmp_path, monkeypatch) -> None:
+    """A token right after a shell operator starts a new command word; it is
+    not the tail of a split path."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy + " && vibesop-route.sh"],
+            platform,
+        )
+        assert result["pass"], (platform, result["detail"])
+
+
+def test_cwd_relative_script_fails_both_platforms(tmp_path, monkeypatch) -> None:
+    """`bash vibesop-track.sh`, `bash ./…`, `bash subdir/…` resolve against
+    the session CWD under the host's bash -c spawn — 127 exactly like
+    hooks/x.sh, on every platform."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        for cmd in (
+            "bash vibesop-track.sh",
+            "bash ./vibesop-track.sh",
+            "bash subdir/vibesop-track.sh",
+        ):
+            result = _route_hook_result(tmp_path, monkeypatch, [healthy, cmd], platform)
+            assert not result["pass"], (platform, cmd, result["detail"])
+            assert "CWD" in result["detail"], (platform, cmd, result["detail"])
+
+
+def test_nested_hooks_subdir_script_fails_both_platforms(tmp_path, monkeypatch) -> None:
+    """`bash hooks/sub/vibesop-route.sh` is not the config-relative
+    hooks/<script>.sh form — it resolves against the session CWD too, so
+    the hooks/ exemption must cover only the exact single-level shape."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy, "bash hooks/sub/vibesop-route.sh"],
+            platform,
+        )
+        assert not result["pass"], (platform, result["detail"])
+        assert "CWD" in result["detail"], (platform, result["detail"])
+
+
+def test_bash_dash_c_script_fails_both_platforms(tmp_path, monkeypatch) -> None:
+    """`bash -c vibesop-route.sh` (quoted or not) runs the script against
+    the session CWD — same 127 class as `bash vibesop-route.sh`."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        for cmd in (
+            "bash -c vibesop-route.sh",
+            'bash -c "vibesop-route.sh"',
+        ):
+            result = _route_hook_result(tmp_path, monkeypatch, [healthy, cmd], platform)
+            assert not result["pass"], (platform, cmd, result["detail"])
+            assert "CWD" in result["detail"], (platform, cmd, result["detail"])
+
+
+def test_bash_dash_c_non_script_command_passes(tmp_path, monkeypatch) -> None:
+    """`bash -c "echo hi"` is a command string, not a script path — the
+    dash-c check must not flag it."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy, 'bash -c "echo hi"'],
+            platform,
+        )
+        assert result["pass"], (platform, result["detail"])
+
+
+def test_unquoted_spaced_relative_script_fails_both_platforms(tmp_path, monkeypatch) -> None:
+    """`bash My Dir/vibesop-route.sh` (unquoted space in a *relative* path)
+    word-splits into 3+ tokens under the host's bash -c spawn — the script
+    resolves against the session CWD and 127s exactly like `bash x.sh`."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy, "bash My Dir/vibesop-route.sh"],
+            platform,
+        )
+        assert not result["pass"], (platform, result["detail"])
+        assert "CWD" in result["detail"], (platform, result["detail"])
+
+
+def test_bash_dash_c_mentioning_basename_passes(tmp_path, monkeypatch) -> None:
+    """`bash -c "echo hi vibesop-route.sh"` mentions the basename inside a
+    command string — tokens[1] == "-c" exempts it from the spaced-split
+    check (it never resolves a script path against the CWD)."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        result = _route_hook_result(
+            tmp_path,
+            monkeypatch,
+            [healthy, 'bash -c "echo hi vibesop-route.sh"'],
+            platform,
+        )
+        assert result["pass"], (platform, result["detail"])
+
+
+def test_tilde_and_home_prefixed_script_passes(tmp_path, monkeypatch) -> None:
+    """`bash ~/.claude/hooks/x.sh` / `bash $HOME/.claude/hooks/x.sh` expand
+    to absolute paths under the host's bash -c spawn — not CWD-relative."""
+    for platform in ("win32", "darwin"):
+        for cmd in (
+            "bash ~/.claude/hooks/vibesop-route.sh",
+            "bash $HOME/.claude/hooks/vibesop-route.sh",
+        ):
+            result = _route_hook_result(tmp_path, monkeypatch, [cmd], platform)
+            assert result["pass"], (platform, cmd, result["detail"])
