@@ -285,6 +285,9 @@ class StepRunner:
 
         Returns:
             Dict with:
+                - plan_id: str (anchor metadata; each per-step results entry
+                  carries step_id — together they let a UI deep-link a step
+                  output message to the plan step that produced it)
                 - completed: int
                 - failed: int
                 - skipped: int
@@ -334,6 +337,7 @@ class StepRunner:
                         }
                     )
             return {
+                "plan_id": self._plan.plan_id,
                 "completed": self.completed_count,
                 "failed": self.failed_count,
                 "skipped": 0,
@@ -360,6 +364,7 @@ class StepRunner:
             if not isinstance(dyn_result, DynamicExecutionResult):
                 raise TypeError(f"Expected DynamicExecutionResult, got {type(dyn_result).__name__}")
             return {
+                "plan_id": self._plan.plan_id,
                 "completed": dyn_result.total_steps_executed,
                 "failed": 0,
                 "skipped": 0,
@@ -496,6 +501,7 @@ class StepRunner:
             if s.completed and not s.failed and s.output.startswith("[SKIPPED]")
         )
         return {
+            "plan_id": self._plan.plan_id,
             "completed": self.completed_count - skipped,
             "failed": self.failed_count,
             "skipped": skipped,

@@ -29,7 +29,17 @@ class MessageRole(Enum):
 
 @dataclass
 class Message:
-    """A message in the conversation."""
+    """A message in the conversation.
+
+    ``metadata`` is the extension channel for message-block annotations.
+    Reserved keys by convention:
+    - ``skill_id`` / ``layer``: set on routing-decision assistant messages
+      (see ``core/routing/unified.py``).
+    - ``plan_id`` / ``step_id``: anchor metadata set when the message block
+      was produced by an execution-plan step. Consumers use them to
+      deep-link a conversation message to the plan step that produced it.
+      Both are plain strings; absent means the message is not step-produced.
+    """
 
     role: MessageRole
     content: str

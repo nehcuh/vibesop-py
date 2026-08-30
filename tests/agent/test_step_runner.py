@@ -302,6 +302,36 @@ class TestExecuteAll:
         # The key behavior is that no further batches run.
         assert result["failed"] >= 1, "fail_fast should record at least one failure"
         assert result["failed"] + result["skipped"] == runner.total_steps
+        # Anchor metadata contract also holds on the fail-fast return path.
+        assert result["plan_id"] == plan.plan_id
+        assert all("step_id" in r for r in result["results"])
+
+    def test_execute_all_result_carries_anchor_metadata(self):
+        """Side-panel anchor contract (proposal §3.2 item 3): the result dict
+        carries plan_id, and every per-step entry carries step_id."""
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", ["step-1"]),
+            ]
+        )
+        runner = StepRunner(plan, track_state=False)
+
+        result = runner.execute_all(lambda step, ctx: f"out-{step.step_id}")
+
+        assert result["plan_id"] == plan.plan_id
+        assert [r["step_id"] for r in result["results"]] == ["step-1", "step-2"]
+
+    def test_execute_all_dynamic_result_carries_plan_id(self):
+        """Dynamic (WorkflowEngine) return path also carries plan_id."""
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        runner = StepRunner(plan, track_state=False)
+
+        result = runner.execute_all(lambda step, ctx: "done")
+
+        assert result["plan_id"] == plan.plan_id
+        assert result["dynamic"] is True
 
 
 class TestStatePersistence:
