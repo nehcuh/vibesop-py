@@ -9,7 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`builtin/instinct-learning` 技能删除（能力并入 `builtin/instinct`）**:
+  功能域与 instinct 1:1 重叠（learn/eval/status/export/import/evolve），
+  且是 CLI 出现前的 prompt 型遗产（内嵌 `python3 -c` 脚本直操作
+  `InstinctLearner._instincts` 私有成员）；双目录共存稀释 "instinct"
+  token 的路由锚点（gate14 实测：小技能池下相关查询掉进 fallback）。
+  instinct/SKILL.md 吸收了 Pattern Writing Guidelines 与 Best Practices。
+  **Breaking**：`@builtin/instinct-learning` 显式引用不再命中，
+  改用 `@builtin/instinct`；`vibe instinct` 13 个子命令完整覆盖旧能力。
+  路由评测三条 learning 查询的期望集收敛为 builtin/instinct，其中
+  「从我的工作流里学习一个新的本能模式」从 fallback-llm 翻转为
+  keyword 命中（合并的预期收益，非回归）。
+
 ### Fixed
+
+- **slash-* CLI 包装技能整族排除出 Levenshtein 模糊层**: slash-analyze
+  经 "gstack"~"stack" token 相似度（0.83）窃取 `gstack/review` 查询
+  （management gate 对 ≤2 词短查询整表放行，fuzzy 兜底命中其
+  "tech stack" tag）。修复为家族级排除：`_is_slash_wrapper` 按 id 前缀
+  过滤全部 slash-*（它们由 `/vibe-*` 显式触发，永非模糊目标），
+  不再逐事故扩列 LEVENSHTEIN_EXCLUDED_SKILL_IDS；新增
+  `test_slash_wrappers_excluded_by_family` 回归钉。
+- **`vibe instinct evolve` 文档/帮助与行为对齐**: 裸 `evolve` 会直接
+  演化第一个候选（--index 默认 0），此前 SKILL.md 注释、--index help
+  与代码内注释都误写为"默认仅列出"。统一为 `--list` 才是仅列出。
 
 - **builtin 技能死命令引用 → `/vibe-*` registry 正源**: 用户实机发现
   `vibe evaluate` 不存在（slash-evaluate SKILL.md 引用死命令）。全量审计

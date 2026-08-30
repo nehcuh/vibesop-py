@@ -568,7 +568,7 @@ def evolve(
         0,
         "--index",
         "-i",
-        help="Index of the instinct to evolve (from 'vibe instinct evolve' without args)",
+        help="Index of the instinct to evolve (use --list to see candidates first)",
     ),
     list_only: bool = typer.Option(
         False, "--list", "-l", help="Only list candidates, don't generate"
@@ -597,7 +597,9 @@ def evolve(
             )
         return
 
-    # Default: list if no index given, or the index is out of range but we'll show list first
+    # Out-of-range index: show the candidate list instead of evolving
+    # (note: bare `evolve` uses the --index default of 0 and evolves the
+    # first candidate directly; --list is the review-only path)
     if index < 0 or index >= len(reliable):
         console.print("[bold]Evolution Candidates:[/bold]")
         for j, ins in enumerate(reliable):
