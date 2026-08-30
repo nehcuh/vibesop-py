@@ -939,6 +939,111 @@ def test_append_steps_fallback_when_no_router() -> None:
 
     assert len(new_steps) == 1
     assert new_steps[0].skill_id == "builtin/slash-orchestrate"
+    assert new_steps[0].confidence == 0.0, (
+        "fallback skill_id is not routing-derived and must not carry a "
+        f"high-confidence sentinel, got {new_steps[0].confidence}"
+    )
+
+
+def test_append_steps_fallback_when_routing_fails() -> None:
+    """P2: when the router raises, appended steps fall back with confidence 0.0."""
+
+    class FailingRouter:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def _single_skill_route(self, query, context=None, candidates=None):
+            self.calls += 1
+            raise RuntimeError("router exploded")
+
+    router = FailingRouter()
+    engine = WorkflowEngine(router=router)
+    plan = ExecutionPlan(
+        plan_id="append-routing-fail-test",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="test", intent="Original", output_as="s1"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+    )
+
+    new_steps = engine._create_steps_from_analysis(
+        plan, [{"intent": "Task", "query": "do something"}]
+    )
+
+    # The fallback must come from the router raising — a signature mismatch
+    # (TypeError before the body runs) would pass the assertions vacuously.
+    assert router.calls == 1
+    assert len(new_steps) == 1
+    assert new_steps[0].skill_id == "builtin/slash-orchestrate"
+    assert new_steps[0].confidence == 0.0
+
+
+def test_append_steps_non_numeric_confidence_keeps_skill_id() -> None:
+    """P2: a non-numeric routed confidence degrades to 0.0 without dropping
+    the successfully routed skill_id."""
+
+    class NoneConfidenceRouter:
+        def _single_skill_route(self, query, context=None, candidates=None):
+            from types import SimpleNamespace
+
+            primary = SimpleNamespace(skill_id="real/debug-skill", confidence=None)
+            return SimpleNamespace(primary=primary)
+
+    engine = WorkflowEngine(router=NoneConfidenceRouter())
+    plan = ExecutionPlan(
+        plan_id="append-non-numeric-confidence-test",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="test", intent="Original", output_as="s1"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+    )
+
+    new_steps = engine._create_steps_from_analysis(
+        plan, [{"intent": "Task", "query": "do something"}]
+    )
+
+    assert len(new_steps) == 1
+    assert new_steps[0].skill_id == "real/debug-skill"
+    assert new_steps[0].confidence == 0.0
+
+
+def test_append_steps_overflow_confidence_keeps_skill_id() -> None:
+    """P3: float(10**400) raises OverflowError, not ValueError — it must
+    degrade confidence to 0.0 without dropping the routed skill_id (the
+    outer broad except would otherwise swallow the skill_id)."""
+
+    class HugeConfidenceRouter:
+        def _single_skill_route(self, query, context=None, candidates=None):
+            from types import SimpleNamespace
+
+            primary = SimpleNamespace(skill_id="real/debug-skill", confidence=10**400)
+            return SimpleNamespace(primary=primary)
+
+    engine = WorkflowEngine(router=HugeConfidenceRouter())
+    plan = ExecutionPlan(
+        plan_id="append-overflow-confidence-test",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="test", intent="Original", output_as="s1"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+    )
+
+    new_steps = engine._create_steps_from_analysis(
+        plan, [{"intent": "Task", "query": "do something"}]
+    )
+
+    assert len(new_steps) == 1
+    assert new_steps[0].skill_id == "real/debug-skill"
+    assert new_steps[0].confidence == 0.0
 
 
 class _ReviewLLM:

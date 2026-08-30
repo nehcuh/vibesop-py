@@ -629,11 +629,11 @@ class WorkflowEngine:
         """Route an appended sub-task to a real skill via the configured router.
 
         Returns ``(skill_id, confidence)``. Falls back to
-        ``builtin/slash-orchestrate`` with the pre-assigned sentinel
-        confidence when no router is configured or routing fails, matching
-        the prior hard-coded behaviour.
+        ``builtin/slash-orchestrate`` with confidence 0.0 when no router is
+        configured or routing fails — a fallback is not routing-derived and
+        must not carry a high-confidence sentinel.
         """
-        default = ("builtin/slash-orchestrate", 0.99)
+        default = ("builtin/slash-orchestrate", 0.0)
         route_method = getattr(self._router, "_single_skill_route", None) if self._router else None
         if route_method is None:
             return default
@@ -642,7 +642,13 @@ class WorkflowEngine:
             primary = getattr(route, "primary", None)
             skill_id = getattr(primary, "skill_id", None) if primary else None
             if skill_id:
-                confidence = float(getattr(primary, "confidence", 0.0))
+                try:
+                    confidence = float(getattr(primary, "confidence", 0.0))
+                except (TypeError, ValueError, OverflowError):
+                    # Non-numeric confidence (None, "") or an unrepresentable
+                    # one (float(10**400) → OverflowError) must not abort a
+                    # successful route — degrade confidence only.
+                    confidence = 0.0
                 logger.info("APPEND step routed to %s for intent=%s", skill_id, intent)
                 return skill_id, confidence
         except Exception as e:
