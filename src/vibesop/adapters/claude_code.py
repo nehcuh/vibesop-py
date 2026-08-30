@@ -818,7 +818,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         try:
             hook_content = """#!/bin/bash
 # Pre-session-end hook for Claude Code
-# Closes the instinct-learning loop: mines the session for patterns and
+# Closes the instinct loop: mines the session for patterns and
 # promotes matured candidates into skill suggestions.
 
 set -e

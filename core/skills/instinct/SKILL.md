@@ -68,9 +68,15 @@ vibe instinct import instincts-export.json --force
 ### `/instinct evolve` — Upgrade to Skill
 
 ```bash
-vibe instinct evolve          # list evolution candidates
+vibe instinct evolve --list   # list evolution candidates
 vibe instinct evolve --index 0 # evolve the first candidate
 ```
+
+Note: bare `vibe instinct evolve` evolves the first candidate directly when
+candidates exist — use `--list` to review before evolving.
+
+Additional subcommands (`pending`, `accept`, `dismiss`, `stats`, `prune`,
+`auto-promote`, `feedback-collect`) are available — see `vibe instinct --help`.
 
 ## When to Use
 
@@ -78,6 +84,22 @@ vibe instinct evolve --index 0 # evolve the first candidate
 - At session end to review accumulated patterns
 - Before team sharing: export high-confidence instincts
 - When an instinct has 10+ successful uses: evolve it to a formal skill
+
+## Pattern Writing Guidelines
+
+| Good Pattern | Bad Pattern |
+|-------------|------------|
+| "Before deploying, run `pytest --cov` and check coverage > 80%" | "Test before deploy" |
+| "When fixing lint errors, run `ruff check --fix` before manual edits" | "Fix lint" |
+| "For Django migrations, always run `makemigrations --dry-run` first" | "Migrations" |
+
+## Best Practices
+
+- Record immediately after a successful workflow while context is fresh: `vibe instinct learn`
+- Review accumulated patterns at session end: `vibe instinct eval`
+- Export high-confidence instincts (>= 0.8) for team sharing: `vibe instinct export --min-confidence 0.8`
+- Evolve instincts to skills after 10+ successful uses: `vibe instinct evolve --list` to review candidates first
+- Keep instinct descriptions specific and actionable (not vague)
 
 ## Storage
 

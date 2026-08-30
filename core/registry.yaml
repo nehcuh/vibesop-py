@@ -380,22 +380,6 @@ skills:
       - Bash
     safety_level: trusted_builtin
 
-  - id: instinct-learning
-    namespace: builtin
-    entrypoint: skills/instinct-learning/SKILL.md
-    intent: Automatic pattern extraction from sessions with confidence scoring.
-    trigger_mode: suggest
-    priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-      pi: native-skill
-    requires_tools:
-      - Read
-      - Write
-      - Bash
-    safety_level: trusted_builtin
-
   - id: instinct
     namespace: builtin
     entrypoint: skills/instinct/SKILL.md
