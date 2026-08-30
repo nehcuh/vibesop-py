@@ -396,6 +396,22 @@ skills:
       - Bash
     safety_level: trusted_builtin
 
+  - id: instinct
+    namespace: builtin
+    entrypoint: skills/instinct/SKILL.md
+    intent: Instinct learning system — record patterns, review candidates, view status, import/export, and evolve instincts into formal skills.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Write
+      - Bash
+    safety_level: trusted_builtin
+
   # External Superpowers skill pack (conditional on installation)
   - id: superpowers/tdd
     <<: *superpowers_base
@@ -585,6 +601,23 @@ skills:
       - Bash
     safety_level: trusted_builtin
 
+  - id: deep-diagnosis-optimization
+    namespace: builtin
+    entrypoint: skills/deep-diagnosis-optimization/SKILL.md
+    intent: Systematic codebase diagnosis, prioritized batch optimization, and container-verified landing — end-to-end workflow for deeply auditing a codebase and fixing issues by severity.
+    trigger_mode: manual
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Write
+      - Edit
+      - Bash
+    safety_level: trusted_builtin
+
   # omx/ skills — oh-my-codex engineering methodologies (external install)
   - <<: *omx_base
     id: omx/deep-interview
@@ -653,6 +686,19 @@ skills:
       opencode: slash-command
       pi: prompt-template
     command: "/vibe-install"
+    safety_level: trusted_builtin
+
+  - id: slash-analyze
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Deep project architecture and tech stack analysis. Use when you want to understand project structure and stack.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+      pi: prompt-template
+    command: "/vibe-analyze"
     safety_level: trusted_builtin
 
 

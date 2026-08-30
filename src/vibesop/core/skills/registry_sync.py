@@ -119,8 +119,12 @@ class RegistrySync:
             if not skill_file.exists():
                 continue
             meta = parse_skill_md(skill_file)
+            # Key by directory name (bare id), not frontmatter meta.id:
+            # SKILL.md frontmatter uses namespaced ids ("builtin/x") while
+            # registry.yaml keys builtin entries by bare name ("x"), matching
+            # the entrypoint "skills/<name>/SKILL.md" convention.
             if meta:
-                skills[meta.id] = meta
+                skills[skill_dir.name] = meta
             else:
                 skills[skill_dir.name] = None
         return skills
