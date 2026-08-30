@@ -47,15 +47,13 @@ full CI green. Developed and validated on the VibeSOP v8.0.0-dev optimization
 ### Tooling
 
 ```bash
-# Kimi code review (NOT on PATH — use full path)
-KIMI=/Users/huchen/.kimi-code/bin/kimi
+# Kimi code review (assumes `kimi` on PATH; otherwise set KIMI to the binary path)
+KIMI=${KIMI:-kimi}
 # Invoke: $KIMI -p "<review prompt with diff>" --output-format text
 
-# Container e2e (OrbStack — arm64 native, NO Rosetta needed)
-DOCKER="$HOME/.orbstack/bin/docker"
-# Verify: orb status (must be "Running")
-# If stopped: orb start (or open the OrbStack app)
-# If Rosetta missing: softwareupdate --install-rosetta --agree-to-license
+# Container e2e (any Docker runtime; on macOS OrbStack/Colima/Desktop all work)
+DOCKER=${DOCKER:-docker}
+# Verify: docker info (daemon must be running)
 ```
 
 ### Base Image (one-time)
@@ -258,8 +256,8 @@ gh pr merge <PR#> --rebase --delete-branch
 ## Execution Notes
 
 - **Branch per batch** off main (never commit directly to main).
-- **kimi path**: `/Users/huchen/.kimi-code/bin/kimi` (not on PATH).
-- **Docker path**: `$HOME/.orbstack/bin/docker` (not on PATH).
+- **kimi**: resolved via `$KIMI` env var or PATH.
+- **Docker**: resolved via `$DOCKER` env var or PATH.
 - **arm64 native**: use `--platform=linux/arm64` (no Rosetta needed on Apple Silicon).
 - **Container freshness**: each `docker run --rm` is a fresh container (no stale state).
 - **`uv run --frozen`**: uses the lock exactly; mount the repo for live-code validation.
