@@ -398,6 +398,9 @@ class TriageService:
                             "AI triage selected '%s' but query lacks an explicit session-end signal; ignoring",
                             skill_id,
                         )
+                        # Still a structured reply — reset the drop counter
+                        # (same rule as the match and NONE paths below).
+                        self._unstructured_drops = 0
                         return None
 
                     source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
@@ -434,8 +437,10 @@ class TriageService:
             # Structured reply with no usable skill (explicit null / NONE
             # verdict): a definitive no-match — cache it negatively so
             # repeat queries skip the LLM call.
-            if parsed.get("structured") and self._triage_cache is not None:
-                self._store_negative(augmented_query, candidates)
+            if parsed.get("structured"):
+                if self._triage_cache is not None:
+                    self._store_negative(augmented_query, candidates)
+                self._unstructured_drops = 0
         except Exception as e:
             latency_ms = (time.perf_counter() - start_time) * 1000
             logger.debug(f"AI triage failed, falling through to next layer: {e}")

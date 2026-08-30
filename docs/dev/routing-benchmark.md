@@ -66,8 +66,10 @@ query is routed:
 `{query, expect, reject, primary, layer, ok1}` plus a content fingerprint —
 sha256 over `core/registry.yaml`, every `*.md`/`*.yaml`/`*.yml` under the pinned skill
 roots, the dataset file, and the canonical posture. **Content-only**: mtimes and
-absolute paths are not hashed, so `touch` and a checkout at a different location
-(CI vs local) fingerprint identically.
+absolute paths are not hashed, and line endings are normalized (CRLF→LF) before
+hashing, so `touch`, a checkout at a different location (CI vs local), and a
+Windows autocrlf checkout all fingerprint identically. The fingerprinted paths
+are also pinned to `eol=lf` in `.gitattributes` so checkouts never rewrite them.
 
 `tests/fixtures/benchmark-pack/` exercises pack-shaped skills *inside* the pinned
 universe (distinctive tokens → deterministic keyword routing), so the external-path
@@ -90,8 +92,10 @@ flag. Exit **1** (new top-1 fail) is never fixed by refreshing — fix the regre
 the old baseline and **refuses to write** (exit 1) when the refresh would fold in any
 `ok1: true→false` flip — the difference between "the universe changed" and "the router
 regressed" is enforced by the tool, not by review discipline. To knowingly absorb such
-flips, re-run with `--force` and justify every flip in the PR. Refresh on Linux/macOS;
-Windows regeneration has not been A/B-verified (the gate itself runs ubuntu-only).
+flips, re-run with `--force` and justify every flip in the PR. Refresh on Linux/macOS/Windows —
+file hashing normalizes CRLF→LF (and the fingerprinted paths are pinned `eol=lf` in
+`.gitattributes`), so a Windows checkout fingerprints identically (the gate CI itself
+runs ubuntu-only).
 
 ## Exit codes (`--hermetic --check`)
 

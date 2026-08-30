@@ -559,6 +559,34 @@ class TestSessionEndGuard:
 
         assert result is None
 
+    def test_guarded_structured_reply_resets_unstructured_drops(self) -> None:
+        """The guard's early return still followed a structured reply — the
+        drop counter must reset there too ('reset on any structured reply',
+        same rule as the match and NONE paths)."""
+        service = self._make_service_with_llm()
+        service._unstructured_drops = 2
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "intent": "wrap up session",
+                "triggers": ["that's all for now", "拜拜"],
+            },
+            {"id": "debug-skill", "intent": "debug things"},
+        ]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "builtin/session-end", "structured": True},
+        ):
+            result = service.try_ai_triage(
+                "有点奇怪，当前 CMSpark 的 MCP 支持有问题，未连接，无法获取工具列表",
+                candidates,
+            )
+
+        assert result is None
+        assert service._unstructured_drops == 0
+
 
 class TestFreshCacheHit:
     """Persistent-cache fresh hits: session-end guard reuse and metadata keys."""
@@ -1131,6 +1159,15 @@ class TestNoMatchExit:
         service = self._service_with_reply('{"skill_id": null}')
         result = service.try_ai_triage("explain the GIL", [{"id": "skill-a", "intent": "test"}])
         assert result is None
+
+    def test_structured_null_resets_unstructured_drops(self) -> None:
+        """A structured NONE verdict is a structured reply: the consecutive
+        unstructured-drop counter resets, same as on a structured match."""
+        service = self._service_with_reply('{"skill_id": null}')
+        service._unstructured_drops = 2
+        result = service.try_ai_triage("explain the GIL", [{"id": "skill-a", "intent": "test"}])
+        assert result is None
+        assert service._unstructured_drops == 0
 
     def test_structured_match_honors_parsed_confidence(self) -> None:
         service = self._service_with_reply('{"skill_id": "skill-a", "confidence": 0.93}')

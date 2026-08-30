@@ -66,7 +66,9 @@ _SKIPPED_DIR_PARTS = frozenset({".git", "__pycache__", "node_modules", ".venv"})
 
 
 def _hash_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # Normalize CRLF -> LF so a Windows autocrlf checkout fingerprints
+    # identically to an LF checkout of the same content.
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _hash_tree(root: Path) -> dict[str, str]:
@@ -130,6 +132,13 @@ class CheckOutcome:
         return self.exit_code == 3
 
 
+def _entries_wellformed(entries: Any) -> bool:
+    """Entries must be a list of dicts each carrying a string ``query``."""
+    return isinstance(entries, list) and all(
+        isinstance(e, dict) and isinstance(e.get("query"), str) for e in entries
+    )
+
+
 def compare_entries(
     baseline_entries: list[dict[str, Any]],
     current_entries: list[dict[str, Any]],
@@ -147,7 +156,27 @@ def compare_entries(
     - current query absent from baseline — only reachable when the dataset
       changed (fingerprint already exited 3); a failing one is still
       reported as a new fail rather than swallowed.
+
+    Malformed input (non-list, or an entry whose ``query`` is missing or
+    not a string — unhashable queries would crash the dict comprehension)
+    is treated as unreadable: exit 3 instead of a traceback. The reason
+    names the malformed side — a malformed *baseline* is healed by
+    ``--update-baseline``, but malformed *current* entries come from the
+    benchmark's own run, which a baseline refresh cannot fix.
     """
+    if not _entries_wellformed(baseline_entries):
+        return CheckOutcome(
+            exit_code=3,
+            reason="malformed baseline entries — regenerate with --update-baseline",
+        )
+    if not _entries_wellformed(current_entries):
+        return CheckOutcome(
+            exit_code=3,
+            reason=(
+                "malformed current entries (benchmark self-run output) — "
+                "fix the eval harness; refreshing the baseline cannot heal this"
+            ),
+        )
     base = {e["query"]: e for e in baseline_entries}
     cur = {e["query"]: e for e in current_entries}
 
@@ -248,7 +277,10 @@ def evaluate_against_baseline(
                 f"{BASELINE_VERSION} — regenerate with --update-baseline"
             ),
         )
-    if baseline.get("fingerprint", {}).get("sha") != fingerprint.get("sha"):
+    baseline_fingerprint = baseline.get("fingerprint")
+    if not isinstance(baseline_fingerprint, dict) or baseline_fingerprint.get(
+        "sha"
+    ) != fingerprint.get("sha"):
         return CheckOutcome(
             exit_code=3,
             reason=(
@@ -283,7 +315,10 @@ def check_update_absorption(
     baseline = load_baseline(baseline_path)
     if baseline is None or baseline.get("version") != BASELINE_VERSION:
         return None
-    return compare_entries(baseline.get("entries", []), current_entries)
+    entries = baseline.get("entries", [])
+    if not _entries_wellformed(entries):
+        return None
+    return compare_entries(entries, current_entries)
 
 
 def write_baseline(path: Path, fingerprint: dict[str, Any], entries: list[dict[str, Any]]) -> None:
