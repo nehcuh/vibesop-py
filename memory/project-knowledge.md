@@ -2,6 +2,24 @@
 
 ## Technical Pitfalls
 
+### 绿灯假象：子代理汇报的测试通过数必须核对覆盖范围 (2026-08-30 S54)
+
+**Issue**: instinct 合并后执行方汇报 "834 passed"，但 claude+grok 双路终审独立发现 `tests/core/matching/test_strategies.py` 的排除集钉死测试必红——834 的覆盖范围（benchmark/integration/skills/hooks/routing）恰好不含 `tests/core/matching`。对抗验证员另发现执行顺序问题：基线重生成后又改了 SKILL.md，最终状态下 `--check` 实际 exit 3 STALE。
+
+**Solution**: 验收子代理工作时，（a）测试数字必须附目录/标记口径并与改动面交叉比对——改动 `src/vibesop/core/matching/` 就必须看到 matching 目录的结果；（b）有指纹/基线类门禁时，最后跑一次 `--check` 确认的是**最终**工作区状态；（c）双路外部评审（claude+grok）对这种"覆盖范围错位"检出率很高，值得作为重交付的固定收尾。
+
+### 改任何 SKILL.md 必须重刷路由基线 — 两个 commit 漏刷导致 HEAD STALE (2026-08-30 S54)
+
+**Issue**: `tests/benchmark/routing_baseline.json` 的 fingerprint 覆盖 registry/dataset/**每个 SKILL.md 的内容哈希**。两个只改技能文档的 commit 没刷基线，HEAD 处于 STALE；后续合并重生成时才发现夹带了历史欠账。
+
+**Solution**: 流程纪律：凡 diff 触及 `core/skills/**/SKILL.md` 或 `core/registry.yaml`，commit 前跑 `uv run python scripts/eval_routing.py --hermetic --update-baseline`（--check exit 0 才算完）。另注意执行顺序：先改完全部技能文件，最后一次性刷基线。
+
+### 删除内置技能的完整影响面 = 仓库 + 本机安装残留 (2026-08-30 S54)
+
+**Issue**: 删 `core/skills/instinct-learning/` 后 `vibe skills list` 仍列出它——来源是四处本机残留：中央库 `~/.config/skills/<name>`、平台部署副本（`~/.claude/skills/builtin-<name>` 注意命名空间扁平前缀、`~/.grok/skills/`、`~/.config/opencode/skills/`）、全局语义索引 `~/.vibe/skill-index.json` 的条目。`list_skills()` 合并中央库 + 各平台目录（Windows 无 symlink 权限时是带 `.vibe-copy-source` 标记的实体拷贝）。
+
+**Solution**: 删内置技能清单：仓库侧（目录/registry/routing_eval/baseline/交叉引用/文档）+ 本机侧（中央库目录、所有 PLATFORM_SKILLS_DIRS 副本——注意 `builtin-` 前缀变体、索引条目剔除）。`vibe skills index` 重建需 LLM provider，无 key 时只能手动剔条目（先备份）。
+
 ### `claude -p` 大 prompt 无声挂死 — 挂点不是 prompt 大小而是工具权限阻断；`--tools ""` 立解 (2026-08-30)
 
 **Issue**: 用 `claude -p --output-format text < prompt.md`（stdin 传入 13KB+ 评审 prompt）做外部复审时，进程零输出挂死直到超时（20–30 分钟，5 路并行与单路串行同现）；同 CLI 小 prompt 秒回。Git Bash 下 `$(<file)` 传参另有 `Argument list too long`（~54KB 即触发），须走 stdin。

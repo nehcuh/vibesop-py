@@ -11,7 +11,7 @@
 1. **Claude Code 2.1.220 hook 形态修复** ✅ (Completed - Aug 28, PR #115 merged `f6f32c6`)
    - 实机探针证伪 S51 前提（宿主改 `bash -c` + 会话 CWD spawn）；生成器/rewrite/verify/e2e 四层统一 `bash <posix-abs>`；CI 11/11 job 绿；本机 `~/.claude` 已重部署
    - 教训入 project-knowledge：hook 规范形态必须对用户实际版本实机探针钉死
-2. **S52 深度治理主线**（in progress）— 分支 `governance/s52-deep-clean` 已建，Phase 1 六路对抗诊断未跑
+2. **S52 深度治理主线** ✅ (Completed - Aug 30，S54 确认已并入 main 后删分支 `governance/s52-deep-clean`)
 3. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
 4. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估

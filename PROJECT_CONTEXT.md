@@ -3,6 +3,26 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-08-30 S54 [vibesop-py + cmspark] 侧边栏任务面板 → 跨项目纠正 → 编排事件契约 → 技能治理（已全部推送）
+
+**Session Summary**:
+- cmspark 侧边栏"任务拆解清单"：4 路对抗推演 + claude/grok 双路复审（9 必改）→ v1.1；用户纠正归属后，cmspark 侧发现 Issue #256 在途 → spec 补强 §5 + Wave 1 实现（RunProgress 默认收起+sticky，855/855）→ 合 main 推送（`9d45b7c2`）
+- vibesop-py 编排事件契约保留：events.py（PlanEventLog 单调 seq + replay）+ commands.py（retry/skip 幂等 + 依赖级联）；四路评审后清死钩子 on_plan_event、修 H1 级联 skip 抹终态等 11 项 → 4 commits
+- 技能治理：18 预置技能审计零删除；registry_sync 键 bug + slash-analyze 补建 + Pi 模板 .pi/ 前缀；instinct-learning 并入 instinct（双路终审抓出绿灯假象：834 恰好不含 matching）→ slash-* 家族级模糊层排除 → 全量 6563 passed → 推至 `e682861`
+- 本机残留清理：instinct-learning 中央库/claude/grok/opencode 副本 + 全局索引条目（备份 ~/.vibe/skill-index.json.bak）
+
+**Key Decisions**:
+- vibesop-py 定位纯后端给外部 agent；外产品 UI 需求不入仓（文档归档 docs/archive/）
+- 计数语义：静态计划 x/N，动态计划分项计数；SW 永不做状态真源（Agent 后端事件日志才是）
+- LEVENSHTEIN_EXCLUDED 不再逐事故扩列——slash-* 家族级前缀排除（_is_slash_wrapper）
+- 分支纪律：只删已合并分支；cmspark 两个 fix 分支含未合并提交（用户确认后删）
+
+**Next Steps**:
+1. cmspark #256 Wave 2（FocusBand 24px 扫视行）另票；#256 可更新 Wave 1 已落地
+2. tortoise-centipede 分支被 Warp worktree 占用，需用户在 Warp 侧处理
+3. examples/datasets/silm-log.zip（18MB 未跟踪）归属待确认；.omx/artifacts/ 是否入库/ignore 待定
+4. executor.py:182 "bug" 是误报（同名不同类 WorkflowEngine），已实证关闭
+
 ### 2026-08-30 S53 [vibesop-py] 多路独立对抗评审 → workflow 修复 → claude 节点复审（改动未提交）
 
 **Session Summary**:
@@ -21,21 +41,4 @@
 2. marker-less 旧 hook 冻结：release note 提示或补 `vibe hooks repair`
 3. Dependabot PR 积压评估
 
-### 2026-08-28 S52b [vibesop-py] Claude Code 2.1.220 hook 形态翻转 → PR #115 merged
-
-**Session Summary**:
-- 用户报告 S51 修复后 hook 仍每条 prompt 127。实机探针（`claude -p` + `--settings` + 探针脚本分文件落日志，4 形态对照）证实 2.1.220 宿主改为 `bash -c` + **会话 CWD** spawn hooks——config-relative `hooks/<name>.sh` 按 CWD 解析，S51 依赖的 path-join 行为已消失
-- 修复 PR #115（`f981aac` → merged `f6f32c6`）：生成器两平台统一 `bash <posix-abs>`（唯一新旧宿主双稳形态）；rewrite 升级 legacy 形态（config-relative 需 config_dir 推导）；verify 判定反转（config-relative 全平台 unsafe）；e2e 形态断言收紧
-- 验证：全量 6386 passed；真机外部 CWD 点火零报错 + route/mirror exit 0；PR CI 11/11 job 绿（Windows lane 首跑即绿）；本机 `~/.claude` 已重部署
-- 教训入 project-knowledge.md（08-26 quoted-POSIX 条目标注已证伪）
-
-**Key Decisions**:
-- 唯一跨版本稳形态 = 无引号 `bash <posix-abs>`；引号形态虽在 2.1.220 可跑但仍拒绝（老宿主 path-join 未灭绝 + 与最稳形态不一致）
-- config-relative 无 config_dir 推不出绝对路径 → 保持字节原样（低置信不动用户配置），由 verify 标记
-- 规范形态必须对用户实际版本实机探针钉死；hook 修复验证必须「外部 CWD」真实点火
-
-**Next Steps**:
-1. main post-merge CI 3 run 收尾（CI/E2E/CodeQL @ `f6f32c6`，后台监控中）
-2. S52 深度治理主线：六路诊断（分支已建；存量 skill_auditor 1 fail 在该分支）
-3. Dependabot 9 PR：小版本批量合，openai/anthropic major 单独评估
 <!-- handoff:end -->
