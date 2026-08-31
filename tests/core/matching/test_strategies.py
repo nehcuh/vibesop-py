@@ -285,6 +285,26 @@ class TestLevenshteinMatcher:
             == LEVENSHTEIN_EXCLUDED_SKILL_IDS
         )
 
+    def test_slash_wrappers_excluded_by_family(self):
+        """slash-* CLI wrappers are excluded family-wide, not per-incident.
+
+        Regression pin for the recorded steal: `gstack/review` fuzzy-matched
+        builtin/slash-analyze via "gstack"~"stack" token similarity (0.83).
+        """
+        m = LevenshteinMatcher(MatcherConfig(min_confidence=0.0))
+        slash = _make_candidate(
+            "builtin/slash-analyze",
+            name="slash-analyze",
+            keywords=["analyze", "stack"],
+        )
+        normal = _make_candidate("some-pack/review", name="review", keywords=["review"])
+        results = m.match("gstack/review", [slash, normal])
+        assert all(r.skill_id != "builtin/slash-analyze" for r in results)
+        assert any(r.skill_id == "some-pack/review" for r in results)
+        # Bare (namespace-less) ids are covered too
+        bare = _make_candidate("slash-route", name="slash-route", keywords=["route"])
+        assert m.match("route", [bare]) == []
+
     def test_match_typo_correction(self):
         m = LevenshteinMatcher(MatcherConfig(min_confidence=0.0))
         c = _make_candidate("debug-skill", name="debugging", keywords=["debug"])

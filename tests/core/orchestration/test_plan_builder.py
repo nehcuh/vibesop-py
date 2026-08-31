@@ -622,7 +622,12 @@ class TestPlanBuilderSquadIntegration:
         """P1-2 direct squad test (pull-20260828): squad steps are structurally
         mandated, so every one carries the 0.99 sentinel — without it,
         _needs_confirmation's all_confident fold is always False for squad
-        plans and ambiguous_only auto-proceed never fires."""
+        plans and ambiguous_only auto-proceed never fires.
+
+        Exception (P2 fix): a step whose skill assignment came back empty
+        (fallback-llm) carries 0.0 instead — see
+        test_squad_steps_empty_skill_ids_zero_confidence. Here every role is
+        given a distinct, non-conflicting skill so all steps keep 0.99."""
         router = self._make_router_with_skills()
         builder = PlanBuilder(router)
         analysis = IntentAnalysis(
@@ -631,7 +636,19 @@ class TestPlanBuilderSquadIntegration:
             squad_needed=True,
             suggested_roles=roles,
             collaboration_protocol=protocol,
-            per_agent_skills={role: ["code-review"] for role in roles},
+            # Each parametrized case's protocol role set happens to contain
+            # no shared-skill pair (debater↔implementer share code-review
+            # and architect↔orchestrator share system-design, but those
+            # pairs never co-occur within a single case): a shared skill
+            # would lose conflict resolution on the non-lead role, leaving
+            # its assignment empty (→ 0.0).
+            per_agent_skills={
+                "architect": ["system-design"],
+                "red_team": ["security-audit"],
+                "implementer": ["code-review"],
+                "debater": ["code-review"],
+                "orchestrator": ["system-design"],
+            },
             confidence=0.9,
         )
 
@@ -644,7 +661,41 @@ class TestPlanBuilderSquadIntegration:
 
         assert plan.steps, pattern
         for step in plan.steps:
+            assert step.role_skills, (pattern, step.assigned_role, step.role_skills)
             assert step.confidence == 0.99, (pattern, step.assigned_role, step.confidence)
+
+    def test_squad_steps_empty_skill_ids_zero_confidence(self) -> None:
+        """Empty skill assignment (no catalog match → fallback-llm) must NOT
+        carry the 0.99 sentinel: with confidence 0.0 the ambiguous_only
+        all_confident fold stays False, so a plan with no real skills cannot
+        silently auto-proceed without user confirmation."""
+        router = FakeRouter(default=self._route("generic"))
+        router._skill_loader = FakeSkillLoader({})
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="multi_agent",
+            facets=["architecture", "security"],
+            squad_needed=True,
+            suggested_roles=["architect", "red_team"],
+            collaboration_protocol="red_team",
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "design and audit",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            metadata={"intent_analysis": analysis},
+        )
+
+        assert plan.steps
+        for step in plan.steps:
+            assert step.skill_id == "fallback-llm", (step.assigned_role, step.skill_id)
+            assert step.confidence == 0.0, (step.assigned_role, step.confidence)
+        # ambiguous_only auto-proceed folds
+        # all(step.confidence >= auto_select_threshold) with default 0.6 —
+        # confidence 0.0 keeps the fold False → confirmation is shown.
+        assert not all(step.confidence >= 0.6 for step in plan.steps)
 
     def test_squad_step_dependencies_wired(self) -> None:
         router = self._make_router_with_skills()

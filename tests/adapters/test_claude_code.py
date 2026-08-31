@@ -1025,3 +1025,9 @@ class TestGeneratorAllowlistCanary:
                 assert f.name in VIBESOP_HOOK_SCRIPT_BASENAMES, (
                     f"{platform}: {f.name} installed outside the allowlist"
                 )
+            # Content canary: bash templates must never land in non-.sh
+            # targets (pi's extensions/*.ts mapped to a .sh.j2 template).
+            for ts_file in sorted(target.rglob("*.ts")):
+                assert not ts_file.read_text(encoding="utf-8").startswith("#!"), (
+                    f"{platform}: {ts_file.name} holds a bash script"
+                )

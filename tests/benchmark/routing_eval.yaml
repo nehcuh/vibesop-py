@@ -34,16 +34,13 @@
 - query: 查看一下我的 instinct 学习状态
   expect:
   - builtin/instinct
-  - builtin/instinct-learning
   category: learning
 - query: show my coding instincts and their confidence
   expect:
   - builtin/instinct
-  - builtin/instinct-learning
   category: learning
 - query: 从我的工作流里学习一个新的本能模式
   expect:
-  - builtin/instinct-learning
   - builtin/instinct
   category: learning
 - query: 用 RIPER 流程来做这个功能

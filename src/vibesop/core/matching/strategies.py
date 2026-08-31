@@ -724,6 +724,18 @@ LEVENSHTEIN_EXCLUDED_SKILL_IDS = frozenset(
 )
 
 
+def _is_slash_wrapper(skill_id: str) -> bool:
+    """slash-* skills are CLI wrappers invoked explicitly via `/vibe-*`.
+
+    They are never fuzzy-match targets: their tags carry generic English
+    tokens that steal pack-owned phrases via last-resort fuzzy match
+    (recorded incident: `gstack/review` → slash-analyze through the
+    "gstack"~"stack" token similarity at 0.83). Family-level exclusion —
+    per-incident id listing does not scale (S51 M4 needed three).
+    """
+    return skill_id.split("/", 1)[-1].startswith("slash-")
+
+
 class LevenshteinMatcher:
     """Fuzzy matcher using Levenshtein distance."""
 
@@ -742,7 +754,7 @@ class LevenshteinMatcher:
 
         for candidate in candidates:
             skill_id = str(candidate.get("id", ""))
-            if skill_id in LEVENSHTEIN_EXCLUDED_SKILL_IDS:
+            if skill_id in LEVENSHTEIN_EXCLUDED_SKILL_IDS or _is_slash_wrapper(skill_id):
                 continue
             score = self.score(query, candidate, context)
 

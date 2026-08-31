@@ -1,0 +1,16 @@
+# Routing-baseline fingerprint invariants (src/vibesop/core/routing/benchmark.py):
+# the hermetic fingerprint hashes file CONTENT, so these trees must check out
+# with LF line endings on every platform (no autocrlf rewriting). Rules are
+# extension-scoped (not tree-wide `text`) so a future binary under these dirs
+# is never corrupted by CR stripping. Keep this list narrow — do not add
+# repo-wide `* text=auto` rules here.
+core/registry.yaml text eol=lf
+core/skills/**/*.md text eol=lf
+core/skills/**/*.yaml text eol=lf
+core/skills/**/*.yml text eol=lf
+tests/benchmark/**/*.md text eol=lf
+tests/benchmark/**/*.yaml text eol=lf
+tests/benchmark/**/*.yml text eol=lf
+tests/fixtures/benchmark-pack/**/*.md text eol=lf
+tests/fixtures/benchmark-pack/**/*.yaml text eol=lf
+tests/fixtures/benchmark-pack/**/*.yml text eol=lf

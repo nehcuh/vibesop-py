@@ -2,10 +2,10 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "b97e66d8ef96ae9df76489870ee05aee23a4014162658ebf913a37c70695a809",
+    "sha": "77630ba6bd56545e95a536befe6cb47f95e377294f283c7e40cd935594a1ea83",
     "inputs": {
-      "registry.yaml": "a567f17924325a5c164ad3d14d8b85f01ad8fce1305a97d6830a80fa33235642",
-      "dataset": "00713f5cac1997cce6d61c2f24e06f73016af62ec88d6ea312cd4129c9db9587",
+      "registry.yaml": "f997c3baa48c35098d05b6509230da865ffad068d964cf683eaca864948e56fa",
+      "dataset": "80470cef6457385e88b0b6fd15391ab10e9d63cdcb4657cc5a01aa4dc8e54128",
       "posture": {
         "enable_embedding": false,
         "enable_ai_triage": false,
@@ -21,13 +21,13 @@
         "autonomous-experiment/SKILL.md": "c7c87ae2bb489e3db0e5879a5e735ffa167e3fd899b0d203d1efed510557d938",
         "code-review/SKILL.md": "e851866cfc71ece1256853c3f6afafa0b390ad560678756cc4dab71f053d4e1c",
         "commit-message/SKILL.md": "63ba1c61aa15983078ba4dba3dd62d12476431713b7be8f8b58ec06b7f51b8c4",
-        "deep-diagnosis-optimization/SKILL.md": "27e55b1109ff813e9fa775b62ef256d8a3b719ee898b4c3fa8d291d69cf6edb8",
+        "deep-diagnosis-optimization/SKILL.md": "e6329d312edc2b9f7516ba937d4a6f58c8d9a2e9d4c4e3b46dfe1154ca9622f1",
         "experience-evolution/SKILL.md": "d1ac91aa722f689d71a1b3b28c60e899dfd7f724be64b996ad2e879ea7a0d309",
-        "instinct-learning/SKILL.md": "fbea172b82e0f0b1b483bfd1666fb4fc42e1f9da99546b3d726c5485f671cb25",
-        "instinct/SKILL.md": "9f11fee06a8918d704b2ee6cfdb48261f6673d6b51187f9d35655bfb64243bdb",
+        "instinct/SKILL.md": "b788cd5765111e505337cf4ecaabd233752ac8d246bc04665ec92b6ae3528b38",
         "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
         "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
-        "skill-craft/SKILL.md": "c17c6b459e4114f123e26923281d52a709b45384e9d1cd4fc72e6f2b8af559d5",
+        "skill-craft/SKILL.md": "eab483c40cfd0a8595cd57c1534dd1efae49126765c5ac45e742abb4d4a0ab72",
+        "slash-analyze/SKILL.md": "f36b7380f537b51a2ca91c489a4096b0d2fb21d6654e550157a0615ed1c58196",
         "slash-evaluate/SKILL.md": "03ec2764a2fa5d1f338b9235ba148f6d76e997539240960bf9f9188076499f1f",
         "slash-help/SKILL.md": "385a269b499f9a87db72c03296c24f681de05c90ff80e7008e580e58cdbaffd7",
         "slash-install/SKILL.md": "b7c7b9234e2c5668d250d709f2c1eab96bbc2e3de0a4dc6d5f9a2bc7f2e5f8ab",
@@ -117,19 +117,17 @@
     {
       "query": "查看一下我的 instinct 学习状态",
       "expect": [
-        "builtin/instinct",
-        "builtin/instinct-learning"
+        "builtin/instinct"
       ],
       "reject": [],
       "primary": "builtin/instinct",
-      "layer": "levenshtein",
+      "layer": "keyword",
       "ok1": true
     },
     {
       "query": "show my coding instincts and their confidence",
       "expect": [
-        "builtin/instinct",
-        "builtin/instinct-learning"
+        "builtin/instinct"
       ],
       "reject": [],
       "primary": "builtin/instinct",
@@ -139,13 +137,12 @@
     {
       "query": "从我的工作流里学习一个新的本能模式",
       "expect": [
-        "builtin/instinct-learning",
         "builtin/instinct"
       ],
       "reject": [],
-      "primary": "fallback-llm",
-      "layer": "fallback_llm",
-      "ok1": false
+      "primary": "builtin/instinct",
+      "layer": "keyword",
+      "ok1": true
     },
     {
       "query": "用 RIPER 流程来做这个功能",

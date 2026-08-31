@@ -337,13 +337,12 @@ Query: "debub"  # 拼写错误
 | `commit-message` | 从 staged diff 起草约定式提交信息 | 提交信息类查询 |
 | `riper-workflow` | 结构化 5 阶段开发工作流 (Research→Innovate→Plan→Execute→Review) | 复杂任务 fallback |
 | `experience-evolution` | 捕获可重用的经验和模式 | 重复工作模式 |
-| `instinct-learning` | 自动提取会话模式 | 会话结束时 |
+| `instinct` | 记录/评审/演化 instinct，自动从会话提取模式 | 会话结束时 |
 | `deep-diagnosis-optimization` | 多代理深度诊断编排 | 深度诊断任务 |
-| `instinct` | instinct 循环系统内部技能 | launchd/loop 内部 |
 | `autonomous-experiment` | 自主实验循环 | 优化和迭代任务 |
 | `skill-craft` | 自动检测模式生成技能 | 检测到重复模式 |
 
-另有 6 个 `slash-*` 元命令技能（route/list/help/install/evaluate/orchestrate），由 `/vibe-*` 快捷命令触发。
+另有 7 个 `slash-*` 元命令技能（route/list/help/install/analyze/evaluate/orchestrate），由 `/vibe-*` 快捷命令触发。
 
 ---
 

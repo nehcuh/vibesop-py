@@ -639,7 +639,13 @@ class PlanBuilder:
                     assigned_role=squad_step.role_id,
                     agent_squad_id=squad.squad_id,
                     role_skills=squad_step.skill_ids,
-                    confidence=0.99,  # structurally mandated, not routing-derived
+                    confidence=(
+                        # structurally mandated, not routing-derived — but only
+                        # when a real skill was assigned; an empty assignment
+                        # falls back to "fallback-llm" and must stay at 0.0 so
+                        # ambiguous_only confirmation is not silently skipped.
+                        0.99 if squad_step.skill_ids else 0.0
+                    ),
                 )
             )
 

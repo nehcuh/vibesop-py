@@ -60,7 +60,7 @@ class TestExternalSkillIntegration:
             "builtin/riper-workflow",
             "builtin/slash-route",
             "builtin/slash-help",
-            "builtin/instinct-learning",
+            "builtin/instinct",
             "gstack/office-hours",
         ]
 

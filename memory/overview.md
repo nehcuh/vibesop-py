@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-28 (S52b — Claude Code 2.1.220 hook 形态翻转探针+修复 PR #115 merged `f6f32c6`)
+**Last Updated**: 2026-08-30 (S54 — 编排事件契约 + 技能治理已推送 `e682861`；S53a R6 A/B 收官)
 
 ---
 
@@ -14,7 +14,7 @@
 2. **A/B 效果验证系列 R1-R6 收官** ✅ (Completed - Aug 29-30，`855de0a`+`05d9e29` push CI 全绿)
    - 强模型四连平手 → harness 假说（结构层赢提示词层）；R6 弱模型：treatment 22/25 vs control 零产物×2，但路由 2/2 no-match 零技能消费——**路由层是弱模型第一瓶颈**；公众号深度调研报告已成稿
    - 待办：R5 第二轮人评（8801/8802，封盘前最后一步）
-3. **S52 深度治理主线**（in progress）— 分支 `governance/s52-deep-clean` 已建，Phase 1 六路对抗诊断未跑
+3. **S52 深度治理主线** ✅ (Completed - Aug 30，S54 确认已并入 main 后删分支 `governance/s52-deep-clean`)
 4. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
 5. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估

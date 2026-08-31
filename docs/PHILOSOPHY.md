@@ -447,8 +447,7 @@ VibeSOP 自身提供**管理工具**、**通用兜底工作流**和**系统级�
 | slash-evaluate | 管理工具 | 评估技能质量：质量评分和反馈 |
 | slash-orchestrate | 管理工具 | 多技能编排：分解复杂请求为执行计划 |
 | riper-workflow | 通用兜底 | 无具体技能匹配时的 fallback 工作流 |
-| instinct | 系统工作流 | 记录和演化使用模式为可复用本能 |
-| instinct-learning | 系统工作流 | 自动从会话历史中提取模式 |
+| instinct | 系统工作流 | 记录和演化使用模式为可复用本能，自动从会话历史中提取模式 |
 | experience-evolution | 系统工作流 | 项目知识积累与经验沉淀 |
 | session-end | 系统工作流 | 会话收尾：更新 handoff + 提交 + 记录经验 |
 | autonomous-experiment | 系统工作流 | 自主实验循环（预测-归因-评估） |

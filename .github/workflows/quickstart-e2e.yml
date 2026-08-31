@@ -61,6 +61,11 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/scratch-home
           USERPROFILE: ${{ runner.temp }}/scratch-home
+          # uv on Windows derives its tool dirs from %APPDATA% and ignores
+          # HOME/USERPROFILE — pin both into the scratch home explicitly so
+          # the runner's real home is never touched.
+          UV_TOOL_DIR: ${{ runner.temp }}/scratch-home/uv/tools
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/scratch-home/uv/bin
         run: |
           mkdir -p "$HOME"
           uv tool install --no-cache --force ./dist/vibesop-*.whl

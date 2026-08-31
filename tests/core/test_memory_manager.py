@@ -134,3 +134,26 @@ class TestDeleteConversation:
 
     def test_delete_missing_returns_false(self, manager):
         assert manager.delete_conversation("missing") is False
+
+
+class TestMessageAnchorMetadata:
+    """Side-panel anchor contract (proposal §3.2 item 3): step-produced
+    message blocks carry plan_id/step_id through the metadata channel, and
+    the keys survive a to_dict/from_dict (persistence) roundtrip."""
+
+    def test_metadata_roundtrip_preserves_anchor_keys(self, manager):
+        conv = manager.create_conversation()
+        manager.add_assistant_message(
+            conv.id,
+            "Step output text",
+            metadata={"plan_id": "plan-1", "step_id": "s1"},
+        )
+
+        loaded = manager.get_conversation(conv.id)
+        assert loaded is not None
+        msg = loaded.messages[0]
+        assert msg.metadata["plan_id"] == "plan-1"
+        assert msg.metadata["step_id"] == "s1"
+
+        serialized = msg.to_dict()
+        assert serialized["metadata"]["step_id"] == "s1"

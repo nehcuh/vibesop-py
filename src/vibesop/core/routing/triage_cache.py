@@ -15,9 +15,11 @@ degrades to "no cache" and never breaks the routing main flow.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -94,8 +96,18 @@ class TriageCache:
             if entry.get("v") != self.SCHEMA_VERSION:
                 # Self-heal: evict the incompatible entry instead of letting
                 # it squat in the file forever (it can never hit again).
-                data.pop(self.key_for(query), None)
-                self._write(data)
+                # Re-read under the lock so pop+write is atomic against a
+                # concurrent store (the read above already released it);
+                # contention just skips the eviction.
+                with cross_process_lock(self.lock_path, blocking=False):
+                    data = self._read()
+                    if data and data.get(self.key_for(query), {}).get("v") != self.SCHEMA_VERSION:
+                        # Re-check under the lock: a concurrent store may
+                        # have upgraded the entry to the current schema
+                        # version since the unlocked read above — only pop
+                        # when it is still incompatible.
+                        data.pop(self.key_for(query), None)
+                        self._write(data)
                 return None, None
             age_seconds = time.time() - float(entry.get("ts", 0))
             if not entry.get("skill_id"):
@@ -144,6 +156,7 @@ class TriageCache:
     def _read(self) -> dict[str, Any] | None:
         """Read cache state; corrupt/missing state returns None (self-heals
         on the next ``_write``)."""
+        self._cleanup_stale_tmp()
         if not self.cache_path.exists():
             return None
         try:
@@ -153,9 +166,23 @@ class TriageCache:
             return None
         return data if isinstance(data, dict) else None
 
+    def _cleanup_stale_tmp(self) -> None:
+        """Remove ``triage_cache.<pid>.tmp`` leftovers from crashed writers.
+
+        ``_write`` renames its per-process tmp file atomically, so a tmp file
+        surviving to a later read means that writer died mid-write (every
+        ``_read`` caller holds the cross-process lock, so a live writer's tmp
+        is never seen here). Best-effort: any OSError is ignored.
+        """
+        for tmp in self.cache_path.parent.glob(f"{self.cache_path.stem}.*.tmp"):
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+
     def _write(self, data: dict[str, Any]) -> None:
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = self.cache_path.with_suffix(".tmp")
+        # Per-process tmp name: two processes writing concurrently must not
+        # interleave on a shared tmp file.
+        tmp_path = self.cache_path.with_suffix(f".{os.getpid()}.tmp")
         with tmp_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
         tmp_path.replace(self.cache_path)

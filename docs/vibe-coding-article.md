@@ -353,7 +353,7 @@ vibe route "debug this"
 
 - 维护一个 `memory/` 目录，记录项目中遇到的坑和解决方案
 - 使用 `PROJECT_CONTEXT.md` 做 session 间的 handoff
-- 让 AI 读历史记录而不是从零推理。VibeSOP 的 `instinct-learning` 技能会自动从会话中提取可复用的模式
+- 让 AI 读历史记录而不是从零推理。VibeSOP 的 `instinct` 技能会自动从会话中提取可复用的模式
 
 ### 4.4 开放 > 封闭
 

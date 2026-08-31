@@ -95,6 +95,26 @@ class TestComputeFingerprint:
         )
         assert fp["sha"] != _fingerprint(registry, dataset, skills)["sha"]
 
+    def test_crlf_checkout_fingerprints_identically(self, tmp_path: Path) -> None:
+        """Windows autocrlf checkout: same content with CRLF bytes must hash
+        identically to the LF checkout."""
+        registry, dataset, skills = _make_files(tmp_path / "env-lf")
+        # Force true LF bytes (write_text translates \n to os.linesep, so on
+        # Windows the tree is already CRLF and the test would be vacuous).
+        for path in (registry, dataset, skills / "alpha" / "SKILL.md"):
+            path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))
+        lf_fp = _fingerprint(registry, dataset, skills)
+
+        registry, dataset, skills = _make_files(tmp_path / "env-crlf")
+        for path in (registry, dataset, skills / "alpha" / "SKILL.md"):
+            # Normalize to LF first (write_text may already have emitted
+            # CRLF on Windows), then rewrite every line ending as CRLF.
+            content = path.read_bytes().replace(b"\r\n", b"\n")
+            path.write_bytes(content.replace(b"\n", b"\r\n"))
+        crlf_fp = _fingerprint(registry, dataset, skills)
+
+        assert crlf_fp == lf_fp
+
 
 class TestCompareEntries:
     def test_new_fail_exits_1(self) -> None:
@@ -172,6 +192,59 @@ class TestEvaluateAgainstBaseline:
         path.write_text("not json at all", encoding="utf-8")
         outcome = evaluate_against_baseline(path, fp, [])
         assert outcome.exit_code == 3
+
+    def test_non_dict_fingerprint_exits_3_not_traceback(self, tmp_path: Path) -> None:
+        """Valid JSON with a wrong-typed fingerprint is unreadable, not a crash."""
+        path, fp = self._write(tmp_path, "a", [_entry("q1", ok1=True, primary="s1")])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["fingerprint"] = "not-a-dict"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        outcome = evaluate_against_baseline(path, fp, [])
+        assert outcome.exit_code == 3 and outcome.stale
+
+    def test_malformed_entries_exit_3_not_traceback(self, tmp_path: Path) -> None:
+        """Entries that are not a list of dicts with 'query' are unreadable."""
+        path, fp = self._write(tmp_path, "a", [_entry("q1", ok1=True, primary="s1")])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["entries"] = [{"no_query": True}]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        outcome = evaluate_against_baseline(path, fp, [_entry("q1", ok1=True, primary="s1")])
+        assert outcome.exit_code == 3 and outcome.stale
+
+        data["entries"] = "not-a-list"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        outcome = evaluate_against_baseline(path, fp, [])
+        assert outcome.exit_code == 3 and outcome.stale
+
+    def test_non_string_query_exits_3_not_traceback(self, tmp_path: Path) -> None:
+        """A list/dict ``query`` is unhashable — the dict comprehension in
+        compare_entries would raise TypeError, so it counts as malformed."""
+        path, fp = self._write(tmp_path, "a", [_entry("q1", ok1=True, primary="s1")])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for bad_query in (["a"], {"x": 1}):
+            data["entries"] = [{"query": bad_query, "ok1": True, "primary": "s1"}]
+            path.write_text(json.dumps(data), encoding="utf-8")
+            outcome = evaluate_against_baseline(path, fp, [_entry("q1", ok1=True, primary="s1")])
+            assert outcome.exit_code == 3 and outcome.stale, bad_query
+
+    def test_malformed_reason_names_the_malformed_side(self, tmp_path: Path) -> None:
+        """Malformed BASELINE entries coach --update-baseline; malformed
+        CURRENT entries come from the benchmark's own run — a baseline
+        refresh cannot heal them, so the message must not suggest one."""
+        path, fp = self._write(tmp_path, "a", [_entry("q1", ok1=True, primary="s1")])
+
+        current_bad = evaluate_against_baseline(path, fp, [{"no_query": True}])
+        assert current_bad.exit_code == 3 and current_bad.stale
+        assert "current" in current_bad.reason
+        assert "--update-baseline" not in current_bad.reason
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["entries"] = [{"no_query": True}]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        baseline_bad = evaluate_against_baseline(path, fp, [_entry("q1", ok1=True, primary="s1")])
+        assert baseline_bad.exit_code == 3 and baseline_bad.stale
+        assert "baseline" in baseline_bad.reason
+        assert "--update-baseline" in baseline_bad.reason
 
 
 class TestCheckUpdateAbsorption:

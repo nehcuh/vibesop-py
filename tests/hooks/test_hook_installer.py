@@ -4,7 +4,11 @@ import stat
 import sys
 from pathlib import Path
 
+import pytest
+
+from vibesop.core.skills import SkillStorage
 from vibesop.hooks import HookInstaller, HookPoint
+from vibesop.installer import VibeSOPInstaller
 
 
 class TestHookInstaller:
@@ -123,6 +127,56 @@ class TestHookInstaller:
         assert not (tmp_path / "hooks" / "pre-session-end.sh").exists()
         assert not (tmp_path / "hooks" / "pre-tool-use.sh").exists()
         assert not (tmp_path / "hooks" / "route-interceptor.sh").exists()
+
+    def test_install_preserves_non_utf8_existing_hook(self, tmp_path: Path) -> None:
+        """A pre-existing hook encoded in GBK (not UTF-8) must not crash
+        install with UnicodeDecodeError — it is not installer-generated,
+        so it is left untouched."""
+        installer = HookInstaller()
+        hook_path = tmp_path / "hooks" / "pre-session-end.sh"
+        hook_path.parent.mkdir(parents=True)
+        hook_path.write_bytes("#!/bin/bash\n# 用户自定义 hook\n".encode("gbk"))
+
+        results = installer.install_hooks(
+            "claude-code",
+            tmp_path,
+            hook_points=[HookPoint.PRE_SESSION_END],
+        )
+
+        assert results["pre-session-end"] is True
+        assert hook_path.read_bytes() == "#!/bin/bash\n# 用户自定义 hook\n".encode("gbk")
+
+    def test_uninstall_pi_keeps_adapter_ts_extensions(self, tmp_path: Path) -> None:
+        """pi's hook points map to extensions/*.ts — non-.sh targets belong
+        to the platform adapter, so uninstall must not unlink them."""
+        installer = HookInstaller()
+        installer.install_hooks("pi", tmp_path)
+        for name in ("vibesop-route.ts", "vibesop-track.ts"):
+            ts = tmp_path / "extensions" / name
+            ts.parent.mkdir(parents=True, exist_ok=True)
+            ts.write_text("// adapter-rendered extension\n", encoding="utf-8")
+
+        results = installer.uninstall_hooks("pi", tmp_path)
+
+        assert all(results.values())
+        assert (tmp_path / "extensions" / "vibesop-route.ts").exists()
+        assert (tmp_path / "extensions" / "vibesop-track.ts").exists()
+
+    def test_uninstall_opencode_keeps_markerless_route_hook(self, tmp_path: Path) -> None:
+        """opencode's hook points map to hooks/vibesop-route.sh, rendered by
+        the adapter (no installer marker) — uninstall must preserve it."""
+        installer = HookInstaller()
+        route_hook = tmp_path / "hooks" / "vibesop-route.sh"
+        route_hook.parent.mkdir(parents=True)
+        route_hook.write_text(
+            "#!/bin/bash\n# real adapter-rendered route hook\nexec vibe route --hook\n",
+            encoding="utf-8",
+        )
+
+        results = installer.uninstall_hooks("opencode", tmp_path)
+
+        assert all(results.values())
+        assert "exec vibe route --hook" in route_hook.read_text(encoding="utf-8")
 
     def test_uninstall_hooks_specific(self, tmp_path: Path) -> None:
         """Test uninstalling specific hooks."""
@@ -270,6 +324,31 @@ class TestHookInstallerIntegration:
         # Templated hooks still install normally alongside the preserved file.
         assert (tmp_path / "hooks" / "pre-tool-use.sh").exists()
 
+    def test_kept_hook_chmod_failure_still_reports_success(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A kept (non-installer-generated) hook whose chmod fails — read-only
+        file, foreign owner — is still a successful keep: the chmod is
+        best-effort and must not surface as an install failure."""
+        installer = HookInstaller()
+        kept = tmp_path / "hooks" / "pre-session-end.sh"
+        kept.parent.mkdir(parents=True)
+        kept.write_text("#!/bin/bash\n# user-managed hook\n", encoding="utf-8")
+
+        real_chmod = Path.chmod
+
+        def failing_chmod(self: Path, mode: int, *args, **kwargs):
+            if self == kept:
+                raise PermissionError("read-only file")
+            return real_chmod(self, mode, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "chmod", failing_chmod)
+
+        results = installer.install_hooks("claude-code", tmp_path)
+
+        assert results.get("pre-session-end") is True
+        assert "user-managed hook" in kept.read_text(encoding="utf-8")
+
     def test_multiple_platforms(self, tmp_path: Path) -> None:
         """Test installing hooks for multiple platforms."""
         installer = HookInstaller()
@@ -289,3 +368,66 @@ class TestHookInstallerIntegration:
         assert len(opencode_results) == 2
         assert opencode_results.get("post-session-start") is True
         assert opencode_results.get("route-interceptor") is True
+
+
+class TestHookInstallerClobberE2E:
+    """P1: inside ``VibeSOPInstaller.install`` the adapter renders the real
+    hooks first and HookInstaller runs second — its template stubs must never
+    overwrite the adapter-rendered files (opencode's vibesop-route.sh, pi's
+    extensions/*.ts)."""
+
+    @pytest.fixture
+    def home(self, monkeypatch, tmp_path):
+        home = tmp_path / "fake_home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+        # SkillStorage binds its dirs from Path.home() at import time; point
+        # them at the fake home so the install's skill sync stays hermetic.
+        monkeypatch.setattr(SkillStorage, "CENTRAL_SKILLS_DIR", home / ".config" / "skills")
+        monkeypatch.setattr(
+            SkillStorage,
+            "PLATFORM_SKILLS_DIRS",
+            {p: home / ".skills" / p for p in SkillStorage.PLATFORM_SKILLS_DIRS},
+        )
+        return home
+
+    def test_opencode_route_hook_survives_install(self, home, tmp_path: Path) -> None:
+        """opencode post-session-start has a bash template mapped to
+        hooks/vibesop-route.sh — it must not clobber the adapter render."""
+        config_dir = tmp_path / "opencode"
+        result = VibeSOPInstaller().install("opencode", config_dir)
+        assert result["success"], result["errors"]
+
+        content = (config_dir / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
+        # Still the adapter-rendered route hook, not the template stub.
+        assert "handle_query_for_hook" in content
+        assert "Post-session-start hook for" not in content
+
+    def test_pi_extensions_survive_install(self, home, tmp_path: Path) -> None:
+        """pi pre-session-end/post-session-start have bash templates mapped
+        to extensions/*.ts — the .ts files must not be rewritten as bash."""
+        config_dir = tmp_path / "pi"
+        result = VibeSOPInstaller().install("pi", config_dir)
+        assert result["success"], result["errors"]
+
+        for name, ts_marker in (
+            ("vibesop-route.ts", "runVibeRoute"),
+            ("vibesop-track.ts", "isSessionEndSignal"),
+        ):
+            content = (config_dir / "extensions" / name).read_text(encoding="utf-8")
+            assert not content.startswith("#!"), f"{name} overwritten with a bash stub"
+            assert "Generated by VibeSOP v" in content
+            # Positive discriminator: a function name only the adapter-rendered
+            # .ts template carries — the bash stub can never contain it.
+            assert ts_marker in content, f"{name} lost the adapter-rendered {ts_marker}"
+
+    def test_reinstall_preserves_adapter_render(self, home, tmp_path: Path) -> None:
+        """A forced reinstall must still not clobber the adapter-rendered hook."""
+        installer = VibeSOPInstaller()
+        config_dir = tmp_path / "opencode"
+        assert installer.install("opencode", config_dir)["success"]
+        assert installer.install("opencode", config_dir, force=True)["success"]
+
+        content = (config_dir / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
+        assert "handle_query_for_hook" in content

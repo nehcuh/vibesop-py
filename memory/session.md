@@ -1,7 +1,27 @@
 
 ## Current Session
 
-### S53 (2026-08-29~30) [vibesop-py] R6 弱模型 A/B 全闭环 + 验证报告 push + 公众号深度调研报告
+### S54 (2026-08-30 21:00~22:40) [vibesop-py + cmspark] 侧边栏任务面板设计 → 跨项目方向纠正 → 编排事件契约 → 技能治理
+
+- **设计**:cmspark 侧边栏"任务拆解清单"需求 → 4 路独立对抗推演（UX/架构/批判/竞品）→ claude+grok 双路复审（均有条件通过，9 项必改：计数语义矛盾、SW 不能当真源、loop_back 无 replace 语义等）→ v1.1 方案 `docs/proposals/`（后移 archive）
+- **方向纠正**:用户指出需求属 cmspark 非 vibesop-py（纯后端/外部 agent 定位）；已落地的 events.py/commands.py 经四路评审裁决为通用编排契约保留——清死钩子（on_plan_event）、修 11 项（级联 skip 抹终态步骤 H1、异常无 terminal、escalate 终态失真等）→ 4 commits
+- **cmspark 落地**:勘察发现 #256 已在途（流内收起+sticky 方向已定，NEVER 禁进度条）→ spec 补强 §5（吸收对抗评审结论）→ Wave 1 实现（RunProgress 默认收起+sticky，855/855）→ 合并推 main；清理 3 个已合并分支
+- **技能治理**:18 预置技能审计（全部有效零删除）→ 清机器特定路径/registry 对齐（sync 键 bug）/slash-analyze 补建/Pi 模板 .pi/ 前缀 → instinct-learning 并入 instinct（功能域 1:1 + token 稀释实证）→ 对抗验证抓出基线 STALE + 终审抓出绿灯假象（834 恰好不含 matching）→ 家族级 slash-* 模糊层排除 → 全量 6563 passed → 推送至 e682861
+- **教训**:绿灯假象核对覆盖范围、SKILL.md 改动必刷基线、删技能含本机残留（中央库+平台副本+全局索引）→ project-knowledge.md
+- Next: cmspark #256 Wave 2（FocusBand）另票；vibesop-py 遗留 tortoise-centipede（Warp worktree 占用）
+- Recorded: yes — 3 pitfalls → project-knowledge.md
+
+### S53b (2026-08-30 15:08~) [vibesop-py] pull×2 + 多路独立对抗评审 → workflow 修复 → claude 节点复审
+
+- **评审**:pull 3c1deb6→51319ba（24 commits）后 5 路独立对抗评审 → P1×2（benchmark 指纹 CRLF 失效+可投毒 CI [三路独立实证]；HookInstaller clobber opencode/pi adapter 产物 [E2E 复现]）+ P2×8；增量 pull（05d9e29）再 2 路 → R6 A/B 报告规则 5 事后豁免（P1）+ 框架不对称 1/3 vs 0/2（P2）等
+- **修复**:5 路并行 coder（routing/hooks/orchestration/scripts+CI/omx 文档）→ 4 路独立对抗验证 → 9 项残留（含 2 项新引入：非 UTF-8 install 崩溃、verify 新误报）→ 跟进修复 → claude 5 分块终审全 APPROVE → 终审残留（.gitattributes 收窄、CRLF 测试 Windows 恒真、verify 空格形态逃逸等）清零
+- **验证**:全量 6507 passed（2 fail stash 对照证实 pre-existing flake）；本机 Windows CRLF 检出 `eval_routing --hermetic --check` 从 exit 3 STALE → exit 0 OK
+- **产出**:24 文件 +1016/−90；遗留不阻塞：marker-less 旧 hook 不再被升级/卸载（需 release note 或 `vibe hooks repair`）、installer 无 "skipped" 状态
+- **教训**:`claude -p` 大 prompt 挂死 = 工具权限阻断非 prompt 大小，`--tools ""` 立解；AGENTS.md 会被 vibe 工具链会话中再生成 → project-knowledge.md
+- Next: 24 commits（S52 遗留）+ 本轮修复待 push；本轮改动按 fix(routing)/fix(hooks)/fix(orchestration)/fix(scripts+ci)/docs(omx) 分组提交
+- Recorded: yes — claude --tools "" + AGENTS.md 再生成 → project-knowledge.md
+
+### S53a (2026-08-29~30) [vibesop-py] R6 弱模型 A/B 全闭环 + 验证报告 push + 公众号深度调研报告
 
 - [x] **R6 弱模型 A/B 收官**：control 尝试 2 同轨迹思考循环死亡（2561s 零产物）→ 按预注册规则 4 记完成度差距。treatment 评分 **22/25**（D1 物理 5.0 / D3 教学法 5.0 满分；D4 3.5 扣 app-smoke PointerEvent 崩溃 + 构建期 npm 违离线字面；D5 4.0 扣实现说明未输出）
 - [x] **核心发现**：treatment 赢但**技能内容从未进入上下文**——27B 路由 2/2 no-match、0 次 SKILL.md 读取（R5 强模型 80 次）；赢因 = VibeSOP 静态脚手架（协议/目录/CLI）+ n=1 方差不可分离。弱模型格结论改写：**路由层是第一瓶颈，注入效果在路由质量解决前不可检验**

@@ -325,10 +325,10 @@ skill-craft:
 
 ## Integration with Existing Skills
 
-### With `instinct-learning`
+### With `instinct`
 
 ```
-instinct-learning          skill-craft
+instinct                   skill-craft
      │                         │
      │  Low-level patterns     │
      ├────────────────────────►│
@@ -452,4 +452,4 @@ Skill registered! Use /api-error-debug to invoke.
 
 **Version**: 1.0.0
 **Status**: Ready for Implementation
-**Dependencies**: instinct-learning, session-end
+**Dependencies**: instinct, session-end

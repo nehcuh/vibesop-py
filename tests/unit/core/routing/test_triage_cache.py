@@ -125,6 +125,35 @@ class TestCapacity:
             assert TriageCache.key_for(f"query {i}") in data
 
 
+class TestTmpCleanup:
+    """A crashed writer leaks ``triage_cache.<pid>.tmp`` forever — reads
+    sweep the leftovers (the tmp is renamed atomically on success, so any
+    survivor means the writer died)."""
+
+    def test_stale_pid_tmp_removed_on_read(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        _store(cache)
+        stale = tmp_path / "triage_cache.999999.tmp"
+        stale.write_text('{"partial": true', encoding="utf-8")
+
+        cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+
+        assert not stale.exists()
+        # The real cache file is untouched by the sweep.
+        fresh, _ = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is not None
+
+    def test_unrelated_tmp_files_survive(self, tmp_path) -> None:
+        cache = TriageCache(tmp_path)
+        _store(cache)
+        unrelated = tmp_path / "other_tool.123.tmp"
+        unrelated.write_text("keep me", encoding="utf-8")
+
+        cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+
+        assert unrelated.exists()
+
+
 class TestPrivacy:
     """No raw query text is persisted."""
 
@@ -551,8 +580,12 @@ class TestNegativeCaching:
 
         fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
         assert fresh is None
-        # Expired negatives are NOT kept as last-good either.
-        assert stale is None or stale["skill_id"] is None
+        # Expired negatives still surface in the stale slot, but the service
+        # never resurrects a no-match as a last-good route.
+        assert stale is not None
+        assert stale["skill_id"] is None
+        service = _make_service(cache)
+        assert service._last_good_route(stale, _CANDIDATES) is None
 
     def test_structured_none_reply_negative_hit_skips_llm(self, tmp_path) -> None:
         """A cached no-match short-circuits before the LLM call."""
@@ -599,6 +632,46 @@ class TestNegativeCaching:
         assert stale is None
         after = json.loads(cache.cache_path.read_text(encoding="utf-8"))
         assert key not in after
+
+    def test_locked_reread_does_not_evict_concurrent_upgrade(self, tmp_path, monkeypatch) -> None:
+        """Between the unlocked read and the locked re-read a concurrent
+        store may upgrade the entry to the current schema version — the
+        eviction must re-check the version under the lock instead of
+        popping unconditionally."""
+        cache = TriageCache(tmp_path)
+        key = TriageCache.key_for("hello world")
+        legacy = {key: {"skill_id": "skill-a", "ts": time.time()}}  # no "v"
+        cache.cache_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        upgraded = {
+            key: {
+                "v": TriageCache.SCHEMA_VERSION,
+                "skill_id": "skill-a",
+                "confidence": 0.9,
+                "candidates_hash": TriageCache.candidates_hash(_CANDIDATES),
+                "ts": time.time(),
+            }
+        }
+        real_read = cache._read
+        reads = 0
+
+        def concurrent_store_then_read() -> dict:
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                # The locked re-read: a concurrent store has landed since
+                # the unlocked read above.
+                cache.cache_path.write_text(json.dumps(upgraded), encoding="utf-8")
+            return real_read()
+
+        monkeypatch.setattr(cache, "_read", concurrent_store_then_read)
+
+        fresh, stale = cache.lookup("hello world", _CANDIDATES, ttl_hours=72)
+        assert fresh is None
+        assert stale is None
+        after = json.loads(cache.cache_path.read_text(encoding="utf-8"))
+        assert key in after
+        assert after[key]["v"] == TriageCache.SCHEMA_VERSION
 
     def test_negative_entry_never_resurrects_as_last_good(self, tmp_path) -> None:
         cache = TriageCache(tmp_path)

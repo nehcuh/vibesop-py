@@ -1476,7 +1476,11 @@ class TestParallelism:
         # Serial would be ~960ms; parallel with 8 workers ≈ 120ms + overhead.
         # Bound chosen for margin on both sides (see comment above).
         assert elapsed < 0.60, f"Indexer not parallelizing: 8×120ms slept took {elapsed:.3f}s"
-        assert max_concurrent > 1, "Expected concurrent _analyze_skill executions"
+        # 8 skills / 8 workers: 2-3-way concurrency degenerations must fail
+        # here; the wall-clock bound above is only a loose backstop.
+        assert max_concurrent >= 4, (
+            f"Expected >=4 concurrent _analyze_skill executions, got {max_concurrent}"
+        )
 
     def test_analyze_failure_in_one_thread_doesnt_kill_others(
         self,

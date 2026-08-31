@@ -77,12 +77,12 @@ A/B 的前提是"注入该发生时发生、不该发生时不发生"。精度�
 
 | 文件 | 内容 |
 |---|---|
-| `.omx/artifacts/ab-probe-20260828.md` | R1-R3 详细报告 |
-| `.omx/artifacts/ab-probe-kimi-synthesis.md` | R4 五路对抗仲裁 |
-| `.omx/artifacts/ab-jet-round1-eval.md` | R5 预注册(预测/评分表/判读规则) |
-| `.omx/artifacts/ab-jet-round1-report.md` | R5 第一轮评分 |
-| `.omx/artifacts/routing-precision-audit-20260829.md` | 路由精度审计+修复全记录 |
-| `.omx/artifacts/routing-fix-kimi-synthesis.md` | 修复的五路复审仲裁 |
+| `.omx/artifacts/ab-probe-20260828.md` | R1-R3 详细报告（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
+| `.omx/artifacts/ab-probe-kimi-synthesis.md` | R4 五路对抗仲裁（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
+| `.omx/artifacts/ab-jet-round1-eval.md` | R5 预注册(预测/评分表/判读规则)（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
+| `.omx/artifacts/ab-jet-round1-report.md` | R5 第一轮评分（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
+| `.omx/artifacts/routing-precision-audit-20260829.md` | 路由精度审计+修复全记录（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
+| `.omx/artifacts/routing-fix-kimi-synthesis.md` | 修复的五路复审仲裁（**未入库，存放于实验环境，数字暂不可从仓库独立核验**） |
 | `/tmp/ab-jet-out/{treatment,control}/` | R5 双臂产物 |
 
 ---
@@ -111,7 +111,7 @@ A/B 的前提是"注入该发生时发生、不该发生时不发生"。精度�
 全报告见 `.omx/artifacts/ab-jet-weak-report-r6.md`。要点:
 
 - 单变量:双臂编码模型换 27B(Qwen3.8-27B oMLX),treatment 路由 LLM 同模型(用户公平性要求)
-- **treatment 交付 22/25**(10 文件 2503 行,25 项物理自验全过);**control 两次尝试零产物**(纯思考循环撞帽 ×2)——完成度差距极大
+- **treatment 三次尝试中一次交付 22/25**(1/3,另两次作废;10 文件 2503 行,25 项物理自验全过)vs **control 0/2**(两次尝试零产物,纯思考循环撞帽 ×2)——完成度差距极大;且 treatment 唯一有效尝试依赖预注册规则 5 的事后豁免,control runner 参数时点未记录(详见 R6 报告 §1/§5 协议偏离声明)
 - **但技能内容从未进入 treatment 上下文**:27B 路由 2/2 no-match(hook + 模型自调),0 次 SKILL.md 读取(R5 强模型同期 80 次);模型显式推理"路由没匹配,任务书即完整需求,直接实现"
-- 矩阵弱模型格结论修正为:**好 harness + 弱模型 + 零技能注入 → 仍交付接近强模型质量的产物(22 vs 23.5);裸上下文 + 弱模型 → 无法启动**。结构层(环境脚手架)再次主导;混杂 = 静态目录/协议在场 + n=1 方差,不可分离
+- 矩阵弱模型格结论修正为:**好 harness + 弱模型 + 零技能注入 → 仍交付接近强模型质量的产物(22 vs 23.5);裸上下文 + 弱模型 → 无法启动**。结构层(环境脚手架)方向性上再次占优(方向性观察,非定论);混杂 = 静态目录/协议在场 + n=1 方差,不可分离
 - 对"技能抬升弱模型"这一问:**在路由质量解决前不可检验**——27B 路由就是第一瓶颈(P5 硬命中)。弱模型格的下一个实验应是路由质量,不是注入效果
