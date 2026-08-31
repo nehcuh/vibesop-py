@@ -158,6 +158,13 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/scratch-home
           USERPROFILE: ${{ runner.temp }}/scratch-home
+          # The deployed script resolves the uv tool env via `uv tool dir`,
+          # which honors UV_TOOL_DIR. The install step pinned the tool under
+          # the scratch home, so every step executing the deployed artifact
+          # must pin it too — otherwise the probe falls back to the default
+          # tool dir, finds no importable vibesop, and the hook silently
+          # degrades to {} (install env ≠ exec env; found 2026-08-31).
+          UV_TOOL_DIR: ${{ runner.temp }}/scratch-home/uv/tools
         run: |
           script="$HOME/.claude/hooks/vibesop-route.sh"
           test -f "$script"
@@ -197,6 +204,11 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/scratch home
           USERPROFILE: ${{ runner.temp }}/scratch home
+          # Same UV_TOOL_DIR propagation as the hook smoke above: the tool
+          # env lives under the FIRST scratch home while HOME here is the
+          # spaced one — without this the deployed command runs but routing
+          # silently degrades to {}.
+          UV_TOOL_DIR: ${{ runner.temp }}/scratch-home/uv/tools
         run: |
           mkdir -p "$HOME"
           vibe quickstart --force < /dev/null > "$PWD/spaced-quickstart.txt" 2>&1 || {
@@ -241,6 +253,12 @@ jobs:
           if [ "$rc" -eq 127 ] || grep -qi "No such file or directory" "$PWD/spaced-out.txt"; then
             echo "FAIL: deployed command 127s under a spaced home (M1 class)"; exit 1
           fi
+          # UV_TOOL_DIR above must reach the script's `uv tool dir` probe —
+          # assert real routing, not just non-127. Before the env fix this
+          # step ran silently degraded ({} output satisfied the 127 check).
+          grep -qF "[ACTIVE SKILL: builtin/commit-message]" "$PWD/spaced-out.txt" || {
+            echo "FAIL: spaced-home hook silently degraded to {} (no routing)"; exit 1
+          }
           vibe verify claude-code --verbose > "$PWD/spaced-verify.txt" 2>&1 || true
           if grep -qi "unsafe" "$PWD/spaced-verify.txt"; then
             echo "FAIL: vibe verify flags the spaced-home deployment"
