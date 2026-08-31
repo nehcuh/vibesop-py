@@ -390,6 +390,11 @@ class TestHookInstallerClobberE2E:
             "PLATFORM_SKILLS_DIRS",
             {p: home / ".skills" / p for p in SkillStorage.PLATFORM_SKILLS_DIRS},
         )
+        # The pi adapter resolves project_root="." at render time and writes
+        # AGENTS.md there — without this chdir the install leaks a rewrite of
+        # the vibesop repo's own AGENTS.md (found 2026-08-31: the nvm bullet
+        # silently vanished from the working tree after every full-suite run).
+        monkeypatch.chdir(tmp_path)
         return home
 
     def test_opencode_route_hook_survives_install(self, home, tmp_path: Path) -> None:
@@ -410,6 +415,11 @@ class TestHookInstallerClobberE2E:
         config_dir = tmp_path / "pi"
         result = VibeSOPInstaller().install("pi", config_dir)
         assert result["success"], result["errors"]
+
+        # The adapter's project-root AGENTS.md lands inside the fixture cwd
+        # (tmp), never in the vibesop repo checkout.
+        assert (Path.cwd() / "AGENTS.md").exists()
+        assert (Path.cwd() / "AGENTS.md").resolve().is_relative_to(tmp_path)
 
         for name, ts_marker in (
             ("vibesop-route.ts", "runVibeRoute"),
