@@ -36,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
+  `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
+  tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实
+  cwd，`render_config` 无条件把 `AGENTS.md.j2` 渲到仓库根——夹具的 fake
+  HOME 下 nvm 三条探测全落空（fake `~/.nvm`、Intel brew 路径、`which nvm`
+  对 shell 函数永远 None），uv 靠 PATH 存活，于是每次全量测试后工作树的
+  AGENTS.md 都静默少一行 nvm。夹具补 `monkeypatch.chdir(tmp_path)` + 落点
+  断言（AGENTS.md 必须落在 tmp 内）。
+- **`detect_tool_environment` 的 nvm 候选缺 Apple Silicon brew 路径**:
+  补 `/opt/homebrew/opt/nvm/nvm.sh`。此前 Apple Silicon + brew 装 nvm 且无
+  `~/.nvm` symlink 的机器永远探测不到（`which nvm` 探不到 shell 函数，
+  唯一可靠探针就是 opt/ 下的 symlink）。函数此前零测试覆盖，补三钉
+  （brew 路径命中 / 双空 / uv-only）。
 - **plan 终态与事件流统一到同一张终态词汇表（P1-2，20260831 评审）**:
   引擎循环收尾处无条件写 `plan.status = COMPLETED`，而终端事件用的是
   `_compute_final_status` 的四值词汇（completed/partial/failed/
