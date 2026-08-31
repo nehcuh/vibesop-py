@@ -330,6 +330,7 @@ def test_foreign_script_with_argument_passes_both_platforms(tmp_path, monkeypatc
         for cmd in (
             "bash hooks/run.sh vibesop-route.sh",
             "bash scripts/run.sh vibesop-route.sh",
+            "bash hooks/run.sh sub/vibesop-route.sh",
         ):
             result = _route_hook_result(tmp_path, monkeypatch, [healthy, cmd], platform)
             assert result["pass"], (platform, cmd, result["detail"])

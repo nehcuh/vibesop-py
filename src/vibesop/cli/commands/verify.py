@@ -252,12 +252,13 @@ def _spaced_relative_script_reason(tokens: list[str]) -> str | None:
     tail = tokens[-1].replace("\\", "/").strip("\"'")
     if tail.rsplit("/", 1)[-1].lower() not in VIBESOP_HOOK_SCRIPT_BASENAMES:
         return None
-    if "/" not in tail and frag.lower().endswith(".sh"):
+    if frag.lower().endswith(".sh"):
         # `bash hooks/run.sh vibesop-route.sh` — tokens[1] is a complete
-        # foreign script path (slash + .sh) and the bare allowlisted tail
-        # is its argument, not a split fragment of the script path (a
-        # split tail keeps its slash: `... First Last/…/x.sh`). Foreign
-        # script paths are outside this generator-basename scan.
+        # foreign script path (slash + .sh) and the allowlisted tail
+        # (bare basename or a sub-path argument) is its argument, not a
+        # split fragment of the script path (a split first fragment
+        # never ends in .sh: `... First Last/…/x.sh`). Foreign script
+        # paths are outside this generator-basename scan.
         return None
     return (
         "unquoted space in CWD-relative script path resolves against the "
