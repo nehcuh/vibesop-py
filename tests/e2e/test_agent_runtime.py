@@ -9,6 +9,7 @@ would orchestrate in production, without requiring actual AI Agent platform conn
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -641,3 +642,31 @@ class TestCrossPlatformConsistency:
         assert KimiCliAdapter._route_hook_registered is True
         assert CursorAdapter._route_hook_registered is False
         assert OpenCodeAdapter._route_hook_registered is False
+
+    def test_pi_faces_reference_prefixed_skill_paths(self):
+        """P1-4 (20260831 review): every skill/doc path the pi templates tell
+        the agent to read must live under `.pi/` — bare `skills/` paths
+        resolve to nothing in the generated tree (recognizer/generator
+        isomorphism: the reader must point where the writer writes)."""
+        templates_dir = (
+            Path(__file__).parent.parent.parent / "src" / "vibesop" / "adapters" / "templates"
+        )
+        faces = {
+            "pi AGENTS.md": (templates_dir / "pi" / "AGENTS.md.j2").read_text(encoding="utf-8"),
+            "pi project AGENTS.md": (templates_dir / "pi" / "AGENTS.md.project.j2").read_text(
+                encoding="utf-8"
+            ),
+            "pi vibe-route prompt": (
+                templates_dir / "pi" / "prompts" / "vibe-route.md.j2"
+            ).read_text(encoding="utf-8"),
+        }
+        for name, text in faces.items():
+            assert ".pi/skills/<matched-skill>/SKILL.md" in text, f"{name}: skill read instruction"
+            for pattern in (
+                r"(?<!\.pi/)skills/<matched-skill>/SKILL\.md",
+                r"(?<!\.pi/)docs/routing-protocol\.md",
+                r"(?<!\.pi/)docs/skills\.md",
+            ):
+                assert re.search(pattern, text) is None, (
+                    f"{name}: path missing .pi/ prefix ({pattern})"
+                )
