@@ -45,6 +45,10 @@ def detect_tool_environment() -> str:
     nvm_candidates = [
         Path.home() / ".nvm" / "nvm.sh",
         Path("/usr/local/opt/nvm/nvm.sh"),
+        # Apple Silicon Homebrew prefix — `which nvm` can never find nvm
+        # (it is a shell function, not a binary), so the symlink under
+        # opt/ is the only reliable probe there (2026-08-31 investigation).
+        Path("/opt/homebrew/opt/nvm/nvm.sh"),
     ]
     for candidate in nvm_candidates:
         if candidate.exists():

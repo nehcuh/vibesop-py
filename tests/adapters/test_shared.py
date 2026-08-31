@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from vibesop.adapters._content import detect_tool_environment
 from vibesop.adapters._shared import (
     find_skill_content,
     generate_fallback_skill_content,
@@ -178,3 +179,49 @@ class TestRenderRouteHook:
             no_match_message=True,
         )
         assert "vibe route" in result or "VibeSOP" in result
+
+
+class TestDetectToolEnvironment:
+    """detect_tool_environment: nvm/uv guidance for generated configs."""
+
+    def test_apple_silicon_brew_nvm_detected(self) -> None:
+        """/opt/homebrew/opt/nvm/nvm.sh is the only reliable probe on Apple
+        Silicon: `which nvm` never resolves (nvm is a shell function) and
+        ~/.nvm may not exist for a brew install (2026-08-31 finding)."""
+        brew_path = Path("/opt/homebrew/opt/nvm/nvm.sh")
+
+        original_exists = Path.exists
+
+        def fake_exists(self: Path) -> bool:
+            if self == brew_path:
+                return True
+            return original_exists(self)
+
+        with (
+            patch("pathlib.Path.exists", fake_exists),
+            patch("shutil.which", side_effect=lambda name: None),
+        ):
+            result = detect_tool_environment()
+
+        assert "- **nvm**" in result
+        assert "- **uv**" not in result
+
+    def test_no_tools_empty_section(self) -> None:
+        with (
+            patch("pathlib.Path.exists", return_value=False),
+            patch("shutil.which", side_effect=lambda name: None),
+        ):
+            assert detect_tool_environment() == ""
+
+    def test_uv_only(self) -> None:
+        with (
+            patch("pathlib.Path.exists", return_value=False),
+            patch(
+                "shutil.which",
+                side_effect=lambda name: "/usr/local/bin/uv" if name == "uv" else None,
+            ),
+        ):
+            result = detect_tool_environment()
+
+        assert "- **uv**" in result
+        assert "- **nvm**" not in result
