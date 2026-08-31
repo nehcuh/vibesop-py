@@ -14,6 +14,8 @@ Provides:
 - WorkflowEngine: dynamic execution for loop-until-dry and tournament (v6.2.0)
 - Reorchestrator: post-step analysis for runtime re-evaluation (v6.2.0)
 - TournamentRunner: multi-contestant comparison with judge (v6.2.0)
+- PlanEventLog / PlanEvent: per-plan append-only execution event contract (v8.3)
+- PlanCommandHandler / PlanCommand: observer retry/skip control-plane contract (v8.3)
 """
 
 from __future__ import annotations
@@ -27,6 +29,19 @@ from vibesop.core.orchestration.callbacks import (
     StepResult,
 )
 from vibesop.core.orchestration.classifier import ClassifierAgent
+from vibesop.core.orchestration.commands import (
+    PlanCommand,
+    PlanCommandHandler,
+    PlanCommandResult,
+    PlanCommandStatus,
+    PlanCommandType,
+)
+from vibesop.core.orchestration.events import (
+    PlanEvent,
+    PlanEventLog,
+    PlanEventType,
+    ReplayResult,
+)
 from vibesop.core.orchestration.multi_intent_detector import MultiIntentDetector
 from vibesop.core.orchestration.parallel_scheduler import (
     ParallelScheduler,
@@ -76,9 +91,18 @@ __all__ = [
     "ParallelScheduler",
     "PhaseInfo",
     "PlanBuilder",
+    "PlanCommand",
+    "PlanCommandHandler",
+    "PlanCommandResult",
+    "PlanCommandStatus",
+    "PlanCommandType",
+    "PlanEvent",
+    "PlanEventLog",
+    "PlanEventType",
     "PlanTracker",
     "ReorchestrationAnalysis",
     "Reorchestrator",
+    "ReplayResult",
     "StepResult",
     "SubTask",
     "TaskDecomposer",

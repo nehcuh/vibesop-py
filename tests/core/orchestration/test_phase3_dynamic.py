@@ -382,7 +382,11 @@ def test_workflow_engine_loop_until_dry() -> None:
 
     assert result.pattern == WorkflowPattern.LOOP_UNTIL_DRY
     assert result.total_steps_executed >= 1
-    assert plan.status == PlanStatus.COMPLETED
+    # Degraded goals-met ends via a terminate_early decision — plan.status
+    # now follows the same terminal vocabulary as the event stream (P1-2,
+    # 20260831 review).
+    assert result.final_status == "terminated_early"
+    assert plan.status == PlanStatus.TERMINATED_EARLY
 
 
 def test_workflow_engine_tournament() -> None:
@@ -868,7 +872,8 @@ def test_loop_until_dry_degraded_continues_safely() -> None:
 
     result = engine.run(plan, lambda s: f"result_{s.step_id}")
 
-    assert plan.status == PlanStatus.COMPLETED
+    # Degraded run ends via goals-met terminate_early (P1-2 unified vocabulary).
+    assert plan.status == PlanStatus.TERMINATED_EARLY
     assert result.total_steps_executed == 2
     assert result.reorchestration_rounds == 0
     assert any(entry.get("decision") == "degraded" for entry in result.reorchestration_history), (

@@ -331,22 +331,89 @@ def test_cascade_skip_preserves_terminal_downstream() -> None:
     assert mutation.payload["excluded_terminal"] == ["s2", "s3"]
 
 
-def test_command_rejected_on_terminal_plan() -> None:
-    """Commands against a completed/failed plan would be accepted-but-inert;
-    reject them up front."""
+def test_command_accepted_on_terminal_plan_after_failure() -> None:
+    """FC2 (20260831 review): the engine runs synchronously, so failure
+    intervention is by nature post-run — a terminal plan status must NOT
+    reject retry/skip. Step-state gates are the validity authority."""
     plan = _make_plan()
     _fail_step(plan, "s3")
-    plan.status = PlanStatus.COMPLETED
+    plan.status = PlanStatus.FAILED
     handler, log = _make_handler(plan)
 
     result = handler.apply(_cmd("c-1", type=PlanCommandType.SKIP_STEP, step_id="s3"))
 
-    assert result.status == PlanCommandStatus.REJECTED_INVALID_STATE
-    assert "terminal" in (result.reason or "")
-    assert result.events == []
-    assert log.replay(plan.plan_id, since_seq=0).events == []
-    # The rejection did not consume the idempotency key: after the plan
-    # reopens (hypothetically), the same command may be re-issued.
+    assert result.status == PlanCommandStatus.ACCEPTED
+    assert result.events, "accepted command must emit its events"
+    assert log.replay(plan.plan_id, since_seq=0).events
+
+
+def test_engine_failure_then_retry_accepted_post_run() -> None:
+    """End-to-end FC2: engine.run() with a failing executor marks the plan
+    FAILED (not COMPLETED), and a panel-issued retry on the failed step is
+    accepted afterwards."""
+    from vibesop.core.orchestration.workflow_engine import WorkflowEngine
+
+    plan = _make_plan(plan_id="plan-fc2")
+    log = PlanEventLog()
+    engine = WorkflowEngine(event_log=log)
+
+    def boom(step):
+        raise RuntimeError(f"boom-{step.step_id}")
+
+    engine.run(plan, boom)
+
+    assert plan.status == PlanStatus.FAILED
+    assert plan.steps[0].status == StepStatus.FAILED
+
+    handler = PlanCommandHandler(log, {"plan-fc2": plan}.get)
+    result = handler.apply(_cmd("c-retry", plan_id="plan-fc2", step_id="s1"))
+    assert result.status == PlanCommandStatus.ACCEPTED
+    assert plan.steps[0].status == StepStatus.PENDING
+
+
+def test_reentrant_subscriber_does_not_deadlock() -> None:
+    """FC3 (20260831 review): PlanEventLog.append invokes subscribers
+    synchronously; a subscriber that issues another command must not
+    deadlock on the handler lock. Events are emitted outside the lock."""
+    import threading
+
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    _fail_step(plan, "s3")
+    handler, log = _make_handler(plan)
+
+    nested_results: list[PlanCommandStatus] = []
+    issued = threading.Event()
+
+    def reentering_subscriber(event):
+        # Fire once: without this guard the nested command's own events
+        # re-invoke this subscriber, and the idempotency gate (correctly)
+        # rejects the second application — that path is covered elsewhere.
+        if issued.is_set():
+            return
+        issued.set()
+        # Skip a *different* failed step from inside the callback (the
+        # in-flight gate blocks same-step commands by design).
+        nested = handler.apply(_cmd("c-nested", type=PlanCommandType.SKIP_STEP, step_id="s3"))
+        nested_results.append(nested.status)
+
+    log.subscribe(plan.plan_id, reentering_subscriber)
+
+    done = threading.Event()
+    outer_status: list[PlanCommandStatus] = []
+
+    def run_outer():
+        outer_status.append(handler.apply(_cmd("c-outer")).status)
+        done.set()
+
+    thread = threading.Thread(target=run_outer, daemon=True)
+    thread.start()
+    assert done.wait(timeout=5), "apply() deadlocked: subscriber re-entry blocked the handler lock"
+    thread.join(timeout=5)
+
+    assert outer_status == [PlanCommandStatus.ACCEPTED]
+    assert nested_results, "subscriber callback never ran"
+    assert nested_results[0] == PlanCommandStatus.ACCEPTED
 
 
 def test_apply_registers_plan_for_snapshots() -> None:

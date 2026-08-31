@@ -19,6 +19,11 @@ at plan level, but no per-member step transitions.
 
 The log is pure Python state — no I/O, no transport. Emission is a
 zero-overhead no-op when no log is injected into the engine.
+
+Integration note: nothing inside vibesop constructs a log automatically.
+An integrator wires it explicitly — construct ``PlanEventLog()``, pass it
+as ``WorkflowEngine(event_log=...)`` (or ``AgentRouter.create_runner(
+event_log=...)`` for dynamic plans), then ``subscribe()`` per plan_id.
 """
 
 from __future__ import annotations

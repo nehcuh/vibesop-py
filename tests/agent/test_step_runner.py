@@ -333,6 +333,36 @@ class TestExecuteAll:
         assert result["plan_id"] == plan.plan_id
         assert result["dynamic"] is True
 
+    def test_event_log_wired_through_engine(self):
+        """P1-1 (20260831 review): StepRunner must forward its event_log into
+        the WorkflowEngine — an integrator passing create_runner(event_log=...)
+        or StepRunner(event_log=...) gets engine events without touching the
+        engine directly."""
+        from vibesop.core.orchestration import PlanEventLog, PlanEventType
+
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        log = PlanEventLog()
+        runner = StepRunner(plan, track_state=False, event_log=log)
+
+        runner.execute_all(lambda step, ctx: "done")
+
+        events = log.replay(plan.plan_id, since_seq=0).events
+        assert events, "engine events must land in the wired log"
+        assert log.snapshot(plan.plan_id) is not None
+        assert any(e.type == PlanEventType.PLAN_TERMINAL for e in events)
+
+    def test_event_log_absent_engine_still_runs(self):
+        """Default (no event_log) stays fully functional."""
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        runner = StepRunner(plan, track_state=False)
+
+        result = runner.execute_all(lambda step, ctx: "done")
+
+        assert result["dynamic"] is True
+        assert result["failed"] == 0
+
 
 class TestStatePersistence:
     """StepRunner integration with PlanTracker."""

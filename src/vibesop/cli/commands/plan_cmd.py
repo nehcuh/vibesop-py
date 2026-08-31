@@ -43,6 +43,9 @@ def plan_list(
             "pending": "⏳",
             "active": "🔄",
             "completed": "✅",
+            "failed": "❌",
+            "partial": "⚠️",
+            "terminated_early": "🛑",
         }.get(plan.status.value, "❓")
 
         console.print(

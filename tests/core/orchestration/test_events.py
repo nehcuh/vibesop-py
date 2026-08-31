@@ -16,6 +16,7 @@ from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,
     ExecutionStep,
+    PlanStatus,
     StepStatus,
     WorkflowPattern,
 )
@@ -245,6 +246,9 @@ def test_engine_terminal_status_failed_and_partial() -> None:
     failed_transition = log.replay("p-fail", since_seq=0).events[-2]
     assert failed_transition.payload["status"] == "failed"
     assert failed_transition.payload["error"] == "boom-s1"
+    # Unified terminal vocabulary: plan.status is not stamped COMPLETED on
+    # a failed run (FC2 from the 20260831 three-lane review).
+    assert plan.status == PlanStatus.FAILED
 
     log2 = PlanEventLog()
     engine2 = WorkflowEngine(event_log=log2)
@@ -259,6 +263,7 @@ def test_engine_terminal_status_failed_and_partial() -> None:
     terminal2 = log2.replay("p-partial", since_seq=0).events[-1]
     assert terminal2.payload["final_status"] == "partial"
     assert terminal2.payload["total_steps_executed"] == 1
+    assert plan2.status == PlanStatus.PARTIAL
 
 
 def test_engine_without_event_log_is_unchanged() -> None:
@@ -378,7 +383,8 @@ def test_engine_emits_escalate_mutation() -> None:
 
 def test_engine_terminate_early_maps_terminal_status() -> None:
     """Degraded (no-LLM) goals-met path emits terminated_early, and the
-    DynamicExecutionResult keeps the _compute_final_status vocabulary."""
+    terminal vocabulary is unified: event, result object, and plan.status
+    all say terminated_early."""
     log = PlanEventLog()
     engine = WorkflowEngine(event_log=log)  # no LLM → degraded path
     plan = _make_plan(
@@ -401,8 +407,8 @@ def test_engine_terminate_early_maps_terminal_status() -> None:
     assert terminal.type == PlanEventType.PLAN_TERMINAL
     assert terminal.payload["final_status"] == "terminated_early"
     assert terminal.payload["total_steps_executed"] == 1
-    # Result model unchanged: terminated_early stays an event-level mapping.
-    assert result.final_status == "completed"
+    assert result.final_status == "terminated_early"
+    assert plan.status == PlanStatus.TERMINATED_EARLY
 
 
 def test_engine_snapshot_reflects_latest_plan_state() -> None:
@@ -518,6 +524,8 @@ def test_engine_crash_emits_failed_terminal_then_reraises() -> None:
     assert terminal.type == PlanEventType.PLAN_TERMINAL
     assert terminal.payload["final_status"] == "failed"
     assert terminal.payload["error"] == "engine exploded"
+    # The plan object agrees with the event stream (no stuck ACTIVE).
+    assert plan.status == PlanStatus.FAILED
 
 
 def test_engine_escalate_terminal_is_terminated_early_with_message() -> None:
@@ -546,6 +554,7 @@ def test_engine_escalate_terminal_is_terminated_early_with_message() -> None:
     assert terminal.type == PlanEventType.PLAN_TERMINAL
     assert terminal.payload["final_status"] == "terminated_early"
     assert terminal.payload["escalation_message"] == "Need a human decision"
+    assert plan.status == PlanStatus.TERMINATED_EARLY
 
 
 def test_verification_step_emits_skipped_transition() -> None:
@@ -648,3 +657,24 @@ async def test_squad_crash_emits_failed_terminal() -> None:
     assert terminal.type == PlanEventType.PLAN_TERMINAL
     assert terminal.payload["final_status"] == "failed"
     assert terminal.payload["error"] == "member crashed"
+    assert plan.status == PlanStatus.FAILED
+
+
+def test_contract_types_exported_from_package() -> None:
+    """The v8.3 event/command contract types are importable from the
+    orchestration package — integrators must not reach into submodules."""
+    import vibesop.core.orchestration as orch
+
+    for name in (
+        "PlanEvent",
+        "PlanEventLog",
+        "PlanEventType",
+        "ReplayResult",
+        "PlanCommand",
+        "PlanCommandHandler",
+        "PlanCommandResult",
+        "PlanCommandStatus",
+        "PlanCommandType",
+    ):
+        assert hasattr(orch, name), f"{name} missing from vibesop.core.orchestration"
+        assert name in orch.__all__

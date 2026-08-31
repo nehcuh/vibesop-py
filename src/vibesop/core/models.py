@@ -247,6 +247,8 @@ class PlanStatus(StrEnum):
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
+    PARTIAL = "partial"
+    TERMINATED_EARLY = "terminated_early"
 
 
 class ExecutionMode(StrEnum):

@@ -66,6 +66,17 @@ class WorkflowEngineConfig:
     token_budget_multiplier: float = 3.0
 
 
+#: Single terminal vocabulary shared by the event stream, the result object,
+#: and ``plan.status`` — recognizer/emitter isomorphism for terminal states.
+_FINAL_STATUS_TO_PLAN_STATUS: dict[str, PlanStatus] = {
+    "completed": PlanStatus.COMPLETED,
+    "partial": PlanStatus.PARTIAL,
+    "failed": PlanStatus.FAILED,
+    "terminated_early": PlanStatus.TERMINATED_EARLY,
+    "prompts_generated": PlanStatus.COMPLETED,
+}
+
+
 class DynamicExecutionResult(BaseModel):
     """Result from dynamic execution via WorkflowEngine."""
 
@@ -73,9 +84,9 @@ class DynamicExecutionResult(BaseModel):
     pattern: WorkflowPattern = Field(..., description="Pattern used")
     total_steps_executed: int = Field(default=0)
     reorchestration_rounds: int = Field(default=0)
-    final_status: Literal["completed", "partial", "failed", "prompts_generated"] = Field(
-        default="completed"
-    )
+    final_status: Literal[
+        "completed", "partial", "failed", "prompts_generated", "terminated_early"
+    ] = Field(default="completed")
     champion_index: int | None = Field(default=None, description="Tournament champion")
     results: dict[str, Any] = Field(default_factory=dict)
     reorchestration_history: list[dict[str, Any]] = Field(default_factory=list)
@@ -280,6 +291,7 @@ class WorkflowEngine:
         try:
             return run_fn(plan, *args)
         except Exception as e:
+            plan.status = PlanStatus.FAILED
             self._emit_plan_terminal(
                 plan,
                 final_status="failed",
@@ -369,7 +381,9 @@ class WorkflowEngine:
                 return await self._run_red_team(plan, context, executor)
         except Exception as e:
             # Crash inside a squad run: close the event stream with a failed
-            # terminal before the exception propagates (M3).
+            # terminal before the exception propagates (M3), and stamp the
+            # plan object so command/snapshot consumers see the same truth.
+            plan.status = PlanStatus.FAILED
             self._emit_plan_terminal(
                 plan, final_status="failed", total_steps_executed=0, error=str(e)
             )
@@ -595,9 +609,6 @@ class WorkflowEngine:
 
             step_idx += 1
 
-        plan.status = PlanStatus.COMPLETED
-        plan.reorchestration_history = history
-
         total_executed = sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED)
         # Escalation ends the run awaiting human intervention; map it to
         # "terminated_early" (the contract has no separate escalate terminal)
@@ -607,6 +618,11 @@ class WorkflowEngine:
             if terminated_early or escalation_message is not None
             else self._compute_final_status(results)
         )
+        # One vocabulary everywhere: the event stream, the result object, and
+        # plan.status must agree on the terminal state.
+        plan.status = _FINAL_STATUS_TO_PLAN_STATUS[final_status]
+        plan.reorchestration_history = history
+
         self._emit_plan_terminal(
             plan,
             final_status=final_status,
@@ -620,7 +636,7 @@ class WorkflowEngine:
             pattern=WorkflowPattern.LOOP_UNTIL_DRY,
             total_steps_executed=total_executed,
             reorchestration_rounds=round_count,
-            final_status=self._compute_final_status(results),
+            final_status=final_status,
             results=results,
             reorchestration_history=history,
         )
@@ -693,12 +709,13 @@ class WorkflowEngine:
         else:
             tournament_result = TournamentResult(champion_index=0)
 
-        plan.status = PlanStatus.COMPLETED
+        tournament_final_status = self._compute_final_status(results)
+        plan.status = _FINAL_STATUS_TO_PLAN_STATUS[tournament_final_status]
 
         total_executed = sum(1 for s in contestant_steps if s.status == StepStatus.COMPLETED)
         self._emit_plan_terminal(
             plan,
-            final_status=self._compute_final_status(results),
+            final_status=tournament_final_status,
             total_steps_executed=total_executed,
         )
 
@@ -707,7 +724,7 @@ class WorkflowEngine:
             pattern=WorkflowPattern.TOURNAMENT,
             total_steps_executed=total_executed,
             reorchestration_rounds=0,
-            final_status=self._compute_final_status(results),
+            final_status=tournament_final_status,
             champion_index=(tournament_result.champion_index if any(contestant_outputs) else None),
             results=results,
         )
@@ -802,12 +819,13 @@ class WorkflowEngine:
                 self._emit_step_transition(plan.plan_id, step, error=str(e))
                 break
 
-        plan.status = PlanStatus.COMPLETED
+        sequential_final_status = self._compute_final_status(results)
+        plan.status = _FINAL_STATUS_TO_PLAN_STATUS[sequential_final_status]
 
         total_executed = sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED)
         self._emit_plan_terminal(
             plan,
-            final_status=self._compute_final_status(results),
+            final_status=sequential_final_status,
             total_steps_executed=total_executed,
         )
 
@@ -815,7 +833,7 @@ class WorkflowEngine:
             plan_id=plan.plan_id,
             pattern=plan.workflow_pattern,
             total_steps_executed=total_executed,
-            final_status=self._compute_final_status(results),
+            final_status=sequential_final_status,
             results=results,
         )
 

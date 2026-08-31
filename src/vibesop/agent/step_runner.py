@@ -95,12 +95,14 @@ class StepRunner:
         max_parallel: int = 5,
         track_state: bool = True,
         llm_client: Any = None,
+        event_log: Any | None = None,
     ):
         self._plan = plan
         self._project_root = Path(project_root)
         self._max_parallel = max_parallel
         self._track_state = track_state
         self._llm_client = llm_client
+        self._event_log = event_log
 
         self._states: dict[str, PlanStepState] = {}
         for step in plan.steps:
@@ -353,7 +355,7 @@ class StepRunner:
         )
 
         if WorkflowEngine.is_dynamic(self._plan):
-            engine = WorkflowEngine(llm_client=self._llm_client)
+            engine = WorkflowEngine(llm_client=self._llm_client, event_log=self._event_log)
 
             # Wrap executor to accept just the step (WorkflowEngine interface)
             def _wrap_executor(step: ExecutionStep):

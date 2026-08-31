@@ -29,7 +29,6 @@ from vibesop.core.models import (
     DynamicNodeStatus,
     ExecutionPlan,
     ExecutionStep,
-    PlanStatus,
     StepStatus,
 )
 from vibesop.core.orchestration.events import (
@@ -139,11 +138,17 @@ class PlanCommandHandler:
         step → state validity → dependency check (skip only). Rejections
         produce no side effects and emit no events.
 
+        The plan being terminal is NOT a rejection: the engine runs
+        synchronously, so failure intervention (retry a failed step, skip a
+        failed/pending step) is by nature a post-run action. Step-state
+        gates are the validity authority.
+
         Only accepted commands consume the idempotency key: a rejected
         command may be re-issued with the same ``command_id`` once the
         blocking condition clears, while a duplicate of an accepted command
         is always ``rejected_duplicate``.
         """
+        pending: list[tuple[PlanEventType, dict[str, Any]]] = []
         with self._lock:
             state = self._plans.setdefault(command.plan_id, _PlanCommandState())
 
@@ -155,13 +160,13 @@ class PlanCommandHandler:
                 )
 
             if command.step_id in state.in_flight:
-                pending = state.in_flight[command.step_id]
+                pending_id = state.in_flight[command.step_id]
                 return PlanCommandResult(
                     command_id=command.command_id,
                     status=PlanCommandStatus.REJECTED_INVALID_STATE,
                     reason=(
                         f"Step {command.step_id} already has an in-flight command "
-                        f"({pending}); wait for it to complete"
+                        f"({pending_id}); wait for it to complete"
                     ),
                 )
 
@@ -175,15 +180,6 @@ class PlanCommandHandler:
             # Keep the event log's snapshot reference current — commands may
             # arrive for plans the engine never registered (e.g. static plans).
             self._events.update_plan(plan)
-            if plan.status in (PlanStatus.COMPLETED, PlanStatus.FAILED):
-                return PlanCommandResult(
-                    command_id=command.command_id,
-                    status=PlanCommandStatus.REJECTED_INVALID_STATE,
-                    reason=(
-                        f"Plan {command.plan_id} is already terminal "
-                        f"({plan.status.value}); commands would be inert"
-                    ),
-                )
             step = next((s for s in plan.steps if s.step_id == command.step_id), None)
             if step is None:
                 return PlanCommandResult(
@@ -193,15 +189,25 @@ class PlanCommandHandler:
                 )
 
             if command.type is PlanCommandType.RETRY_STEP:
-                result = self._apply_retry(command, plan, step)
+                result = self._apply_retry(command, step, pending)
             else:
-                result = self._apply_skip(command, plan, step)
+                result = self._apply_skip(command, plan, step, pending)
 
             if result.status is PlanCommandStatus.ACCEPTED:
                 state.processed.add(command.command_id)
                 state.in_flight[command.step_id] = command.command_id
                 self._command_plan[command.command_id] = command.plan_id
-            return result
+
+        # Emit outside the handler lock: PlanEventLog.append invokes
+        # subscribers synchronously, and a subscriber that re-enters
+        # apply()/complete_command() must not deadlock on the lock we
+        # would still be holding.
+        if result.status is PlanCommandStatus.ACCEPTED:
+            result.events = [
+                self._events.append(command.plan_id, event_type, payload)
+                for event_type, payload in pending
+            ]
+        return result
 
     def complete_command(self, command_id: str) -> bool:
         """Mark an accepted command as completed, releasing its in-flight slot.
@@ -244,8 +250,8 @@ class PlanCommandHandler:
     def _apply_retry(
         self,
         command: PlanCommand,
-        plan: ExecutionPlan,
         step: ExecutionStep,
+        pending: list[tuple[PlanEventType, dict[str, Any]]],
     ) -> PlanCommandResult:
         """Apply RETRY_STEP: rewind a failed step (loop_back semantics).
 
@@ -273,9 +279,8 @@ class PlanCommandHandler:
         step.started_at = None
         step.completed_at = None
 
-        events = [
-            self._events.append(
-                plan.plan_id,
+        pending.append(
+            (
                 PlanEventType.PLAN_MUTATED,
                 {
                     "decision": "loop_back",
@@ -283,17 +288,12 @@ class PlanCommandHandler:
                     "source": "user_command",
                     "command_id": command.command_id,
                 },
-            ),
-            self._events.append(
-                plan.plan_id,
-                PlanEventType.STEP_TRANSITION,
-                step_transition_payload(step),
-            ),
-        ]
+            )
+        )
+        pending.append((PlanEventType.STEP_TRANSITION, step_transition_payload(step)))
         return PlanCommandResult(
             command_id=command.command_id,
             status=PlanCommandStatus.ACCEPTED,
-            events=events,
         )
 
     def _apply_skip(
@@ -301,6 +301,7 @@ class PlanCommandHandler:
         command: PlanCommand,
         plan: ExecutionPlan,
         step: ExecutionStep,
+        pending: list[tuple[PlanEventType, dict[str, Any]]],
     ) -> PlanCommandResult:
         """Apply SKIP_STEP with the review-mandated dependency semantics.
 
@@ -341,16 +342,9 @@ class PlanCommandHandler:
         targets = [s for s in closure if s.status in (StepStatus.PENDING, StepStatus.FAILED)]
         excluded = [s.step_id for s in closure if s not in targets]
 
-        events: list[PlanEvent] = []
         for target in targets:
             target.status = StepStatus.SKIPPED
-            events.append(
-                self._events.append(
-                    plan.plan_id,
-                    PlanEventType.STEP_TRANSITION,
-                    step_transition_payload(target),
-                )
-            )
+            pending.append((PlanEventType.STEP_TRANSITION, step_transition_payload(target)))
 
         # ReorchestrationDecision has no skip semantics and must not change;
         # the mutation is expressed via user_action with decision=null.
@@ -364,17 +358,10 @@ class PlanCommandHandler:
         }
         if excluded:
             mutation_payload["excluded_terminal"] = excluded
-        events.append(
-            self._events.append(
-                plan.plan_id,
-                PlanEventType.PLAN_MUTATED,
-                mutation_payload,
-            )
-        )
+        pending.append((PlanEventType.PLAN_MUTATED, mutation_payload))
         return PlanCommandResult(
             command_id=command.command_id,
             status=PlanCommandStatus.ACCEPTED,
-            events=events,
         )
 
     @staticmethod

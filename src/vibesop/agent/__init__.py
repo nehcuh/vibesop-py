@@ -416,8 +416,15 @@ class AgentRouter:
         self,
         query: str,
         project_root: str | Path = ".",
+        event_log: Any | None = None,
     ) -> Any:
-        """Create a StepRunner for a multi-intent query."""
+        """Create a StepRunner for a multi-intent query.
+
+        ``event_log`` (optional ``PlanEventLog``) is threaded into the
+        dynamic-plan WorkflowEngine so external observers can subscribe to
+        plan execution events — the integration point for the v8.3 event
+        contract.
+        """
         from vibesop.agent.step_runner import StepRunner
 
         orch = self.orchestrate(query)
@@ -432,7 +439,7 @@ class AgentRouter:
         # v7.0.10: use from_dict to avoid manual field-by-field rebuild that
         # silently dropped step_type / metadata / estimated_* fields.
         plan = ExecutionPlan.from_dict(plan_dict)
-        return StepRunner(plan, project_root=project_root)
+        return StepRunner(plan, project_root=project_root, event_log=event_log)
 
 
 __all__ = [
