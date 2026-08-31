@@ -105,15 +105,21 @@ class TestManagementOnlyMarking:
         assert by_id["gstack/office-hours"]["management_only"] is False
 
     def test_slash_prefix_variants_marked(self, candidate_manager: Any) -> None:
+        from vibesop.core.matching.strategies import is_management_skill_id
+
         definitions = {
             "slash-route": _make_definition("slash-route"),
             "slash-help": _make_definition("slash-help"),
             "slash-install": _make_definition("slash-install"),
+            "Slash-Analyze": _make_definition("Slash-Analyze"),
+            "builtin-slash-list": _make_definition("builtin-slash-list"),
             "gstack/review": _make_definition("gstack/review", namespace="gstack"),
         }
         candidates = _get_candidates(candidate_manager, definitions)
         for c in candidates:
-            if c["id"].startswith("slash-"):
+            # The oracle is the shared recognizer, not a hand-rolled prefix
+            # check — the two had drifted before (20260831 review B-F7/A-F7).
+            if is_management_skill_id(c["id"]):
                 assert c["management_only"] is True, f"{c['id']} should be management_only"
             else:
                 assert c["management_only"] is False, f"{c['id']} should NOT be management_only"

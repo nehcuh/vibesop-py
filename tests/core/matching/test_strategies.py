@@ -305,6 +305,33 @@ class TestLevenshteinMatcher:
         bare = _make_candidate("slash-route", name="slash-route", keywords=["route"])
         assert m.match("route", [bare]) == []
 
+    def test_management_id_recognition_shared_and_case_insensitive(self):
+        """B-F7/FC11/A-F7 (20260831 review): the fuzzy family filter and the
+        candidate manager share one recognizer (`is_management_skill_id`);
+        flat, mixed-case, and nested-path forms are all management ids."""
+        from vibesop.core.matching.strategies import is_management_skill_id
+
+        for skill_id in (
+            "slash-route",
+            "builtin/slash-route",
+            "builtin-slash-route",  # flat deployment form (B-F7)
+            "Slash-Analyze",  # mixed case (A-F7)
+            "Builtin/Slash-Route",
+            "ns/sub/slash-x",  # nested path segment (FC11)
+        ):
+            assert is_management_skill_id(skill_id), skill_id
+        for skill_id in ("some-pack/review", "analyze-slash", "my-pack/slashed"):
+            assert not is_management_skill_id(skill_id), skill_id
+
+    def test_mixed_case_slash_wrapper_excluded_from_fuzzy(self):
+        """A pack titling its wrapper `Slash-Analyze` must not re-open the
+        fuzzy-steal class (A-F7: the old filter was case-sensitive)."""
+        m = LevenshteinMatcher(MatcherConfig(min_confidence=0.0))
+        mixed = _make_candidate(
+            "Builtin/Slash-Analyze", name="Slash-Analyze", keywords=["analyze", "stack"]
+        )
+        assert m.match("gstack review", [mixed]) == []
+
     def test_match_typo_correction(self):
         m = LevenshteinMatcher(MatcherConfig(min_confidence=0.0))
         c = _make_candidate("debug-skill", name="debugging", keywords=["debug"])

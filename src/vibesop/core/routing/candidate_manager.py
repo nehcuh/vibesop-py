@@ -14,6 +14,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from vibesop.core.matching.strategies import is_management_skill_id
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
 logger = logging.getLogger(__name__)
@@ -113,8 +114,6 @@ class CandidateManager:
                 encoding="utf-8",
             )
 
-    MANAGEMENT_SKILL_PREFIXES = ("slash-", "builtin/slash-", "builtin-slash-")
-
     def pin_search_paths(
         self,
         search_paths: list[Path],
@@ -193,7 +192,7 @@ class CandidateManager:
             enabled = skill_config.enabled if skill_config else True
             scope = skill_config.scope if skill_config else "global"
             lifecycle = skill_config.lifecycle if skill_config else "active"
-            is_management = metadata.id.startswith(self.MANAGEMENT_SKILL_PREFIXES)
+            is_management = is_management_skill_id(metadata.id)
 
             candidates.append(
                 {

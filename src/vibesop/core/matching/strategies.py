@@ -711,7 +711,9 @@ class EmbeddingMatcher:
 # and their keyless demo queries route via keyword layers, so excluding them
 # from fuzzy costs nothing. `systematic-debugging` is deliberately NOT here:
 # its keyless demo floor ("why is this broken") routes via the fuzzy layer
-# (pinned by test_demo_skills.py's routing-floor tests).
+# (pinned by test_demo_skills.py's routing-floor tests). This list stays
+# frozen at the archived incidents; the going-forward mechanism is the
+# family filter `is_management_skill_id` below (B-F8 cross-reference).
 LEVENSHTEIN_EXCLUDED_SKILL_IDS = frozenset(
     {
         "builtin/commit-message",
@@ -724,16 +726,28 @@ LEVENSHTEIN_EXCLUDED_SKILL_IDS = frozenset(
 )
 
 
-def _is_slash_wrapper(skill_id: str) -> bool:
-    """slash-* skills are CLI wrappers invoked explicitly via `/vibe-*`.
+# Shared recognizer for slash-wrapper ("management") skill ids — the
+# helper (not the bare prefix tuple) is the single source of truth: it
+# also covers nested path segments (`ns/sub/slash-x`) and matching is
+# case-insensitive. Consumed by both the routing candidate manager and
+# this module's fuzzy family exclusion (recognizer/generator isomorphism
+# law; the two had drifted: flat `builtin-slash-*` and mixed-case ids
+# slipped past the fuzzy filter only — 20260831 review A-F7/B-F7/FC11).
+MANAGEMENT_SKILL_PREFIXES = ("slash-", "builtin/slash-", "builtin-slash-")
 
-    They are never fuzzy-match targets: their tags carry generic English
-    tokens that steal pack-owned phrases via last-resort fuzzy match
-    (recorded incident: `gstack/review` → slash-analyze through the
-    "gstack"~"stack" token similarity at 0.83). Family-level exclusion —
-    per-incident id listing does not scale (S51 M4 needed three).
+
+def is_management_skill_id(skill_id: str) -> bool:
+    """Case-insensitive recognition of slash-wrapper management skills.
+
+    slash-* skills are CLI wrappers invoked explicitly via `/vibe-*`; they
+    are never fuzzy-match targets: their tags carry generic English tokens
+    that steal pack-owned phrases via last-resort fuzzy match (recorded
+    incident: `gstack/review` → slash-analyze through the "gstack"~"stack"
+    token similarity at 0.83). Family-level exclusion — per-incident id
+    listing does not scale (S51 M4 needed three).
     """
-    return skill_id.split("/", 1)[-1].startswith("slash-")
+    lowered = skill_id.lower()
+    return lowered.startswith(MANAGEMENT_SKILL_PREFIXES) or "/slash-" in lowered
 
 
 class LevenshteinMatcher:
@@ -754,7 +768,7 @@ class LevenshteinMatcher:
 
         for candidate in candidates:
             skill_id = str(candidate.get("id", ""))
-            if skill_id in LEVENSHTEIN_EXCLUDED_SKILL_IDS or _is_slash_wrapper(skill_id):
+            if skill_id in LEVENSHTEIN_EXCLUDED_SKILL_IDS or is_management_skill_id(skill_id):
                 continue
             score = self.score(query, candidate, context)
 
@@ -919,9 +933,11 @@ class LevenshteinMatcher:
 
 # Convenience exports
 __all__ = [
+    "MANAGEMENT_SKILL_PREFIXES",
     "EmbeddingMatcher",
     "KeywordMatcher",
     "LevenshteinMatcher",
     "MatcherConfig",
     "TFIDFMatcher",
+    "is_management_skill_id",
 ]
