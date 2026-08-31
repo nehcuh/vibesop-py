@@ -7,6 +7,9 @@ dependency semantics, event payloads, and the complete_command lifecycle
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from vibesop.core.models import (
     DynamicNodeStatus,
     ExecutionMode,
@@ -329,6 +332,44 @@ def test_cascade_skip_preserves_terminal_downstream() -> None:
     mutation = events[-1]
     assert mutation.payload["step_ids"] == ["s1"]
     assert mutation.payload["excluded_terminal"] == ["s2", "s3"]
+
+
+def test_cascade_skip_reports_in_flight_dependent_separately() -> None:
+    """FC8 (20260831 review): an in_progress dependent is neither skipped
+    nor terminal — the cascade leaves it running and reports it under
+    ``excluded_in_flight``, never under ``excluded_terminal``."""
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    plan.steps[1].status = StepStatus.IN_PROGRESS
+    handler, log = _make_handler(plan)
+
+    result = handler.apply(_cmd("c-1", type=PlanCommandType.SKIP_STEP, step_id="s1", cascade=True))
+
+    assert result.status == PlanCommandStatus.ACCEPTED
+    assert plan.steps[0].status == StepStatus.SKIPPED
+    assert plan.steps[1].status == StepStatus.IN_PROGRESS  # left running
+    assert plan.steps[2].status == StepStatus.SKIPPED  # pending → skipped
+
+    mutation = [
+        e
+        for e in log.replay(plan.plan_id, since_seq=0).events
+        if e.type == PlanEventType.PLAN_MUTATED
+    ][-1]
+    assert mutation.payload["excluded_in_flight"] == ["s2"]
+    assert "excluded_terminal" not in mutation.payload
+
+
+def test_plan_command_rejects_non_iso8601_issued_at() -> None:
+    """B-F9 residue (20260831 review): issued_at is a contract field fed by
+    external callers — a non-ISO8601 value must fail validation."""
+    with pytest.raises(ValidationError, match="ISO8601"):
+        PlanCommand(
+            command_id="c-bad",
+            plan_id="plan-cmd",
+            type=PlanCommandType.RETRY_STEP,
+            step_id="s1",
+            issued_at="not-a-date",
+        )
 
 
 def test_command_accepted_on_terminal_plan_after_failure() -> None:

@@ -83,15 +83,24 @@ class ReplayResult(BaseModel):
     retention window; ``snapshot`` carries the current full plan projection
     (its ``event_seq`` is the latest allocated seq and becomes the caller's
     new cursor) and ``events`` is empty — the snapshot already reflects every
-    mutation up to that seq. ``snapshot`` is None when no plan reference was
-    ever registered with the log; treat that as "plan state unknown" and
-    surface an explicit plan-not-found/resync-failed state rather than
-    rendering a stale list.
+    mutation up to that seq. When ``history_lost`` is True the cursor fell out
+    of the window but no plan reference was ever registered with the log, so
+    neither deltas nor a snapshot can be produced; treat that as "plan state
+    unknown" and surface an explicit plan-not-found/resync-failed state rather
+    than rendering a stale list.
     """
 
     events: list[PlanEvent] = Field(default_factory=list)
     snapshot: PlanEvent | None = Field(default=None)
     needs_snapshot: bool = Field(default=False)
+    history_lost: bool = Field(
+        default=False,
+        description=(
+            "Cursor fell out of the window and no plan reference is registered, "
+            "so neither deltas nor a snapshot can be produced; the consumer must "
+            "treat this plan's history as unavailable and re-subscribe from scratch"
+        ),
+    )
 
 
 def plan_snapshot_projection(plan: ExecutionPlan) -> dict[str, Any]:
@@ -232,7 +241,9 @@ class PlanEventLog:
         """Replay events after ``since_seq`` for incremental sync.
 
         If ``since_seq`` is older than the oldest retained event, returns
-        ``needs_snapshot=True`` with the current snapshot instead of deltas.
+        ``needs_snapshot=True`` with the current snapshot instead of deltas;
+        when no plan reference is registered, returns ``history_lost=True``
+        instead (neither deltas nor a snapshot can be produced).
         """
         with self._lock:
             state = self._logs.get(plan_id)
@@ -245,6 +256,11 @@ class PlanEventLog:
                 # window: resync from a full snapshot of the latest known
                 # plan state instead of deltas.
                 snapshot = self._snapshot_locked(plan_id, state)
+                if snapshot is None:
+                    # No plan reference registered — no snapshot can be built.
+                    # Flag the loss instead of the contradictory
+                    # needs_snapshot=True + snapshot=None (FC7).
+                    return ReplayResult(history_lost=True)
                 return ReplayResult(snapshot=snapshot, needs_snapshot=True)
             return ReplayResult(
                 events=[e for e in state.events if e.event_seq > since_seq],

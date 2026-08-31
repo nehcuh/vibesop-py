@@ -20,10 +20,11 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from vibesop.core.models import (
     DynamicNodeStatus,
@@ -65,6 +66,15 @@ class PlanCommand(BaseModel):
         default=False,
         description="SKIP_STEP only: also skip all transitive downstream dependents",
     )
+
+    @field_validator("issued_at")
+    @classmethod
+    def _issued_at_must_be_iso8601(cls, value: str) -> str:
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as e:
+            raise ValueError(f"issued_at must be an ISO8601 timestamp, got {value!r}") from e
+        return value
 
 
 class PlanCommandStatus(StrEnum):
@@ -310,9 +320,10 @@ class PlanCommandHandler:
         and ``cascade=True``: skip the step plus the transitive closure of
         downstream dependents — but only dependents still in a mutable state
         (pending/failed). Dependents that already reached a terminal state
-        (completed/skipped) or are in progress are left untouched and listed
-        under ``excluded_terminal`` in the plan_mutated payload, so a cascade
-        can never rewrite history (e.g. flip a completed step to skipped).
+        (completed/skipped) are listed under ``excluded_terminal``; dependents
+        currently executing (in_progress) are left running and listed under
+        ``excluded_in_flight`` — a cascade never rewrites history and never
+        renames live work as terminal.
         """
         if step.status not in (StepStatus.FAILED, StepStatus.PENDING):
             return PlanCommandResult(
@@ -340,7 +351,12 @@ class PlanCommandHandler:
             closure = self._skip_closure(plan, step.step_id)
 
         targets = [s for s in closure if s.status in (StepStatus.PENDING, StepStatus.FAILED)]
-        excluded = [s.step_id for s in closure if s not in targets]
+        # Complete partition of StepStatus's five values; a future sixth
+        # status would silently vanish from both lists — extend here (FC8).
+        excluded_terminal = [
+            s.step_id for s in closure if s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED)
+        ]
+        excluded_in_flight = [s.step_id for s in closure if s.status == StepStatus.IN_PROGRESS]
 
         for target in targets:
             target.status = StepStatus.SKIPPED
@@ -356,8 +372,10 @@ class PlanCommandHandler:
             "source": "user_command",
             "command_id": command.command_id,
         }
-        if excluded:
-            mutation_payload["excluded_terminal"] = excluded
+        if excluded_terminal:
+            mutation_payload["excluded_terminal"] = excluded_terminal
+        if excluded_in_flight:
+            mutation_payload["excluded_in_flight"] = excluded_in_flight
         pending.append((PlanEventType.PLAN_MUTATED, mutation_payload))
         return PlanCommandResult(
             command_id=command.command_id,

@@ -290,13 +290,16 @@ class WorkflowEngine:
         """
         try:
             return run_fn(plan, *args)
-        except Exception as e:
+        except (Exception, KeyboardInterrupt, asyncio.CancelledError) as e:
+            # KeyboardInterrupt/^C closes the stream too, then propagates —
+            # an interrupt must not leave observers waiting on plan_terminal.
+            # Same no-await invariant as the run_async guard applies here.
             plan.status = PlanStatus.FAILED
             self._emit_plan_terminal(
                 plan,
                 final_status="failed",
                 total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
-                error=str(e),
+                error=str(e) or type(e).__name__,
             )
             raise
 
@@ -379,17 +382,27 @@ class WorkflowEngine:
                 return await self._run_debate(plan, context, executor)
             if pattern == WorkflowPattern.RED_TEAM:
                 return await self._run_red_team(plan, context, executor)
-        except Exception as e:
-            # Crash inside a squad run: close the event stream with a failed
-            # terminal before the exception propagates (M3), and stamp the
-            # plan object so command/snapshot consumers see the same truth.
+            # Misuse path: the snapshot above already opened the stream, so
+            # the ValueError must close it with a failed terminal like every
+            # other escape (20260831 review A-F1).
+            raise ValueError(f"Pattern {pattern.value} is not a squad pattern")
+        except (Exception, KeyboardInterrupt, asyncio.CancelledError) as e:
+            # Crash, cancellation or ^C inside a squad run: close the event
+            # stream with a failed terminal before the exception propagates
+            # (M3), and stamp the plan object so command/snapshot consumers
+            # see the same truth. CancelledError is BaseException since 3.8
+            # and KeyboardInterrupt likewise — both must be listed
+            # explicitly, and both are re-raised after the emit. Invariant:
+            # this handler must never await, or a second cancellation could
+            # interrupt the terminal emit itself.
             plan.status = PlanStatus.FAILED
             self._emit_plan_terminal(
-                plan, final_status="failed", total_steps_executed=0, error=str(e)
+                plan,
+                final_status="failed",
+                total_steps_executed=0,
+                error=str(e) or type(e).__name__,
             )
             raise
-
-        raise ValueError(f"Pattern {pattern.value} is not a squad pattern")
 
     def _run_loop_until_dry(
         self,
@@ -773,13 +786,19 @@ class WorkflowEngine:
             llm_client=self._llm,
             output_dir=self._prompt_chain_output_dir,
         )
-        # Note: no plan_terminal here — "prompts_generated" is outside the
-        # terminal vocabulary of the plan event contract; only the initial
-        # snapshot is emitted for this pattern.
         prompt_files = generator.generate(plan)
         written = generator.write_files(prompt_files)
 
         plan.status = PlanStatus.COMPLETED
+        # The generation run completed within the event terminal vocabulary;
+        # "prompts_generated" stays a result-model-only discriminator. The
+        # stream opened by the initial snapshot must close like every other
+        # path (FC6, 20260831 review).
+        self._emit_plan_terminal(
+            plan,
+            final_status="completed",
+            total_steps_executed=0,
+        )
 
         results = {
             "prompt_files": [

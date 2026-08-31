@@ -411,6 +411,95 @@ def test_engine_terminate_early_maps_terminal_status() -> None:
     assert plan.status == PlanStatus.TERMINATED_EARLY
 
 
+def test_engine_prompt_chain_success_emits_terminal(tmp_path) -> None:
+    """FC6 (20260831 review): PROMPT_CHAIN success must close the stream its
+    snapshot opened — a consumer waiting on plan_terminal would otherwise
+    hang on a completed plan."""
+    log = PlanEventLog()
+    engine = WorkflowEngine(event_log=log, prompt_chain_output_dir=str(tmp_path / "prompts"))
+    plan = _make_plan(plan_id="p-chain", pattern=WorkflowPattern.PROMPT_CHAIN)
+
+    result = engine.run(plan, lambda step: "out")
+
+    events = log.replay("p-chain", since_seq=0).events
+    assert events, "prompt chain must emit at least snapshot + terminal"
+    terminal = events[-1]
+    assert terminal.type == PlanEventType.PLAN_TERMINAL
+    assert terminal.payload["final_status"] == "completed"
+    assert terminal.payload["total_steps_executed"] == 0
+    # The result model keeps its own domain discriminator; the plan object
+    # agrees with the event vocabulary.
+    assert result.final_status == "prompts_generated"
+    assert plan.status == PlanStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_run_async_misuse_closes_stream_with_failed_terminal() -> None:
+    """A-F1 (20260831 review): the non-squad ValueError fires after the
+    snapshot opened the stream — it must close with a failed terminal."""
+    log = PlanEventLog()
+    engine = WorkflowEngine(event_log=log)
+    plan = _make_plan(plan_id="p-misuse", pattern=WorkflowPattern.SEQUENTIAL)
+
+    with pytest.raises(ValueError, match="not a squad pattern"):
+        await engine.run_async(plan)
+
+    events = log.replay("p-misuse", since_seq=0).events
+    assert [e.type for e in events] == [
+        PlanEventType.PLAN_SNAPSHOT,
+        PlanEventType.PLAN_TERMINAL,
+    ]
+    assert events[-1].payload["final_status"] == "failed"
+    assert "not a squad pattern" in events[-1].payload["error"]
+    assert plan.status == PlanStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_run_async_cancellation_closes_stream() -> None:
+    """A6 (20260831 review, kimi+grok independently found): asyncio
+    cancellation is BaseException — the guard must still close the stream,
+    then re-raise so the cancellation propagates unchanged."""
+    import asyncio
+
+    log = PlanEventLog()
+    engine = WorkflowEngine(event_log=log)
+    plan = _make_plan(plan_id="p-cancel", pattern=WorkflowPattern.AGENT_SQUAD)
+
+    async def cancelled(*args, **kwargs):
+        raise asyncio.CancelledError()
+
+    engine._run_agent_squad = cancelled  # type: ignore[method-assign]
+    with pytest.raises(asyncio.CancelledError):
+        await engine.run_async(plan)
+
+    events = log.replay("p-cancel", since_seq=0).events
+    assert events[-1].type == PlanEventType.PLAN_TERMINAL
+    assert events[-1].payload["final_status"] == "failed"
+    # CancelledError() has an empty str — the guard falls back to the class
+    # name so the error payload is never blank.
+    assert events[-1].payload["error"] == "CancelledError"
+    assert plan.status == PlanStatus.FAILED
+
+
+def test_run_guarded_keyboard_interrupt_closes_stream() -> None:
+    """A6 sync lane: ^C closes the stream, then propagates."""
+    log = PlanEventLog()
+    engine = WorkflowEngine(event_log=log)
+    plan = _make_plan(plan_id="p-ki", pattern=WorkflowPattern.SEQUENTIAL)
+
+    def interrupter(step):
+        raise KeyboardInterrupt()
+
+    with pytest.raises(KeyboardInterrupt):
+        engine.run(plan, interrupter)
+
+    events = log.replay("p-ki", since_seq=0).events
+    assert events[-1].type == PlanEventType.PLAN_TERMINAL
+    assert events[-1].payload["final_status"] == "failed"
+    assert events[-1].payload["error"] == "KeyboardInterrupt"
+    assert plan.status == PlanStatus.FAILED
+
+
 def test_engine_snapshot_reflects_latest_plan_state() -> None:
     log = PlanEventLog()
     engine = WorkflowEngine(event_log=log)
@@ -455,6 +544,22 @@ def test_replay_since_seq_at_latest_returns_empty() -> None:
 
     assert result.events == []
     assert result.needs_snapshot is False
+
+
+def test_replay_stale_without_plan_ref_flags_history_lost() -> None:
+    """FC7 (20260831 review): a stale cursor with no registered plan
+    reference can produce neither deltas nor a snapshot — say so explicitly
+    instead of the contradictory needs_snapshot=True + snapshot=None."""
+    log = PlanEventLog(window_size=2)
+    for i in range(5):
+        log.append("p1", PlanEventType.STEP_TRANSITION, {"i": i})
+
+    result = log.replay("p1", since_seq=1)
+
+    assert result.history_lost is True
+    assert result.needs_snapshot is False
+    assert result.snapshot is None
+    assert result.events == []
 
 
 def test_registered_plan_with_zero_events_replay_and_snapshot() -> None:
