@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `StepRunner(event_log=...)` 与 `AgentRouter.create_runner(event_log=...)`
   会把日志转发进 `WorkflowEngine`——集成方订阅一次即可拿到引擎与
   面板命令的混合事件流，无需直接触碰 engine。
+- **计划事件契约（`PlanEventLog`，v8.3）**: 合同层定义 plan_snapshot /
+  step_transition / plan_terminal / plan_mutated 四类事件；引擎各执行
+  路径（loop_until_dry / sequential / tournament / squad）接入发射——
+  squad 语义只发 snapshot+terminal（无 per-member step_transition），
+  plan_mutated 出现在 loop 重编排与控制面命令。锁保护单写者、per-plan
+  单调 `event_seq`，deque 环形窗口。`replay` 消费侧支持游标追播：游标
+  掉出环形窗口时，若日志仍持有 plan 引用则降级返回快照
+  （`needs_snapshot=True`，消费方从快照重续游标）；连 plan 引用都已
+  丢失时置 `ReplayResult.history_lost=True`（历史不可重建，消费方从头
+  再订）。`event_log=None` 时零开销 no-op，不接不影响现有行为。
+- **控制面命令契约（retry/skip，v8.3）**: `PlanCommand` /
+  `PlanCommandHandler` 提供幂等命令——`command_id` 去重（REJECTED
+  不消耗幂等键）、同 step in-flight 拒绝；`retry_step` 对齐引擎
+  loop_back 语义，`skip_step` 沿依赖传递闭包级联（级联对象区分
+  终态与 in-flight 两类并分别上报）；命令事件与引擎事件共享同一
+  per-plan seq 序列。
+- **步骤产出 `plan_id` 锚点（v8.3）**: `StepRunner.execute_all` 三个
+  返回路径（含 fail-fast）统一携带 `plan_id`；`Message.metadata`
+  固化 `plan_id` / `step_id` 约定键，外部消费方（面板/回放）可把
+  对话消息块深链到计划步骤。
 
 ### Removed
 
@@ -77,6 +97,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intent 会把 registry 里精修的整句意图拍平（全表重写还会翻转路由
   基线指纹）。改为仅在 registry intent 为空时回填；新增真实
   `core/registry.yaml` pin 测试（sync 必须 `updated == []`）。
+- **deep-diagnosis-optimization 技能清除机器特定路径**:
+  `/Users/...` 下的 kimi 二进制与 OrbStack docker 绝对路径改为
+  `$KIMI` / `$DOCKER` 环境变量或 PATH 解析——技能在非本机环境
+  开箱可执行，不再依赖作者机器的安装位置。
 - **slash-* CLI 包装技能整族排除出 Levenshtein 模糊层**: slash-analyze
   经 "gstack"~"stack" token 相似度（0.83）窃取 `gstack/review` 查询
   （management gate 对 ≤2 词短查询整表放行，fuzzy 兜底命中其
