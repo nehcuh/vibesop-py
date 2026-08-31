@@ -1,6 +1,6 @@
 # Cross-Platform Support
 
-> **Version**: 8.1.1
+> **Version**: 8.1.2
 > **Updated**: 2026-08-26
 
 ## Overview
