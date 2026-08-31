@@ -302,6 +302,47 @@ class TestHookInstallerIntegration:
         verify_results = installer.verify_hooks("claude-code", tmp_path)
         assert all(verify_results.values())
 
+    def test_install_writes_content_hash_trailer(self, tmp_path: Path) -> None:
+        """Every installer write carries a sha256 trailer over the body —
+        the ownership proof beyond the spoofable marker line."""
+        installer = HookInstaller()
+        assert all(installer.install_hooks("claude-code", tmp_path).values())
+        hook = tmp_path / "hooks" / "pre-tool-use.sh"
+        text = hook.read_text(encoding="utf-8")
+        assert installer._CONTENT_HASH_PREFIX in text
+        assert installer._owns_text(text)
+
+    def test_edited_marker_copy_survives_reinstall_and_uninstall(self, tmp_path: Path) -> None:
+        """A user copy that keeps the marker but edits the body (stale
+        trailer digest) is user-owned: reinstall must not clobber it and
+        uninstall must not delete it (20260831 review A-F3)."""
+        installer = HookInstaller()
+        assert all(installer.install_hooks("claude-code", tmp_path).values())
+        hook = tmp_path / "hooks" / "pre-tool-use.sh"
+        edited = hook.read_text(encoding="utf-8") + "# my precious custom logic\n"
+        hook.write_text(edited, encoding="utf-8")
+
+        assert all(installer.install_hooks("claude-code", tmp_path).values())
+        assert "my precious custom logic" in hook.read_text(encoding="utf-8")
+
+        assert all(installer.uninstall_hooks("claude-code", tmp_path).values())
+        assert hook.exists()
+
+    def test_legacy_marker_file_without_trailer_is_upgraded(self, tmp_path: Path) -> None:
+        """Marker without trailer = pre-hash installer output — still ours:
+        reinstall rewrites it (the upgrade path carries the trailer)."""
+        installer = HookInstaller()
+        hook = tmp_path / "hooks" / "pre-tool-use.sh"
+        hook.parent.mkdir(parents=True)
+        hook.write_text(
+            f"#!/bin/bash\n# {installer._GENERATED_MARKER}\necho legacy\n",
+            encoding="utf-8",
+        )
+
+        assert all(installer.install_hooks("claude-code", tmp_path).values())
+        rewritten = hook.read_text(encoding="utf-8")
+        assert installer._CONTENT_HASH_PREFIX in rewritten
+
     def test_fallback_stub_does_not_clobber_existing_script(self, tmp_path: Path) -> None:
         """No template exists for route-interceptor, so only the fallback
         stub is available — it must never overwrite the real script a

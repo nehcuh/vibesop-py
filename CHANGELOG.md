@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   路由评测三条 learning 查询的期望集收敛为 builtin/instinct，其中
   「从我的工作流里学习一个新的本能模式」从 fallback-llm 翻转为
   keyword 命中（合并的预期收益，非回归）。
+  升级注意：删除前安装过中央库副本的机器（`~/.config/skills/instinct-learning/`
+  及各平台 `builtin-instinct-learning` 部署副本、`~/.vibe/skill-index.json`
+  条目）需手动清理残留，否则已删技能在本机继续可路由。
 
 ### Fixed
 

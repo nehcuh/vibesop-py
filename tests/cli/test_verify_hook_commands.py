@@ -321,6 +321,20 @@ def test_unquoted_spaced_relative_script_fails_both_platforms(tmp_path, monkeypa
         assert "CWD" in result["detail"], (platform, result["detail"])
 
 
+def test_foreign_script_with_argument_passes_both_platforms(tmp_path, monkeypatch) -> None:
+    """`bash hooks/run.sh vibesop-route.sh` — the first fragment is a
+    complete foreign script path and the allowlisted basename is its
+    argument (20260831 review A-F4/F10): the split-path story doesn't
+    apply and a foreign script is outside the generator-basename scan."""
+    for platform, healthy in (("win32", HEALTHY_WIN_ROUTE), ("darwin", HEALTHY_MAC_ROUTE)):
+        for cmd in (
+            "bash hooks/run.sh vibesop-route.sh",
+            "bash scripts/run.sh vibesop-route.sh",
+        ):
+            result = _route_hook_result(tmp_path, monkeypatch, [healthy, cmd], platform)
+            assert result["pass"], (platform, cmd, result["detail"])
+
+
 def test_bash_dash_c_mentioning_basename_passes(tmp_path, monkeypatch) -> None:
     """`bash -c "echo hi vibesop-route.sh"` mentions the basename inside a
     command string — tokens[1] == "-c" exempts it from the spaced-split

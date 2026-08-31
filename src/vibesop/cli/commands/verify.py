@@ -212,6 +212,13 @@ def _unquoted_spaced_script_reason(command: str) -> str | None:
         if prev_n in ("&&", "||", "|", ";", "&"):
             # New command word after an operator — not a path fragment.
             continue
+        if prev_n.endswith(".sh"):
+            # prev is itself a complete script invocation (`bash
+            # hooks/run.sh vibesop-route.sh`: run.sh is the script, the
+            # allowlisted basename is its argument) — the word-split
+            # story does not apply. Foreign script paths are outside
+            # this generator-basename scan.
+            continue
         if "/" not in prev_n:
             # Bare mention after a non-path word, not a split path tail.
             continue
@@ -244,6 +251,13 @@ def _spaced_relative_script_reason(tokens: list[str]) -> str | None:
         return None
     tail = tokens[-1].replace("\\", "/").strip("\"'")
     if tail.rsplit("/", 1)[-1].lower() not in VIBESOP_HOOK_SCRIPT_BASENAMES:
+        return None
+    if "/" not in tail and frag.lower().endswith(".sh"):
+        # `bash hooks/run.sh vibesop-route.sh` — tokens[1] is a complete
+        # foreign script path (slash + .sh) and the bare allowlisted tail
+        # is its argument, not a split fragment of the script path (a
+        # split tail keeps its slash: `... First Last/…/x.sh`). Foreign
+        # script paths are outside this generator-basename scan.
         return None
     return (
         "unquoted space in CWD-relative script path resolves against the "
