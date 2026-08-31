@@ -233,14 +233,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strict `<bash> <script>` parser (`vibesop.utils.hook_commands`) plus an
   explicit legacy signal; everything else is preserved byte-for-byte.
   Known issue: rebuild still drops user entries whose command contains a
-  vibesop substring (the preserve-matcher is substring-based) — fix planned
-  for 8.1.2.
+  vibesop substring (the preserve-matcher is substring-based) — NOT fixed
+  in 8.1.2; still pending a follow-up patch.
 - **`vibe verify` false positives (M2)**: the Git-Bash-safety scan now
   covers only vibesop hook commands (token-basename classification,
   quoting- and platform-agnostic) instead of every command in
   settings.json — user commands such as PowerShell hooks no longer fail
   verification. Non-win32 hosts additionally surface Windows-form vibesop
   commands (drive-letter paths) that previously passed silently.
+
+## [8.1.2] — 2026-08-31
+
+### Fixed
+
+- **控制面命令的变更-发射原子性与 seq 代际重置（C1/C2，20260831 对抗评审）**:
+  多路独立对抗评审（5 路独立评审 + 逐条对抗验证，发现均经独立脚本复现）
+  确认两条 medium 缺陷，均由 P1-3 引入。**C1 陈旧 payload 晚于更新事件**：
+  事件移出 handler 锁发射后，锁内物化的 payload 在"已释放锁、尚未补发"的
+  窗口里可被另一线程对同一步骤的级联变更超越，随后补发的陈旧 transition
+  成为该步骤最后一条事件——按 seq 重放的订阅者视图与真实 plan 状态永久
+  背离。修复：发射移回锁内恢复变更-发射原子性（发射序=变更序），死锁面
+  改由 RLock 同线程重入解决（订阅者回调运行在发射线程，重入必为同线程）；
+  docstring 补订阅者契约（快速、非阻塞、禁止发射期间跨线程汇合 handler
+  操作）并如实记录跨 plan 共享锁的慢订阅者放大代价。**C2 drop 后 seq 代际
+  重置**：FC2 允许终态后受理命令，集成方按文档在终态 drop 两处状态后，
+  `update_plan` 重建日志使 `event_seq` 从 1 重计——持旧游标的消费者
+  `replay` 得到空增量且无 `needs_snapshot`/`history_lost` 标记，用户变更
+  静默不可见。修复：`drop_plan` 记录私有 seq floor、状态重建时接续
+  （重建后首事件 = floor+1，floor 恰消费一次；重复 drop 不重录），
+  `event_seq` 契约改为"按 plan_id 生命周期单调连续，跨 drop→重建不重置"；
+  `drop_plan` 后 `latest_seq` 仍为 0。新增回归：终态→drop→retry→旧游标
+  delta 可见（修复前红/修复后绿）、重复 drop 循环计数连续、retry×级联
+  skip 并发折叠一致性压测（100 轮护栏）。
+- **控制面命令发射期重入护栏（C1 复评收口，20260831 多路独立对抗复审）**：
+  对上一条 C1 修复（发射移回锁内）的多路独立对抗复审发现其不变量在
+  同线程重入模式（FC3）下仍确定性可破：payload 在
+  发射循环之前物化，订阅者回调重入 `apply()` 对同一 plan 发级联命令时，
+  内层命令的"变更+发射"落在外层两次 append 之间，外层陈旧 payload 最终
+  成为该步骤最后一条事件——回放视图与 plan 真实状态背离（确定性单线程
+  复现：外层 retry(s2) 物化 s2=pending，内层 cascade skip 把 s2 改写为
+  SKIPPED 后，陈旧的 s2=pending 以最高 seq 落盘）。修复：新增 per-plan
+  发射期护栏 `_emitting`——发射窗口内对同一 plan 的重入 `apply()` 以
+  `rejected_invalid_state` 拒绝（可重试：无副作用、不消耗幂等键，回调
+  返回后重发即被受理）；对其他 plan 的重入不受影响。类 docstring 与
+  `apply()` docstring 同步更新订阅者契约与拒绝顺序。新增回归测试：
+  FC3 测试改写为"发射期拒绝 + 回调后重发受理"双断言、重入交错发散的
+  确定性复现钉、跨 plan 重入不受影响的边界钉。
+- **发射期 `complete_command`/`drop_plan` 重入护栏与发射异常簿记回滚
+  （同轮复审）**：复审攻击发现两条重入滥用面与一条异常路径缺陷。
+  订阅者回调在发射窗口内重入 `complete_command` 会提前释放 in-flight
+  槽（后续命令可命中干预仍未落定的步骤）；重入 `drop_plan` 会抹掉正在
+  发射的命令批的幂等键（同一 command_id 可被二次受理）。两者现均在
+  发射期对同一 plan 抛 `RuntimeError`（订阅者内由 `PlanEventLog.append`
+  记录并吞没，回调返回后可正常调用）。发射中途 append 级异常此前会把
+  幂等键永久楔死（簿记已提交、事件未落盘、重发被判 duplicate）；现在
+  异常路径回滚簿记（processed/in_flight/索引），命令可在发射端恢复后
+  重新受理。另修复 `apply()` 拒绝路径的 `setdefault` 副作用（未知 plan
+  的纯拒绝不再留下空簿记条目，"拒绝无副作用"声明恢复严格成立）。
+  同轮还发现全局 in-flight 索引缺口：同一 `command_id` 在 plan A 在飞
+  时可被 plan B 重复受理，索引被覆盖导致 A 的 in-flight 槽永久楔死——
+  现受理前检查跨 plan 冲突并以 `rejected_invalid_state` 拒绝（首个命令
+  完成后可重发）。类 docstring 补充"每 plan 单 handler"约束（双 handler
+  共享 log 时锁各自独立，C1 原子性不跨 handler 成立）；`apply()`
+  docstring 补发射失败语义（簿记回滚但变更保留、已落盘事件不回收，
+  回放视图可能短暂落后一条 transition）。新增五条回归钉：发射期
+  complete/drop 抛错、发射异常后幂等键可重发、A→B→A 传递性重入防护
+  （重入命令选用无护栏时必被受理的形态，杜绝假绿）、跨 plan
+  command_id 冲突拒绝。
+- **文档/措辞与实现对齐（同轮复审 NIT 批）**：`_seq_floors` 注释的
+  "bounded tombstone" 改为如实表述（per-plan-id 墓碑、随不同 plan_id
+  数量增长）；`PlanEvent` docstring 与 `snapshot()` docstring 的
+  `event_seq` 零值语义补齐 floor 情形（drop→重建后的合成快照返回 floor
+  而非 0）；`apply()` 命令类型分派由枚举身份比较（`is`）改为相等比较
+  （`==`），消除模块重复加载时静默落入 skip 分支的隐患。新增"连续两次
+  drop 无重建不重录 floor"边界测试。
 
 ## [8.1.1] — 2026-08-26
 

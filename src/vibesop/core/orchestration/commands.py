@@ -114,13 +114,40 @@ class PlanCommandHandler:
     The handler mutates the same ExecutionPlan object the engine holds and
     emits through the shared PlanEventLog, so panel subscribers observe
     command-driven transitions with the same seq ordering as engine-driven
-    ones.
+    ones. A command's plan mutation and its event emission are atomic with
+    respect to other commands: events are appended while the handler lock
+    is still held, so the log's seq order equals the mutation order and a
+    superseded payload can never land after the event that superseded it
+    (C1, 20260831 adversarial review).
 
     Thread-safety: the handler's own bookkeeping is lock-guarded, so
-    concurrent *handler* calls are safe. It is NOT safe against a
-    concurrently running engine mutating the same plan — the integrator
-    must serialize command application against engine execution (e.g.
-    apply commands only between engine runs/steps).
+    concurrent *handler* calls are safe. The lock is an RLock: a subscriber
+    that synchronously re-enters apply()/complete_command() from its
+    callback runs on the emitting thread and re-enters without deadlocking
+    (FC3). One re-entry restriction applies: while a command's events are
+    being emitted, a nested apply() for the SAME plan is rejected
+    (rejected_invalid_state, retryable — no side effects, idempotency key
+    not consumed). Payloads are materialized before the emission loop, so
+    a nested command mutating the plan mid-emission would let the outer
+    command's stale payloads land after the nested command's newer events,
+    silently breaking the seq-order-equals-mutation-order invariant above;
+    the guard closes that interleave. Issue the follow-up command after
+    the callback returns instead. Nested commands for OTHER plans are
+    unaffected. For the same reason, re-entering complete_command() or
+    drop_plan() for the emitting plan mid-emission raises RuntimeError
+    (completing would release the in-flight slot before the command's
+    effects settle; dropping would erase the idempotency keys of the batch
+    being emitted). Use ONE handler per plan: two handlers sharing a log
+    hold independent locks, so the mutation-emission atomicity above does
+    not hold across handlers. Subscriber contract: callbacks must be fast
+    and non-blocking, and must not wait on handler operations from another
+    thread — cross-thread rendezvous during emission deadlocks. The lock
+    is shared across all plans, so a slow subscriber delays command
+    application for every plan (engine execution is unaffected — it never
+    takes this lock). It is NOT safe against a concurrently running engine
+    mutating the same plan — the integrator must serialize command
+    application against engine execution (e.g. apply commands only between
+    engine runs/steps).
     """
 
     def __init__(
@@ -139,14 +166,24 @@ class PlanCommandHandler:
         self._plan_provider = plan_provider
         self._plans: dict[str, _PlanCommandState] = {}
         self._command_plan: dict[str, str] = {}  # command_id -> plan_id (in-flight index)
-        self._lock = threading.Lock()
+        # RLock so a re-entrant subscriber (FC3) can re-enter
+        # apply()/complete_command() from its callback on the emitting
+        # thread without deadlocking.
+        self._lock = threading.RLock()
+        # Plan ids whose command events are currently being emitted on this
+        # thread. A nested apply() for one of these plans is rejected (see
+        # the class docstring): payloads are materialized before emission,
+        # so a mid-emission mutation would let stale outer payloads land
+        # after the nested command's newer events (C1 follow-up).
+        self._emitting: set[str] = set()
 
     def apply(self, command: PlanCommand) -> PlanCommandResult:
         """Validate and apply a command.
 
-        Rejection order: duplicate command_id → in-flight command on the same
-        step → state validity → dependency check (skip only). Rejections
-        produce no side effects and emit no events.
+        Rejection order: duplicate command_id → in-flight command_id on
+        another plan → in-flight command on the same step → mid-emission
+        re-entry on the same plan → state validity → dependency check
+        (skip only). Rejections produce no side effects and emit no events.
 
         The plan being terminal is NOT a rejection: the engine runs
         synchronously, so failure intervention (retry a failed step, skip a
@@ -157,19 +194,45 @@ class PlanCommandHandler:
         command may be re-issued with the same ``command_id`` once the
         blocking condition clears, while a duplicate of an accepted command
         is always ``rejected_duplicate``.
+
+        If event emission itself fails mid-flush, the bookkeeping is rolled
+        back (the idempotency key is NOT wedged — the command can be
+        re-issued once the emitter recovers), while the plan mutation stays
+        applied and events already appended are not retracted — a replayed
+        view may lag the plan by the un-emitted transitions until the next
+        event or a snapshot resync.
         """
         pending: list[tuple[PlanEventType, dict[str, Any]]] = []
         with self._lock:
-            state = self._plans.setdefault(command.plan_id, _PlanCommandState())
+            # Look up, don't create: a rejected command must leave no
+            # bookkeeping behind ("rejections produce no side effects").
+            state = self._plans.get(command.plan_id)
 
-            if command.command_id in state.processed:
+            if state is not None and command.command_id in state.processed:
                 return PlanCommandResult(
                     command_id=command.command_id,
                     status=PlanCommandStatus.REJECTED_DUPLICATE,
                     reason="Command already processed (idempotency key reused)",
                 )
 
-            if command.step_id in state.in_flight:
+            owner_plan = self._command_plan.get(command.command_id)
+            if owner_plan is not None and owner_plan != command.plan_id:
+                # The in-flight index is global: re-using an in-flight
+                # command_id on another plan would overwrite the index entry
+                # and wedge the first plan's in-flight slot forever
+                # (complete_command would only ever release the second one).
+                # Retryable once the first command completes.
+                return PlanCommandResult(
+                    command_id=command.command_id,
+                    status=PlanCommandStatus.REJECTED_INVALID_STATE,
+                    reason=(
+                        f"Command {command.command_id} is in flight on plan "
+                        f"{owner_plan}; command ids must be unique across plans "
+                        "while in flight"
+                    ),
+                )
+
+            if state is not None and command.step_id in state.in_flight:
                 pending_id = state.in_flight[command.step_id]
                 return PlanCommandResult(
                     command_id=command.command_id,
@@ -177,6 +240,24 @@ class PlanCommandHandler:
                     reason=(
                         f"Step {command.step_id} already has an in-flight command "
                         f"({pending_id}); wait for it to complete"
+                    ),
+                )
+
+            if command.plan_id in self._emitting:
+                # A subscriber callback is re-entering apply() for the plan
+                # whose events are being emitted on this thread. Applying it
+                # now would interleave its mutation+events between this
+                # command's pre-materialized payload appends, so a stale
+                # outer payload could land after the nested command's newer
+                # events (C1). Reject retryably: re-issue once the callback
+                # has returned. Other plans are unaffected.
+                return PlanCommandResult(
+                    command_id=command.command_id,
+                    status=PlanCommandStatus.REJECTED_INVALID_STATE,
+                    reason=(
+                        f"Plan {command.plan_id} is emitting command events on this "
+                        "thread; re-issue the command after the subscriber "
+                        "callback returns"
                     ),
                 )
 
@@ -198,25 +279,46 @@ class PlanCommandHandler:
                     reason=f"Step {command.step_id} not found in plan {command.plan_id}",
                 )
 
-            if command.type is PlanCommandType.RETRY_STEP:
+            if command.type == PlanCommandType.RETRY_STEP:
                 result = self._apply_retry(command, step, pending)
             else:
                 result = self._apply_skip(command, plan, step, pending)
 
             if result.status is PlanCommandStatus.ACCEPTED:
+                state = self._plans.setdefault(command.plan_id, _PlanCommandState())
                 state.processed.add(command.command_id)
                 state.in_flight[command.step_id] = command.command_id
                 self._command_plan[command.command_id] = command.plan_id
-
-        # Emit outside the handler lock: PlanEventLog.append invokes
-        # subscribers synchronously, and a subscriber that re-enters
-        # apply()/complete_command() must not deadlock on the lock we
-        # would still be holding.
-        if result.status is PlanCommandStatus.ACCEPTED:
-            result.events = [
-                self._events.append(command.plan_id, event_type, payload)
-                for event_type, payload in pending
-            ]
+                # Emit while still holding the handler lock: mutation and
+                # emission stay atomic, so the log's seq order equals the
+                # mutation order and a payload materialized under the lock
+                # can never land after a newer event for the same step
+                # (C1, 20260831 adversarial review). Re-entrant subscribers
+                # are safe: PlanEventLog.append invokes callbacks on this
+                # thread and the RLock lets them re-enter apply()/
+                # complete_command() without deadlocking (FC3). The
+                # _emitting guard above closes the remaining same-thread
+                # interleave: a nested command for this plan is rejected
+                # before it can mutate between these appends.
+                self._emitting.add(command.plan_id)
+                try:
+                    result.events = [
+                        self._events.append(command.plan_id, event_type, payload)
+                        for event_type, payload in pending
+                    ]
+                except BaseException:
+                    # Append-level failure mid-flush (subscriber exceptions
+                    # are already swallowed by PlanEventLog.append): roll the
+                    # bookkeeping back so the idempotency key is not wedged
+                    # and the command can be re-issued once the emitter
+                    # recovers. The plan mutation itself stays applied.
+                    state.processed.discard(command.command_id)
+                    if state.in_flight.get(command.step_id) == command.command_id:
+                        del state.in_flight[command.step_id]
+                    self._command_plan.pop(command.command_id, None)
+                    raise
+                finally:
+                    self._emitting.discard(command.plan_id)
         return result
 
     def complete_command(self, command_id: str) -> bool:
@@ -228,8 +330,23 @@ class PlanCommandHandler:
         Returns:
             True when the command was in flight and is now completed;
             False for unknown or already-completed command ids.
+
+        Raises:
+            RuntimeError: when re-entered from a subscriber callback while
+                the command's own plan is mid-emission on this thread —
+                completing now would release the in-flight slot before the
+                command's effects settle. Call it after the callback
+                returns. (Inside a subscriber the error is logged and
+                swallowed by ``PlanEventLog.append``.)
         """
         with self._lock:
+            plan_id = self._command_plan.get(command_id)
+            if plan_id is not None and plan_id in self._emitting:
+                raise RuntimeError(
+                    f"complete_command({command_id!r}) re-entered while plan "
+                    f"{plan_id!r} is emitting command events on this thread; "
+                    "call it after the subscriber callback returns"
+                )
             plan_id = self._command_plan.pop(command_id, None)
             if plan_id is None:
                 return False
@@ -248,8 +365,21 @@ class PlanCommandHandler:
         command_id index for the plan. Integrators should call this together
         with ``PlanEventLog.drop_plan`` once a plan is terminal. Unknown
         plan_ids are silently ignored.
+
+        Raises:
+            RuntimeError: when re-entered from a subscriber callback while
+                this plan is mid-emission on this thread — dropping now
+                would erase the idempotency keys of the command batch being
+                emitted, letting an accepted command be applied twice. Call
+                it after the callback returns.
         """
         with self._lock:
+            if plan_id in self._emitting:
+                raise RuntimeError(
+                    f"drop_plan({plan_id!r}) re-entered while the plan is "
+                    "emitting command events on this thread; call it after "
+                    "the subscriber callback returns"
+                )
             state = self._plans.pop(plan_id, None)
             if state is None:
                 return

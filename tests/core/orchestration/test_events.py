@@ -594,6 +594,86 @@ def test_drop_plan_clears_all_state() -> None:
     log.drop_plan("unknown")  # silently ignored
 
 
+def test_seq_continues_across_drop_rebuild_cycle() -> None:
+    """C2 (20260831 adversarial review): seq floor continuation. The first
+    event after a drop→rebuild carries floor+1, not 1 — a restart would make
+    pre-drop cursors silently stale (empty delta, no loss flag). latest_seq
+    reads 0 while the plan is dropped: the state entry is deleted and the
+    floor is not surfaced through it."""
+    log = PlanEventLog()
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    assert log.latest_seq("p1") == 2
+
+    log.drop_plan("p1")
+    assert log.latest_seq("p1") == 0
+
+    event = log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    assert event.event_seq == 3  # floor 2 + 1, not 1
+
+
+def test_replay_after_drop_rebuild_returns_new_events_for_old_cursor() -> None:
+    """C2 end-to-end at the log level: a consumer that synced up to the
+    pre-drop latest seq still receives post-rebuild events as deltas, with
+    no needs_snapshot/history_lost flag."""
+    log = PlanEventLog()
+    log.update_plan(_make_plan(plan_id="p1"))
+    for _ in range(4):
+        log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    log.drop_plan("p1")
+
+    # The handler's apply() re-registers the plan via update_plan before
+    # appending; mirror that ordering here.
+    log.update_plan(_make_plan(plan_id="p1"))
+    log.append("p1", PlanEventType.STEP_TRANSITION, {"step_id": "s1"})
+
+    result = log.replay("p1", since_seq=4)
+
+    assert [e.event_seq for e in result.events] == [5]
+    assert result.needs_snapshot is False
+    assert result.history_lost is False
+
+
+def test_floor_consumed_once_across_repeated_cycles() -> None:
+    """T-C2b: double-drop does not re-record the floor — the stream keeps
+    counting across repeated drop→rebuild cycles, never stalling or
+    restarting."""
+    log = PlanEventLog()
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})  # seq 1
+    log.drop_plan("p1")
+
+    first = log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    assert first.event_seq == 2  # rebuild consumes floor 1
+
+    log.drop_plan("p1")  # floor becomes 2; a naive re-record would clamp it
+    second = log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    assert second.event_seq == 3
+
+
+def test_consecutive_drops_without_rebuild_do_not_rerecord_floor() -> None:
+    """C2 boundary: a second drop_plan while the plan is still dropped (no
+    live state) must not re-record the floor — the rebuild still continues
+    from the first drop's floor."""
+    log = PlanEventLog()
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})  # seq 1
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})  # seq 2
+    log.drop_plan("p1")  # floor = 2
+    log.drop_plan("p1")  # state already gone — must not touch the floor
+
+    event = log.append("p1", PlanEventType.STEP_TRANSITION, {})
+    assert event.event_seq == 3
+
+
+def test_brand_new_plan_id_still_starts_at_one() -> None:
+    """T-C2b boundary: floor continuation never touches plans that were
+    never dropped."""
+    log = PlanEventLog()
+    log.append("p1", PlanEventType.STEP_TRANSITION, {})
+
+    event = log.append("p2", PlanEventType.STEP_TRANSITION, {})
+    assert event.event_seq == 1
+
+
 def test_event_to_dict_carries_schema_version_and_is_json_ready() -> None:
     import json
 

@@ -7,7 +7,9 @@ mutations in real time).
 Contract summary:
 - ``PlanEventType``: plan_snapshot / step_transition / plan_terminal / plan_mutated
 - ``event_seq`` is assigned by :class:`PlanEventLog` as the single writer,
-  monotonically increasing from 1 per ``plan_id``.
+  monotonically increasing per ``plan_id`` over the plan's whole lifetime:
+  from 1 initially, and continuously across ``drop_plan`` → rebuild cycles
+  (a rebuild resumes after the dropped generation's last seq — no restart).
 - Each plan keeps a bounded ring window of recent events; consumers whose
   cursor fell out of the window resync via :meth:`PlanEventLog.replay`,
   which returns a full snapshot instead of deltas.
@@ -59,8 +61,11 @@ class PlanEventType(StrEnum):
 class PlanEvent(BaseModel):
     """A single plan execution event.
 
-    ``event_seq`` is 0 only for synthesized snapshots of a plan that has not
-    emitted any event yet; all appended events are numbered from 1 upward.
+    ``event_seq`` is the latest allocated seq for synthesized snapshots
+    (0 only when no seq was ever allocated for the plan — a plan rebuilt
+    after ``drop_plan`` reports its floor); appended events are numbered
+    over the plan's lifetime (from 1 initially, continuing across a
+    drop→rebuild cycle).
     ``schema_version`` versions the payload contract for consumers.
     """
 
@@ -188,6 +193,12 @@ class PlanEventLog:
             raise ValueError("window_size must be >= 1")
         self._window_size = window_size
         self._logs: dict[str, _PlanLogState] = {}
+        # Last allocated seq per dropped plan: a rebuild continues the
+        # stream instead of restarting at 1 (C2, 20260831 adversarial
+        # review). Deliberate tombstone: one small int per dropped
+        # plan_id, kept for the process lifetime — bounded per entry,
+        # but grows with the number of distinct dropped plan ids.
+        self._seq_floors: dict[str, int] = {}
         self._lock = threading.Lock()
 
     def _state_locked(self, plan_id: str) -> _PlanLogState:
@@ -195,6 +206,7 @@ class PlanEventLog:
         state = self._logs.get(plan_id)
         if state is None:
             state = _PlanLogState(self._window_size)
+            state.next_seq = self._seq_floors.pop(plan_id, 0) + 1
             self._logs[plan_id] = state
         return state
 
@@ -270,8 +282,10 @@ class PlanEventLog:
         """Return the current plan projection as a ``plan_snapshot`` event.
 
         The event's ``event_seq`` is the latest allocated seq for the plan
-        (0 when nothing was appended yet); it is synthesized, not appended.
-        Returns None when no plan reference is known for ``plan_id``.
+        (0 when no seq has been allocated yet — a plan rebuilt after
+        ``drop_plan`` resumes from its floor); it is synthesized, not
+        appended. Returns None when no plan reference is known for
+        ``plan_id``.
         """
         with self._lock:
             state = self._logs.get(plan_id)
@@ -328,6 +342,16 @@ class PlanEventLog:
         finishes. Integrators should call this once a plan reaches a
         terminal state and all consumers have resynced. Unknown plan_ids
         are silently ignored.
+
+        The plan's last allocated seq is kept as a private floor so a later
+        rebuild — e.g. a post-terminal command re-registering the plan,
+        which FC2 makes a legal mainline path — continues the seq stream
+        instead of restarting at 1. A restart would strand pre-drop
+        cursors: their replays would silently return empty deltas with no
+        needs_snapshot/history_lost flag (C2, 20260831 adversarial review).
         """
         with self._lock:
+            state = self._logs.get(plan_id)
+            if state is not None:
+                self._seq_floors[plan_id] = state.next_seq - 1
             self._logs.pop(plan_id, None)

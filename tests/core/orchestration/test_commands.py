@@ -415,7 +415,15 @@ def test_engine_failure_then_retry_accepted_post_run() -> None:
 def test_reentrant_subscriber_does_not_deadlock() -> None:
     """FC3 (20260831 review): PlanEventLog.append invokes subscribers
     synchronously; a subscriber that issues another command must not
-    deadlock on the handler lock. Events are emitted outside the lock."""
+    deadlock on the handler lock — the lock is an RLock and the callback
+    re-enters on the emitting thread.
+
+    C1 follow-up (20260831 re-review): a nested apply() for the SAME plan
+    during emission is rejected retryably — payloads are materialized
+    before the emission loop, so a mid-emission mutation would let the
+    outer command's stale payloads land after the nested command's newer
+    events. Re-issued after the callback returns, the same command_id is
+    accepted (rejections do not consume the idempotency key)."""
     import threading
 
     plan = _make_plan()
@@ -433,8 +441,8 @@ def test_reentrant_subscriber_does_not_deadlock() -> None:
         if issued.is_set():
             return
         issued.set()
-        # Skip a *different* failed step from inside the callback (the
-        # in-flight gate blocks same-step commands by design).
+        # Same-plan command from inside the callback: blocked by the
+        # mid-emission re-entry guard (C1 follow-up), with no side effects.
         nested = handler.apply(_cmd("c-nested", type=PlanCommandType.SKIP_STEP, step_id="s3"))
         nested_results.append(nested.status)
 
@@ -451,10 +459,260 @@ def test_reentrant_subscriber_does_not_deadlock() -> None:
     thread.start()
     assert done.wait(timeout=5), "apply() deadlocked: subscriber re-entry blocked the handler lock"
     thread.join(timeout=5)
+    assert not thread.is_alive(), "apply() deadlocked: emitting thread never returned"
 
     assert outer_status == [PlanCommandStatus.ACCEPTED]
-    assert nested_results, "subscriber callback never ran"
-    assert nested_results[0] == PlanCommandStatus.ACCEPTED
+    assert nested_results == [PlanCommandStatus.REJECTED_INVALID_STATE]
+    # The idempotency key survived the rejection: the same command_id is
+    # accepted once issued outside the emission window.
+    retried = handler.apply(_cmd("c-nested", type=PlanCommandType.SKIP_STEP, step_id="s3"))
+    assert retried.status == PlanCommandStatus.ACCEPTED
+    assert plan.steps[2].status == StepStatus.SKIPPED
+
+
+def test_mid_emission_reentry_cannot_diverge_replay_view() -> None:
+    """C1 follow-up (20260831 re-review): deterministic reproducer of the
+    stale-payload interleave the emission guard closes. Pre-guard, a
+    subscriber re-entering apply() with a cascade skip landed its
+    mutation+events BETWEEN the outer command's appends, so the outer's
+    pre-materialized s2=pending payload was appended last — the replayed
+    final view for s2 said pending while the plan said skipped. With the
+    guard, the nested command is rejected and the replayed final view can
+    never diverge from plan truth."""
+    plan = _make_plan()
+    _fail_step(plan, "s2")  # outer retry target
+    handler, log = _make_handler(plan)
+
+    fired: list[bool] = []
+    nested_status: list[PlanCommandStatus] = []
+
+    def cascade_during_emission(event):
+        if fired:
+            return
+        fired.append(True)
+        # s1 is pending; its cascade closure covers s2/s3 — pre-guard this
+        # rewrote s2 to SKIPPED between the outer command's appends.
+        nested_status.append(
+            handler.apply(
+                _cmd("c-inner", type=PlanCommandType.SKIP_STEP, step_id="s1", cascade=True)
+            ).status
+        )
+
+    log.subscribe(plan.plan_id, cascade_during_emission)
+
+    outer = handler.apply(_cmd("c-outer", step_id="s2"))  # retry s2
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert fired, "subscriber never ran"
+    assert nested_status == [PlanCommandStatus.REJECTED_INVALID_STATE]
+
+    # The follow-up lands whole, after the outer flush.
+    follow_up = handler.apply(
+        _cmd("c-inner", type=PlanCommandType.SKIP_STEP, step_id="s1", cascade=True)
+    )
+    assert follow_up.status == PlanCommandStatus.ACCEPTED
+
+    replayed = log.replay(plan.plan_id, since_seq=0).events
+    last_status: dict[str, str] = {}
+    for event in replayed:
+        if event.type is PlanEventType.STEP_TRANSITION:
+            last_status[event.payload["step_id"]] = event.payload["status"]
+    for step in plan.steps:
+        assert last_status.get(step.step_id) == step.status.value
+
+
+def test_mid_emission_reentry_other_plan_accepted() -> None:
+    """The emission guard is per-plan: a subscriber command for a DIFFERENT
+    plan applies normally mid-emission."""
+    plan_a = _make_plan(plan_id="plan-a")
+    plan_b = _make_plan(plan_id="plan-b")
+    _fail_step(plan_a, "s1")
+    _fail_step(plan_b, "s1")
+    log = PlanEventLog(window_size=100)
+    plans = {"plan-a": plan_a, "plan-b": plan_b}
+    handler = PlanCommandHandler(log, plans.get)
+
+    fired: list[bool] = []
+    nested_status: list[PlanCommandStatus] = []
+
+    def cross_plan_subscriber(event):
+        if fired:
+            return
+        fired.append(True)
+        nested_status.append(handler.apply(_cmd("c-b", plan_id="plan-b", step_id="s1")).status)
+
+    log.subscribe("plan-a", cross_plan_subscriber)
+
+    outer = handler.apply(_cmd("c-a", plan_id="plan-a", step_id="s1"))
+
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert nested_status == [PlanCommandStatus.ACCEPTED]
+    assert plan_b.steps[0].status == StepStatus.PENDING  # retry rewound it
+
+
+def test_complete_command_during_emission_raises() -> None:
+    """Re-entering complete_command() for the emitting plan mid-emission is
+    a programming error: it would release the in-flight slot before the
+    command's effects settle, letting a follow-up command target a step
+    whose intervention is still in flight. After the callback returns the
+    same call completes normally."""
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    handler, log = _make_handler(plan)
+
+    caught: list[str] = []
+
+    def completing_subscriber(event):
+        if caught:
+            return
+        try:
+            handler.complete_command("c-outer")
+        except RuntimeError as exc:
+            caught.append(str(exc))
+
+    log.subscribe(plan.plan_id, completing_subscriber)
+
+    outer = handler.apply(_cmd("c-outer"))
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert caught, "complete_command during emission did not raise"
+    assert "emitting" in caught[0]
+
+    # After the callback the completion lands normally.
+    assert handler.complete_command("c-outer") is True
+
+
+def test_drop_plan_during_emission_raises_and_preserves_idempotency() -> None:
+    """Re-entering drop_plan() mid-emission would erase the idempotency keys
+    of the batch being emitted, letting an accepted command be applied
+    twice. It raises instead; the keys survive (re-issuing the outer
+    command_id is still rejected_duplicate)."""
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    handler, log = _make_handler(plan)
+
+    caught: list[str] = []
+
+    def dropping_subscriber(event):
+        if caught:
+            return
+        try:
+            handler.drop_plan(plan.plan_id)
+        except RuntimeError as exc:
+            caught.append(str(exc))
+
+    log.subscribe(plan.plan_id, dropping_subscriber)
+
+    outer = handler.apply(_cmd("c-outer"))
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert caught, "drop_plan during emission did not raise"
+
+    assert handler.apply(_cmd("c-outer")).status == PlanCommandStatus.REJECTED_DUPLICATE
+
+
+def test_emission_failure_rolls_back_bookkeeping() -> None:
+    """An append-level failure mid-flush must not wedge the idempotency key:
+    bookkeeping is rolled back so the command can be re-issued once the
+    emitter recovers (the plan mutation itself stays applied, so the
+    re-issue is then judged by the state gates, not the duplicate gate)."""
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    handler, log = _make_handler(plan)
+
+    original_append = log.append
+
+    def failing_append(*args, **kwargs):
+        raise RuntimeError("emitter down")
+
+    log.append = failing_append  # type: ignore[method-assign]
+    try:
+        with pytest.raises(RuntimeError, match="emitter down"):
+            handler.apply(_cmd("c-1"))
+    finally:
+        log.append = original_append  # type: ignore[method-assign]
+
+    # Not wedged: the same command_id is re-issuable. The mutation already
+    # rewound s1 to PENDING, so the retry now hits the state gate — proof
+    # the duplicate gate did not swallow it.
+    second = handler.apply(_cmd("c-1"))
+    assert second.status == PlanCommandStatus.REJECTED_INVALID_STATE
+    assert "requires a failed step" in second.reason
+    # The in-flight slot was rolled back too.
+    assert handler.complete_command("c-1") is False
+
+
+def test_transitive_reentry_guard_covers_a_to_b_to_a() -> None:
+    """The emission guard is transitive across nested emissions: while plan
+    A emits, a callback command on plan B is accepted and emits B's events;
+    a B-side callback re-entering apply() for A is still rejected because
+    A remains in _emitting until its whole flush completes."""
+    plan_a = _make_plan(plan_id="plan-a")
+    plan_b = _make_plan(plan_id="plan-b")
+    _fail_step(plan_a, "s1")
+    _fail_step(plan_b, "s1")
+    log = PlanEventLog(window_size=100)
+    plans = {"plan-a": plan_a, "plan-b": plan_b}
+    handler = PlanCommandHandler(log, plans.get)
+
+    b_status: list[PlanCommandStatus] = []
+    reentry_a_status: list[PlanCommandStatus] = []
+
+    def b_subscriber(event):
+        # B's own emission: re-entering for A must still be guarded. Target
+        # A's pending s2 with a skip — it clears every earlier gate (no
+        # in-flight entry on s2), so without the _emitting guard this
+        # command would be ACCEPTED and this test would go red.
+        reentry_a_status.append(
+            handler.apply(
+                _cmd("c-a2", plan_id="plan-a", type=PlanCommandType.SKIP_STEP, step_id="s2")
+            ).status
+        )
+
+    def a_subscriber(event):
+        if b_status:
+            return
+        b_status.append(handler.apply(_cmd("c-b", plan_id="plan-b", step_id="s1")).status)
+
+    log.subscribe("plan-b", b_subscriber)
+    log.subscribe("plan-a", a_subscriber)
+
+    outer = handler.apply(_cmd("c-a", plan_id="plan-a", step_id="s1"))
+
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert b_status == [PlanCommandStatus.ACCEPTED]
+    # B's accepted retry emits two events; every B-side callback re-entry
+    # for A is rejected while A's flush is still open.
+    assert reentry_a_status
+    assert all(s == PlanCommandStatus.REJECTED_INVALID_STATE for s in reentry_a_status)
+
+
+def test_command_id_in_flight_on_other_plan_rejected() -> None:
+    """The in-flight index is global: re-using an in-flight command_id on a
+    different plan must be rejected — accepting it would overwrite the index
+    entry and wedge the first plan's in-flight slot forever. Retryable once
+    the first command completes."""
+    plan_a = _make_plan(plan_id="plan-a")
+    plan_b = _make_plan(plan_id="plan-b")
+    _fail_step(plan_a, "s1")
+    _fail_step(plan_b, "s1")
+    log = PlanEventLog(window_size=100)
+    plans = {"plan-a": plan_a, "plan-b": plan_b}
+    handler = PlanCommandHandler(log, plans.get)
+
+    first = handler.apply(_cmd("c-shared", plan_id="plan-a", step_id="s1"))
+    assert first.status == PlanCommandStatus.ACCEPTED
+
+    conflict = handler.apply(_cmd("c-shared", plan_id="plan-b", step_id="s1"))
+    assert conflict.status == PlanCommandStatus.REJECTED_INVALID_STATE
+    assert "in flight on plan plan-a" in conflict.reason
+
+    # A's in-flight slot is untouched by the rejected conflict.
+    blocked = handler.apply(_cmd("c-other", plan_id="plan-a", step_id="s1"))
+    assert blocked.status == PlanCommandStatus.REJECTED_INVALID_STATE
+    assert "in-flight" in blocked.reason
+
+    # Once the first completes, the id is free for plan B.
+    assert handler.complete_command("c-shared") is True
+    retry_on_b = handler.apply(_cmd("c-shared", plan_id="plan-b", step_id="s1"))
+    assert retry_on_b.status == PlanCommandStatus.ACCEPTED
 
 
 def test_apply_registers_plan_for_snapshots() -> None:
@@ -486,6 +744,45 @@ def test_handler_drop_plan_clears_bookkeeping() -> None:
     again = handler.apply(_cmd("c-1"))
     assert again.status == PlanCommandStatus.ACCEPTED
     handler.drop_plan("unknown")  # silently ignored
+
+
+def test_post_terminal_drop_then_retry_emits_visible_deltas() -> None:
+    """C2 (20260831 adversarial review): the engine reaches a terminal state,
+    the integrator follows the documented lifecycle and drops both handler
+    and log state, and the user then retries the failed step (FC2: accepted
+    on a terminal plan). The retry's events must continue the dropped
+    stream's seq — if the rebuilt log restarts at seq 1, an old-cursor
+    consumer's replay silently returns an empty delta with no
+    needs_snapshot/history_lost flag and the mutation is invisible forever."""
+    plan = _make_plan(plan_id="plan-c2")
+    _fail_step(plan, "s1")
+    handler, log = _make_handler(plan)
+
+    # Simulate the engine lifecycle: events up to a failed terminal.
+    log.update_plan(plan)
+    log.append("plan-c2", PlanEventType.PLAN_TERMINAL, {"final_status": "failed"})
+    assert log.latest_seq("plan-c2") == 1
+
+    # Integrator drops both sides per the documented terminal lifecycle.
+    handler.drop_plan("plan-c2")
+    log.drop_plan("plan-c2")
+
+    # User retries the failed step post-run (FC2: must be accepted).
+    result = handler.apply(_cmd("c-retry-post-drop", plan_id="plan-c2", step_id="s1"))
+    assert result.status == PlanCommandStatus.ACCEPTED
+    assert plan.steps[0].status == StepStatus.PENDING
+
+    # The retry's events continue the dropped stream (seq 2, 3 — not 1, 2),
+    # so the old-cursor (since_seq=1) consumer sees them as a plain delta.
+    assert [e.event_seq for e in result.events] == [2, 3]
+    replay = log.replay("plan-c2", since_seq=1)
+    assert [e.event_seq for e in replay.events] == [2, 3]
+    assert replay.needs_snapshot is False
+    assert replay.history_lost is False
+    # Folding the delta onto the pre-drop view converges to the true state.
+    last_transition = replay.events[-1]
+    assert last_transition.payload["step_id"] == "s1"
+    assert last_transition.payload["status"] == "pending"
 
 
 def test_skip_cascade_diamond_dependency_dedupes() -> None:
@@ -556,3 +853,86 @@ def test_skip_cascade_cyclic_plan_terminates() -> None:
     assert result.status == PlanCommandStatus.ACCEPTED
     mutation = result.events[-1]
     assert sorted(mutation.payload["step_ids"]) == ["s1", "s2"]
+
+
+def _run_c1_round(round_num: int) -> tuple[list[PlanCommandStatus], ExecutionPlan, PlanEventLog]:
+    """One retry-vs-cascade-skip race round (C1 invariant stress).
+
+    Builds s1→s2→s3 with s1/s2 failed, races ``retry(s2)`` against
+    ``skip(s1, cascade=True)`` on two barrier-synchronized threads, and
+    returns (outcomes, plan, log) for invariant checks.
+    """
+    import threading
+
+    plan = _make_plan(plan_id=f"plan-c1-{round_num}")
+    _fail_step(plan, "s1")
+    _fail_step(plan, "s2")
+    handler, log = _make_handler(plan)
+
+    start = threading.Barrier(2)
+    outcomes: list[PlanCommandStatus] = []
+
+    def retry_downstream() -> None:
+        start.wait()
+        outcomes.append(handler.apply(_cmd("c-retry", plan_id=plan.plan_id, step_id="s2")).status)
+
+    def skip_root_cascade() -> None:
+        start.wait()
+        outcomes.append(
+            handler.apply(
+                _cmd(
+                    "c-skip",
+                    plan_id=plan.plan_id,
+                    type=PlanCommandType.SKIP_STEP,
+                    step_id="s1",
+                    cascade=True,
+                )
+            ).status
+        )
+
+    threads = [
+        threading.Thread(target=retry_downstream),
+        threading.Thread(target=skip_root_cascade),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+    # A future deadlock regression must fail the round, not hang the suite.
+    assert all(not thread.is_alive() for thread in threads), "round deadlocked"
+    return outcomes, plan, log
+
+
+def test_concurrent_retry_and_cascade_skip_replay_converges() -> None:
+    """C1 (20260831 adversarial review): a retry on a downstream step racing
+    a cascading skip must never leave the event log's final per-step view
+    diverged from the plan's real status.
+
+    Timing argument: a command's mutation and its event emission are atomic
+    under the handler lock, so a competing command can only mutate a step
+    AFTER the first command's flush completes — a payload materialized under
+    the lock can never be stale at append time, and the last
+    step_transition per step always reflects the final status. Before the
+    fix (events appended outside the lock) a gated interleaving made the
+    stale payload land last and the replayed view diverge permanently; the
+    divergence needed that forced window, so this test is a stress
+    guardrail over the invariant, not a deterministic reproducer of the
+    pre-fix defect."""
+    for round_num in range(100):
+        outcomes, plan, log = _run_c1_round(round_num)
+
+        # Both commands were legal when issued; neither may deadlock or
+        # crash — whatever the interleaving, at least the skip lands.
+        assert PlanCommandStatus.ACCEPTED in outcomes
+        # The replayed final view must agree with the plan's real state for
+        # every step (the C1 divergence made s2's last transition stale).
+        replayed = log.replay(plan.plan_id, since_seq=0).events
+        last_status: dict[str, str] = {}
+        for event in replayed:
+            if event.type is PlanEventType.STEP_TRANSITION:
+                last_status[event.payload["step_id"]] = event.payload["status"]
+        for step in plan.steps:
+            assert last_status.get(step.step_id) == step.status.value, (
+                f"round {round_num}: replayed view for {step.step_id} is "
+                f"{last_status.get(step.step_id)!r}, plan says {step.status.value!r}"
+            )
