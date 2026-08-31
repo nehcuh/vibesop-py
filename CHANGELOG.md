@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
+  `PlanCommand` / `PlanCommandHandler` / `PlanCommandResult` /
+  `PlanCommandStatus` / `PlanCommandType` 与 `PlanEvent` / `PlanEventLog` /
+  `PlanEventType` / `ReplayResult` 均可从 `vibesop.core.orchestration`
+  直接导入（此前藏在子模块，库接缝不可发现）。集成接线点同步落地：
+  `StepRunner(event_log=...)` 与 `AgentRouter.create_runner(event_log=...)`
+  会把日志转发进 `WorkflowEngine`——集成方订阅一次即可拿到引擎与
+  面板命令的混合事件流，无需直接触碰 engine。
+
 ### Removed
 
 - **`builtin/instinct-learning` 技能删除（能力并入 `builtin/instinct`）**:
@@ -25,6 +36,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **plan 终态与事件流统一到同一张终态词汇表（P1-2，20260831 评审）**:
+  引擎循环收尾处无条件写 `plan.status = COMPLETED`，而终端事件用的是
+  `_compute_final_status` 的四值词汇（completed/partial/failed/
+  terminated_early）——降级 goals-met、crash、escalate 的 plan 在
+  tracker 里全显示"已完成"。修复为单一 `_FINAL_STATUS_TO_PLAN_STATUS`
+  映射：`PlanStatus` 新增 `TERMINATED_EARLY`，`DynamicExecutionResult.
+  final_status` 的 Literal 同步加宽，循环/tournament/sequential 三条
+  路径先算 final_status 再映射，结果对象复用同一变量（不再二次计算）；
+  PROMPT_CHAIN 与 squad 成功路径保持 COMPLETED（有意为之，代码内注释）。
+  `vibe plan list` 图标表补齐 failed/partial/terminated_early。
+- **`PlanCommandHandler.apply()` 锁内同步发事件的死锁面（P1-3）+ 终态
+  plan 误拒（FC2）**: `PlanEventLog.append` 同步调用订阅者——订阅者
+  回调里再发命令（面板订阅事件→自动干预的合法形态）会在持有 handler
+  锁时重入 `apply()` 造成死锁；同时旧的 plan 终态拒绝门把"运行后失败
+  干预"（引擎同步跑完、面板事后 retry/skip 的唯一形态）一律
+  REJECTED_INVALID_STATE。修复：校验与状态变更留在锁内，事件移到锁外
+  批量 append；删除 plan 终态门（步骤状态门才是合法性权威，docstring
+  写明语义）；新增重入订阅者不死锁 + 引擎失败后 retry 被接受两条回归钉。
+- **Pi 项目级模板的裸 `skills/` 路径（P1-4）**: `AGENTS.md.project.j2`
+  与 `prompts/vibe-route.md.j2` 让 agent 读 `skills/<matched-skill>/
+  SKILL.md` 与 `docs/routing-protocol.md`——生成树里这些路径不存在
+  （真实位置在 `.pi/` 下），agent 按指面读必空手。补前缀对齐全局模板
+  的既有写法；新增三面 `.pi/` 前缀 isomorphism 回归钉。
+- **RegistrySync intent 守卫改 backfill-only（P1-5）**: 旧逻辑
+  `new_intent != old_intent` 即覆写——SKILL.md frontmatter 的单词
+  intent 会把 registry 里精修的整句意图拍平（全表重写还会翻转路由
+  基线指纹）。改为仅在 registry intent 为空时回填；新增真实
+  `core/registry.yaml` pin 测试（sync 必须 `updated == []`）。
 - **slash-* CLI 包装技能整族排除出 Levenshtein 模糊层**: slash-analyze
   经 "gstack"~"stack" token 相似度（0.83）窃取 `gstack/review` 查询
   （management gate 对 ≤2 词短查询整表放行，fuzzy 兜底命中其

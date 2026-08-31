@@ -49,7 +49,11 @@ class RegistrySync:
                 existing = existing_by_id[skill_id]
                 new_intent = meta.intent or meta.description or ""
                 old_intent = existing.get("intent", "")
-                if new_intent and new_intent != old_intent:
+                # Backfill-only: the registry's curated intent sentences are
+                # richer than one-word SKILL.md frontmatter values — never
+                # let a sync flatten them (a full-registry rewrite would also
+                # flip the routing-baseline fingerprint).
+                if new_intent and not old_intent:
                     existing["intent"] = new_intent
                     updated.append(skill_id)
                 else:

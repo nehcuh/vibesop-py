@@ -129,10 +129,13 @@ class TestSync:
         assert "new-skill" in report["added"]
         assert report["total"] == 1
 
-    def test_sync_updates_changed_intent(self, tmp_path: Path):
+    def test_sync_preserves_curated_intent(self, tmp_path: Path):
+        """P1-5 (20260831 review): a curated registry intent sentence must
+        never be flattened by a one-word frontmatter value."""
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n    intent: old intent\n",
+            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n"
+            "    intent: 精修的整句意图描述\n",
             encoding="utf-8",
         )
 
@@ -142,7 +145,33 @@ class TestSync:
 
         mock_meta = MagicMock()
         mock_meta.id = "existing"
-        mock_meta.intent = "new intent"
+        mock_meta.intent = "learning"
+        mock_meta.description = ""
+
+        sync = RegistrySync(registry_path=registry_file, skills_dir=tmp_path / "skills")
+        with patch("vibesop.core.skills.registry_sync.parse_skill_md", return_value=mock_meta):
+            report = sync.sync()
+
+        assert "existing" in report["unchanged"]
+        assert "existing" not in report["updated"]
+        with registry_file.open("r", encoding="utf-8") as f:
+            assert "精修的整句意图描述" in f.read()
+
+    def test_sync_backfills_empty_intent(self, tmp_path: Path):
+        registry_file = tmp_path / "registry.yaml"
+        registry_file.write_text(
+            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n"
+            "    intent: ''\n",
+            encoding="utf-8",
+        )
+
+        skill_dir = tmp_path / "skills" / "existing"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Existing\n", encoding="utf-8")
+
+        mock_meta = MagicMock()
+        mock_meta.id = "existing"
+        mock_meta.intent = "backfilled intent"
         mock_meta.description = ""
 
         sync = RegistrySync(registry_path=registry_file, skills_dir=tmp_path / "skills")
@@ -150,6 +179,31 @@ class TestSync:
             report = sync.sync()
 
         assert "existing" in report["updated"]
+
+    def test_sync_leaves_committed_registry_intents_untouched(self, tmp_path: Path):
+        """Pin against the real committed registry: a sync run must report
+        zero intent updates (all 18 builtins carry curated sentences; a
+        full-registry rewrite would also flip the routing-baseline
+        fingerprint)."""
+        import shutil
+
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+        repo_root = Path(__file__).resolve().parents[3]
+        src = repo_root / "core" / "registry.yaml"
+        dst = tmp_path / "registry.yaml"
+        shutil.copy(src, dst)
+
+        before = dst.read_text(encoding="utf-8")
+        sync = RegistrySync(registry_path=dst, skills_dir=resolve_builtin_skills_dir())
+        report = sync.sync()
+
+        assert report["updated"] == []
+        assert report["added"] == []
+        after = dst.read_text(encoding="utf-8")
+        for line in before.splitlines():
+            if line.strip().startswith("intent:"):
+                assert line in after, f"intent line drifted: {line}"
 
     def test_sync_preserves_non_builtin(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
