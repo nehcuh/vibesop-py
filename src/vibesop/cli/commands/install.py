@@ -41,6 +41,7 @@ from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms
 from vibesop.constants import DEFAULT_AUTO_INSTALL_PACKS, TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
 from vibesop.core.skills.trust import TrustStore
+from vibesop.installer.omx_cli import ensure_omx_cli, is_omx_pack
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
@@ -209,6 +210,11 @@ def _auto_install(
         info = supported.get(name, {})
         if scope == "global" and info.get("installed") and not force:
             console.print(f"[dim]⊘ {name}: already installed, skipping[/dim]")
+            # PackInstaller is never entered on this path; still ensure omx CLI.
+            if is_omx_pack(name, None):
+                cli = ensure_omx_cli()
+                style = "green" if cli.status in ("present", "installed") else "yellow"
+                console.print(f"[{style}]{cli.detail}[/{style}]\n")
             results[name] = "skipped"
             continue
 
@@ -315,6 +321,10 @@ def _install_pack(
                     f"[yellow]⚠ {pack_name} is already installed[/yellow]\n"
                     "[dim]Use --force to reinstall[/dim]\n"
                 )
+            if is_omx_pack(pack_name, pack_url):
+                cli = ensure_omx_cli()
+                style = "green" if cli.status in ("present", "installed") else "yellow"
+                console.print(f"[{style}]{cli.detail}[/{style}]\n")
             return "skipped"
 
     from vibesop.core.exceptions import PackIntegrityError

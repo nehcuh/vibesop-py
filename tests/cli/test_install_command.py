@@ -134,11 +134,15 @@ class TestInstallCommand:
             "omx", None, platforms=["claude-code"], upgrade=False, scope="global"
         )
 
+    @patch("vibesop.cli.commands.install.ensure_omx_cli")
     @patch("vibesop.cli.commands.install.PackInstaller")
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
     def test_install_auto_skips_installed(
-        self, mock_loader_cls: Any, mock_installer_cls: Any
+        self, mock_loader_cls: Any, mock_installer_cls: Any, mock_cli: Any
     ) -> None:
+        from vibesop.installer.omx_cli import OmxCliResult
+
+        mock_cli.return_value = OmxCliResult("present", "omx CLI already on PATH", "/bin/omx")
         mock_installer = MagicMock()
         mock_installer_cls.return_value = mock_installer
 
@@ -155,6 +159,45 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "already installed, skipping" in result.output
         mock_installer.install_pack.assert_not_called()
+        mock_cli.assert_called_once()
+
+    @patch("vibesop.cli.commands.install.ensure_omx_cli")
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_omx_already_installed_still_ensures_cli(
+        self, mock_loader_cls: Any, mock_installer_cls: Any, mock_cli: Any
+    ) -> None:
+        from vibesop.installer.omx_cli import OmxCliResult
+
+        mock_cli.return_value = OmxCliResult(
+            "installed", "omx CLI installed (/usr/bin/omx)", "/usr/bin/omx"
+        )
+        mock_installer_cls.return_value = MagicMock()
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {"omx": {"installed": True}}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "omx"])
+        assert result.exit_code == 0
+        assert "already installed" in result.output
+        mock_installer_cls.return_value.install_pack.assert_not_called()
+        mock_cli.assert_called_once()
+        assert "omx CLI installed" in result.output
+
+    @patch("vibesop.cli.commands.install.ensure_omx_cli")
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_already_installed_non_omx_does_not_ensure_cli(
+        self, mock_loader_cls: Any, mock_installer_cls: Any, mock_cli: Any
+    ) -> None:
+        mock_installer_cls.return_value = MagicMock()
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {"superpowers": {"installed": True}}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "superpowers"])
+        assert result.exit_code == 0
+        mock_cli.assert_not_called()
 
     def test_install_no_args(self) -> None:
         result = runner.invoke(app, ["install"])
