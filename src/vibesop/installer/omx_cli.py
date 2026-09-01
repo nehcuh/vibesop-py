@@ -72,6 +72,8 @@ def ensure_omx_cli(*, timeout_s: float = OMX_CLI_TIMEOUT_S) -> OmxCliResult:
             [npm, "install", "-g", OMX_NPM_PACKAGE],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout_s,
             check=False,
         )
@@ -81,6 +83,16 @@ def ensure_omx_cli(*, timeout_s: float = OMX_CLI_TIMEOUT_S) -> OmxCliResult:
             f"omx CLI install timed out after {int(timeout_s)}s. Install manually: {_MANUAL}",
         )
     except OSError as exc:
+        return OmxCliResult(
+            "failed",
+            f"omx CLI install failed ({exc}). Install manually: {_MANUAL}",
+        )
+    except KeyboardInterrupt:
+        return OmxCliResult(
+            "failed",
+            f"omx CLI install interrupted. Install manually: {_MANUAL}",
+        )
+    except Exception as exc:
         return OmxCliResult(
             "failed",
             f"omx CLI install failed ({exc}). Install manually: {_MANUAL}",
