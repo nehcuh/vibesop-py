@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OMX CLI companion on pack install**: `vibe install omx` (and `--auto` / already-installed skip) best-effort runs `npm install -g oh-my-codex` so skill bodies that call `omx state` have a binary. Missing Node/npm or npm failure warns and still exits 0. `vibe quickstart` asks `Install OMX (oh-my-codex skills + CLI)?` default No; `--force` does not. Does not run `omx setup`.
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
   `PlanCommand` / `PlanCommandHandler` / `PlanCommandResult` /
   `PlanCommandStatus` / `PlanCommandType` 与 `PlanEvent` / `PlanEventLog` /

@@ -660,6 +660,8 @@ Agent 10: 修复 bug #132 (文档更新)
 
 ```bash
 # 安装 OMX 技能包（外部技能，需先安装）
+# 同时 best-effort 安装 oh-my-codex CLI（`omx state` / `omx doctor`）。
+# 没有 Node/npm 时技能包仍成功，并打印手工命令：npm install -g oh-my-codex
 vibe install omx
 
 # 同步所有技能（包括已安装的 OMX）到 Claude Code
@@ -668,6 +670,8 @@ vibe skills sync claude-code
 # 查看已同步的技能
 vibe skills list
 ```
+
+`vibe install omx` **does not** run `omx setup` (that writes Codex `AGENTS.md` / `~/.codex`). Use `omx setup` yourself only if you want the Codex runtime.
 
 ### 方法 2: 构建部署
 
