@@ -322,6 +322,13 @@ class QuickstartRunner:
             success, msg = installer.install_pack(integration)
             if success:
                 console.print(f"[green]✓[/green] {integration} installed")
+                for line in msg.splitlines():
+                    if "omx CLI" not in line:
+                        continue
+                    if "skipped" in line or "failed" in line:
+                        console.print(f"[yellow]{line}[/yellow]")
+                    else:
+                        console.print(f"[dim]{line}[/dim]")
             else:
                 console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {msg}")
         except Exception as e:

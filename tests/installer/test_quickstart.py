@@ -170,6 +170,7 @@ class TestQuickstartRunner:
         assert result["config"] is not None
         assert result["config"].platform == "grok-build"
         assert result["success"] is False
+        assert result["config"].install_omx is False
 
     def test_show_next_steps_project(self) -> None:
         """Test _show_next_steps for project install."""
@@ -193,6 +194,7 @@ class TestQuickstartRunner:
             result = runner.run(project_path=tmp_path)
         assert result["success"] is False
         assert result["config"] is not None
+        assert result["config"].install_omx is False
 
     def test_run_omx_yes_sets_config(self, tmp_path: Path) -> None:
         runner = QuickstartRunner()
@@ -333,6 +335,19 @@ class TestQuickstartRunner:
             idx_cls.return_value = idx
             assert runner._execute_installation(config) is True
         mock_omx.assert_not_called()
+
+    def test_install_integration_prints_omx_cli_line(self, capsys) -> None:
+        runner = QuickstartRunner()
+        with patch("vibesop.installer.pack_installer.PackInstaller") as pack_cls:
+            pack_cls.return_value.install_pack.return_value = (
+                True,
+                "Installed omx\nomx CLI skipped (npm not found). "
+                "Install Node, then: npm install -g oh-my-codex",
+            )
+            runner._install_integration("omx", "opencode")
+        out = capsys.readouterr().out
+        assert "omx CLI skipped (npm not found)" in out
+        assert "omx installed" in out
 
 
 class TestRouteDemo:
@@ -544,6 +559,7 @@ class TestForceMode:
                 "vibesop.core.skills.indexer.SkillIndexer",
                 return_value=mock_indexer,
             ),
+            patch.object(runner, "_install_integration") as mock_omx,
             patch.object(QuickstartRunner, "_run_route_demo"),
         ):
             result = runner.run(project_path=tmp_path, force=True)
@@ -555,6 +571,7 @@ class TestForceMode:
         assert config.install_integrations is False
         assert config.install_hooks is True
         assert config.install_omx is False
+        mock_omx.assert_not_called()
 
     def test_force_rejects_unknown_platform(self, tmp_path: Path) -> None:
         runner = QuickstartRunner()
