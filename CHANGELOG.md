@@ -59,13 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **编排控制面 CHANGELOG/测试与 8.1.2 C1 对齐（pull-20260901 评审）**:
-  Unreleased 的 P1-3 条不再把「事件移到锁外批量 append」写成当前机制
-  （该发射路径已被 [8.1.2] C1 取代：锁内发射 + RLock + `_emitting`）；
-  发射失败 rollback 的「重新受理」改为「幂等键未楔死，重发走步骤状态门」；
-  A→B→A 传递性钉改打叶子步骤，避免无护栏时先撞依赖门造成假绿；
-  拒绝路径钉 `_plans` 无幽灵键；`latest_seq` / `replay` / `drop_plan`
-  文档补 drop 窗口语义；新增两线程发射期锁持有确定性钉。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实
@@ -251,6 +244,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings.json — user commands such as PowerShell hooks no longer fail
   verification. Non-win32 hosts additionally surface Windows-form vibesop
   commands (drive-letter paths) that previously passed silently.
+
+## [8.1.3] — 2026-09-01
+
+### Fixed
+
+- **编排控制面 CHANGELOG/测试与 8.1.2 C1 对齐（pull-20260901 评审）**:
+  Unreleased 的 P1-3 条不再把「事件移到锁外批量 append」写成当前机制
+  （该发射路径已被 [8.1.2] C1 取代：锁内发射 + RLock + `_emitting`）；
+  发射失败 rollback 的「重新受理」改为「幂等键未楔死，重发走步骤状态门」；
+  A→B→A 传递性钉改打叶子步骤，避免无护栏时先撞依赖门造成假绿；
+  拒绝路径钉 `_plans` 无幽灵键；`latest_seq` / `replay` / `drop_plan`
+  文档补 drop 窗口语义；新增两线程发射期锁持有确定性钉。kimi+claude
+  修复复审 PASS_WITH_NITS。
+- **8.1.2 文档扫荡漏网的当前版本串**: INDEX 指标表、QUICKSTART 页脚、
+  three-layers 页脚、EXTERNAL_SKILLS_GUIDE 概述、knowledge overview 仍写
+  8.1.0。
 
 ## [8.1.2] — 2026-08-31
 

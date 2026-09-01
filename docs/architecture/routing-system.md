@@ -1,6 +1,6 @@
 # Routing System Architecture
 
-> **Version**: 8.1.2
+> **Version**: 8.1.3
 > **Last Updated**: 2026-07-02
 
 ## Overview

@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.1.2
+> **Version**: 8.1.3
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -168,7 +168,7 @@ These files remain in the project root for discoverability and tool integration:
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 8.1.2 |
+| **Version** | 8.1.3 |
 | **Tests** | 4,066+ pytest passing |
 | **Coverage** | ~73% (target: 75%) |
 | **Skills Supported** | 18 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |

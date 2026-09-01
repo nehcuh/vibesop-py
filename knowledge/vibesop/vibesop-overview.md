@@ -14,7 +14,7 @@ tags:
 
 VibeSOP 是一个 **AI SkillOS（技能操作系统）**——面向 AI 编程 Agent（Claude Code、Grok Build、Kimi CLI、Pi、Cursor、OpenCode 等）的技能路由、编排与全生命周期管理系统。一句话：**管理技能的发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰全链路**。
 
-PyPI 包名 `vibesop`，当前版本 8.1.2，MIT 协议，Python 3.12+。
+PyPI 包名 `vibesop`，当前版本 8.1.3，MIT 协议，Python 3.12+。
 
 ## 解决什么问题
 
