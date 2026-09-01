@@ -560,5 +560,5 @@ python -m pytest tests/architecture/test_boundaries.py -v
 ---
 
 **更新时间**: 2026-07-21
-**版本**: 8.1.0
+**版本**: 8.1.2
 **状态**: ✅ 架构文档化完成

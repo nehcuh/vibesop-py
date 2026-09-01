@@ -365,5 +365,5 @@ vibe skills --help    # skills 命令帮助
 
 **祝你使用愉快！Happy using!**
 
-**版本 Version**: 8.1.0
+**版本 Version**: 8.1.2
 **更新时间 Last Updated**: 2026-06-05
