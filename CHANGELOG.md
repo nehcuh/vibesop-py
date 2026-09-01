@@ -59,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **编排控制面 CHANGELOG/测试与 8.1.2 C1 对齐（pull-20260901 评审）**:
+  Unreleased 的 P1-3 条不再把「事件移到锁外批量 append」写成当前机制
+  （该发射路径已被 [8.1.2] C1 取代：锁内发射 + RLock + `_emitting`）；
+  发射失败 rollback 的「重新受理」改为「幂等键未楔死，重发走步骤状态门」；
+  A→B→A 传递性钉改打叶子步骤，避免无护栏时先撞依赖门造成假绿；
+  拒绝路径钉 `_plans` 无幽灵键；`latest_seq` / `replay` / `drop_plan`
+  文档补 drop 窗口语义；新增两线程发射期锁持有确定性钉。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实
@@ -83,13 +90,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PROMPT_CHAIN 与 squad 成功路径保持 COMPLETED（有意为之，代码内注释）。
   `vibe plan list` 图标表补齐 failed/partial/terminated_early。
 - **`PlanCommandHandler.apply()` 锁内同步发事件的死锁面（P1-3）+ 终态
-  plan 误拒（FC2）**: `PlanEventLog.append` 同步调用订阅者——订阅者
-  回调里再发命令（面板订阅事件→自动干预的合法形态）会在持有 handler
-  锁时重入 `apply()` 造成死锁；同时旧的 plan 终态拒绝门把"运行后失败
-  干预"（引擎同步跑完、面板事后 retry/skip 的唯一形态）一律
-  REJECTED_INVALID_STATE。修复：校验与状态变更留在锁内，事件移到锁外
-  批量 append；删除 plan 终态门（步骤状态门才是合法性权威，docstring
-  写明语义）；新增重入订阅者不死锁 + 引擎失败后 retry 被接受两条回归钉。
+  plan 误拒（FC2）** *(发射路径已被下方 [8.1.2] C1 条目取代)*:
+  `PlanEventLog.append` 同步调用订阅者——订阅者回调里再发命令（面板
+  订阅事件→自动干预的合法形态）会在持有 handler 锁时重入 `apply()`
+  造成死锁；同时旧的 plan 终态拒绝门把"运行后失败干预"（引擎同步跑完、
+  面板事后 retry/skip 的唯一形态）一律 REJECTED_INVALID_STATE。修复：
+  删除 plan 终态门（步骤状态门才是合法性权威，docstring 写明语义）；
+  新增引擎失败后 retry 被接受回归钉。S54 曾把事件移到锁外批量 append
+  以避免该死锁；**该发射路径已被 [8.1.2] C1 推翻**——发射改回锁内，
+  死锁面改由 RLock + `_emitting` 护栏解决，重入测试改为断言发射期拒绝
+  而非成功受理。详见 [8.1.2] 首条。
 - **Pi 项目级模板的裸 `skills/` 路径（P1-4）**: `AGENTS.md.project.j2`
   与 `prompts/vibe-route.md.j2` 让 agent 读 `skills/<matched-skill>/
   SKILL.md` 与 `docs/routing-protocol.md`——生成树里这些路径不存在
@@ -287,8 +297,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   发射期对同一 plan 抛 `RuntimeError`（订阅者内由 `PlanEventLog.append`
   记录并吞没，回调返回后可正常调用）。发射中途 append 级异常此前会把
   幂等键永久楔死（簿记已提交、事件未落盘、重发被判 duplicate）；现在
-  异常路径回滚簿记（processed/in_flight/索引），命令可在发射端恢复后
-  重新受理。另修复 `apply()` 拒绝路径的 `setdefault` 副作用（未知 plan
+  异常路径回滚簿记（processed/in_flight/索引），幂等键不再被楔死，
+  重发走步骤状态门（通常因 mutation 已应用而被拒）。另修复 `apply()`
+  拒绝路径的 `setdefault` 副作用（未知 plan
   的纯拒绝不再留下空簿记条目，"拒绝无副作用"声明恢复严格成立）。
   同轮还发现全局 in-flight 索引缺口：同一 `command_id` 在 plan A 在飞
   时可被 plan B 重复受理，索引被覆盖导致 A 的 in-flight 槽永久楔死——
@@ -298,7 +309,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   docstring 补发射失败语义（簿记回滚但变更保留、已落盘事件不回收，
   回放视图可能短暂落后一条 transition）。新增五条回归钉：发射期
   complete/drop 抛错、发射异常后幂等键可重发、A→B→A 传递性重入防护
-  （重入命令选用无护栏时必被受理的形态，杜绝假绿）、跨 plan
+  （重入打叶子步骤，无护栏时必被 ACCEPTED，杜绝假绿）、跨 plan
   command_id 冲突拒绝。
 - **文档/措辞与实现对齐（同轮复审 NIT 批）**：`_seq_floors` 注释的
   "bounded tombstone" 改为如实表述（per-plan-id 墓碑、随不同 plan_id

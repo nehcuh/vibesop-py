@@ -256,6 +256,15 @@ class PlanEventLog:
         ``needs_snapshot=True`` with the current snapshot instead of deltas;
         when no plan reference is registered, returns ``history_lost=True``
         instead (neither deltas nor a snapshot can be produced).
+
+        A dropped plan (no live state — ``drop_plan`` already ran) returns
+        an empty ``ReplayResult`` with no flags, indistinguishable from
+        "caught up" or "never existed". That is distinct from a *live* log
+        whose plan reference was never registered: a stale cursor there
+        sets ``history_lost=True`` because no snapshot can be built. Keep
+        a pre-drop cursor; after rebuild, seqs continue from the floor and
+        ``replay(cursor)`` returns the new deltas. Do not treat
+        ``latest_seq() == 0`` after drop as a cursor reset.
         """
         with self._lock:
             state = self._logs.get(plan_id)
@@ -329,7 +338,12 @@ class PlanEventLog:
                 state.subscribers.remove(callback)
 
     def latest_seq(self, plan_id: str) -> int:
-        """Return the latest allocated seq for a plan (0 when none)."""
+        """Return the latest allocated seq for a live plan.
+
+        ``0`` means the plan is unknown *or has been dropped* — the seq
+        floor is private (see ``drop_plan``). Do not treat 0 as "no seq
+        was ever allocated".
+        """
         with self._lock:
             state = self._logs.get(plan_id)
             return state.next_seq - 1 if state is not None else 0
@@ -342,6 +356,14 @@ class PlanEventLog:
         finishes. Integrators should call this once a plan reaches a
         terminal state and all consumers have resynced. Unknown plan_ids
         are silently ignored.
+
+        Do not call this from a ``PlanCommandHandler`` subscriber callback
+        while that handler is emitting the plan — the log has no emission
+        guard (the handler twin raises ``RuntimeError``). Order: wait for
+        the callback to return, then ``handler.drop_plan``, then this
+        method. Calling this mid-flush drops already-appended events of
+        the in-flight command from the ring (``replay(0)`` may report
+        ``history_lost`` even though the handler returned those events).
 
         The plan's last allocated seq is kept as a private floor so a later
         rebuild — e.g. a post-terminal command re-registering the plan,

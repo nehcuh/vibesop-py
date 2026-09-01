@@ -104,7 +104,7 @@ class _PlanCommandState:
     __slots__ = ("in_flight", "processed")
 
     def __init__(self) -> None:
-        self.processed: set[str] = set()  # command_ids already applied or rejected
+        self.processed: set[str] = set()  # accepted command_ids (idempotency keys)
         self.in_flight: dict[str, str] = {}  # step_id -> command_id (accepted, not completed)
 
 
@@ -183,7 +183,9 @@ class PlanCommandHandler:
         Rejection order: duplicate command_id → in-flight command_id on
         another plan → in-flight command on the same step → mid-emission
         re-entry on the same plan → state validity → dependency check
-        (skip only). Rejections produce no side effects and emit no events.
+        (skip only). Rejections produce no *command-bookkeeping* side
+        effects and emit no events (a known plan is still registered with
+        the event log for snapshots).
 
         The plan being terminal is NOT a rejection: the engine runs
         synchronously, so failure intervention (retry a failed step, skip a
@@ -316,6 +318,8 @@ class PlanCommandHandler:
                     if state.in_flight.get(command.step_id) == command.command_id:
                         del state.in_flight[command.step_id]
                     self._command_plan.pop(command.command_id, None)
+                    if not state.processed and not state.in_flight:
+                        self._plans.pop(command.plan_id, None)
                     raise
                 finally:
                     self._emitting.discard(command.plan_id)
@@ -363,8 +367,11 @@ class PlanCommandHandler:
 
         Clears processed idempotency keys, in-flight entries, and the
         command_id index for the plan. Integrators should call this together
-        with ``PlanEventLog.drop_plan`` once a plan is terminal. Unknown
-        plan_ids are silently ignored.
+        with ``PlanEventLog.drop_plan`` once a plan is terminal — this
+        method first, then the log (the log has no emission-window guard).
+        Do not call ``PlanEventLog.drop_plan`` from a subscriber callback
+        while this handler is emitting the plan. Unknown plan_ids are
+        silently ignored.
 
         Raises:
             RuntimeError: when re-entered from a subscriber callback while
@@ -403,7 +410,7 @@ class PlanCommandHandler:
         residue leaks into the next attempt's context.
         ``cascade`` is meaningless for retry and ignored.
         """
-        if step.status is not StepStatus.FAILED:
+        if step.status != StepStatus.FAILED:
             return PlanCommandResult(
                 command_id=command.command_id,
                 status=PlanCommandStatus.REJECTED_INVALID_STATE,

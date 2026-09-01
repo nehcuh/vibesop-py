@@ -144,6 +144,8 @@ def test_rejected_command_does_not_consume_idempotency_key() -> None:
 
     rejected = handler.apply(_cmd("c-1"))
     assert rejected.status == PlanCommandStatus.REJECTED_INVALID_STATE
+    assert plan.plan_id not in handler._plans
+    assert "c-1" not in handler._command_plan
 
     _fail_step(plan, "s1")
     retried = handler.apply(_cmd("c-1"))
@@ -203,9 +205,13 @@ def test_unknown_plan_or_step_rejected() -> None:
     no_plan = handler.apply(_cmd("c-1", plan_id="nope"))
     assert no_plan.status == PlanCommandStatus.REJECTED_INVALID_STATE
     assert "not found" in (no_plan.reason or "")
+    assert "nope" not in handler._plans
+    assert "c-1" not in handler._command_plan
 
     no_step = handler.apply(_cmd("c-2", step_id="nope"))
     assert no_step.status == PlanCommandStatus.REJECTED_INVALID_STATE
+    assert plan.plan_id not in handler._plans
+    assert "c-2" not in handler._command_plan
 
 
 # --- SKIP_STEP ---
@@ -637,6 +643,8 @@ def test_emission_failure_rolls_back_bookkeeping() -> None:
     assert "requires a failed step" in second.reason
     # The in-flight slot was rolled back too.
     assert handler.complete_command("c-1") is False
+    # First-command rollback must not leave an empty _plans tombstone.
+    assert plan.plan_id not in handler._plans
 
 
 def test_transitive_reentry_guard_covers_a_to_b_to_a() -> None:
@@ -657,12 +665,13 @@ def test_transitive_reentry_guard_covers_a_to_b_to_a() -> None:
 
     def b_subscriber(event):
         # B's own emission: re-entering for A must still be guarded. Target
-        # A's pending s2 with a skip — it clears every earlier gate (no
-        # in-flight entry on s2), so without the _emitting guard this
-        # command would be ACCEPTED and this test would go red.
+        # A's pending leaf s3 with a skip — s3 has no dependents, so it
+        # clears every earlier gate (no in-flight entry, no dependency
+        # block). Without the _emitting guard this command would be
+        # ACCEPTED and this test would go red.
         reentry_a_status.append(
             handler.apply(
-                _cmd("c-a2", plan_id="plan-a", type=PlanCommandType.SKIP_STEP, step_id="s2")
+                _cmd("c-a2", plan_id="plan-a", type=PlanCommandType.SKIP_STEP, step_id="s3")
             ).status
         )
 
@@ -677,11 +686,13 @@ def test_transitive_reentry_guard_covers_a_to_b_to_a() -> None:
     outer = handler.apply(_cmd("c-a", plan_id="plan-a", step_id="s1"))
 
     assert outer.status == PlanCommandStatus.ACCEPTED
-    assert b_status == [PlanCommandStatus.ACCEPTED]
-    # B's accepted retry emits two events; every B-side callback re-entry
-    # for A is rejected while A's flush is still open.
+    # Assert re-entry first: if the guard is gone this is ACCEPTED (not
+    # DEPENDENCY_BLOCKED), which is the pin. The b_status check is second
+    # because an accepted re-entry can cascade extra A events and make
+    # a_subscriber fire again (duplicate c-b) before this function returns.
     assert reentry_a_status
     assert all(s == PlanCommandStatus.REJECTED_INVALID_STATE for s in reentry_a_status)
+    assert b_status == [PlanCommandStatus.ACCEPTED]
 
 
 def test_command_id_in_flight_on_other_plan_rejected() -> None:
@@ -936,3 +947,71 @@ def test_concurrent_retry_and_cascade_skip_replay_converges() -> None:
                 f"round {round_num}: replayed view for {step.step_id} is "
                 f"{last_status.get(step.step_id)!r}, plan says {step.status.value!r}"
             )
+
+
+def test_competing_thread_cannot_interleave_during_emission() -> None:
+    """Deterministic pin for C1's two-thread variant: emission stays inside
+    the handler lock, so a competing ``apply()`` started during the first
+    append cannot complete until the outer flush finishes.
+
+    If emission were moved back outside the lock while keeping ``_emitting``,
+    the competitor would acquire the lock in the gap, land its events, and
+    finish before the outer command's remaining appends — this test would
+    see the competitor finish mid-flush and fail.
+    """
+    import threading
+    import time
+
+    plan = _make_plan()
+    _fail_step(plan, "s1")
+    _fail_step(plan, "s3")
+    handler, log = _make_handler(plan)
+
+    original_append = log.append
+    competitor_started = threading.Event()
+    competitor_finished = threading.Event()
+    finished_mid_flush = False
+    competitor_events: list = []
+    thread_holder: list[threading.Thread] = []
+
+    def competing() -> None:
+        competitor_started.set()
+        result = handler.apply(_cmd("c-comp", type=PlanCommandType.SKIP_STEP, step_id="s3"))
+        competitor_events.extend(result.events)
+        competitor_finished.set()
+
+    append_count = 0
+
+    def wrapping_append(*args, **kwargs):
+        nonlocal append_count, finished_mid_flush
+        if append_count == 0:
+            thread = threading.Thread(target=competing)
+            thread_holder.append(thread)
+            thread.start()
+            assert competitor_started.wait(timeout=2)
+            # apply() finishes in well under 50ms when the lock is free.
+            time.sleep(0.05)
+            if competitor_finished.is_set():
+                finished_mid_flush = True
+        event = original_append(*args, **kwargs)
+        append_count += 1
+        return event
+
+    log.append = wrapping_append  # type: ignore[method-assign]
+    try:
+        outer = handler.apply(_cmd("c-outer"))
+    finally:
+        log.append = original_append  # type: ignore[method-assign]
+
+    assert thread_holder
+    thread_holder[0].join(timeout=5)
+    assert not thread_holder[0].is_alive(), "competing apply() deadlocked"
+
+    assert outer.status == PlanCommandStatus.ACCEPTED
+    assert not finished_mid_flush, (
+        "competing apply() completed during outer emission — handler lock "
+        "was not held across appends (C1 two-thread interleave is back)"
+    )
+    assert competitor_finished.is_set()
+    assert competitor_events
+    assert all(event.event_seq > outer.events[-1].event_seq for event in competitor_events)
