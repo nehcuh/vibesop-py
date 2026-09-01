@@ -14,6 +14,7 @@ from rich.prompt import Confirm
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage, write_copy_source_marker
 from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
+from vibesop.installer.omx_cli import ensure_omx_cli, is_omx_pack
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
 from vibesop.utils.helpers import safe_rmtree as _safe_rmtree
@@ -170,7 +171,7 @@ class PackInstaller:
                         )
                         if scope == "global":
                             self._rebuild_global_index(pack_name)
-                        return True, msg
+                        return True, self._with_omx_cli(pack_name, pack_url, msg)
 
             target_path.mkdir(parents=True, exist_ok=True)
 
@@ -264,12 +265,18 @@ class PackInstaller:
                 )
             except OSError as e:
                 logger.warning("Install succeeded but failed to write pack lock: %s", e)
-            return True, msg
+            return True, self._with_omx_cli(pack_name, pack_url, msg)
 
         except PackIntegrityError:
             raise  # F-02: propagate to the CLI (actionable, not a generic install error)
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
+
+    def _with_omx_cli(self, pack_name: str, pack_url: str | None, msg: str) -> str:
+        if not is_omx_pack(pack_name, pack_url):
+            return msg
+        result = ensure_omx_cli()
+        return f"{msg}\n{result.detail}"
 
     def _audit_skills(
         self,

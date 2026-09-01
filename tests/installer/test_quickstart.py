@@ -116,6 +116,12 @@ class TestQuickstartRunner:
             assert config.global_install is False
             assert config.install_integrations is False
 
+    def test_ask_install_type_global_omx_defaults_false(self) -> None:
+        runner = QuickstartRunner()
+        with patch.object(builtins, "input", return_value="1"):
+            config = runner._ask_install_type(Path("/tmp/project"))
+        assert config.install_omx is False
+
     def test_show_summary_does_not_raise(self) -> None:
         """Test _show_summary does not raise."""
         runner = QuickstartRunner()
@@ -158,12 +164,13 @@ class TestQuickstartRunner:
     def test_run_uses_provided_platform(self, tmp_path: Path) -> None:
         """Passing platform= skips the interactive platform prompt."""
         runner = QuickstartRunner()
-        # Global install type, then cancel at confirm — no platform prompt.
-        with patch.object(builtins, "input", side_effect=["1", "n"]):
+        # Global install type, OMX default No, then cancel at confirm — no platform prompt.
+        with patch.object(builtins, "input", side_effect=["1", "", "n"]):
             result = runner.run(project_path=tmp_path, platform="grok-build")
         assert result["config"] is not None
         assert result["config"].platform == "grok-build"
         assert result["success"] is False
+        assert result["config"].install_omx is False
 
     def test_show_next_steps_project(self) -> None:
         """Test _show_next_steps for project install."""
@@ -181,12 +188,22 @@ class TestQuickstartRunner:
         """Test run cancelled by user at confirmation step."""
         runner = QuickstartRunner()
         # Global install: integrations/hooks defaults are non-None, so only
-        # install type, platform, and confirm inputs are needed.
-        inputs = ["1", "1", "n"]
+        # install type, platform, OMX default No, and confirm inputs are needed.
+        inputs = ["1", "1", "", "n"]
         with patch.object(builtins, "input", side_effect=inputs):
             result = runner.run(project_path=tmp_path)
         assert result["success"] is False
         assert result["config"] is not None
+        assert result["config"].install_omx is False
+
+    def test_run_omx_yes_sets_config(self, tmp_path: Path) -> None:
+        runner = QuickstartRunner()
+        # type=global, platform=1, omx=y, proceed=n
+        with patch.object(builtins, "input", side_effect=["1", "1", "y", "n"]):
+            result = runner.run(project_path=tmp_path)
+        assert result["success"] is False
+        assert result["config"] is not None
+        assert result["config"].install_omx is True
 
     def test_execute_installation_global(self, tmp_path: Path) -> None:
         """Test _execute_installation for global install."""
@@ -258,6 +275,79 @@ class TestQuickstartRunner:
 
         assert success is True
         assert mock_installer.install.call_count == 1
+
+    def test_execute_installation_omx_yes_installs_omx_pack(self, tmp_path: Path) -> None:
+        runner = QuickstartRunner()
+        config = QuickstartConfig(
+            platform="opencode",
+            install_integrations=False,
+            install_hooks=False,
+            project_path=tmp_path,
+            global_install=True,
+            install_omx=True,
+        )
+        with (
+            patch("vibesop.installer.init_support._ensure_global_config"),
+            patch("vibesop.installer.quickstart_runner.VibeSOPInstaller") as inst_cls,
+            patch("vibesop.core.skills.indexer.SkillIndexer") as idx_cls,
+            patch.object(runner, "_install_integration") as mock_omx,
+            patch.object(runner, "_sync_platform_symlinks") as mock_sync,
+        ):
+            inst_cls.return_value.install.return_value = {
+                "success": True,
+                "hooks_installed": [],
+                "files_created": [],
+                "errors": [],
+            }
+            idx = MagicMock()
+            idx.global_index_path.exists.return_value = True
+            idx.build_index.return_value = MagicMock(success=True)
+            idx_cls.return_value = idx
+            assert runner._execute_installation(config) is True
+        mock_omx.assert_called_once_with("omx", "opencode")
+        mock_sync.assert_called()
+
+    def test_execute_installation_omx_no_skips_pack(self, tmp_path: Path) -> None:
+        runner = QuickstartRunner()
+        config = QuickstartConfig(
+            platform="opencode",
+            install_integrations=False,
+            install_hooks=False,
+            project_path=tmp_path,
+            global_install=True,
+            install_omx=False,
+        )
+        with (
+            patch("vibesop.installer.init_support._ensure_global_config"),
+            patch("vibesop.installer.quickstart_runner.VibeSOPInstaller") as inst_cls,
+            patch("vibesop.core.skills.indexer.SkillIndexer") as idx_cls,
+            patch.object(runner, "_install_integration") as mock_omx,
+        ):
+            inst_cls.return_value.install.return_value = {
+                "success": True,
+                "hooks_installed": [],
+                "files_created": [],
+                "errors": [],
+            }
+            idx = MagicMock()
+            idx.global_index_path.exists.return_value = True
+            idx.build_index.return_value = MagicMock(success=True)
+            idx_cls.return_value = idx
+            assert runner._execute_installation(config) is True
+        mock_omx.assert_not_called()
+
+    def test_install_integration_prints_omx_cli_line(self, capsys) -> None:
+        runner = QuickstartRunner()
+        with patch("vibesop.installer.pack_installer.PackInstaller") as pack_cls:
+            pack_cls.return_value.install_pack.return_value = (
+                True,
+                "Installed omx\nomx CLI skipped (npm not found). "
+                "Install Node, then: npm install -g oh-my-codex",
+            )
+            runner._install_integration("omx", "opencode")
+        out = capsys.readouterr().out
+        assert "omx CLI skipped (npm not found)" in out
+        assert "omx installed" in out
 
 
 class TestRouteDemo:
@@ -469,6 +559,7 @@ class TestForceMode:
                 "vibesop.core.skills.indexer.SkillIndexer",
                 return_value=mock_indexer,
             ),
+            patch.object(runner, "_install_integration") as mock_omx,
             patch.object(QuickstartRunner, "_run_route_demo"),
         ):
             result = runner.run(project_path=tmp_path, force=True)
@@ -479,6 +570,8 @@ class TestForceMode:
         assert config.platform == "claude-code"
         assert config.install_integrations is False
         assert config.install_hooks is True
+        assert config.install_omx is False
+        mock_omx.assert_not_called()
 
     def test_force_rejects_unknown_platform(self, tmp_path: Path) -> None:
         runner = QuickstartRunner()

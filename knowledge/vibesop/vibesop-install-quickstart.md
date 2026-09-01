@@ -41,6 +41,8 @@ vibe doctor
 vibe route "帮我获取茅台最近一年的股价"
 ```
 
+交互向导默认不装第三方包。可选一步 `Install OMX (oh-my-codex skills + CLI)?`（默认 No）；Yes 会装 omx 技能包并 best-effort 安装 `omx` CLI。`vibe quickstart --force` 跳过这一步。
+
 新用户也可以用 `vibe onboard` 走新手引导。
 
 ## LLM 配置（重要）

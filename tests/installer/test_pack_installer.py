@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from vibesop.installer.omx_cli import OmxCliResult
 from vibesop.installer.pack_installer import PackInstaller
 from vibesop.security.skill_auditor import PackAuditResult
 
@@ -262,6 +263,89 @@ class TestPackInstaller:
 
             assert success is True
             assert "Build:" not in msg
+
+
+class TestOmxCliCompanion:
+    """Successful omx installs must ensure the CLI; other packs must not."""
+
+    def test_omx_fresh_install_appends_cli_detail(self) -> None:
+        cli = OmxCliResult("installed", "omx CLI installed (/usr/bin/omx)", "/usr/bin/omx")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+            with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze.return_value = MagicMock(
+                    errors=[],
+                    skill_files=[Path("skills/autopilot/SKILL.md")],
+                )
+                mock_analyzer.git_clone.return_value = True
+                mock_cls.return_value = mock_analyzer
+                with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
+                    mock_plan = MagicMock()
+                    mock_plan.target_path = Path(tmpdir) / "omx"
+                    planner_cls.return_value.plan.return_value = mock_plan
+                    with patch(
+                        "vibesop.installer.pack_installer.ensure_omx_cli",
+                        return_value=cli,
+                    ) as mock_cli:
+                        success, msg = installer.install_pack(
+                            "omx", "https://github.com/Yeachan-Heo/oh-my-codex"
+                        )
+        assert success is True
+        mock_cli.assert_called_once()
+        assert "omx CLI installed (/usr/bin/omx)" in msg
+
+    def test_non_omx_pack_does_not_ensure_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+            with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze.return_value = MagicMock(
+                    errors=[],
+                    skill_files=[Path("skills/test/SKILL.md")],
+                )
+                mock_analyzer.git_clone.return_value = True
+                mock_cls.return_value = mock_analyzer
+                with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
+                    mock_plan = MagicMock()
+                    mock_plan.target_path = Path(tmpdir) / "test-pack"
+                    planner_cls.return_value.plan.return_value = mock_plan
+                    with patch("vibesop.installer.pack_installer.ensure_omx_cli") as mock_cli:
+                        success, _msg = installer.install_pack(
+                            "test-pack", "https://example.com/test-pack"
+                        )
+        assert success is True
+        mock_cli.assert_not_called()
+
+    def test_omx_already_installed_still_ensures_cli(self) -> None:
+        cli = OmxCliResult("present", "omx CLI already on PATH (/usr/bin/omx)", "/usr/bin/omx")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = Path(tmpdir) / "omx"
+            target.mkdir()
+            (target / "SKILL.md").write_text("# omx\n", encoding="utf-8")
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+            with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze.return_value = MagicMock(
+                    errors=[],
+                    skill_files=[target / "SKILL.md"],
+                )
+                mock_cls.return_value = mock_analyzer
+                with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
+                    mock_plan = MagicMock()
+                    mock_plan.target_path = target
+                    planner_cls.return_value.plan.return_value = mock_plan
+                    with patch(
+                        "vibesop.installer.pack_installer.ensure_omx_cli",
+                        return_value=cli,
+                    ) as mock_cli:
+                        success, msg = installer.install_pack(
+                            "omx", "https://github.com/Yeachan-Heo/oh-my-codex"
+                        )
+        assert success is True
+        mock_cli.assert_called_once()
+        assert "Already installed" in msg
+        assert "omx CLI already on PATH" in msg
 
 
 class TestSkillSymlinks:

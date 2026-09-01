@@ -20,6 +20,7 @@ class QuickstartConfig:
     install_hooks: bool | None
     project_path: Path
     global_install: bool
+    install_omx: bool = False
 
 
 class QuickstartRunner:
@@ -88,6 +89,7 @@ class QuickstartRunner:
                     install_hooks=True,
                     project_path=Path.home(),
                     global_install=True,
+                    install_omx=False,
                 )
                 result["config"] = config
             else:
@@ -117,6 +119,12 @@ class QuickstartRunner:
 
                 if config.install_hooks is None:
                     config.install_hooks = self._ask_yes_no("Install platform hooks?", default=True)
+                console.print()
+
+                config.install_omx = self._ask_yes_no(
+                    "Install OMX (oh-my-codex skills + CLI)?",
+                    default=False,
+                )
                 console.print()
 
                 self._show_summary(config)
@@ -165,6 +173,7 @@ class QuickstartRunner:
                 install_hooks=True,
                 project_path=Path.home(),
                 global_install=True,
+                install_omx=False,
             )
         return QuickstartConfig(
             platform="ask",
@@ -172,6 +181,7 @@ class QuickstartRunner:
             install_hooks=False,
             project_path=project_path,
             global_install=False,
+            install_omx=False,
         )
 
     def _ask_platform(self) -> str:
@@ -220,6 +230,7 @@ class QuickstartRunner:
         console.print(f"│ Type: {'Global' if config.global_install else 'Project':<20} │")
         console.print(f"│ Integrations: {'Yes' if config.install_integrations else 'No':<20} │")
         console.print(f"│ Hooks: {'Yes' if config.install_hooks else 'No':<20} │")
+        console.print(f"│ OMX: {'Yes' if config.install_omx else 'No':<20} │")
         console.print(f"│ Location: {config.project_path!s:<20} │")
         console.print("└──────────────────────────────────────────┘")
 
@@ -255,6 +266,10 @@ class QuickstartRunner:
                 self._sync_platform_symlinks(config.platform)
             else:
                 console.print("⊘ Integrations skipped")
+
+            if config.install_omx:
+                self._install_integration("omx", config.platform)
+                self._sync_platform_symlinks(config.platform)
 
             # installer.install() already deploys hooks (shell via HookInstaller,
             # JSON via the platform adapter). A second install() hits
@@ -307,6 +322,13 @@ class QuickstartRunner:
             success, msg = installer.install_pack(integration)
             if success:
                 console.print(f"[green]✓[/green] {integration} installed")
+                for line in msg.splitlines():
+                    if "omx CLI" not in line:
+                        continue
+                    if "skipped" in line or "failed" in line:
+                        console.print(f"[yellow]{line}[/yellow]")
+                    else:
+                        console.print(f"[dim]{line}[/dim]")
             else:
                 console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {msg}")
         except Exception as e:
