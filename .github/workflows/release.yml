@@ -50,7 +50,7 @@ jobs:
         # Generate SLSA build provenance for the dist artifacts (F-12). PyPI
         # package attestations (PEP 740) are emitted separately by the publish
         # action below via Trusted Publishing + id-token: write.
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
 
