@@ -1,6 +1,51 @@
 
 ## Current Session
 
+### S56b (2026-09-02) [vibesop-py] R8 独立命题人 TASK.md
+
+- R7 澄清：TASK.md 由编排者写，未跟实现技能，但按 R5 模板+技能形态出题 → 污染
+- R8：Kimi 只凭用户原话写 `TASK.kimi.md`（sha256 `eb074c27…`）；编排者只加 `ENV.md` 环境附录
+- 宿主 hook 对 kimi -p 注入了 fallback-llm 多意图编排（无真实 SKILL.md）— 记入污染
+- 双路 builder 已发射：`/Users/huchen/Projects/ab-quant-r8/{treatment,control}`，人评端口预定 8821/8822
+- Next: builder 完成后 E2E + 暴露端口
+- Recorded: no
+
+
+
+### S56 (2026-09-02) [vibesop-py] R7 A/B：rstdx → 量化框架（真实行情）
+
+- 用户否决喷气机案例过简单，要求从 `~/Projects/rstdx` 做完整量化系统双路对照
+- 预注册：`.omx/artifacts/ab-quant-r7-prereg.md`；用户当场改口：**禁止伪造 K 线**，必须 TDX/Tushare 真实行情
+- 实测：本机旧 Tushare token 失效；TDX HQ `180.153.18.170:7709` 可用。rstdx 源码 `query/api.rs` 私有模块无法编译（已本地一处 import 修复）；wheel 需按请求重连
+- 真实行情落盘：8 标的 × 799 日线（2023-05-19→2026-09-01），600000 2026-09-01 收 9.35
+- 三路对抗锁 treatment：DuckDB + FastAPI/Jinja/uPlot + 单进程事件队列 + 进程内 paper CTP；control 不给 CHOICES
+- 双路 builder 完成（T 1668s / C 1454s）；真 TDX 落盘 8×799 日线；8811/8812 已暴露
+- API 冒烟双臂全过（600000 2026-09-01 C=9.35）；Grok 深评 16.5 vs 17.0；Kimi 20 vs 15
+- T 技能消费有效（writing-plans/TDD/design）；C 有 PINNED_CLOSE；T 测试路径 lookahead
+- Next: 用户人评 D3；容器勿停
+- Recorded: no
+
+
+
+### S55 (2026-09-01) [vibesop-py] pull latest + 三路独立对抗评审
+
+- Pull: `1178176` → `5057a70` (ff-only, 2 commits, tag `v8.1.2`)
+  - `54ed9de` fix(orchestration): C1/C2 对抗评审修复 + 发射期重入护栏收口
+  - `5057a70` chore(release): bump version to 8.1.2
+- Routing: `fuck-my-shit-mountain` 82% 不适用（28 维全仓审计，会卡模式/语言/格式）；按既有 pull 三路对抗评审推进
+- Lanes: A=grok 正确性/并发 · B=claude 架构/契约（`--tools ""` 纯静态）· C=kimi 外部批判
+- 终裁: **NEEDS_FIX（软）— 0 P0 / 1 P1 / 7 P2**。生产合同三路守住；P1 = CHANGELOG Unreleased 仍教「事件移到锁外」（3/3 MAJOR）
+- 产物: `.omx/artifacts/pull-20260901-review-{instructions,lane-a,lane-b,lane-c,synthesis}.md`
+- Next: 清 Unreleased P1-3 矛盾（迁入 8.1.2 或标注取代）；P2 测试钉/措辞可顺手
+- 双路确认: claude CONFIRM-PASS · kimi CONFIRM-PASS（71 passed + FC2 探针重跑 DEPENDENCY_BLOCKED×2）
+- 终裁: **CONFIRM-PASS**；P1 定级 ACCEPT-P1；最小修法双路一致 **ANNOTATE-UNRELEASED**
+- 产物: `.omx/artifacts/pull-20260901-confirm-{instructions,claude,kimi,synthesis}.md`
+- 优化落地: P1-1 + P2-1/2/3/4/6/7 + NIT 批（P2-5 故意不绑）；4 文件 +142/−23
+- 修复复审: claude+kimi 均 PASS_WITH_NITS；吸收 Claude F1 docstring 澄清 + Kimi F1 断言顺序
+- 验证: 定向 72 passed；ruff check/format 绿
+- Next: 用户授权后再 commit
+- Recorded: no
+
 ### S54 (2026-08-30 21:00~22:40) [vibesop-py + cmspark] 侧边栏任务面板设计 → 跨项目方向纠正 → 编排事件契约 → 技能治理
 
 - **设计**:cmspark 侧边栏"任务拆解清单"需求 → 4 路独立对抗推演（UX/架构/批判/竞品）→ claude+grok 双路复审（均有条件通过，9 项必改：计数语义矛盾、SW 不能当真源、loop_back 无 replace 语义等）→ v1.1 方案 `docs/proposals/`（后移 archive）

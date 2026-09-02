@@ -60,6 +60,8 @@ VibeSOP 让你：
 - `superpowers/review` - 代码审查技能
 - `superpowers/tdd` - 测试驱动开发
 
+想先用大白话搞清「技能 / 路由 / 我们验证过什么」：读 **[给 AI 找对说明书](skill-routing-explained.md)**。
+
 ### 2. 路由 Routing
 
 **路由**就是根据你的意图，找到最合适的技能。

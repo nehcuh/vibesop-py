@@ -13,6 +13,8 @@ This page has been consolidated. Please use the main documentation index:
 
 For the project overview, see the root **[README.md](../README.md)**.
 
+对外技能路由叙事（实验发现、和同类差别、怎么用）：**[skill-routing-explained.md](skill-routing-explained.md)**。
+
 ---
 
 *This file is kept for backward compatibility. All documentation navigation should use INDEX.md or the root README.*

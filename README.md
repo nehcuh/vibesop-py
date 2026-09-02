@@ -68,6 +68,8 @@ orchestration → evaluation → retention/deprecation. Simple tasks are handled
 
 📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) (中文)
 
+🧭 **Skill routing in plain language** (experiments, vs similar tools, how to use): [docs/skill-routing-explained.md](docs/skill-routing-explained.md)
+
 🎯 **See real use cases**: [docs/USE_CASES.en.md](docs/USE_CASES.en.md) (English) | [docs/USE_CASES.md](docs/USE_CASES.md) (中文) — 12 concrete scenarios with pain → approach → commands → expected output
 
 ---

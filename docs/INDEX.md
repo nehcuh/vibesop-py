@@ -26,6 +26,7 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Getting Started
 
+- **[给 AI 找对说明书](skill-routing-explained.md)** — 技能路由科普（对照实验发现、和同类差别、怎么用和进化）。**对外叙事以这篇为准。**
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
   - 18 built-in skills + community packs explained (superpowers, gstack, omx)
   - 4-stage routing cascade详解
@@ -61,7 +62,7 @@ These files remain in the project root for discoverability and tool integration:
   - Component structure and data flow
 - **[Architecture Guide (overview)](architecture/overview.md)** — 架构导览与阅读路径
 - **[Three Layers](architecture/three-layers.md)** — 三层模型详解
-- **[Routing System](architecture/routing-system.md)** — 路由系统设计与决策机制
+- **[Routing System](architecture/routing-system.md)** — 路由系统设计与决策机制（实现稿；产品叙事见 [skill-routing-explained.md](skill-routing-explained.md)）
 - **[Skill Runtime Interface](architecture/skill-runtime-interface.md)** — SkillRuntime contract and lifecycle state machine
 - **[Workflow Engine](architecture/ARCHITECTURE.md#dynamic-workflow-engine-v60v62)** — Dynamic workflow engine: 6 patterns, platform compatibility, CLI flags
 - **[Cross-Platform Support](architecture/cross-platform-support.md)** — Windows / macOS / Linux 兼容设计
