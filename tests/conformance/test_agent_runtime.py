@@ -195,6 +195,57 @@ class TestAgentRuntimeHookResponse:
         assert "gstack/analyze" in resp
         assert "gstack/refactor" in resp
 
+    def test_notice_only_skips_active_skill_wrap(self):
+        from vibesop.security.runtime_scan import unsafe_replacement_notice
+
+        notice = unsafe_replacement_notice("evil-skill")
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="evil-skill",
+            confidence=0.9,
+            skill_content=notice,
+            notice_only=True,
+        )
+        data = json.loads(result.to_hook_response(hook_event_name="UserPromptSubmit"))
+        assert "VibeSOP routed" not in data["systemMessage"]
+        assert "NEXT STEP" not in data["systemMessage"]
+        assert "ACTIVE SKILL" not in data["systemMessage"]
+        ctx = data["hookSpecificOutput"]["additionalContext"]
+        assert "ACTIVE SKILL" not in ctx
+        assert "MUST follow" not in ctx
+        assert "SECURITY" in ctx
+
+    def test_notice_only_empty_content_does_not_route(self):
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="evil-skill",
+            confidence=0.9,
+            skill_content="",
+            notice_only=True,
+        )
+        data = json.loads(result.to_hook_response())
+        assert "VibeSOP routed" not in data["systemMessage"]
+        assert "NEXT STEP" not in data["systemMessage"]
+        assert "ACTIVE SKILL" not in data["systemMessage"]
+        assert "not injected" in data["systemMessage"]
+
+    def test_vibe_sop_notice_without_flag_still_skips_wrap(self):
+        from vibesop.security.runtime_scan import empty_content_notice
+
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="ghost",
+            confidence=0.8,
+            skill_content=empty_content_notice("ghost"),
+        )
+        data = json.loads(result.to_hook_response())
+        ctx = data["hookSpecificOutput"]["additionalContext"]
+        assert "ACTIVE SKILL" not in ctx
+        assert "MUST follow" not in ctx
+
 
 class TestAgentRuntimeHandleQuery:
     """AgentRuntime.handle_query() pipeline conformance."""

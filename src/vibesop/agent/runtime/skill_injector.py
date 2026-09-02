@@ -60,12 +60,30 @@ class InjectionResult:
         payload: The actual content or injection payload
         skill_id: Which skill was injected
         truncated: Whether content was truncated for length
+        content_missing: True when no SKILL.md body could be loaded
+        refused_unsafe: True when a body was found but the runtime scan refused it
     """
 
     method: InjectionMethod
     payload: str | dict[str, Any]
     skill_id: str = ""
     truncated: bool = False
+    content_missing: bool = False
+    refused_unsafe: bool = False
+
+    @property
+    def has_content(self) -> bool:
+        """False when the empty-content gate fired (match must not stand).
+
+        Keys on the structured flag, not on user-facing notice wording — a
+        reworded ``empty_content_notice`` must not silently disable demotion.
+        """
+        return not self.content_missing
+
+    @property
+    def notice_only(self) -> bool:
+        """True when payload is a VibeSOP notice, not a skill body."""
+        return self.content_missing or self.refused_unsafe
 
 
 class SkillInjector:
@@ -122,6 +140,7 @@ class SkillInjector:
                 method=InjectionMethod.TEXT,
                 payload=empty_content_notice(skill_id),
                 skill_id=skill_id,
+                content_missing=True,
             )
 
         # Runtime security gate: re-scan the loaded content before injecting.
@@ -141,6 +160,7 @@ class SkillInjector:
                 method=InjectionMethod.TEXT,
                 payload=unsafe_replacement_notice(skill_id),
                 skill_id=skill_id,
+                refused_unsafe=True,
             )
 
         truncated = False
@@ -207,7 +227,20 @@ class SkillInjector:
             )
 
     def _load_skill_content(self, skill_id: str) -> str:
-        """Load skill content from filesystem.
+        """Load skill content from filesystem."""
+        path = self._resolve_skill_md(skill_id)
+        if path is None:
+            return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
+        try:
+            return path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            # UnicodeDecodeError is not an OSError. A GBK/ANSI SKILL.md on
+            # Windows would otherwise bubble into handle_query's bare
+            # ``except Exception`` and leave skill_id set with empty content.
+            return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
+
+    def _resolve_skill_md(self, skill_id: str) -> Path | None:
+        """Return the on-disk SKILL.md for *skill_id*, or None.
 
         v7.3.5 fix (Round 4 P1): previously only checked 3 paths and missed
         the actual install locations for Claude Code (``~/.claude/skills/``)
@@ -221,106 +254,112 @@ class SkillInjector:
         1. ``core/skills/{skill_id}/SKILL.md`` — project-local builtin skills
         2. ``.vibe/skills/{skill_id}/SKILL.md`` — project-local promoted custom
            skills (W4/W5 promote materialization target; nested by skill_id)
+        2b. ``skills/{skill_id}/SKILL.md`` — SkillLoader default project root
+            (adapters also write here; discovered unless strict_search_paths)
         3. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
         4. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
         5. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
-        6. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
-        7. ``~/.vibe/skills/{skill_id}/SKILL.md`` — global-scope promoted custom
+        6. ``~/.kimi/skills/{...}/SKILL.md`` — Kimi home install (CandidateManager)
+        7. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
+        8. ``~/.config/opencode/skills/{...}/SKILL.md`` — OpenCode install
+        9. ``~/.vibe/skills/{skill_id}/SKILL.md`` — global-scope promoted custom
            skills (``skill promote --scope global`` target)
 
         For each path, lookup strategies are tried in order:
         - Exact nested id: ``{base}/{skill_id}/SKILL.md`` (namespaced ids only —
           the on-disk layout of promoted custom skills)
         - Exact flat id: ``{skill_id.replace('/', '-')}`` (e.g. ``gstack-review``)
+        - ``{id}.skill/`` layout: ``{base}/{flat_id}.skill/SKILL.md`` and
+          ``{base}/**/{leaf}.skill/SKILL.md`` (project cross-cutting packs)
         - Pack-prefix glob: ``*-{flat_id}`` (e.g. ``mattpocock-diagnosing-bugs``)
         - Nested glob: ``**/{flat_id}/SKILL.md`` in central storage only
           (e.g. ``mattpocock/engineering/diagnosing-bugs``)
         """
+        return self._find_skill_md_path(skill_id)
+
+    def _find_skill_md_path(self, skill_id: str) -> Path | None:
+        """Walk install layouts; return the first existing SKILL.md."""
         flat_id = skill_id.replace("/", "-")
         home = Path.home()
 
-        # Candidate base directories in priority order
         from vibesop.utils.bundled import resolve_builtin_skills_dir
 
+        # Keep this a superset of CandidateManager._build_search_paths so a
+        # discovered skill is injectable. Extra injector-only roots (pi,
+        # kimi-code, global .vibe) stay here for platform installs the
+        # router does not currently index.
         candidate_dirs: list[Path] = [
             resolve_builtin_skills_dir(self.project_root),
             self.project_root / ".vibe" / "skills",
+            self.project_root / "skills",
             home / ".claude" / "skills",
             home / ".pi" / "agent" / "skills",
             home / ".kimi-code" / "skills",
+            home / ".kimi" / "skills",
             home / ".config" / "skills",
+            home / ".config" / "opencode" / "skills",
             home / ".vibe" / "skills",
         ]
 
-        # Strategy 0 (builtin skills only): strip namespace prefix.
-        # On-disk layout is flat. Resolution is a single policy:
-        # resolve_builtin_skills_dir (identified checkout → wheel).
-        # External packs (gstack/yyy) are NOT stripped here.
+        def _if_file(path: Path) -> Path | None:
+            try:
+                if path.is_file():
+                    return path
+            except OSError:
+                return None
+            return None
+
         if "/" in skill_id:
             name_only = skill_id.split("/", 1)[1]
-            strip_bases: list[Path] = [resolve_builtin_skills_dir(self.project_root)]
-            for base in strip_bases:
-                direct = base / name_only / "SKILL.md"
-                if direct.exists():
-                    try:
-                        return direct.read_text(encoding="utf-8")
-                    except OSError:
-                        pass
+            hit = _if_file(resolve_builtin_skills_dir(self.project_root) / name_only / "SKILL.md")
+            if hit is not None:
+                return hit
 
         for base in candidate_dirs:
             if not base.exists():
                 continue
-
-            # Strategy 1 (namespaced ids only): exact nested layout — the
-            # promote flow materializes ``custom/<id>/SKILL.md`` verbatim
-            # under .vibe/skills (project) and ~/.vibe/skills (global).
-            # Without this the injector cannot load skills the router
-            # indexed from those dirs (cmspark ghost-route, 2026-08-25).
             if "/" in skill_id:
-                nested = base / skill_id / "SKILL.md"
-                if nested.exists():
-                    try:
-                        return nested.read_text(encoding="utf-8")
-                    except OSError:
-                        pass
-
-            # Strategy 2: exact flat id (handles "gstack/review" → "gstack-review")
-            direct = base / flat_id / "SKILL.md"
-            if direct.exists():
+                hit = _if_file(base / skill_id / "SKILL.md")
+                if hit is not None:
+                    return hit
+            hit = _if_file(base / flat_id / "SKILL.md")
+            if hit is not None:
+                return hit
+            hit = _if_file(base / f"{flat_id}.skill" / "SKILL.md")
+            if hit is not None:
+                return hit
+            if "/" in skill_id:
+                ns, rest = skill_id.split("/", 1)
+                hit = _if_file(base / ns / f"{rest}.skill" / "SKILL.md")
+                if hit is not None:
+                    return hit
+            leaf = skill_id.rsplit("/", 1)[-1]
+            try:
+                for match in base.glob(f"**/{leaf}.skill/SKILL.md"):
+                    hit = _if_file(match)
+                    if hit is not None:
+                        return hit
+            except OSError:
+                pass
+            if base != self.project_root / "core" / "skills":
                 try:
-                    return direct.read_text(encoding="utf-8")
+                    for candidate in base.glob(f"*-{flat_id}"):
+                        hit = _if_file(candidate / "SKILL.md")
+                        if hit is not None:
+                            return hit
                 except OSError:
                     pass
 
-            # Strategy 2: pack-prefix glob (handles skill_id="diagnose"
-            # resolving to "mattpocock-diagnose")
-            if base != self.project_root / "core" / "skills":
-                # Only glob user-install dirs (core/skills has no pack prefix)
-                try:
-                    for candidate in base.glob(f"*-{flat_id}"):
-                        skill_file = candidate / "SKILL.md"
-                        if skill_file.exists():
-                            try:
-                                return skill_file.read_text(encoding="utf-8")
-                            except OSError:
-                                continue
-                except (OSError, PermissionError):
-                    pass
-
-        # Strategy 3: nested layout in central storage (~/.config/skills/)
-        # handles "mattpocock/skills/engineering/diagnose/SKILL.md"
         central = home / ".config" / "skills"
         if central.exists():
             try:
                 for match in central.glob(f"**/{flat_id}/SKILL.md"):
-                    try:
-                        return match.read_text(encoding="utf-8")
-                    except OSError:
-                        continue
-            except (OSError, PermissionError):
+                    hit = _if_file(match)
+                    if hit is not None:
+                        return hit
+            except OSError:
                 pass
-
-        return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
+        return None
 
     def _is_content_safe(self, content: str) -> tuple[bool, str]:
         """Runtime security check of skill content before injection.
@@ -389,13 +428,21 @@ You MUST follow this skill's workflow. Do not skip steps.
         _truncated: bool,
     ) -> InjectionResult:
         """Build Kimi CLI instruction (AI must read skill file itself)."""
-        flat_id = skill_id.replace("/", "-")
-        instruction = (
-            f"请先读取 ~/.kimi-code/skills/{flat_id}/SKILL.md "
-            f"（或 .kimi-code/skills/{flat_id}/SKILL.md），"
-            f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
-            f"不得跳过任何步骤。"
-        )
+        resolved = self._resolve_skill_md(skill_id)
+        if resolved is not None:
+            instruction = (
+                f"请先读取 {resolved.as_posix()} ，"
+                f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
+                f"不得跳过任何步骤。"
+            )
+        else:
+            flat_id = skill_id.replace("/", "-")
+            instruction = (
+                f"请先读取 ~/.kimi-code/skills/{flat_id}/SKILL.md "
+                f"（或 .kimi-code/skills/{flat_id}/SKILL.md），"
+                f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
+                f"不得跳过任何步骤。"
+            )
         return InjectionResult(
             method=InjectionMethod.INSTRUCTION,
             payload=instruction,

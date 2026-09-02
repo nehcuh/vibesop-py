@@ -80,6 +80,9 @@ class AgentRuntimeResult:
     # Existing consumers of the property (instinct bridge, hook JSON)
     # are untouched.
     router_matched: bool = False
+    # True when skill_content is a VibeSOP empty/unsafe notice, not a
+    # skill body. Hook JSON must not wrap it as [ACTIVE SKILL] / MUST follow.
+    notice_only: bool = False
 
     @property
     def has_match(self) -> bool:
@@ -168,6 +171,21 @@ class AgentRuntimeResult:
                 response["hookSpecificOutput"] = ho
             return json.dumps(response, ensure_ascii=False)
 
+        # Notice-only (unsafe refusal, or a leftover empty notice): tell the
+        # host the body was not injected. Do NOT wrap [ACTIVE SKILL] / MUST
+        # follow, and do NOT emit NEXT STEP pointing at the refused file.
+        if self.notice_only:
+            notice = (self.skill_content or f"[VibeSOP] Skill '{self.skill_id}' was not injected.")[
+                :3000
+            ]
+            notice_resp: dict[str, Any] = {"systemMessage": notice}
+            if include_additional_context:
+                notice_ho: dict[str, Any] = {"additionalContext": notice}
+                if hook_event_name:
+                    notice_ho["hookEventName"] = hook_event_name
+                notice_resp["hookSpecificOutput"] = notice_ho
+            return json.dumps(notice_resp, ensure_ascii=False)
+
         # No match — fallback
         if not self.skill_id or self.skill_id == "fallback-llm":
             if no_match_message:
@@ -217,6 +235,15 @@ class AgentRuntimeResult:
                         break
         else:
             hint_path = f"skills/{self.skill_id}/SKILL.md"
+            vibe_skills = user_root / ".vibe" / "skills"
+            if vibe_skills.is_dir():
+                dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
+                if dotted:
+                    hint_path = dotted[0].resolve().as_posix()
+                else:
+                    direct = vibe_skills / self.skill_id / "SKILL.md"
+                    if direct.exists():
+                        hint_path = direct.resolve().as_posix()
 
         # Build alternatives message
         alt_msg = ""
@@ -246,7 +273,9 @@ class AgentRuntimeResult:
             # The claude-code/grok-build injectors already open with the
             # [ACTIVE SKILL] banner — wrapping again duplicated it (gate46
             # dual-review P1: double banner ate the preview's line budget).
-            if "[ACTIVE SKILL:" in self.skill_content:
+            # VibeSOP notices must never be wrapped as an active skill.
+            stripped_content = self.skill_content.lstrip()
+            if stripped_content.startswith("[VibeSOP") or "[ACTIVE SKILL:" in self.skill_content:
                 additional_context = self.skill_content[:3000]
             else:
                 additional_context = (
@@ -659,11 +688,45 @@ class AgentRuntime:
                     _task_span.set_error(f"Routing failed: {e}")
                     return result
 
-                # 6. Inject skill content
-                if result.skill_id:
+                # 6. Inject skill content. A routed id with no SKILL.md body
+                # is not a match — demote to no-match rather than hand the
+                # host a "matched" id plus an empty-content notice.
+                # Skip the sentinel (result contract keeps skill_id=
+                # fallback-llm) and orchestrate mode (the plan is the
+                # payload; steps[0] may be fallback while a later step is
+                # real — demoting would clobber router_matched).
+                if (
+                    result.skill_id
+                    and result.skill_id != "fallback-llm"
+                    and result.mode != "orchestrate"
+                ):
                     try:
                         injection = self.injector.inject_single_skill(result.skill_id, platform)
-                        if isinstance(injection.payload, str):
+                        if not injection.has_content:
+                            logger.warning(
+                                "Routed skill '%s' has no injectable content; "
+                                "demoting to no-match.",
+                                result.skill_id,
+                            )
+                            result.skill_id = ""
+                            result.skill_name = ""
+                            result.skill_content = ""
+                            result.router_matched = False
+                            result.notice_only = False
+                        elif injection.refused_unsafe:
+                            logger.warning(
+                                "Routed skill '%s' failed the runtime security "
+                                "scan; injecting notice without activation.",
+                                result.skill_id,
+                            )
+                            result.skill_content = (
+                                injection.payload
+                                if isinstance(injection.payload, str)
+                                else str(injection.payload)
+                            )
+                            result.router_matched = False
+                            result.notice_only = True
+                        elif isinstance(injection.payload, str):
                             result.skill_content = injection.payload
                         elif isinstance(injection.payload, dict):
                             result.skill_content = (
@@ -672,7 +735,17 @@ class AgentRuntime:
                                 or ""
                             )
                     except Exception as e:
-                        logger.debug(f"Skill injection failed: {e}")
+                        logger.warning(
+                            "Skill injection failed for '%s': %s; demoting to no-match.",
+                            result.skill_id,
+                            e,
+                        )
+                        result.errors.append(f"Skill injection failed: {e}")
+                        result.skill_id = ""
+                        result.skill_name = ""
+                        result.skill_content = ""
+                        result.router_matched = False
+                        result.notice_only = False
 
                 # Enrich the task span with routing metadata.
                 # gate40 项4: the SPAN's skill_id / top_skills are built

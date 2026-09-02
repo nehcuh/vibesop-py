@@ -2,6 +2,14 @@
 
 ## Technical Pitfalls
 
+### 发现能看见的技能，注入器未必能加载 — match 必须 fail-closed (2026-09-03 S58)
+
+**Issue**: Windows 上 `vibe route` 命中 `fuck-my-shit-mountain`（82%），agent 读不到 SKILL.md。不是路径分隔符。`SkillLoader.discover_all` rglob `*.md` 能看见 `.vibe/skills/cross-cutting/{id}.skill/SKILL.md`，候选 id 是 frontmatter 裸 id；`SkillInjector` 只猜 `{base}/{id}/SKILL.md`，且 `**/{leaf}.skill` glob 曾被挡在 `if "/" in skill_id`。Hook 已写 `VibeSOP routed` + `[ACTIVE SKILL]`。GBK SKILL.md 的 `UnicodeDecodeError` 不是 `OSError`，会被 `handle_query` 裸 except 吞掉并留下 skill_id。`has_content` 曾嗅探用户文案 `"no injectable content"`，改 notice 就静默失效。
+
+**Solution**: 不变量是 **match ⇔ 可注入 SKILL.md 正文**，闸在 inject 时刻而不是「两套路径学碰巧对齐」。① 候选 `source_file` 缺失/不可读则不可路由。② 注入对所有 id glob `**/{leaf}.skill/SKILL.md`，`candidate_dirs` 必须是发现根的超集（含 `project/skills`、`~/.kimi/skills`、`~/.config/opencode/skills`）。③ `_load_skill_content` 捕获 `(OSError, UnicodeError)`。④ `InjectionResult.content_missing` 标志，不靠 notice 文案。⑤ 空内容 demote 为 no-match；unsafe 走 `notice_only` 信封，禁止 wrap MUST follow。删跟踪包还要清 `.vibe/skill-index.json` 与 `skill-routing.yaml`，否则语义索引仍会召回幽灵 id。
+
+**Files**: `skill_injector.py`, `agent_runtime.py`, `candidate_manager.py`
+
 ### 绿灯假象：子代理汇报的测试通过数必须核对覆盖范围 (2026-08-30 S54)
 
 **Issue**: instinct 合并后执行方汇报 "834 passed"，但 claude+grok 双路终审独立发现 `tests/core/matching/test_strategies.py` 的排除集钉死测试必红——834 的覆盖范围（benchmark/integration/skills/hooks/routing）恰好不含 `tests/core/matching`。对抗验证员另发现执行顺序问题：基线重生成后又改了 SKILL.md，最终状态下 `--check` 实际 exit 3 STALE。

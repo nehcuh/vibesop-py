@@ -1,6 +1,33 @@
 
 ## Current Session
 
+### S58 (2026-09-03) [vibesop-py] 匹配无内容：对抗分析 → fail-closed → 双路复审
+
+- 根因（三路一致）：不是 Windows `/` 分隔符。SkillLoader rglob 能看见 `.vibe/skills/cross-cutting/{id}.skill/SKILL.md`，injector 按 id 重猜路径；`fuck-my-shit-mountain` 是仓库跟踪包。
+- Windows 实测：修 glob 前 `kimi-gated-fix` CONTENT_NOT_FOUND；修后 FOUND 3931/4075。mountain git-rm 后 missing=True。
+- 闸门：source_file 缺失不可路由；inject glob 全 id；空内容 demote；`content_missing`/`refused_unsafe` 标志；`(OSError, UnicodeError)`；candidate_dirs 超集 CM + `project/skills`；notice_only 信封不 wrap ACTIVE SKILL。
+- 三路对抗验证：fail-closed APPROVE / wrap APPROVE / Windows COMMENT（project/skills，已吸收）。
+- Kimi APPROVE（2 nit，吸收 notice_only 空内容守卫）；Claude APPROVE。
+- [executed] 定向 143 passed；ruff 绿；GBK SKILL.md → has_content False；unsafe wrap routed=False。
+- 未做 / 不宣称 merge-ready：source_file 注入主路径、CLI `vibe route` 不 inject、orchestrate 逐步读文件。
+- 产物：`.omx/artifacts/{review-diff-fail-closed-gates.patch,fail-closed-gates-review-prompt.md,fail-closed-gates-{kimi,claude}-review.md,windows-skill-split-synthesis.md}`
+- Recorded: yes — 发现/注入路径学分裂 + UnicodeDecodeError 非 OSError + 文案嗅探 has_content → project-knowledge.md
+
+### S57 (2026-09-02) [vibesop-py] pull latest + 多路独立对抗评审
+
+- Routing: `fuck-my-shit-mountain` 82% 幻影技能（磁盘无 SKILL.md，已知 AI-triage 误匹配）。按既有「5 路独立 finder + 逐条对抗验证」推进。
+- Pull: `5a7c6fa` → `fa6e3fc`（fetch 后本地 ff-only；`git pull` TLS 握手失败，改 merge origin/main）
+  - `941be71` docs: 重写技能路由对外叙事（对照实验发现）
+  - `633226f` Merge PR #117
+  - `fa6e3fc` docs: 技能路由对外叙事对齐仓库口径 (#118)
+- Scope: 12 files +547/−2，docs-only。Diff 固件 `.omx/artifacts/review-diff-5a7c6fa-fa6e3fc.patch`
+- Workflow: `adversarial-review`，25 agents，finders 5/5，19→17 确认 / 2 驳回 / 0 未核实
+- 终裁: **REQUEST CHANGES**（HIGH 8 / MEDIUM 8 / LOW 1）。已合入 main，需 follow-up 修正，不是未合并 PR 挡板
+- 独立根因 7 簇：虚构 `/vibe-review`；R7/R8 死链+未完成写成结论；SequencePattern 自动环；四段拓扑画反；88% 不是数字硬门；环 2 命令张冠李戴；R6 样本量口径
+- 产物: `.omx/artifacts/adversarial-review-5a7c6fa-fa6e3fc.md`
+- 落地: 三路 plan 对抗均 REQUEST CHANGES；吸收 L1 禁止 use tdd、L4 锁 mermaid、L2 禁 R6 回填、L5 表外 CI。已改正文+纯文本+CHANGELOG。复审 workflow 已发。
+- Recorded: no
+
 ### S56b (2026-09-02) [vibesop-py] R8 独立命题人 TASK.md
 
 - R7 澄清：TASK.md 由编排者写，未跟实现技能，但按 R5 模板+技能形态出题 → 污染

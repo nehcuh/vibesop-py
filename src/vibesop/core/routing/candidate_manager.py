@@ -182,6 +182,23 @@ class CandidateManager:
             canonical_id = raw_id.replace("/", "-")
             if canonical_id in seen_ids:
                 continue
+            source_file = definition.source_file
+            if source_file is not None:
+                try:
+                    if not Path(source_file).is_file():
+                        logger.warning(
+                            "Skipping skill %s: source file missing or unreadable (%s)",
+                            metadata.id,
+                            source_file,
+                        )
+                        continue
+                except OSError:
+                    logger.warning(
+                        "Skipping skill %s: source file unreadable (%s)",
+                        metadata.id,
+                        source_file,
+                    )
+                    continue
             seen_ids.add(canonical_id)
 
             tags = metadata.tags or []
@@ -381,6 +398,18 @@ class CandidateManager:
         for c in candidates:
             if not c.get("enabled", True):
                 continue
+            source_file = c.get("source_file")
+            if source_file:
+                try:
+                    if not Path(str(source_file)).is_file():
+                        logger.warning(
+                            "Dropping skill %s from routing: content file missing (%s)",
+                            c.get("id"),
+                            source_file,
+                        )
+                        continue
+                except OSError:
+                    continue
             lifecycle_str = c.get("lifecycle", "active")
             try:
                 lifecycle = SkillLifecycle(lifecycle_str)

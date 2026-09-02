@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-08-30 (S54 — 编排事件契约 + 技能治理已推送 `e682861`；S53a R6 A/B 收官)
+**Last Updated**: 2026-09-03 (S58 — fail-closed inject + 对外叙事复审收口)
 
 ---
 

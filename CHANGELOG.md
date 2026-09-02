@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- **技能路由对外叙事**（`docs/skill-routing-explained.md`）：从 Warp Skill 自进化对照讲入口与出口；数字拆成 hermetic 硬门（34 条 / 88%）、影子徽章永不阻断、pytest 73% 不进效果表；写入 R6 失败观察（27B / 0 读取，不当起源神话）与 R8「找错可能比没找更伤」；Improver 标为缺口。实现稿 `routing-system.md` 只保留级联。另附纯文本变体 `docs/article-x-plain.txt`。
+- **技能路由对外叙事**（`docs/skill-routing-explained.md`）：从 Warp Skill 自进化对照讲入口与出口；hermetic 硬门是指纹 + 逐条 ok1（当前基线 30/34=88%，不是 fail_under）；影子徽章永不阻断；pytest 73% 测 Python、不进效果表但仍挡 CI。写入 R6 失败观察（27B / 0 读取，n=1 上两次路由 no-match，不当起源神话）；R7 仅 session 笔记；R8 未完成，不把「找错可能比没找更伤」当已成立发现。Improver 标为缺口。另附纯文本变体 `docs/article-x-plain.txt`。
 
 ### Added
 
@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **匹配必须可注入 SKILL.md（fail-closed）**: 发现层 rglob 能看见
+  `.vibe/skills/cross-cutting/{id}.skill/`，注入器按裸 id 重猜路径，
+  hook 会发出 `VibeSOP routed` 但 agent 读不到正文。注入器对所有 id
+  glob `**/{leaf}.skill/SKILL.md`；候选缺少 `source_file` 不可路由；
+  空内容 / GBK 解码失败 / 运行时扫描拒绝不再包装成 `[ACTIVE SKILL]`。
+  删除跟踪包 `fuck-my-shit-mountain.skill`（无正文仍进候选）。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实

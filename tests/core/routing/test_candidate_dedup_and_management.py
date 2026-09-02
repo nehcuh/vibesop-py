@@ -74,6 +74,21 @@ class TestDeduplication:
         assert len(ids) == 1
         assert ids[0] == "gstack/office-hours"
 
+    def test_skips_definition_whose_source_file_is_missing(
+        self, candidate_manager: Any, tmp_path: Path
+    ) -> None:
+        ghost = _make_definition("ghost-skill")
+        ghost.source_file = tmp_path / "nope" / "SKILL.md"
+        live = _make_definition("live-skill")
+        live_path = tmp_path / "live" / "SKILL.md"
+        live_path.parent.mkdir()
+        live_path.write_text("# live\n", encoding="utf-8")
+        live.source_file = live_path
+        candidates = _get_candidates(
+            candidate_manager, {"ghost-skill": ghost, "live-skill": live}
+        )
+        assert [c["id"] for c in candidates] == ["live-skill"]
+
     def test_deduplicates_across_namespaces(self, candidate_manager: Any) -> None:
         definitions = {
             "slash-route": _make_definition("slash-route", name="Slash Route"),

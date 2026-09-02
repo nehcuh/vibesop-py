@@ -47,23 +47,6 @@ scenario_patterns:
     priority: P1
     message: "建议使用 GStack QA 进行浏览器测试"
 
-  - id: cross_cutting_audit
-    name: "Fuck My Shit Mountain Audit"
-    trigger_mode: suggest
-    description: "Comprehensive codebase audit with 28 dimensions"
-    keywords:
-      - "audit"
-      - "审计"
-      - "代码审计"
-      - "代码质量"
-      - "code audit"
-      - "health report"
-      - "健康报告"
-      - "fuck"
-    skill_id: "fuck-my-shit-mountain"
-    priority: P1
-    message: "建议使用 Fuck My Shit Mountain 进行全方位代码审计"
-
   - id: cross_cutting_kimi_fix
     name: "Kimi-Gated Fix"
     trigger_mode: suggest

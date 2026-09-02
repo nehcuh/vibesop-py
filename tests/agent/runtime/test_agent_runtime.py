@@ -10,6 +10,26 @@ from vibesop.agent.runtime.agent_runtime import AgentRuntime, AgentRuntimeResult
 from vibesop.agent.runtime.intent_interceptor import InterceptionMode
 
 
+def _force_injectable(runtime: AgentRuntime) -> None:
+    """Span-metadata tests mock the router with ids that have no SKILL.md.
+
+    Fail-closed injection would otherwise demote those hits. Stub a body so
+    the tests keep measuring span verdicts, not filesystem layout.
+    """
+    from unittest.mock import MagicMock
+
+    from vibesop.agent.runtime.skill_injector import InjectionMethod, InjectionResult
+
+    def _ok(skill_id: str, _platform: object) -> InjectionResult:
+        return InjectionResult(
+            method=InjectionMethod.TEXT,
+            payload=f"# {skill_id}\n\nbody",
+            skill_id=skill_id,
+        )
+
+    runtime.injector.inject_single_skill = MagicMock(side_effect=_ok)
+
+
 class TestAgentRuntimeProcessQuery:
     """Async process_query dispatch by InterceptionMode."""
 
@@ -269,6 +289,7 @@ class TestAgentRuntimeLayerMetadata:
 
         runtime = AgentRuntime(project_root=tmp_path)
         runtime._router = self._mock_router(routing_result)
+        _force_injectable(runtime)
         runtime.handle_query("review my code")
 
         spans = self._route_spans(fresh_tracer)
@@ -404,6 +425,7 @@ class TestRouterMatchedSpanVerdict:
 
         runtime = AgentRuntime(project_root=tmp_path)
         runtime._router = self._miss_router(matched=True)
+        _force_injectable(runtime)
         runtime.handle_query("review my code")
 
         span = self._route_span(fresh_tracer)
@@ -461,6 +483,7 @@ class TestRouterMatchedSpanVerdict:
                 "single_result": {"skill_id": "some-skill", "confidence": 0.9, "layer": "keyword"},
             },
         )
+        _force_injectable(runtime)
         runtime.handle_query("orchestrate this")
 
         metadata = self._metadata(self._route_span(fresh_tracer))
@@ -589,6 +612,7 @@ class TestRouterMatchedSpanVerdict:
         router.route.return_value = routing_result
         runtime = AgentRuntime(project_root=tmp_path)
         runtime._router = router
+        _force_injectable(runtime)
         runtime.handle_query("review my code")
 
         metadata = self._metadata(self._route_span(fresh_tracer))
@@ -753,6 +777,7 @@ class TestTopSkillsSpanMetadata:
         router.route.return_value = routing_result
         runtime = AgentRuntime(project_root=tmp_path)
         runtime._router = router
+        _force_injectable(runtime)
         return runtime
 
     @staticmethod
@@ -862,3 +887,88 @@ class TestTopSkillsSpanMetadata:
             encoding="utf-8",
         )
         assert count_skill_fires(tmp_path, now=now) == {"demo/skill": 2}
+
+
+class TestInjectFailClosed:
+    """Match without injectable body must not leave skill_id standing."""
+
+    def _runtime_with_hit(self, tmp_path: Path, skill_id: str = "some-skill") -> AgentRuntime:
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = True
+        routing_result.primary = SimpleNamespace(
+            skill_id=skill_id, skill_name="Some Skill", confidence=0.9, layer=None
+        )
+        routing_result.alternatives = []
+        routing_result.plan = None
+        runtime = AgentRuntime(project_root=tmp_path)
+        router = MagicMock()
+        router.route.return_value = routing_result
+        runtime._router = router
+        return runtime
+
+    def test_inject_exception_demotes_to_no_match(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        runtime = self._runtime_with_hit(tmp_path)
+        runtime.injector.inject_single_skill = MagicMock(
+            side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+        )
+        result = runtime.handle_query("review my code")
+        assert result.skill_id == ""
+        assert result.router_matched is False
+        assert result.notice_only is False
+        hook = result.to_hook_response()
+        assert "VibeSOP routed" not in hook
+        assert "ACTIVE SKILL" not in hook
+
+    def test_empty_inject_demotes_to_no_match(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from vibesop.agent.runtime.skill_injector import InjectionMethod, InjectionResult
+
+        runtime = self._runtime_with_hit(tmp_path)
+        runtime.injector.inject_single_skill = MagicMock(
+            return_value=InjectionResult(
+                method=InjectionMethod.TEXT,
+                payload="[VibeSOP] stub without the old phrase",
+                skill_id="some-skill",
+                content_missing=True,
+            )
+        )
+        result = runtime.handle_query("review my code")
+        assert result.skill_id == ""
+        assert result.router_matched is False
+        hook = result.to_hook_response()
+        assert "VibeSOP routed" not in hook
+        assert "ACTIVE SKILL" not in hook
+
+    def test_unsafe_inject_is_notice_only(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from vibesop.agent.runtime.skill_injector import InjectionMethod, InjectionResult
+        from vibesop.security.runtime_scan import unsafe_replacement_notice
+
+        notice = unsafe_replacement_notice("evil-skill")
+        runtime = self._runtime_with_hit(tmp_path, skill_id="evil-skill")
+        runtime.injector.inject_single_skill = MagicMock(
+            return_value=InjectionResult(
+                method=InjectionMethod.TEXT,
+                payload=notice,
+                skill_id="evil-skill",
+                refused_unsafe=True,
+            )
+        )
+        result = runtime.handle_query("review my code")
+        assert result.notice_only is True
+        assert result.router_matched is False
+        assert result.skill_id == "evil-skill"
+        import json
+
+        data = json.loads(result.to_hook_response())
+        assert "VibeSOP routed" not in data["systemMessage"]
+        assert "ACTIVE SKILL" not in data["systemMessage"]
+        assert "MUST follow" not in data["hookSpecificOutput"]["additionalContext"]
+        assert "SECURITY" in data["systemMessage"]

@@ -128,6 +128,21 @@ class TestFilterRoutable:
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 1
 
+    def test_missing_source_file_is_not_routable(self, tmp_path: Path) -> None:
+        """A candidate whose SKILL.md is gone must not remain a match."""
+        mgr = CandidateManager(tmp_path)
+        candidates = [
+            {
+                "id": "ghost",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": str(tmp_path / "missing" / "SKILL.md"),
+            }
+        ]
+        filtered, _ = mgr.filter_routable(candidates)
+        assert filtered == []
+
 
 class TestGetSkillSource:
     """Test source determination from namespace."""
