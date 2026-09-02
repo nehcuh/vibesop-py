@@ -19,6 +19,38 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def resolve_routed_skill_md(skill_id: str, project_root: Path | None = None) -> Path | None:
+    """Return the SKILL.md the injector would load for a routed id."""
+    if not skill_id or skill_id == "fallback-llm":
+        return None
+    try:
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        return SkillInjector(project_root=project_root or Path.cwd()).resolve_skill_md(skill_id)
+    except Exception:
+        return None
+
+
+def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
+    """Add ``skill_file`` so CLI consumers do not guess ``core/skills/<id>``."""
+    if not isinstance(payload, dict):
+        return
+    sid = str(payload.get("skill_id") or "")
+    if not sid:
+        primary = payload.get("primary")
+        if isinstance(primary, dict):
+            sid = str(primary.get("skill_id") or "")
+        elif primary is None:
+            sid = str(getattr(getattr(result, "primary", None), "skill_id", "") or "")
+        else:
+            sid = str(getattr(primary, "skill_id", "") or "")
+    if sid and sid != "fallback-llm":
+        resolved = resolve_routed_skill_md(sid)
+        payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
+    else:
+        payload["skill_file"] = ""
+
+
 _TIP_TEMPLATES: list[tuple[str, str]] = [
     ("status", "[cyan]vibe status[/cyan] [dim]— see your full ecosystem health[/dim]"),
     ("market", "[cyan]vibe market search <query>[/cyan] [dim]— find skills on GitHub[/dim]"),
@@ -109,6 +141,12 @@ def render_match_panel(result: Any, console: Console) -> None:
             f"\n[yellow]⚠️  Deprecated skills in ecosystem:[/yellow] {', '.join(deprecated)}"
         )
 
+    resolved = resolve_routed_skill_md(primary.skill_id)
+    if resolved is not None:
+        skill_file_line = f"\n[dim]SKILL.md:[/dim] {resolved.as_posix()}"
+    else:
+        skill_file_line = "\n[yellow]SKILL.md: not found — do not treat this as a match[/yellow]"
+
     console.print(
         Panel(
             f"[bold green]Matched:[/bold green] {primary.skill_id}\n"
@@ -116,7 +154,8 @@ def render_match_panel(result: Any, console: Console) -> None:
             f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
             f"[dim]Layer:[/dim] {primary.layer.value}\n"
             f"[dim]Source:[/dim] {primary.source}{quality_str}\n"
-            f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
+            f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms"
+            f"{skill_file_line}",
             title="[bold]Routing Result[/bold]",
             border_style="blue",
         )
@@ -186,6 +225,11 @@ def render_compact_orchestration(
                     table.add_row("Description", f"[dim]{desc[:100]}[/dim]")
                 table.add_row("Confidence", f"{result.primary.confidence:.0%}")
                 table.add_row("Layer", result.primary.layer.value)
+                skill_md = resolve_routed_skill_md(result.primary.skill_id)
+                if skill_md is not None:
+                    table.add_row("SKILL.md", skill_md.as_posix())
+                else:
+                    table.add_row("SKILL.md", "[yellow]not found[/yellow]")
         else:
             table.add_row("Selected", "[yellow]No match[/yellow]")
 
@@ -360,9 +404,11 @@ def render_ecosystem_tips(
 
 
 __all__ = [
+    "attach_skill_file_payload",
     "render_compact_orchestration",
     "render_ecosystem_tips",
     "render_fallback_panel",
     "render_match_panel",
     "render_no_match",
+    "resolve_routed_skill_md",
 ]

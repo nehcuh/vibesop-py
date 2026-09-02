@@ -83,6 +83,9 @@ class AgentRuntimeResult:
     # True when skill_content is a VibeSOP empty/unsafe notice, not a
     # skill body. Hook JSON must not wrap it as [ACTIVE SKILL] / MUST follow.
     notice_only: bool = False
+    # Absolute/posix SKILL.md path actually loaded. Hook NEXT STEP uses this
+    # instead of guessing core/skills/<id>/SKILL.md.
+    skill_path: str = ""
 
     @property
     def has_match(self) -> bool:
@@ -203,13 +206,13 @@ class AgentRuntimeResult:
         skill_flat = self.skill_id.replace("/", "-")
         conf_pct = int(self.confidence * 100)
 
-        # Hint path must match real on-disk layout. For builtin skills the
-        # file is bundled as data (force-include per commit 185dfe4) — it may
-        # live in site-packages next to the installed package, OR in the dev
-        # repo's core/skills/ directory. Scan both and emit an absolute path
-        # so Claude can Read it regardless of the user's CWD.
+        # Hint path must match real on-disk layout. Prefer the path inject
+        # actually loaded (discovered source_file). Fall back to the guess
+        # ladder for results constructed without going through inject.
         user_root = self.project_root or Path.cwd()
-        if "/" in self.skill_id:
+        if self.skill_path:
+            hint_path = self.skill_path.replace("\\", "/")
+        elif "/" in self.skill_id:
             namespace, bare_name = self.skill_id.split("/", 1)
             if namespace == "builtin":
                 from vibesop.utils.bundled import resolve_builtin_skills_dir
@@ -728,12 +731,14 @@ class AgentRuntime:
                             result.notice_only = True
                         elif isinstance(injection.payload, str):
                             result.skill_content = injection.payload
+                            result.skill_path = injection.resolved_path
                         elif isinstance(injection.payload, dict):
                             result.skill_content = (
                                 injection.payload.get("additionalContext")
                                 or injection.payload.get("content")
                                 or ""
                             )
+                            result.skill_path = injection.resolved_path
                     except Exception as e:
                         logger.warning(
                             "Skill injection failed for '%s': %s; demoting to no-match.",

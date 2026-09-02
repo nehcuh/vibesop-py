@@ -506,3 +506,32 @@ class TestSkillInjector:
         assert result.content_missing is False
         assert result.has_content is True
         assert result.notice_only is True
+
+    def test_explicit_source_file_outside_search_roots(self, tmp_path: Path) -> None:
+        """Discovered source_file wins even when glob cannot see the pack."""
+        outside = tmp_path / "elsewhere" / "orphan.skill"
+        outside.mkdir(parents=True)
+        (outside / "SKILL.md").write_text(
+            "---\nid: orphan\n---\n# from source_file\n", encoding="utf-8"
+        )
+        injector = SkillInjector(project_root=tmp_path)
+        assert CONTENT_NOT_FOUND_MARKER in injector._load_skill_content("orphan")
+        loaded = injector._load_skill_content("orphan", source_file=outside / "SKILL.md")
+        assert "from source_file" in loaded
+        result = injector.inject_single_skill(
+            "orphan", PlatformType.GENERIC, source_file=outside / "SKILL.md"
+        )
+        assert result.has_content
+        assert "from source_file" in str(result.payload)
+        assert "orphan.skill/SKILL.md" in result.resolved_path.replace("\\", "/")
+
+    def test_kimi_instruction_uses_source_file_path(self, tmp_path: Path) -> None:
+        outside = tmp_path / "elsewhere" / "orphan.skill"
+        outside.mkdir(parents=True)
+        (outside / "SKILL.md").write_text("# body\n", encoding="utf-8")
+        injector = SkillInjector(project_root=tmp_path)
+        kimi = injector.inject_single_skill(
+            "orphan", PlatformType.KIMI_CLI, source_file=outside / "SKILL.md"
+        )
+        assert "orphan.skill/SKILL.md" in str(kimi.payload).replace("\\", "/")
+        assert "~/.kimi-code/skills/orphan/SKILL.md" not in str(kimi.payload)

@@ -40,6 +40,15 @@ def render_routing_report(
                 f"[bold green]Selected:[/bold green] {result.primary.skill_id} "
                 f"(confidence: {result.primary.confidence:.0%})\n"
             )
+            from vibesop.cli.render import resolve_routed_skill_md
+
+            skill_md = resolve_routed_skill_md(result.primary.skill_id)
+            if skill_md is not None:
+                header_text += f"[dim]SKILL.md:[/dim] {skill_md.as_posix()}\n"
+            else:
+                header_text += (
+                    "[yellow]SKILL.md: not found — do not treat this as a match[/yellow]\n"
+                )
     else:
         header_text += "[yellow]No match found[/yellow]\n"
 

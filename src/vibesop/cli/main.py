@@ -72,6 +72,7 @@ from vibesop.cli.feedback import _collect_feedback
 from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.plan_editor import _edit_execution_plan
 from vibesop.cli.render import (
+    attach_skill_file_payload,
     render_compact_orchestration,
 )
 from vibesop.cli.routing_report import render_routing_report
@@ -1023,9 +1024,12 @@ def route(
 
             # Re-use the orchestration result directly
             minimal_result = LightweightRouter._format_result(result)
+            attach_skill_file_payload(minimal_result, result)
             print(json.dumps(minimal_result, ensure_ascii=False))
         else:
-            print(json.dumps(result.to_dict(), indent=2, default=str, ensure_ascii=False))
+            payload = result.to_dict()
+            attach_skill_file_payload(payload, result)
+            print(json.dumps(payload, indent=2, default=str, ensure_ascii=False))
         # In JSON mode: exit 0 for successful routing (caller inspects has_match field).
         # A completed routing attempt is not an error even when no match found.
         raise typer.Exit(0)

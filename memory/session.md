@@ -1,6 +1,14 @@
 
 ## Current Session
 
+### S59 (2026-09-03) [vibesop-py] source_file 主路径 + CLI 真实 SKILL.md
+
+- Inject: explicit `source_file` → SkillLoader → glob。hook `NEXT STEP` 用 `skill_path`。`vibe route` 人机面板和 `--json` 带真实 `skill_file`。
+- [executed] `kimi-gated-fix` → `.vibe/skills/cross-cutting/kimi-gated-fix.skill/SKILL.md`；hint 不再猜 `skills/kimi-gated-fix/SKILL.md`。搜索根外 `source_file` 可注入。定向 130 passed。
+- 独立镜头 COMMENT，无阻塞：candidate `source_file` 仍未从 RoutingResult 穿进 inject（SkillLoader 对本布局够用）。
+- 提交并推 origin/main。
+- Recorded: no
+
 ### S58 (2026-09-03) [vibesop-py] 匹配无内容：对抗分析 → fail-closed → 双路复审
 
 - 根因（三路一致）：不是 Windows `/` 分隔符。SkillLoader rglob 能看见 `.vibe/skills/cross-cutting/{id}.skill/SKILL.md`，injector 按 id 重猜路径；`fuck-my-shit-mountain` 是仓库跟踪包。

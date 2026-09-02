@@ -70,6 +70,7 @@ class InjectionResult:
     truncated: bool = False
     content_missing: bool = False
     refused_unsafe: bool = False
+    resolved_path: str = ""
 
     @property
     def has_content(self) -> bool:
@@ -109,22 +110,29 @@ class SkillInjector:
         # content-hash → safe? cache for the runtime security scan (avoids
         # re-scanning unchanged skill content on every route).
         self._scan_cache: dict[str, bool] = {}
+        self._loader: Any = None
+        self._last_resolved: Path | None = None
 
     def inject_single_skill(
         self,
         skill_id: str,
         platform: PlatformType,
+        source_file: str | Path | None = None,
     ) -> InjectionResult:
         """Inject a single skill's content.
 
         Args:
             skill_id: The matched skill identifier
             platform: Target platform
+            source_file: Discovered SKILL.md path from the candidate, if any.
+                Preferred over path-guessing.
 
         Returns:
             InjectionResult with platform-specific payload
         """
-        skill_content = self._load_skill_content(skill_id)
+        self._last_resolved = None
+        skill_content = self._load_skill_content(skill_id, source_file=source_file)
+        resolved = self._last_resolved.as_posix() if self._last_resolved is not None else ""
 
         # Empty/placeholder content gate: a registry stub or a missing file is
         # a data problem, not a security finding — report it as such instead
@@ -141,6 +149,7 @@ class SkillInjector:
                 payload=empty_content_notice(skill_id),
                 skill_id=skill_id,
                 content_missing=True,
+                resolved_path="",
             )
 
         # Runtime security gate: re-scan the loaded content before injecting.
@@ -161,6 +170,7 @@ class SkillInjector:
                 payload=unsafe_replacement_notice(skill_id),
                 skill_id=skill_id,
                 refused_unsafe=True,
+                resolved_path=resolved,
             )
 
         truncated = False
@@ -172,15 +182,17 @@ class SkillInjector:
         if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
             # Grok Build's UserPromptSubmit hook envelope is Claude-shaped
             # (hookSpecificOutput.additionalContext) — same payload format.
-            return self._inject_claude_code(skill_id, skill_content, truncated)
+            result = self._inject_claude_code(skill_id, skill_content, truncated)
         elif platform == PlatformType.OPENCODE:
-            return self._inject_opencode(skill_id, skill_content, truncated)
+            result = self._inject_opencode(skill_id, skill_content, truncated)
         elif platform == PlatformType.KIMI_CLI:
-            return self._inject_kimi_cli(skill_id, skill_content, truncated)
+            result = self._inject_kimi_cli(skill_id, skill_content, truncated)
         elif platform == PlatformType.PI:
-            return self._inject_pi(skill_id, skill_content, truncated)
+            result = self._inject_pi(skill_id, skill_content, truncated)
         else:
-            return self._inject_generic(skill_id, skill_content, truncated)
+            result = self._inject_generic(skill_id, skill_content, truncated)
+        result.resolved_path = resolved
+        return result
 
     def inject_execution_plan(
         self,
@@ -226,9 +238,10 @@ class SkillInjector:
                 skill_id="multi-step-plan",
             )
 
-    def _load_skill_content(self, skill_id: str) -> str:
+    def _load_skill_content(self, skill_id: str, source_file: str | Path | None = None) -> str:
         """Load skill content from filesystem."""
-        path = self._resolve_skill_md(skill_id)
+        path = self._resolve_skill_md(skill_id, source_file=source_file)
+        self._last_resolved = path
         if path is None:
             return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
         try:
@@ -237,10 +250,20 @@ class SkillInjector:
             # UnicodeDecodeError is not an OSError. A GBK/ANSI SKILL.md on
             # Windows would otherwise bubble into handle_query's bare
             # ``except Exception`` and leave skill_id set with empty content.
+            self._last_resolved = None
             return f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER} at expected locations.*"
 
-    def _resolve_skill_md(self, skill_id: str) -> Path | None:
+    def resolve_skill_md(self, skill_id: str, source_file: str | Path | None = None) -> Path | None:
+        """Public wrapper: the SKILL.md that would be injected for *skill_id*."""
+        return self._resolve_skill_md(skill_id, source_file=source_file)
+
+    def _resolve_skill_md(
+        self, skill_id: str, source_file: str | Path | None = None
+    ) -> Path | None:
         """Return the on-disk SKILL.md for *skill_id*, or None.
+
+        Prefer the discovered ``source_file`` (same file the router indexed),
+        then SkillLoader's cached definition, then path-guess glob.
 
         v7.3.5 fix (Round 4 P1): previously only checked 3 paths and missed
         the actual install locations for Claude Code (``~/.claude/skills/``)
@@ -275,7 +298,36 @@ class SkillInjector:
         - Nested glob: ``**/{flat_id}/SKILL.md`` in central storage only
           (e.g. ``mattpocock/engineering/diagnosing-bugs``)
         """
+        hit = self._if_file(Path(source_file)) if source_file else None
+        if hit is not None:
+            return hit
+        loaded = self._loader_source_file(skill_id)
+        if loaded is not None:
+            return loaded
         return self._find_skill_md_path(skill_id)
+
+    @staticmethod
+    def _if_file(path: Path) -> Path | None:
+        try:
+            if path.is_file():
+                return path
+        except OSError:
+            return None
+        return None
+
+    def _loader_source_file(self, skill_id: str) -> Path | None:
+        """The SKILL.md SkillLoader discovered for this id, if it still exists."""
+        try:
+            from vibesop.core.skills import SkillLoader
+
+            if self._loader is None:
+                self._loader = SkillLoader(project_root=self.project_root)
+            skill = self._loader.get_skill(skill_id)
+            if skill is not None and skill.source_file is not None:
+                return self._if_file(Path(skill.source_file))
+        except Exception:
+            logger.debug("SkillLoader source_file lookup failed for %s", skill_id, exc_info=True)
+        return None
 
     def _find_skill_md_path(self, skill_id: str) -> Path | None:
         """Walk install layouts; return the first existing SKILL.md."""
@@ -301,17 +353,11 @@ class SkillInjector:
             home / ".vibe" / "skills",
         ]
 
-        def _if_file(path: Path) -> Path | None:
-            try:
-                if path.is_file():
-                    return path
-            except OSError:
-                return None
-            return None
-
         if "/" in skill_id:
             name_only = skill_id.split("/", 1)[1]
-            hit = _if_file(resolve_builtin_skills_dir(self.project_root) / name_only / "SKILL.md")
+            hit = self._if_file(
+                resolve_builtin_skills_dir(self.project_root) / name_only / "SKILL.md"
+            )
             if hit is not None:
                 return hit
 
@@ -319,24 +365,24 @@ class SkillInjector:
             if not base.exists():
                 continue
             if "/" in skill_id:
-                hit = _if_file(base / skill_id / "SKILL.md")
+                hit = self._if_file(base / skill_id / "SKILL.md")
                 if hit is not None:
                     return hit
-            hit = _if_file(base / flat_id / "SKILL.md")
+            hit = self._if_file(base / flat_id / "SKILL.md")
             if hit is not None:
                 return hit
-            hit = _if_file(base / f"{flat_id}.skill" / "SKILL.md")
+            hit = self._if_file(base / f"{flat_id}.skill" / "SKILL.md")
             if hit is not None:
                 return hit
             if "/" in skill_id:
                 ns, rest = skill_id.split("/", 1)
-                hit = _if_file(base / ns / f"{rest}.skill" / "SKILL.md")
+                hit = self._if_file(base / ns / f"{rest}.skill" / "SKILL.md")
                 if hit is not None:
                     return hit
             leaf = skill_id.rsplit("/", 1)[-1]
             try:
                 for match in base.glob(f"**/{leaf}.skill/SKILL.md"):
-                    hit = _if_file(match)
+                    hit = self._if_file(match)
                     if hit is not None:
                         return hit
             except OSError:
@@ -344,7 +390,7 @@ class SkillInjector:
             if base != self.project_root / "core" / "skills":
                 try:
                     for candidate in base.glob(f"*-{flat_id}"):
-                        hit = _if_file(candidate / "SKILL.md")
+                        hit = self._if_file(candidate / "SKILL.md")
                         if hit is not None:
                             return hit
                 except OSError:
@@ -354,7 +400,7 @@ class SkillInjector:
         if central.exists():
             try:
                 for match in central.glob(f"**/{flat_id}/SKILL.md"):
-                    hit = _if_file(match)
+                    hit = self._if_file(match)
                     if hit is not None:
                         return hit
             except OSError:
@@ -428,7 +474,7 @@ You MUST follow this skill's workflow. Do not skip steps.
         _truncated: bool,
     ) -> InjectionResult:
         """Build Kimi CLI instruction (AI must read skill file itself)."""
-        resolved = self._resolve_skill_md(skill_id)
+        resolved = self._last_resolved or self._resolve_skill_md(skill_id)
         if resolved is not None:
             instruction = (
                 f"请先读取 {resolved.as_posix()} ，"

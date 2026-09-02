@@ -195,6 +195,19 @@ class TestAgentRuntimeHookResponse:
         assert "gstack/analyze" in resp
         assert "gstack/refactor" in resp
 
+    def test_hook_hint_uses_injected_skill_path(self):
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="kimi-gated-fix",
+            confidence=0.8,
+            skill_content="# gated body",
+            skill_path=("C:/proj/.vibe/skills/cross-cutting/kimi-gated-fix.skill/SKILL.md"),
+        )
+        data = json.loads(result.to_hook_response())
+        assert "kimi-gated-fix.skill/SKILL.md" in data["systemMessage"]
+        assert "skills/kimi-gated-fix/SKILL.md" not in data["systemMessage"]
+
     def test_notice_only_skips_active_skill_wrap(self):
         from vibesop.security.runtime_scan import unsafe_replacement_notice
 
