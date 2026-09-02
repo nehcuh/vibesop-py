@@ -317,6 +317,19 @@ class CandidateManager:
         """Invalidate candidate cache without reloading."""
         self._candidates_cache = None
 
+    def source_file_for(self, skill_id: str) -> str | None:
+        """Return the discovered SKILL.md path for *skill_id*, if indexed."""
+        if not skill_id:
+            return None
+        try:
+            for c in self.get_cached_candidates():
+                if c.get("id") == skill_id:
+                    sf = c.get("source_file")
+                    return str(sf) if sf else None
+        except Exception:
+            logger.debug("source_file_for(%s) failed", skill_id, exc_info=True)
+        return None
+
     def record_usage(self, skill_id: str, was_successful: bool = True) -> None:
         """Buffer usage stats update; flush to SkillConfig every N routes.
 

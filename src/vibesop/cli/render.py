@@ -19,14 +19,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def resolve_routed_skill_md(skill_id: str, project_root: Path | None = None) -> Path | None:
+def resolve_routed_skill_md(
+    skill_id: str,
+    project_root: Path | None = None,
+    source_file: str | Path | None = None,
+) -> Path | None:
     """Return the SKILL.md the injector would load for a routed id."""
     if not skill_id or skill_id == "fallback-llm":
         return None
     try:
         from vibesop.agent.runtime.skill_injector import SkillInjector
 
-        return SkillInjector(project_root=project_root or Path.cwd()).resolve_skill_md(skill_id)
+        return SkillInjector(project_root=project_root or Path.cwd()).resolve_skill_md(
+            skill_id, source_file=source_file
+        )
     except Exception:
         return None
 
@@ -45,7 +51,13 @@ def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
         else:
             sid = str(getattr(primary, "skill_id", "") or "")
     if sid and sid != "fallback-llm":
-        resolved = resolve_routed_skill_md(sid)
+        hinted = None
+        primary = getattr(result, "primary", None)
+        if primary is not None:
+            meta = getattr(primary, "metadata", None) or {}
+            if isinstance(meta, dict):
+                hinted = meta.get("source_file")
+        resolved = resolve_routed_skill_md(sid, source_file=hinted)
         payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
     else:
         payload["skill_file"] = ""

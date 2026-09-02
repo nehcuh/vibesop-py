@@ -25,6 +25,21 @@ logger = logging.getLogger(__name__)
 _MANAGEMENT_INTENT_RE = re.compile(r"技能|skills?\b|vibe", re.IGNORECASE)
 
 
+def _metadata_with_source(
+    metadata: dict[str, Any] | None,
+    candidates: list[dict[str, Any]],
+    skill_id: str,
+) -> dict[str, Any]:
+    meta = dict(metadata or {})
+    if meta.get("source_file"):
+        return meta
+    for c in candidates:
+        if c.get("id") == skill_id and c.get("source_file"):
+            meta["source_file"] = str(c["source_file"])
+            break
+    return meta
+
+
 def filter_management_candidates(
     query: str,
     candidates: list[dict[str, Any]],
@@ -173,7 +188,9 @@ class MatcherPipeline:
                 layer=winning_layer,
                 source=self._get_skill_source(primary_match.skill_id, primary_namespace),
                 description=desc_map.get(primary_match.skill_id, ""),
-                metadata=primary_match.metadata,
+                metadata=_metadata_with_source(
+                    primary_match.metadata, candidates, primary_match.skill_id
+                ),
             ),
             alternatives=[
                 SkillRoute(
@@ -184,7 +201,7 @@ class MatcherPipeline:
                         m.skill_id, str(m.metadata.get("namespace", "builtin"))
                     ),
                     description=desc_map.get(m.skill_id, ""),
-                    metadata=m.metadata,
+                    metadata=_metadata_with_source(m.metadata, candidates, m.skill_id),
                 )
                 for m in alternatives
             ],

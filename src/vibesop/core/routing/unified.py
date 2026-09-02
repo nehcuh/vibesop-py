@@ -48,6 +48,7 @@ from vibesop.core.optimization import (
     CandidatePrefilter,
 )
 from vibesop.core.routing import _layers, _pipeline
+from vibesop.core.routing._layers import _with_source_file
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
@@ -950,7 +951,7 @@ class UnifiedRouter(
             layer=RoutingLayer.KEYWORD,
             source=self._get_skill_source(skill_id, candidate.get("namespace", "builtin")),
             description=str(candidate.get("description", "")),
-            metadata={"session_end_signal": True},
+            metadata=_with_source_file({"session_end_signal": True}, candidate),
         )
         return match, LayerDetail(
             layer=RoutingLayer.KEYWORD,
@@ -986,7 +987,7 @@ class UnifiedRouter(
             layer=RoutingLayer.KEYWORD,
             source=self._get_skill_source(skill_id, candidate.get("namespace", "builtin")),
             description=str(candidate.get("description", "")),
-            metadata={"guarded_explicit_signal": True},
+            metadata=_with_source_file({"guarded_explicit_signal": True}, candidate),
         )
         return match, LayerDetail(
             layer=RoutingLayer.KEYWORD,

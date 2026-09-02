@@ -26,6 +26,15 @@ from vibesop.core.skills.indexer import SkillIndexer
 logger = logging.getLogger(__name__)
 
 
+def _with_source_file(metadata: dict[str, Any], candidate: dict[str, Any] | None) -> dict[str, Any]:
+    """Copy the candidate's discovered SKILL.md path onto route metadata."""
+    meta = dict(metadata)
+    sf = (candidate or {}).get("source_file")
+    if sf:
+        meta["source_file"] = str(sf)
+    return meta
+
+
 def try_explicit_layer(
     router: RoutingCore,
     query: str,
@@ -55,7 +64,7 @@ def try_explicit_layer(
         layer=RoutingLayer.EXPLICIT,
         source=source,
         description=str(candidate.get("description", "")),
-        metadata={"override": True, "cleaned_query": cleaned_query},
+        metadata=_with_source_file({"override": True, "cleaned_query": cleaned_query}, candidate),
     )
     return match, LayerDetail(
         layer=RoutingLayer.EXPLICIT,
@@ -177,7 +186,7 @@ def try_scenario_layer(
                     layer=RoutingLayer.SCENARIO,
                     source=router._get_skill_source(rid, rel.get("namespace", "builtin")),
                     description=str(rel.get("description", "")),
-                    metadata={"scenario": scenario.get("scenario")},
+                    metadata=_with_source_file({"scenario": scenario.get("scenario")}, rel),
                 )
             )
 
@@ -189,7 +198,7 @@ def try_scenario_layer(
         layer=RoutingLayer.SCENARIO,
         source=router._get_skill_source(actual_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
-        metadata={"scenario": scenario_name},
+        metadata=_with_source_file({"scenario": scenario_name}, candidate),
     )
     return match, LayerDetail(
         layer=RoutingLayer.SCENARIO,
@@ -556,12 +565,15 @@ def _try_embedding_fallback(
         layer=RoutingLayer.SEMANTIC_INDEX,
         source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
-        metadata={
-            "index_hit": True,
-            "index_score": round(best_similarity, 3),
-            "embedding_match": True,
-            "scenarios": index[best_skill_id].scenarios[:3],
-        },
+        metadata=_with_source_file(
+            {
+                "index_hit": True,
+                "index_score": round(best_similarity, 3),
+                "embedding_match": True,
+                "scenarios": index[best_skill_id].scenarios[:3],
+            },
+            candidate,
+        ),
     )
     detail = LayerDetail(
         layer=RoutingLayer.SEMANTIC_INDEX,

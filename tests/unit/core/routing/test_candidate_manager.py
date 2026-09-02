@@ -143,6 +143,17 @@ class TestFilterRoutable:
         filtered, _ = mgr.filter_routable(candidates)
         assert filtered == []
 
+    def test_source_file_for_returns_indexed_path(self, tmp_path: Path) -> None:
+        mgr = CandidateManager(tmp_path)
+        skill = tmp_path / ".vibe" / "skills" / "demo-skill" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nid: demo-skill\nname: Demo\n---\n# demo\n", encoding="utf-8")
+        mgr.get_candidates()
+        found = mgr.source_file_for("demo-skill")
+        assert found is not None
+        assert Path(found).resolve() == skill.resolve()
+        assert mgr.source_file_for("missing-id") is None
+
 
 class TestGetSkillSource:
     """Test source determination from namespace."""

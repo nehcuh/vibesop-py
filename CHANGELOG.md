@@ -71,7 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   删除跟踪包 `fuck-my-shit-mountain.skill`（无正文仍进候选）。
   注入优先发现层 `source_file`（SkillLoader，再 glob）；hook NEXT STEP
   与 `vibe route` JSON/`SKILL.md:` 行使用真实路径，不再猜
-  `core/skills/<id>/SKILL.md`。
+  `core/skills/<id>/SKILL.md`。路由命中把候选 `source_file` 写入
+  SkillRoute.metadata，hook 注入按该路径加载。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实

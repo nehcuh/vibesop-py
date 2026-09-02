@@ -20,7 +20,7 @@ def _force_injectable(runtime: AgentRuntime) -> None:
 
     from vibesop.agent.runtime.skill_injector import InjectionMethod, InjectionResult
 
-    def _ok(skill_id: str, _platform: object) -> InjectionResult:
+    def _ok(skill_id: str, _platform: object, **_kwargs: object) -> InjectionResult:
         return InjectionResult(
             method=InjectionMethod.TEXT,
             payload=f"# {skill_id}\n\nbody",
@@ -972,3 +972,30 @@ class TestInjectFailClosed:
         assert "ACTIVE SKILL" not in data["systemMessage"]
         assert "MUST follow" not in data["hookSpecificOutput"]["additionalContext"]
         assert "SECURITY" in data["systemMessage"]
+
+    def test_inject_uses_candidate_source_file(self, tmp_path: Path) -> None:
+        """The file the router indexed is the file inject loads — not a glob guess."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        outside = tmp_path / "elsewhere" / "orphan.skill"
+        outside.mkdir(parents=True)
+        skill_md = outside / "SKILL.md"
+        skill_md.write_text(
+            "---\nid: orphan\n---\n# from candidate source_file\n", encoding="utf-8"
+        )
+
+        runtime = self._runtime_with_hit(tmp_path, skill_id="orphan")
+        runtime._router._router = SimpleNamespace(
+            _candidate_manager=SimpleNamespace(
+                source_file_for=lambda skill_id: str(skill_md) if skill_id == "orphan" else None
+            )
+        )
+        spy = MagicMock(wraps=runtime.injector.inject_single_skill)
+        runtime.injector.inject_single_skill = spy
+        result = runtime.handle_query("review my code")
+        spy.assert_called()
+        assert spy.call_args.kwargs.get("source_file") == str(skill_md)
+        assert result.skill_id == "orphan"
+        assert "from candidate source_file" in result.skill_content
+        assert "orphan.skill/SKILL.md" in result.skill_path.replace("\\", "/")

@@ -25,6 +25,18 @@ from vibesop.core.observability import ObservabilityTracer, get_tracer
 
 logger = logging.getLogger(__name__)
 
+
+def _source_file_from_route(primary: Any) -> str | None:
+    """Pull the discovered SKILL.md path off a SkillRoute-like object."""
+    meta = getattr(primary, "metadata", None) or {}
+    if isinstance(meta, dict):
+        sf = meta.get("source_file")
+        if sf:
+            return str(sf)
+    sf = getattr(primary, "source_file", None)
+    return str(sf) if sf else None
+
+
 # Module-level observability tracer (lazy-initialised).
 _obs_tracer: ObservabilityTracer | None = None
 
@@ -328,6 +340,20 @@ class AgentRuntime:
         self._plan_executor: Any = None
         self._context_injector: Any = None
 
+    def _lookup_routed_source_file(self, skill_id: str) -> str | None:
+        """The SKILL.md the candidate pool indexed for this id, if any."""
+        inner = getattr(self.router, "_router", self.router)
+        cm = getattr(inner, "_candidate_manager", None)
+        lookup = getattr(cm, "source_file_for", None)
+        if not callable(lookup):
+            return None
+        try:
+            found = lookup(skill_id)
+        except Exception:
+            logger.debug("candidate source_file lookup failed for %s", skill_id, exc_info=True)
+            return None
+        return found if isinstance(found, str) and found else None
+
     # ---- Lazy component accessors ----
 
     @property
@@ -555,6 +581,9 @@ class AgentRuntime:
                     decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
                 )
 
+                # Discovered SKILL.md for the eventual inject (match ⇔ that file).
+                _inject_source: str | None = None
+
                 # 3. Route the query
                 # gate18 pi NIT-4: routing layer for the task span (set in
                 # the branches below; written to span metadata at step 6).
@@ -653,6 +682,7 @@ class AgentRuntime:
                                 result.skill_id = getattr(primary, "skill_id", "")
                                 result.skill_name = getattr(primary, "skill_name", "")
                                 result.confidence = getattr(primary, "confidence", 0.0)
+                                _inject_source = _source_file_from_route(primary)
                                 # gate18 pi NIT-4: winning layer.
                                 _win_layer = getattr(primary, "layer", None)
                                 if _win_layer is not None:
@@ -704,7 +734,12 @@ class AgentRuntime:
                     and result.mode != "orchestrate"
                 ):
                     try:
-                        injection = self.injector.inject_single_skill(result.skill_id, platform)
+                        source_file = _inject_source or self._lookup_routed_source_file(
+                            result.skill_id
+                        )
+                        injection = self.injector.inject_single_skill(
+                            result.skill_id, platform, source_file=source_file
+                        )
                         if not injection.has_content:
                             logger.warning(
                                 "Routed skill '%s' has no injectable content; "
