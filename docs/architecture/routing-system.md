@@ -3,7 +3,7 @@
 > **Version**: 8.1.3
 > **Last Updated**: 2026-09-02
 >
-> 对外「技能路由是什么、实验说明了什么」见 **[给 AI 找对说明书](../skill-routing-explained.md)**。  
+> 对外「技能路由是什么、实验说明了什么」见 **[技能路由对外叙事](../skill-routing-explained.md)**。  
 > 本文只保留实现：级联、置信度、代码入口。不要用本文当产品宣传稿。
 
 ## Overview

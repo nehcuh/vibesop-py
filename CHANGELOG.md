@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- **技能路由对外叙事重写**（`docs/skill-routing-explained.md`）：用人话讲技能=说明书、路由=图书管理员；写入 R1–R8 对照实验发现（找对说明书会塑形成品，找错会把工程带歪）；标明与助手自带 Skills / Agent 工作台 / 观测云的差别，以及安装、纠正路由、技能进化。实现稿 `routing-system.md` 改为指向该文，不再当宣传口径。
+- **技能路由对外叙事**（`docs/skill-routing-explained.md`）：从 Warp Skill 自进化对照讲入口与出口；数字拆成 hermetic 硬门（34 条 / 88%）、影子徽章永不阻断、pytest 73% 不进效果表；写入 R6 失败观察（27B / 0 读取，不当起源神话）与 R8「找错可能比没找更伤」；Improver 标为缺口。实现稿 `routing-system.md` 只保留级联。另附纯文本变体 `docs/article-x-plain.txt`。
 
 ### Added
 
