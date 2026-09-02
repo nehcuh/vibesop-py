@@ -61,6 +61,15 @@ def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
         payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
     else:
         payload["skill_file"] = ""
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+
+    inj = SkillInjector(project_root=Path.cwd())
+    plan = payload.get("execution_plan")
+    if isinstance(plan, dict):
+        inj.annotate_plan_dict(plan)
+    steps = payload.get("steps")
+    if isinstance(steps, list):
+        inj.annotate_plan_dict({"steps": steps})
 
 
 _TIP_TEMPLATES: list[tuple[str, str]] = [

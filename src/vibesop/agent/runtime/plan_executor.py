@@ -74,6 +74,31 @@ class PlanExecutor:
     def __init__(self, project_root: str | Path = "."):
         self._project_root = Path(project_root).resolve()
 
+    def _annotate_skill_files(self, plan: ExecutionPlan) -> None:
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        SkillInjector(project_root=self._project_root).annotate_plan_skill_files(plan)
+
+    @staticmethod
+    def _skill_md_line(step: Any) -> str:
+        sid = getattr(step, "skill_id", "") or ""
+        path = getattr(step, "skill_file", "") or getattr(step, "skill_path", "") or ""
+        if sid in ("", "fallback-llm"):
+            return "- **SKILL.md**: (sentinel — do not read a guessed path)"
+        if path:
+            return f"- **SKILL.md**: `{path}`"
+        return "- **SKILL.md**: not found — do not guess skills/<id>/SKILL.md"
+
+    @staticmethod
+    def _read_skill_instruction(step: Any) -> str:
+        sid = getattr(step, "skill_id", "") or ""
+        path = getattr(step, "skill_file", "") or getattr(step, "skill_path", "") or ""
+        if sid in ("", "fallback-llm"):
+            return "此步骤是 fallback，不要去猜 SKILL.md 路径。"
+        if path:
+            return f"请先读取 {path} ，然后执行。不要猜 skills/{sid}/SKILL.md。"
+        return f"步骤 {sid} 无可用 SKILL.md，不要猜测路径，报告后询问是否继续。"
+
     def build_guide(self, plan: ExecutionPlan) -> ExecutionGuide:
         """Build an execution guide for the given plan.
 
@@ -83,6 +108,7 @@ class PlanExecutor:
         Returns:
             ExecutionGuide with prompt and markers
         """
+        self._annotate_skill_files(plan)
         prompt = self._build_prompt(plan)
         markers = self._extract_step_markers(plan)
         completion = self._build_completion_check(plan)
@@ -109,6 +135,7 @@ class PlanExecutor:
         """
         from vibesop.core.skills import SkillLoader
 
+        self._annotate_skill_files(plan)
         loader = SkillLoader(project_root=self._project_root)
         steps: list[StepManifest] = []
 
@@ -142,7 +169,9 @@ class PlanExecutor:
                 skill_content = unsafe_replacement_notice(step.skill_id)
             skill = loader.get_skill(step.skill_id)
             skill_name = skill.metadata.name if skill else step.skill_id
-            skill_path = str(skill.source_file) if skill and skill.source_file else ""
+            skill_path = step.skill_file or (
+                str(skill.source_file) if skill and skill.source_file else ""
+            )
 
             input_context = self._resolve_input_context(plan, step)
 
@@ -234,6 +263,7 @@ class PlanExecutor:
         Returns:
             Transition prompt text
         """
+        self._annotate_skill_files(plan)
         next_steps = [
             s
             for s in plan.steps
@@ -265,7 +295,7 @@ class PlanExecutor:
         lines.extend(
             [
                 "",
-                f"请先读取 {next_step.skill_id} 的 SKILL.md，然后执行。",
+                self._read_skill_instruction(next_step),
             ]
         )
 
@@ -341,7 +371,7 @@ class PlanExecutor:
                 "---",
                 "## 执行规则",
                 "",
-                "1. **每步必须读取 SKILL.md**: 在执行任何步骤前，先读取对应 skill 的 SKILL.md 文件",
+                "1. **每步必须读取 SKILL.md**: 读取该步骤列出的路径，不要猜 skills/<id>/SKILL.md",
                 "2. **严格按顺序**: 不要跳过步骤，不要改变顺序",
                 "3. **明确报告**: 每步完成后，必须声明"
                 + f"`<!-- {COMPLETION_MARKER_PREFIX}N] -->`"
@@ -361,6 +391,7 @@ class PlanExecutor:
         lines = [
             f"## 步骤 {step.step_number}: {step.intent}",
             f"- **Skill**: {step.skill_id}",
+            self._skill_md_line(step),
             f"- **任务**: {step.input_query}",
         ]
 
@@ -397,6 +428,7 @@ class PlanExecutor:
                 [
                     f"### 步骤 {step.step_number}: {step.intent}",
                     f"- **Skill**: {step.skill_id}",
+                    self._skill_md_line(step),
                     f"- **任务**: {step.input_query}",
                 ]
             )

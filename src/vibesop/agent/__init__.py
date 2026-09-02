@@ -303,6 +303,7 @@ class AgentRouter:
                     "step_id": step.step_id,
                     "step_number": step.step_number,
                     "skill_id": step.skill_id,
+                    "skill_file": getattr(step, "skill_file", "") or "",
                     "intent": step.intent,
                     "input_query": step.input_query,
                     "output_as": step.output_as,

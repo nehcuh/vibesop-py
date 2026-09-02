@@ -1218,6 +1218,10 @@ def orchestrate(
     if json_output:
         import json
 
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        if result.execution_plan is not None:
+            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(result.execution_plan)
         print(json.dumps(result.model_dump(mode="json"), indent=2, default=str, ensure_ascii=False))
     elif verbose:
         render_orchestration_result(result, console=console)
@@ -1535,7 +1539,14 @@ def _orchestration_post_process(
     if json_output:
         import json
 
-        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+        from vibesop.cli.render import attach_skill_file_payload
+
+        if result.execution_plan is not None:
+            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(result.execution_plan)
+        payload = result.to_dict()
+        attach_skill_file_payload(payload, result)
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         render_orchestration_result(result, console=console)
         console.print(

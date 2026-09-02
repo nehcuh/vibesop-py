@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from vibesop.cli.render import resolve_routed_skill_md
 from vibesop.core.models import ExecutionPlan, OrchestrationResult, StepStatus
+
+
+def _step_skill_file_suffix(step: object) -> str:
+    path = getattr(step, "skill_file", "") or ""
+    if not path:
+        sid = getattr(step, "skill_id", "") or ""
+        resolved = resolve_routed_skill_md(sid) if sid else None
+        path = resolved.as_posix() if resolved is not None else ""
+    if path:
+        return f"\n   [dim]SKILL.md:[/dim] {path} "
+    return "\n   [yellow]SKILL.md: not found — do not guess[/yellow] "
 
 
 def render_orchestration_result(
@@ -58,11 +72,18 @@ def _render_single_result(result: OrchestrationResult, console: Console) -> None
         )
 
     # Agent Override Protocol — mandatory footer
+    sid = result.primary.skill_id if result.primary else ""
+    resolved = resolve_routed_skill_md(sid) if sid else None
+    skill_md_hint = (
+        resolved.as_posix()
+        if resolved is not None
+        else "the SKILL.md path from this result (do not guess skills/<id>/SKILL.md)"
+    )
     console.print()
     console.print(
         Panel(
             "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
-            "1. Read the skill file at [bold]skills/<matched-skill>/SKILL.md[/bold]\n"
+            f"1. Read the skill file at [bold]{skill_md_hint}[/bold]\n"
             "2. Execute the skill workflow exactly as defined\n\n"
             "If you choose NOT to use the recommended skill, you MUST:\n"
             "  • State your explicit reasoning\n"
@@ -82,6 +103,9 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
     if plan is None:
         console.print("[red]Error: orchestrated result with no plan[/red]")
         return
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+
+    SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(plan)
 
     # Header
     header_text = (
@@ -117,12 +141,14 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
             if i == 0:
                 data_flow.add(
                     f"📥 Step {step.step_number}: [bold]{step.skill_id}[/bold] "
+                    f"{_step_skill_file_suffix(step)}"
                     f"→ output: [bold cyan]'{step.output_as}'[/bold cyan]"
                 )
             else:
                 prev = plan.steps[i - 1]
                 data_flow.add(
-                    f"⬇️  Step {step.step_number}: [bold]{step.skill_id}[/bold]\n"
+                    f"⬇️  Step {step.step_number}: [bold]{step.skill_id}[/bold]"
+                    f"{_step_skill_file_suffix(step)}\n"
                     f"   [dim]input:[/dim] [cyan]'{prev.output_as}'[/cyan] from Step {prev.step_number}"
                 )
     console.print(flow_tree)

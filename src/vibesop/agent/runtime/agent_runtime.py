@@ -174,6 +174,12 @@ class AgentRuntimeResult:
 
         # Orchestration mode
         if self.mode == "orchestrate" and self.plan:
+            if isinstance(self.plan, dict):
+                from vibesop.agent.runtime.skill_injector import SkillInjector
+
+                SkillInjector(project_root=self.project_root or Path.cwd()).annotate_plan_dict(
+                    self.plan
+                )
             plan_text = json.dumps(self.plan, indent=2, ensure_ascii=False)
             response: dict[str, Any] = {
                 "systemMessage": ("🔀 VibeSOP detected multiple intents. Execution plan injected."),
@@ -720,6 +726,9 @@ class AgentRuntime:
                     result.errors.append(f"Routing failed: {e}")
                     _task_span.set_error(f"Routing failed: {e}")
                     return result
+
+                if isinstance(result.plan, dict):
+                    self.injector.annotate_plan_dict(result.plan)
 
                 # 6. Inject skill content. A routed id with no SKILL.md body
                 # is not a match — demote to no-match rather than hand the

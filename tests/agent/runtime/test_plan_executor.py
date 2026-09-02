@@ -315,6 +315,7 @@ class TestPlanExecutor:
         guide = executor.build_guide(plan)
 
         assert "每步必须读取 SKILL.md" in guide.prompt
+        assert "不要猜 skills/<id>/SKILL.md" in guide.prompt
         assert "严格按顺序" in guide.prompt
         assert "明确报告" in guide.prompt
         assert "失败处理" in guide.prompt

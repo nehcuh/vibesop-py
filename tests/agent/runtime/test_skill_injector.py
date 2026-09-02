@@ -236,6 +236,34 @@ class TestSkillInjector:
         assert result.method == InjectionMethod.INSTRUCTION
         assert "步骤" in result.payload
         assert "skill-a" in result.payload
+        assert "不要猜 skills/<id>/SKILL.md" in result.payload
+
+    def test_execution_plan_lists_real_skill_md_path(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / ".vibe" / "skills" / "cross-cutting" / "kimi-gated-fix.skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: kimi-gated-fix\n---\n# body\n", encoding="utf-8"
+        )
+        injector = SkillInjector(project_root=tmp_path)
+        plan = ExecutionPlan(
+            plan_id="p",
+            original_query="q",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="kimi-gated-fix",
+                    intent="fix",
+                    input_query="fix",
+                )
+            ],
+            execution_mode=ExecutionMode.SEQUENTIAL,
+        )
+        result = injector.inject_execution_plan(plan, PlatformType.GENERIC)
+        text = str(result.payload).replace("\\", "/")
+        assert "kimi-gated-fix.skill/SKILL.md" in text
+        assert "skills/kimi-gated-fix/SKILL.md" not in text
+        assert plan.steps[0].skill_file.replace("\\", "/").endswith("kimi-gated-fix.skill/SKILL.md")
 
     def test_load_skill_from_core_skills(self, tmp_path) -> None:
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")

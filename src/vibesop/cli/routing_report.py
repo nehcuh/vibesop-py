@@ -140,11 +140,20 @@ def render_routing_report(
         console.print(alt_table)
 
     # Agent Override Protocol — mandatory footer
+    from vibesop.cli.render import resolve_routed_skill_md
+
+    sid = result.primary.skill_id if result.primary else ""
+    resolved = resolve_routed_skill_md(sid) if sid else None
+    skill_md_hint = (
+        resolved.as_posix()
+        if resolved is not None
+        else "the SKILL.md path from this result (do not guess skills/<id>/SKILL.md)"
+    )
     console.print()
     console.print(
         Panel(
             "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
-            "1. Read the skill file at [bold]skills/<matched-skill>/SKILL.md[/bold]\n"
+            f"1. Read the skill file at [bold]{skill_md_hint}[/bold]\n"
             "2. Execute the skill workflow exactly as defined\n\n"
             "If you choose NOT to use the recommended skill, you MUST:\n"
             "  • State your explicit reasoning\n"

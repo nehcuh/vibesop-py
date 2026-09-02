@@ -1,6 +1,12 @@
 
 ## Current Session
 
+### S60 (2026-09-03) [vibesop-py] 编排逐步 SKILL.md 真实路径
+
+- 多路对抗目标：编排信封/计划文案/CLI 不再猜 `skills/<id>/SKILL.md`。
+- ExecutionStep.skill_file + annotate_plan_* ；hook orchestrate JSON、inject_execution_plan、PlanExecutor guide/transition、CLI orchestration_report。
+- Recorded: no
+
 ### S59 (2026-09-03) [vibesop-py] source_file 主路径 + CLI 真实 SKILL.md
 
 - Inject: explicit `source_file` → SkillLoader → glob。hook `NEXT STEP` 用 `skill_path`。`vibe route` 人机面板和 `--json` 带真实 `skill_file`。

@@ -195,6 +195,26 @@ class TestAgentRuntimeHookResponse:
         assert "gstack/analyze" in resp
         assert "gstack/refactor" in resp
 
+    def test_orchestrate_hook_plan_includes_skill_file(self, tmp_path):
+        skill_dir = tmp_path / ".vibe" / "skills" / "cross-cutting" / "kimi-gated-fix.skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: kimi-gated-fix\n---\n# body\n", encoding="utf-8"
+        )
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="orchestrate",
+            plan={
+                "plan_id": "p1",
+                "steps": [{"step_number": 1, "skill_id": "kimi-gated-fix", "intent": "fix"}],
+            },
+            project_root=tmp_path,
+        )
+        data = json.loads(result.to_hook_response())
+        ctx = data["hookSpecificOutput"]["additionalContext"]
+        assert "kimi-gated-fix.skill/SKILL.md" in ctx.replace("\\", "/")
+        assert "skills/kimi-gated-fix/SKILL.md" not in ctx
+
     def test_hook_hint_uses_injected_skill_path(self):
         result = AgentRuntimeResult(
             intercepted=True,

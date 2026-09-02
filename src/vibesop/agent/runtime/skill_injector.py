@@ -208,6 +208,7 @@ class SkillInjector:
         Returns:
             InjectionResult with platform-specific payload
         """
+        self.annotate_plan_skill_files(plan)
         plan_content = self._format_execution_plan(plan)
 
         if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
@@ -547,6 +548,43 @@ You MUST follow this skill's workflow. Do not skip steps.
             truncated=truncated,
         )
 
+    def annotate_plan_skill_files(self, plan: ExecutionPlan) -> None:
+        """Fill each step's ``skill_file`` with the injectable SKILL.md path."""
+        for step in plan.steps:
+            sid = step.skill_id
+            if not sid or sid == "fallback-llm":
+                step.skill_file = ""
+                continue
+            if step.skill_file:
+                continue
+            path = self.resolve_skill_md(sid)
+            step.skill_file = path.as_posix() if path is not None else ""
+
+    def annotate_plan_dict(self, plan: dict[str, Any]) -> None:
+        """Same as ``annotate_plan_skill_files`` for a serialized plan dict."""
+        steps = plan.get("steps")
+        if not isinstance(steps, list):
+            return
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            sid = str(step.get("skill_id") or "")
+            if not sid or sid == "fallback-llm":
+                step["skill_file"] = ""
+                continue
+            if step.get("skill_file"):
+                continue
+            path = self.resolve_skill_md(sid)
+            step["skill_file"] = path.as_posix() if path is not None else ""
+
+    @staticmethod
+    def _skill_md_bullet(skill_id: str, skill_file: str) -> str:
+        if skill_id in ("", "fallback-llm"):
+            return "- SKILL.md: (sentinel — do not read a guessed path)"
+        if skill_file:
+            return f"- SKILL.md: {skill_file}"
+        return "- SKILL.md: not found — do not guess skills/<id>/SKILL.md"
+
     def _format_execution_plan(self, plan: ExecutionPlan) -> str:
         """Format an execution plan for agent consumption.
 
@@ -596,6 +634,7 @@ You MUST follow this skill's workflow. Do not skip steps.
                     [
                         f"## 步骤 {step.step_number}: {step.intent}",
                         f"- 使用 skill: {step.skill_id}",
+                        self._skill_md_bullet(step.skill_id, step.skill_file),
                         f"- 任务: {step.input_query}",
                         f"- 输出变量: {step.output_as}",
                         "",
@@ -613,6 +652,7 @@ You MUST follow this skill's workflow. Do not skip steps.
                             "",
                             f"### 步骤 {step.step_number}: {step.intent}",
                             f"- 使用 skill: {step.skill_id}",
+                            self._skill_md_bullet(step.skill_id, step.skill_file),
                             f"- 任务: {step.input_query}",
                         ]
                     )
@@ -630,7 +670,7 @@ You MUST follow this skill's workflow. Do not skip steps.
                 "---",
                 "执行规则:",
                 "1. 严格按照步骤顺序执行",
-                "2. 每步必须读取对应的 SKILL.md",
+                "2. 每步读取该步骤列出的 SKILL.md 路径，不要猜 skills/<id>/SKILL.md",
                 "3. 每步完成后明确报告",
                 "4. 如果某步失败，报告错误并询问是否继续",
             ]

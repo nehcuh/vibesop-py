@@ -324,6 +324,10 @@ class ExecutionStep(BaseModel):
     step_id: str = Field(..., description="Step UUID")
     step_number: int = Field(..., ge=1, description="Step position")
     skill_id: str = Field(..., description="Target skill ID")
+    skill_file: str = Field(
+        default="",
+        description="Resolved SKILL.md path for this step (empty if none)",
+    )
     intent: str = Field(default="", description="Human-readable intent")
     original_query_segment: str = Field(
         default="", description="Original query segment that triggered this step"
@@ -410,6 +414,7 @@ class ExecutionStep(BaseModel):
             "step_id": self.step_id,
             "step_number": self.step_number,
             "skill_id": self.skill_id,
+            "skill_file": self.skill_file,
             "intent": self.intent,
             "original_query_segment": self.original_query_segment,
             "input_query": self.input_query,
@@ -458,6 +463,7 @@ class ExecutionStep(BaseModel):
             step_id=data["step_id"],
             step_number=data["step_number"],
             skill_id=data["skill_id"],
+            skill_file=data.get("skill_file", ""),
             intent=data.get("intent", ""),
             original_query_segment=data.get("original_query_segment", ""),
             input_query=data.get("input_query", ""),
@@ -1120,7 +1126,9 @@ class ExecutionManifest:
             "## Execution Rules",
             "",
             "1. Execute steps in numbered order (step groups may be parallel)",
-            "2. Each step includes the full SKILL.md content — read it before executing",
+            "2. Each step lists a SKILL.md path and inlines content — "
+            "read that path, never guess skills/<id>/SKILL.md. "
+            "If the inlined block is a VibeSOP notice, do not open the file",
             "3. After completing a step, emit the completion marker exactly",
             "4. Data marked as `input_context` is output from an upstream step",
             "5. If a step fails, report the error before continuing",
@@ -1135,6 +1143,7 @@ class ExecutionManifest:
                     f"## Step {step.step_number}: {step.skill_id}",
                     "",
                     f"**Skill**: {step.skill_name}",
+                    f"**SKILL.md**: {step.skill_path or 'not found — do not guess a path'}",
                     "",
                 ]
             )
