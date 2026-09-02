@@ -2,6 +2,9 @@
 
 ## Overview
 
+Narrative for humans (Chinese, with experiment findings):
+[给 AI 找对说明书](../skill-routing-explained.md).
+
 VibeSOP does **not** execute skills. It **routes** queries to the right skill and
 **injects** the skill's instructions (SKILL.md) into your AI Agent's context. The
 actual execution — reading files, writing code, running tests — is done by your

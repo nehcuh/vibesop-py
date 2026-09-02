@@ -73,6 +73,8 @@ VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周
 
 📖 **阅读我们的哲学**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md)
 
+🧭 **技能路由（人话 + 对照实验）**: [docs/skill-routing-explained.md](docs/skill-routing-explained.md)
+
 🎯 **实际用例**: [docs/USE_CASES.md](docs/USE_CASES.md) (中文) | [docs/USE_CASES.en.md](docs/USE_CASES.en.md) (English) — 12 个具体场景
 
 ---

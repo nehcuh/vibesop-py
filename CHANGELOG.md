@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **技能路由对外叙事重写**（`docs/skill-routing-explained.md`）：用人话讲技能=说明书、路由=图书管理员；写入 R1–R8 对照实验发现（找对说明书会塑形成品，找错会把工程带歪）；标明与助手自带 Skills / Agent 工作台 / 观测云的差别，以及安装、纠正路由、技能进化。实现稿 `routing-system.md` 改为指向该文，不再当宣传口径。
+
 ### Added
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
