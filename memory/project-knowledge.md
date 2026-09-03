@@ -2,6 +2,14 @@
 
 ## Technical Pitfalls
 
+### basedpyright 本地与 CI 同版本不同结果 — 判"净增"必须对基线差，不看绝对数 (2026-09-03 S66/S67)
+
+**Issue**: 本地 `uv run basedpyright` 报 29-30 errors（含 confirmation.py 私有跨模块导入、dashboard Flask 路由被报 unused 等），而 CI Type Check 同一 commit 全绿。**版本相同**（本地=lock=CI 均 1.39.9），无参数调用方式也相同——不是版本漂移，是环境性结果分叉（平台/stub 解析差异未定位）。绝对数会误导：看到 30 errors 会以为 CI 要红。
+
+**Solution**: 发布/提交前判类型检查净增，用 `git stash` 在 HEAD（或 origin/main）跑一遍记基线数，再对比工作树——只关心差值。同型佐证：新增 `_candidate_source_lookup` 私有函数被本地报 reportUnusedFunction（CI 不报），改公名 `candidate_source_lookup` 后回到基线持平。另外跨模块导入的符号不该用下划线私有名（私有名正是该规则只盯的目标）。
+
+**Files**: `src/vibesop/cli/render.py`, `src/vibesop/cli/confirmation.py`（同型存量）
+
 ### session-end 三条「去读文件」命令只有一条能拿到路径 (2026-09-03 S62)
 
 **Issue**: 路由失败后的 session-end 回退曾写成 `vibe route --slash "/session-end"`。`--slash` 只接受 `/vibe-*`，该命令 Exit(1)。改成 `vibe route "session-end"` 也不行：短查询旁路 + 守卫技能（无显式告别信号）→ `fallback-llm`、`skill_file` 空。

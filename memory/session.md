@@ -41,6 +41,37 @@
 - Workflow: launching `adversarial-review` with args.base=7f2de48 args.head=967e134 args.patch=frozen patch
 - Recorded: no
 
+### S67 (2026-09-03) [vibesop-py] 8.2.0 发版（并行线，与上方对抗评审线同号不同文）
+
+- 标准 release 流程（复刻 7f2de48 手法）：CHANGELOG 重组（v8.3 契约 Added×4 + instinct-learning Removed 留守 Unreleased，其余入 [8.2.0]）；pyproject+uv.lock bump；33 文件版本串扫荡（含 `v8.1.4+` 形态，先例 7f2de48 也换）；commit `967e134` + tag `v8.2.0` 已 push
+- minor 依据：Changed 面行为变化（demo always-on 路由胜者变化/confirmation_mode 默认 ambiguous_only/demote 计入 success=False/注入器根序中心优先）
+- 验证：`vibe --version`=8.2.0、pkg 8.2.0、badge 同步；ruff 干净；CI 全 job 绿（含 Windows 双 job）+ E2E 绿
+- 坑：CHANGELOG 区块搬迁脚本第一版 slice 取到尾而非到下一标记 → 全文件三倍拼接，`git checkout -- CHANGELOG.md` 恢复后重写（切片用 `index(marker)` 到下一 marker 的半开区间）
+
+### S66 (2026-09-03) [vibesop-py] 评审修复轮 — 标准流程分批
+
+- 批A（P1-1/P2-3/P2-5）commit `925d4ad`：kimi APPROVE + grok 复审 APPROVE（双门禁闭环）
+- 批B（P1-2/P1-3/P2-1/P2-2/P2-6）commit `a9cf9c4`：source_file 全链路穿透；kimi APPROVE + grok APPROVE（5 MINOR 并入批D）
+- 批C 主 commit `7177b65`（22 文件 +413/−37）：doctor Deployment Freshness（5 可构建平台 layout + 段落级猜路径扫描 + 版本标记比对）+ `all_ok` 解包 bug 修复 + `vibesop_version` 量纲（模板/kimi slim/track.sh hook 去硬编码 5.2.0）+ Pi 全链路去猜路径文案 + 长度口径分叉文档化。kimi 三轮 APPROVE（R1 量纲+layout 失真 → R2 session-lifecycle 三平台未扫+cursor 假成功 → R3 全闭合）；fresh 5 平台 build×layout 全扫零误报、标记全 8.1.4；本机 doctor 报出 3 份存量 session-lifecycle 残留
+- 批C grok 复审 REQUEST CHANGES（1B+3MAJOR+4MINOR+2NIT）→ 全采纳修复（fixC2 commit `730b5c6`）：e2e 旧断言重写为 skill_file 契约+生产扫描器同构；pi skills.md 去生成树读命令+纳入 sweep；`_render_extension`×2 补 vibesop_version；exit 码拍板=黄灯 advisory 不参与聚合；session-end 正则左边界；opencode 补扫 docs/routing.md；grok 复检 APPROVE，批C 闭环
+- 批D 闭环：commit `7e2bc94`（kimi APPROVE，其 NIT-1 对象级 annotate 漏传 lookup + NIT-2 数组损坏守卫采纳进同 commit）+ `19b2754`（grok 只读复审 APPROVE，NIT×4 全采纳：顶层 skill_file 补 lookup 对称/闭包回归钉含 MagicMock 安全/缓存内层 list 守卫/remove 自愈口径拆分——skill-index 持续到 `vibe skills index` 非 next routing pass）
+- 全量验证（task #13）：6638 passed / 15 skipped / 105 deselected（批B 时 6624，+14）；ruff check . + format --check . 全仓干净；basedpyright 29 errors = origin/main 基线持平（净增 0）；CHANGELOG 汇总 commit `14f96b5`（批A/B 条目补录 + 行为变化单列：success=False 统计口径 / 注入器根序中心存储优先）
+- 排障记录：origin/main CI Lint 本就红（7f2de48 3 文件未 format，批A/B 提交顺带修复）；本地 basedpyright 29 错误=环境漂移（CI Type Check 同 commit 绿，confirmation.py 同模式佐证）
+- 终态：7 commits 已 push（7f2de48..14f96b5），CI 全绿（Lint 转绿=批A/B format 顺带修复 origin/main 红灯；Type Check 绿证实 basedpyright 净增 0；Windows 双 job 绿；E2E/CodeQL/Dependabot 全绿）。backlog：decomposer 未过滤池、execute_build 假成功、plan_executor/orchestration_report/skill_injector.py:216 三处 annotate 无 lookup（非 CLI 面）
+- 产物链：`.omx/artifacts/pull-20260903-fix{A,B,C,C2}-*`；backlog：execute_build 不查 result.success（cursor 假成功根因，grok/kimi 双双点名另开 ticket）
+- Recorded: no
+
+### S65 (2026-09-03) [vibesop-py] pull latest + 三路独立对抗评审
+
+- Pull `fa6e3fc..7f2de48`（11 commits，fail-closed/skill_file 链 S58–S64 + 8.1.4）；session.md 冲突经 stash→插回时间位解决（并行 session 同号 S57 不同文）
+- 三路：A=claude 正确性 NEEDS_FIX（2 MAJOR）· B=claude 架构 APPROVE_WITH_NITS · C=grok 外部 NEEDS_FIX（3 MAJOR）；定向 225/244/225 全绿
+- **终裁 REQUEST CHANGES：0 P0 / 5 P1 / 8 P2 / 4 NIT**。P1：demote 丢信号（3/3 收敛+telemetry 回灌 instinct/gold）、source_file 断线主导层+根序分歧错体风险（3/3）、None 穿透+CHANGELOG 假声明、存量安装未 rebuild（always-loaded 打架 NEXT STEP）、.pi/prompts/vibe-route.md 仍猜路径
+- 仲裁人亲证 4 项：None 穿透复现、pi prompt 猜路径、路由器 vs 注入器根序逐行比对、本机 ~/.claude 活体旧文案 + session 开头收到 fa6e3fc 修复前 `[ACTIVE SKILL]` 包裹幽灵通知（bug 实机复现）
+- 产物链 `.omx/artifacts/{review-diff-fa6e3fc-7f2de48.patch, pull-20260903-review-{instructions,lane-a,lane-b,grok,synthesis}.md}` + grok-prompt/log/err
+- C 路（grok）独抓全部"部署面/对外声明"P1——外部视角不可替代又一实证
+- Next: 用户裁决是否开修复轮（P1-1 与 P1-2/3 同修性价比最高）
+- Recorded: no
+
 ### S64 (2026-09-03) [vibesop-py] 保存并提交远程 — session-end flush
 
 - 代码已在 `origin/main` `c67c82a`。工作区无未提交源码；未入库 `.omx/`、`.grok/workflows/`、`examples/datasets/`。
@@ -109,6 +140,12 @@
 - 独立根因 7 簇：虚构 `/vibe-review`；R7/R8 死链+未完成写成结论；SequencePattern 自动环；四段拓扑画反；88% 不是数字硬门；环 2 命令张冠李戴；R6 样本量口径
 - 产物: `.omx/artifacts/adversarial-review-5a7c6fa-fa6e3fc.md`
 - 落地: 三路 plan 对抗均 REQUEST CHANGES；吸收 L1 禁止 use tdd、L4 锁 mermaid、L2 禁 R6 回填、L5 表外 CI。已改正文+纯文本+CHANGELOG。复审 workflow 已发。
+- Recorded: no
+
+### S57b (2026-09-02) [vibesop-py] 文档优化落地 — 两路改写对抗 + 双路验证 [并行 session 日志回插]
+
+- 口径锁：`.omx/artifacts/docs-rewrite-20260902-claims-lock.md`；对抗写稿 W1 保守骨架 / W2 最大诚实 → 合成取 W1 管线图 + W2 诚实骨架
+- 双路验证：claude+kimi PASS_WITH_NITS；P0-1..3 与 P1-1..12 全 CLOSED；终落地 PR #118 squash `fa6e3fc`（其后的对抗复审由 S57 pull 评审链跟进）
 - Recorded: no
 
 ### S56b (2026-09-02) [vibesop-py] R8 独立命题人 TASK.md
