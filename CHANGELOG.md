@@ -83,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   目录文案（``docs/skills.md.j2``）、签入的 Pi 生成物（``.pi/prompts/vibe-route.md``、
   ``.pi/docs/routing-protocol.md``）与 USE_CASES 示例同步：跟 ``skill_file`` /
   ``NEXT STEP``，不把扁平 ``skills/<id>/SKILL.md`` 当路由后读路径。
+  hook 失败分支不再输出 ``skills/<id>/SKILL.md``；Pi ``vibesop-route.ts`` 与
+  OpenCode 插件优先消费 JSON ``skill_file``。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实

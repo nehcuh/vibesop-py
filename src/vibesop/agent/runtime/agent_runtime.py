@@ -221,12 +221,11 @@ class AgentRuntimeResult:
             return "{}"
 
         # Single skill match — build full response
-        skill_flat = self.skill_id.replace("/", "-")
         conf_pct = int(self.confidence * 100)
 
         # Hint path must match real on-disk layout. Prefer the path inject
-        # actually loaded (discovered source_file). Fall back to the guess
-        # ladder for results constructed without going through inject.
+        # actually loaded (discovered source_file). If nothing exists on
+        # disk, say so — do not guess skills/<id>/SKILL.md.
         user_root = self.project_root or Path.cwd()
         if self.skill_path:
             hint_path = self.skill_path.replace("\\", "/")
@@ -242,7 +241,10 @@ class AgentRuntimeResult:
                     else f"core/skills/{bare_name}/SKILL.md"
                 )
             else:
-                hint_path = f"skills/{skill_flat}/SKILL.md"
+                hint_path = (
+                    f"{self.skill_id} SKILL.md not found — "
+                    "do not guess skills/<id>/SKILL.md"
+                )
                 # W4/W5 promote materializes custom skills under
                 # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
                 # skill_id) — never the platform skills dir. Point the agent
@@ -255,7 +257,10 @@ class AgentRuntimeResult:
                         hint_path = p.resolve().as_posix()
                         break
         else:
-            hint_path = f"skills/{self.skill_id}/SKILL.md"
+            hint_path = (
+                f"{self.skill_id} SKILL.md not found — "
+                "do not guess skills/<id>/SKILL.md"
+            )
             vibe_skills = user_root / ".vibe" / "skills"
             if vibe_skills.is_dir():
                 dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))

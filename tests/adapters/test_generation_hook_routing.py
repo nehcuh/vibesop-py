@@ -209,6 +209,13 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
         assert ".pi/skills/<matched-skill>/SKILL.md" in text
         assert re.search(r"(?<!\.pi/)skills/<matched-skill>/SKILL\.md", text) is None
 
+    def test_pi_route_extension_prefers_skill_file(self) -> None:
+        rel = "pi/extensions/vibesop-route.ts.j2"
+        text = (TEMPLATES_DIR / rel).read_text(encoding="utf-8")
+        assert "skill_file" in text
+        assert "do not guess skills/<id>/SKILL.md" in text
+        assert "${skillsBaseDir}/${skillDir}/SKILL.md" not in text
+
     def test_use_cases_docs_do_not_teach_guessed_next_step(self) -> None:
         repo = Path(__file__).resolve().parents[2]
         for rel in ("docs/USE_CASES.md", "docs/USE_CASES.en.md"):

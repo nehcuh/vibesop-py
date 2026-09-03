@@ -176,11 +176,12 @@ class TestAgentRuntimeHookResponseHintPath:
         # Sanity: still mentions the skill name
         assert "deep-diagnosis-optimization" in response
 
-    def test_hint_path_for_external_pack_keeps_flat(self) -> None:
-        """gstack/yyy → skills/{gstack-yyy}/SKILL.md (pack-prefixed flat dir)."""
+    def test_hint_path_for_external_pack_does_not_guess_flat(self) -> None:
+        """Missing on-disk file: do not send the agent to skills/<flat>/SKILL.md."""
         result = self._make_result("gstack/review")
         response = result.to_hook_response(no_match_message=False)
-        assert "skills/gstack-review/SKILL.md" in response
+        assert "skills/gstack-review/SKILL.md" not in response
+        assert "do not guess skills/<id>/SKILL.md" in response
 
     def test_hint_path_for_promoted_custom_skill_points_at_vibe_store(
         self, tmp_path, monkeypatch
@@ -211,20 +212,21 @@ class TestAgentRuntimeHookResponseHintPath:
     def test_hint_path_for_promoted_custom_skill_falls_back_when_absent(
         self, tmp_path, monkeypatch
     ) -> None:
-        """No .vibe/skills copy (e.g. project run from elsewhere) → keep the
-        legacy flat hint rather than a guaranteed-dead path."""
+        """No .vibe/skills copy → do not guess a dead skills/<id>/ path."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "empty-home")
 
         result = self._make_result("custom/ghost-abc123")
         result.project_root = tmp_path
         response = result.to_hook_response(no_match_message=False)
-        assert "skills/custom-ghost-abc123/SKILL.md" in response
+        assert "skills/custom-ghost-abc123/SKILL.md" not in response
+        assert "do not guess skills/<id>/SKILL.md" in response
 
     def test_hint_path_for_bare_id(self) -> None:
-        """Bare id (no namespace) → skills/{id}/SKILL.md."""
+        """Bare id with no on-disk file → do not guess skills/{id}/SKILL.md."""
         result = self._make_result("diagnose")
         response = result.to_hook_response(no_match_message=False)
-        assert "skills/diagnose/SKILL.md" in response
+        assert "skills/diagnose/SKILL.md" not in response
+        assert "do not guess skills/<id>/SKILL.md" in response
 
 
 class TestAgentRuntimeLayerMetadata:

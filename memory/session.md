@@ -5,7 +5,7 @@
 
 - 顺序：skills.md.j2 → 签入 `.pi/prompts/vibe-route.md` + routing-protocol.md → Pi skills 目录 → AGENTS 表 → USE_CASES。未跑 `vibe build pi`（会砸 Multi AGENTS.md）。
 - [executed] 38 passed。Docker 本机无。
-- 双路：Kimi COMMENT（Pi 扩展仍拼 `.pi/skills/` 无视 skill_file）/ Claude APPROVE（另标 runtime 失败分支 NEXT STEP 猜路径、OpenCode loadSkillContent）。
+- 双路：Kimi COMMENT（Pi 扩展仍拼 `.pi/skills/` 无视 skill_file）/ Claude APPROVE（另标 runtime 失败分支 NEXT STEP 猜路径、OpenCode loadSkillContent）。已吸收：runtime 失败 hint、Pi 扩展、OpenCode `loadSkillContent` 优先 `skill_file`。[executed] 60 + 139 定向 passed。
 - Recorded: no
 
 ### S62 (2026-09-03) [vibesop-py] 95ed6d2 双路复审 → 吸收 session-end 死命令

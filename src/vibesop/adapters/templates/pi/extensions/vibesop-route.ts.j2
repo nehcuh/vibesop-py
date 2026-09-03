@@ -15,6 +15,7 @@ import { execSync } from "node:child_process";
 interface RouteResult {
   has_match: boolean;
   mode?: string;
+  skill_file?: string;
   primary?: {
     skill_id: string;
     confidence: number;
@@ -62,18 +63,21 @@ function runVibeRoute(prompt: string, cwd: string): RouteResult | null {
 
 function buildSkillInstruction(
   result: RouteResult,
-  skillsBaseDir: string
+  _skillsBaseDir: string
 ): string {
   const skill = result.primary!;
   const name = skillName(skill.skill_id);
-  const skillDir = skill.skill_id.replace(/\//g, "-");
-  const skillPath = `${skillsBaseDir}/${skillDir}/SKILL.md`;
+  const skillPath = (result.skill_file || "").trim();
 
   let instruction = `\n\n## VibeSOP Routing Result\n\n`;
   instruction += `Matched skill: **${name}** (${skill.skill_id})\n`;
   instruction += `Confidence: ${Math.round(skill.confidence * 100)}%\n\n`;
-  instruction += `**IMPORTANT**: Read the skill file at \`${skillPath}\` and follow its instructions exactly.\n`;
-  instruction += `Use the \`read\` tool to load: \`${skillPath}\`\n`;
+  if (skillPath) {
+    instruction += `**IMPORTANT**: Read the skill file at \`${skillPath}\` and follow its instructions exactly.\n`;
+    instruction += `Use the \`read\` tool to load: \`${skillPath}\`\n`;
+  } else {
+    instruction += `SKILL.md: not found — do not guess skills/<id>/SKILL.md\n`;
+  }
 
   if (result.alternatives && result.alternatives.length > 0) {
     instruction += `\nAlternative skills:\n`;

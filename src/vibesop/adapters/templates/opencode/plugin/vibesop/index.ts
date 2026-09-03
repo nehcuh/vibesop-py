@@ -20,6 +20,7 @@ const STATE_FILE = path.join(OPCODE_DIR, ".vibesop-state.json");
 
 interface VibeSOPState {
   activeSkill: Record<string, string>;
+  activeSkillFile: Record<string, string>;
   activePlan: Record<string, string>;
   toolHistory: Record<string, Array<{ tool: string; args: any; timestamp: number }>>;
 }
@@ -30,7 +31,7 @@ function readState(): VibeSOPState {
       return JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
     }
   } catch {}
-  return { activeSkill: {}, activePlan: {}, toolHistory: {} };
+  return { activeSkill: {}, activeSkillFile: {}, activePlan: {}, toolHistory: {} };
 }
 
 function writeState(state: VibeSOPState): void {
@@ -42,6 +43,7 @@ function writeState(state: VibeSOPState): void {
 
 interface RouteResult {
   mode?: string;
+  skill_file?: string;
   primary?: { skill_id?: string; confidence?: number };
   execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; skill_file?: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
   message?: string;
@@ -62,7 +64,10 @@ export default {
     // Check if there's an active skill for this session
     const activeSkill = await getActiveSkill(sessionId);
     if (activeSkill) {
-      const skillContent = await loadSkillContent(activeSkill);
+      const skillContent = await loadSkillContent(
+        activeSkill,
+        await getActiveSkillFile(sessionId),
+      );
       if (skillContent) {
         output.system.push(
           `<vibesop-skill id="${activeSkill}">\n${skillContent}\n</vibesop-skill>`
@@ -108,7 +113,11 @@ export default {
       });
     } else if (result.primary && result.primary.skill_id !== "fallback-llm") {
       // Single skill: mark as active for next system.transform
-      await setActiveSkill(input.sessionID, result.primary.skill_id);
+      await setActiveSkill(
+        input.sessionID,
+        result.primary.skill_id,
+        result.skill_file,
+      );
 
       await output.client?.tui?.showToast?.({
         title: "VibeSOP",
@@ -132,14 +141,31 @@ async function getActiveSkill(sessionId: string): Promise<string | null> {
   return state.activeSkill[sessionId] || null;
 }
 
-async function setActiveSkill(sessionId: string, skillId: string): Promise<void> {
+async function setActiveSkill(
+  sessionId: string,
+  skillId: string,
+  skillFile?: string,
+): Promise<void> {
   const state = readState();
   state.activeSkill[sessionId] = skillId;
+  if (!state.activeSkillFile) state.activeSkillFile = {};
+  if (skillFile) {
+    state.activeSkillFile[sessionId] = skillFile;
+  }
   writeState(state);
 }
 
-async function loadSkillContent(skillId: string): Promise<string | null> {
+async function getActiveSkillFile(sessionId: string): Promise<string | undefined> {
+  const state = readState();
+  return state.activeSkillFile?.[sessionId];
+}
+
+async function loadSkillContent(
+  skillId: string,
+  skillFile?: string,
+): Promise<string | null> {
   const skillPaths = [
+    ...(skillFile ? [skillFile] : []),
     path.join(OPCODE_DIR, "skills", skillId, "SKILL.md"),
     path.join(OPCODE_DIR, "skills", skillId.replace("/", "-"), "SKILL.md"),
   ];
