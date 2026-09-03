@@ -265,6 +265,26 @@ class TestSkillInjector:
         assert "skills/kimi-gated-fix/SKILL.md" not in text
         assert plan.steps[0].skill_file.replace("\\", "/").endswith("kimi-gated-fix.skill/SKILL.md")
 
+    def test_annotate_plan_dict_marks_unresolvable_skill_file(self, tmp_path: Path) -> None:
+        """Raw-JSON plan steps with no body get an explicit note, not silence.
+
+        Without the note, an empty ``skill_file`` is indistinguishable from
+        the fallback-llm sentinel in the JSON a hook-injected plan carries.
+        """
+        injector = SkillInjector(project_root=tmp_path)
+        plan = {
+            "steps": [
+                {"step_number": 1, "skill_id": "ghost-skill", "skill_file": ""},
+                {"step_number": 2, "skill_id": "fallback-llm", "skill_file": ""},
+            ]
+        }
+        injector.annotate_plan_dict(plan)
+        assert plan["steps"][0]["skill_file"] == ""
+        assert "do not guess" in plan["steps"][0]["skill_file_note"]
+        assert "vibe skills info ghost-skill" in plan["steps"][0]["skill_file_note"]
+        # Sentinel gets no note — it is intentionally not-a-skill.
+        assert "skill_file_note" not in plan["steps"][1]
+
     def test_load_skill_from_core_skills(self, tmp_path) -> None:
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         injector = SkillInjector(project_root=tmp_path)

@@ -264,20 +264,24 @@ class TestAgentRuntimeHookResponse:
         assert "ACTIVE SKILL" not in data["systemMessage"]
         assert "not injected" in data["systemMessage"]
 
-    def test_vibe_sop_notice_without_flag_still_skips_wrap(self):
-        from vibesop.security.runtime_scan import empty_content_notice
+    def test_notice_wrap_keys_on_flag_not_prefix(self):
+        """Activation-skip is keyed on notice_only, never a text prefix.
 
+        A real body may legitimately open with "[VibeSOP" — it must KEEP its
+        ACTIVE SKILL banner. A notice without the flag is a hand-built
+        contract violation; the flag is the authority.
+        """
         result = AgentRuntimeResult(
             intercepted=True,
             mode="single",
-            skill_id="ghost",
+            skill_id="convention-docs",
             confidence=0.8,
-            skill_content=empty_content_notice("ghost"),
+            skill_content="[VibeSOP Convention] Always cite the claims-lock file.\n\nStep 1 …",
         )
         data = json.loads(result.to_hook_response())
         ctx = data["hookSpecificOutput"]["additionalContext"]
-        assert "ACTIVE SKILL" not in ctx
-        assert "MUST follow" not in ctx
+        assert "[ACTIVE SKILL: convention-docs]" in ctx
+        assert "MUST follow" in ctx
 
 
 class TestAgentRuntimeHandleQuery:

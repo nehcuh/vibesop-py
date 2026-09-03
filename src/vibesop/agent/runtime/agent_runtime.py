@@ -98,6 +98,14 @@ class AgentRuntimeResult:
     # Absolute/posix SKILL.md path actually loaded. Hook NEXT STEP uses this
     # instead of guessing core/skills/<id>/SKILL.md.
     skill_path: str = ""
+    # The skill id that ROUTED but was demoted to no-match because its body
+    # could not be loaded (missing/empty content, or inject raised). NOT set
+    # by the refused_unsafe branch — that path keeps skill_id (the span
+    # records the refused id via metadata["skill_id"] with has_match=False).
+    # Empty on every non-demoted path. Consumers: span metadata (telemetry
+    # can tell "matched but broken" apart from "no skill matched"), error
+    # reporting.
+    demoted_skill_id: str = ""
 
     @property
     def has_match(self) -> bool:
@@ -196,9 +204,10 @@ class AgentRuntimeResult:
         # host the body was not injected. Do NOT wrap [ACTIVE SKILL] / MUST
         # follow, and do NOT emit NEXT STEP pointing at the refused file.
         if self.notice_only:
-            notice = (self.skill_content or f"[VibeSOP] Skill '{self.skill_id}' was not injected.")[
-                :3000
-            ]
+            notice = (
+                self.skill_content
+                or f"[VibeSOP] Skill '{self.demoted_skill_id or self.skill_id}' was not injected."
+            )[:3000]
             notice_resp: dict[str, Any] = {"systemMessage": notice}
             if include_additional_context:
                 notice_ho: dict[str, Any] = {"additionalContext": notice}
@@ -242,8 +251,7 @@ class AgentRuntimeResult:
                 )
             else:
                 hint_path = (
-                    f"{self.skill_id} SKILL.md not found — "
-                    "do not guess skills/<id>/SKILL.md"
+                    f"{self.skill_id} SKILL.md not found — do not guess skills/<id>/SKILL.md"
                 )
                 # W4/W5 promote materializes custom skills under
                 # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
@@ -257,10 +265,7 @@ class AgentRuntimeResult:
                         hint_path = p.resolve().as_posix()
                         break
         else:
-            hint_path = (
-                f"{self.skill_id} SKILL.md not found — "
-                "do not guess skills/<id>/SKILL.md"
-            )
+            hint_path = f"{self.skill_id} SKILL.md not found — do not guess skills/<id>/SKILL.md"
             vibe_skills = user_root / ".vibe" / "skills"
             if vibe_skills.is_dir():
                 dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
@@ -300,8 +305,10 @@ class AgentRuntimeResult:
             # [ACTIVE SKILL] banner — wrapping again duplicated it (gate46
             # dual-review P1: double banner ate the preview's line budget).
             # VibeSOP notices must never be wrapped as an active skill.
-            stripped_content = self.skill_content.lstrip()
-            if stripped_content.startswith("[VibeSOP") or "[ACTIVE SKILL:" in self.skill_content:
+            # notice_only normally returns earlier (:notice branch); the
+            # flag here is defense-in-depth for hand-built results. Bodies
+            # already carrying their own banner skip the re-wrap.
+            if self.notice_only or "[ACTIVE SKILL:" in self.skill_content:
                 additional_context = self.skill_content[:3000]
             else:
                 additional_context = (
@@ -755,16 +762,28 @@ class AgentRuntime:
                             result.skill_id, platform, source_file=source_file
                         )
                         if not injection.has_content:
+                            demoted_id = result.skill_id
                             logger.warning(
                                 "Routed skill '%s' has no injectable content; "
-                                "demoting to no-match.",
-                                result.skill_id,
+                                "demoting to no-match (notice preserved).",
+                                demoted_id,
+                            )
+                            result.errors.append(
+                                f"Skill '{demoted_id}' matched but has no "
+                                f"injectable content; demoted to no-match"
                             )
                             result.skill_id = ""
                             result.skill_name = ""
-                            result.skill_content = ""
+                            # Keep the re-install notice (built by the
+                            # injector) flowing to the host via the
+                            # notice-only branch — a broken install must not
+                            # look identical to a routing miss.
+                            result.skill_content = (
+                                injection.payload if isinstance(injection.payload, str) else ""
+                            )
                             result.router_matched = False
-                            result.notice_only = False
+                            result.notice_only = True
+                            result.demoted_skill_id = demoted_id
                         elif injection.refused_unsafe:
                             logger.warning(
                                 "Routed skill '%s' failed the runtime security "
@@ -789,17 +808,26 @@ class AgentRuntime:
                             )
                             result.skill_path = injection.resolved_path
                     except Exception as e:
+                        demoted_id = result.skill_id
                         logger.warning(
                             "Skill injection failed for '%s': %s; demoting to no-match.",
-                            result.skill_id,
+                            demoted_id,
                             e,
                         )
                         result.errors.append(f"Skill injection failed: {e}")
                         result.skill_id = ""
                         result.skill_name = ""
-                        result.skill_content = ""
+                        # Type-only detail: exception messages can carry
+                        # environment-specific paths; the errors list above
+                        # keeps the full text for local diagnosis.
+                        result.skill_content = (
+                            f"[VibeSOP] Skill '{demoted_id}' could not be "
+                            f"loaded (injection failed: {type(e).__name__}); "
+                            f"routed as no-match."
+                        )
                         result.router_matched = False
-                        result.notice_only = False
+                        result.notice_only = True
+                        result.demoted_skill_id = demoted_id
 
                 # Enrich the task span with routing metadata.
                 # gate40 项4: the SPAN's skill_id / top_skills are built
@@ -887,6 +915,14 @@ class AgentRuntime:
                 # cross-reference convention ("change one, re-read the
                 # other") was honored — both predicates re-checked.
                 _task_span.metadata["has_match"] = matched
+                # Demoted routes are misses by the span predicate (correct —
+                # the user got no skill), but they are a DIFFERENT miss: the
+                # router matched and the body was broken. Record the id so
+                # downstream analysis (gold/instinct miss evidence) can tell
+                # "broken install" apart from "no skill matched" instead of
+                # silently averaging them.
+                if result.demoted_skill_id:
+                    _task_span.metadata["demoted_skill_id"] = result.demoted_skill_id
                 # gate18 pi NIT-4: layer semantics — match → winning layer;
                 # miss → deepest cascade layer; omitted when unknown
                 # (ScanSummary.miss_share_by_layer buckets missing as

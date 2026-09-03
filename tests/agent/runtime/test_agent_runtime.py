@@ -921,10 +921,14 @@ class TestInjectFailClosed:
         result = runtime.handle_query("review my code")
         assert result.skill_id == ""
         assert result.router_matched is False
-        assert result.notice_only is False
+        assert result.notice_only is True
+        assert result.demoted_skill_id == "some-skill"
         hook = result.to_hook_response()
         assert "VibeSOP routed" not in hook
         assert "ACTIVE SKILL" not in hook
+        # The failure notice reaches the host — an injection failure must
+        # not look identical to a routing miss.
+        assert "could not be loaded" in hook
 
     def test_empty_inject_demotes_to_no_match(self, tmp_path: Path) -> None:
         from unittest.mock import MagicMock
@@ -943,9 +947,14 @@ class TestInjectFailClosed:
         result = runtime.handle_query("review my code")
         assert result.skill_id == ""
         assert result.router_matched is False
+        assert result.notice_only is True
+        assert result.demoted_skill_id == "some-skill"
+        assert result.errors  # matched-but-broken is recorded, not silent
         hook = result.to_hook_response()
         assert "VibeSOP routed" not in hook
         assert "ACTIVE SKILL" not in hook
+        # The re-install notice reaches the host via the notice-only branch.
+        assert "stub without the old phrase" in hook
 
     def test_unsafe_inject_is_notice_only(self, tmp_path: Path) -> None:
         from unittest.mock import MagicMock

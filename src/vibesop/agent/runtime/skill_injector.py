@@ -576,6 +576,14 @@ You MUST follow this skill's workflow. Do not skip steps.
                 continue
             path = self.resolve_skill_md(sid)
             step["skill_file"] = path.as_posix() if path is not None else ""
+            if not step["skill_file"]:
+                # Raw-JSON plan consumers (hook orchestrate branch) see no
+                # formatted envelope — without this note an empty skill_file
+                # is indistinguishable from the fallback-llm sentinel.
+                step["skill_file_note"] = (
+                    "not found — do not guess skills/<id>/SKILL.md "
+                    f"(run `vibe skills info {sid}` to locate)"
+                )
 
     @staticmethod
     def _skill_md_bullet(skill_id: str, skill_file: str) -> str:
