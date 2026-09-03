@@ -284,6 +284,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   （清单是编排执行唯一指令面需全文，hook 注入只是会话提示 3000 截断合理），
   两处源码互注。
 
+- **小项收尾（pull-20260903 三路评审批D，含批B/C 复审遗留 MINOR/NIT）**:
+  - **CLI payload 注入权威 source_lookup**：`attach_skill_file_payload` 新增
+    可选 `source_lookup`（`candidate_source_lookup` 闭包走 router →
+    candidate_manager 的 `source_file_for`，与 AgentRuntime 同构）；route
+    JSON 双通道、orchestrate JSON dict 通道、以及两处对象级
+    `annotate_plan_skill_files` 调用点全部传入——plan 步骤的
+    `skill_file` 标注不再依赖注入器 glob 兜底（kimi 门禁 NIT-1：
+    对象级注解先跑且 dict 通道不回填已填步骤，漏传即失去纠正机会）。
+  - **真实 payload 形状测试**：`OrchestrationResult.to_dict()` 与
+    `LightweightRouter._format_result` 各一条钉住 CLI 注入契约——
+    实测发现 minimal 通道本无 `has_match` 键（手写 fixture 的假设是错的），
+    断言按真实形状收敛（消费者读 `mode`）。
+  - **lifecycle 过滤测试改真实 source_file 建模**：archived/draft/deprecated
+    三条用例此前因缺 `source_file` 被「无内容门」drop——lifecycle 回归
+    （如 archived 重新可路由）不会被抓住；现补真实 SKILL.md 落盘。
+  - **candidates 磁盘缓存加 `schema_version`**：`candidates_v2.json` 读写
+    均带版本；无版本/异版本缓存按外来格式丢弃重建（hash 相同也不误读）；
+    顶层非 dict（手改损坏成数组）静默弃用不抛（kimi 门禁 NIT-2）。
+  - **Kimi 注入器不可达兜底去猜路径**：content 门上游拦截后仍保留的
+    else 分支不再指 `~/.kimi-code/skills/{flat}/SKILL.md`，改
+    `vibe skills info` 取真实 Source file。
+  - **`vibe skills remove` 文档化缓存自愈**（P2-8）：删除不清理派生缓存
+    （candidates/triage/embeddings/skill-index），docstring 与命令输出
+    均注明下次路由自愈。
+  - **docstring 收口**：`filter_routable` 补 source_file 门说明；
+    `with_source_file` 收窄为「从 candidate 构建路由元数据的站点」。
+  - **pi extension 版本标记回归钉**：`_render_extension`（install_hooks
+    无 manifest 上下文路径）渲染的 marker 必须绑定包版本。
+  - 小项：`.pi/docs/skills.md` 补 EOF 换行；layout 契约补
+    opencode/kimi-cli `docs/routing.md` 奇偶性钉。NEXT STEP 的 posix 路径
+    渲染维持现状——Windows E2E（Gate44/46）全绿实证各 Agent Read 接受
+    posix 形态。
+  - 已知残留（backlog）：decomposer 技能目录未过 lifecycle 过滤
+    （`_build_skill_catalog` 直用缓存池，draft/deprecated 技能可被 LLM
+    指派进 plan——执行期路由会拦，但计划面仍可见）；`execute_build`
+    不检查 `result.success`（`vibe build cursor` 假成功根因）。
+
 ## [8.1.4] — 2026-09-03
 
 ### Documentation

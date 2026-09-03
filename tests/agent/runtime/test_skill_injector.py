@@ -197,8 +197,11 @@ class TestSkillInjector:
             result = injector.inject_single_skill("gstack/review", PlatformType.KIMI_CLI)
 
         assert result.method == InjectionMethod.INSTRUCTION
-        assert "gstack-review" in result.payload
-        assert "SKILL.md" in result.payload
+        # No guessed flat path: the fallback points at `vibe skills info`
+        # instead of inventing a ~/.kimi-code/skills/<flat-id>/ location.
+        assert "vibe skills info gstack/review" in result.payload
+        assert "gstack-review" not in result.payload
+        assert "SKILL.md" not in result.payload
         assert "读取" in result.payload
 
     def test_generic_injection(self, tmp_path) -> None:

@@ -19,13 +19,20 @@ from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
 logger = logging.getLogger(__name__)
 
+#: Bump when the candidates cache entry format changes; mismatched caches are
+#: discarded instead of misread (old files simply miss the key → treated as
+#: foreign-format and rebuilt).
+_CANDIDATES_CACHE_SCHEMA_VERSION = 2
+
 
 def with_source_file(metadata: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of *metadata* carrying the candidate's source_file.
 
     Single source of truth for attaching discovered SKILL.md paths to
-    routing results — every SkillRoute construction site must go through
-    this helper so match ⇔ injectable-content stays isomorphic.
+    routing-result metadata — every site that builds SkillRoute metadata
+    from a matched candidate must go through this helper so match ⇔
+    injectable-content stays isomorphic. (Construction sites with no
+    candidate at hand — e.g. synthetic fallbacks — bypass it by design.)
     """
     sf = candidate.get("source_file")
     if not sf:
@@ -104,6 +111,10 @@ class CandidateManager:
         current_hash = self._compute_paths_hash(search_paths)
         try:
             data = json.loads(cache_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return None
+            if data.get("schema_version") != _CANDIDATES_CACHE_SCHEMA_VERSION:
+                return None
             if data.get("paths_hash") == current_hash:
                 return data.get("candidates", [])
         except (json.JSONDecodeError, KeyError, OSError, UnicodeDecodeError):
@@ -120,6 +131,7 @@ class CandidateManager:
             cache_path.write_text(
                 json.dumps(
                     {
+                        "schema_version": _CANDIDATES_CACHE_SCHEMA_VERSION,
                         "paths_hash": paths_hash,
                         "candidates": candidates,
                     },
@@ -424,7 +436,12 @@ class CandidateManager:
     def filter_routable(
         self, candidates: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], list[str]]:
-        """Filter candidates by enablement, scope, and lifecycle state.
+        """Filter candidates by enablement, source_file backing, scope, and
+        lifecycle state.
+
+        Candidates without a resolvable ``source_file`` are dropped (with a
+        warning) — a match must be injectable, and registry stubs without
+        backing content never are.
 
         Returns:
             (filtered_candidates, deprecated_warnings)

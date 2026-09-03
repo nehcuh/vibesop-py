@@ -451,3 +451,93 @@ class TestAttachSkillFilePayload:
 
         assert payload["skill_file"] == skill.as_posix()
         assert "demoted_skill_id" not in payload
+
+    def test_real_orchestration_to_dict_payload_annotated(self, tmp_path, monkeypatch) -> None:
+        """Pin the REAL OrchestrationResult.to_dict() shape (not a hand-crafted
+        dict): execution_plan steps must flow through annotate and get the
+        real SKILL.md path."""
+        from vibesop.cli.render import attach_skill_file_payload
+        from vibesop.core.models import (
+            ExecutionPlan,
+            ExecutionStep,
+            OrchestrationMode,
+            OrchestrationResult,
+            RoutingLayer,
+            SkillRoute,
+        )
+
+        monkeypatch.chdir(tmp_path)
+        skill = tmp_path / ".vibe" / "skills" / "plan-skill" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nid: plan-skill\n---\n# body\n", encoding="utf-8")
+
+        plan = ExecutionPlan(
+            plan_id="p1",
+            steps=[
+                ExecutionStep(
+                    step_id="s1", step_number=1, skill_id="plan-skill", input_query="do it"
+                )
+            ],
+        )
+        result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            execution_plan=plan,
+            primary=SkillRoute(skill_id="plan-skill", layer=RoutingLayer.KEYWORD),
+        )
+
+        payload = result.to_dict()
+        attach_skill_file_payload(payload, result)
+
+        steps = payload["execution_plan"]["steps"]
+        assert steps[0]["skill_file"] == skill.as_posix()
+        assert payload["skill_file"] == skill.as_posix()
+        assert "demoted_skill_id" not in payload
+
+    def test_real_lightweight_format_result_payloads(self, tmp_path, monkeypatch) -> None:
+        """Pin the REAL LightweightRouter._format_result() shapes (the
+        minimal-output channel): orchestrated steps get annotated, single-mode
+        unresolvable demotes."""
+        from vibesop.cli.render import attach_skill_file_payload
+        from vibesop.core.models import (
+            ExecutionPlan,
+            ExecutionStep,
+            OrchestrationMode,
+            OrchestrationResult,
+            RoutingLayer,
+            SkillRoute,
+        )
+        from vibesop.core.routing.lightweight_api import LightweightRouter
+
+        monkeypatch.chdir(tmp_path)
+        skill = tmp_path / ".vibe" / "skills" / "lite-skill" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nid: lite-skill\n---\n# body\n", encoding="utf-8")
+
+        plan = ExecutionPlan(
+            plan_id="p1",
+            steps=[
+                ExecutionStep(step_id="s1", step_number=1, skill_id="lite-skill", input_query="q")
+            ],
+        )
+        orchestrated = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            execution_plan=plan,
+            primary=SkillRoute(skill_id="lite-skill", layer=RoutingLayer.KEYWORD),
+        )
+        payload = LightweightRouter._format_result(orchestrated)
+        assert payload["mode"] == "orchestrated"
+        attach_skill_file_payload(payload, orchestrated)
+        assert payload["steps"][0]["skill_file"] == skill.as_posix()
+        assert payload["skill_file"] == skill.as_posix()
+
+        ghost = OrchestrationResult(
+            mode=OrchestrationMode.SINGLE,
+            primary=SkillRoute(skill_id="ghost-skill-xyz-123", layer=RoutingLayer.KEYWORD),
+        )
+        ghost_payload = LightweightRouter._format_result(ghost)
+        attach_skill_file_payload(ghost_payload, ghost)
+        assert ghost_payload["demoted_skill_id"] == "ghost-skill-xyz-123"
+        assert ghost_payload["skill_id"] == ""
+        assert ghost_payload["mode"] == "no_match"
+        # minimal channel never carries has_match — consumers read mode
+        assert "has_match" not in ghost_payload

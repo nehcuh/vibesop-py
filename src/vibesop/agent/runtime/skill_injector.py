@@ -516,12 +516,13 @@ You MUST follow this skill's workflow. Do not skip steps.
                 f"不得跳过任何步骤。"
             )
         else:
-            flat_id = skill_id.replace("/", "-")
+            # Content gates upstream make this near-unreachable; when it does
+            # happen, point at the authoritative resolver instead of guessing
+            # a .kimi-code/skills/ path (the guess-target layout may be empty).
             instruction = (
-                f"请先读取 ~/.kimi-code/skills/{flat_id}/SKILL.md "
-                f"（或 .kimi-code/skills/{flat_id}/SKILL.md），"
-                f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
-                f"不得跳过任何步骤。"
+                f"请运行 `vibe skills info {skill_id}` 获取真实 skill 文件路径"
+                f"（Source file），读取后严格按照该 skill 的工作流程执行"
+                f"「{skill_id}」。不得跳过任何步骤，不得猜测文件路径。"
             )
         return InjectionResult(
             method=InjectionMethod.INSTRUCTION,

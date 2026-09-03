@@ -141,6 +141,10 @@ def remove(
 
     WARNING: This will delete the skill from central storage.
 
+    Derived caches (`.vibe/cache/candidates_v2.json`, triage/embeddings
+    caches, `~/.vibe/skill-index.json` entries) are NOT pruned — they
+    self-heal: routing drops stale entries on the next mtime/hash check.
+
     \b
     Examples:
         # Remove from central storage (if not linked)
@@ -169,6 +173,10 @@ def remove(
 
     if success:
         console.print(f"[green]✓ {msg}[/green]")
+        console.print(
+            "[dim]Derived caches (candidates/triage/embeddings, skill-index) are not "
+            "pruned; they self-heal on the next routing pass.[/dim]"
+        )
     else:
         console.print(f"[red]✗ {msg}[/red]")
         raise typer.Exit(1)

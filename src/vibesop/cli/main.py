@@ -74,6 +74,7 @@ from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.plan_editor import _edit_execution_plan
 from vibesop.cli.render import (
     attach_skill_file_payload,
+    candidate_source_lookup,
     render_compact_orchestration,
 )
 from vibesop.cli.routing_report import render_routing_report
@@ -1025,11 +1026,15 @@ def route(
 
             # Re-use the orchestration result directly
             minimal_result = LightweightRouter._format_result(result)
-            attach_skill_file_payload(minimal_result, result)
+            attach_skill_file_payload(
+                minimal_result, result, source_lookup=candidate_source_lookup(router)
+            )
             print(json.dumps(minimal_result, ensure_ascii=False))
         else:
             payload = result.to_dict()
-            attach_skill_file_payload(payload, result)
+            attach_skill_file_payload(
+                payload, result, source_lookup=candidate_source_lookup(router)
+            )
             print(json.dumps(payload, indent=2, default=str, ensure_ascii=False))
         # In JSON mode: exit 0 for successful routing (caller inspects has_match field).
         # A completed routing attempt is not an error even when no match found.
@@ -1222,7 +1227,9 @@ def orchestrate(
         from vibesop.agent.runtime.skill_injector import SkillInjector
 
         if result.execution_plan is not None:
-            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(result.execution_plan)
+            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(
+                result.execution_plan, source_lookup=candidate_source_lookup(router)
+            )
         print(json.dumps(result.model_dump(mode="json"), indent=2, default=str, ensure_ascii=False))
     elif verbose:
         render_orchestration_result(result, console=console)
@@ -1541,12 +1548,14 @@ def _orchestration_post_process(
         import json
 
         from vibesop.agent.runtime.skill_injector import SkillInjector
-        from vibesop.cli.render import attach_skill_file_payload
+        from vibesop.cli.render import attach_skill_file_payload, candidate_source_lookup
 
         if result.execution_plan is not None:
-            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(result.execution_plan)
+            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(
+                result.execution_plan, source_lookup=candidate_source_lookup(router)
+            )
         payload = result.to_dict()
-        attach_skill_file_payload(payload, result)
+        attach_skill_file_payload(payload, result, source_lookup=candidate_source_lookup(router))
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         render_orchestration_result(result, console=console)

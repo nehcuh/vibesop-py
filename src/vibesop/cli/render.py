@@ -37,7 +37,32 @@ def resolve_routed_skill_md(
         return None
 
 
-def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
+def candidate_source_lookup(router: Any) -> Any:
+    """Closure resolving ``skill_id → source_file`` from the candidate pool
+    the router indexed (authoritative — beats the injector's glob fallback).
+    Mirrors AgentRuntime._lookup_routed_source_file; returns None when the
+    chain is unavailable (mocked routers, exotic stacks)."""
+
+    def lookup(skill_id: str) -> str | None:
+        inner = getattr(router, "_router", router)
+        cm = getattr(inner, "_candidate_manager", None)
+        source_file_for = getattr(cm, "source_file_for", None)
+        if not callable(source_file_for):
+            return None
+        try:
+            found = source_file_for(skill_id)
+        except Exception:
+            return None
+        return found if isinstance(found, str) and found else None
+
+    return lookup
+
+
+def attach_skill_file_payload(
+    payload: dict[str, Any],
+    result: Any,
+    source_lookup: Any = None,
+) -> None:
     """Add ``skill_file`` so CLI consumers do not guess ``core/skills/<id>``."""
     if not isinstance(payload, dict):
         return
@@ -81,10 +106,10 @@ def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
     inj = SkillInjector(project_root=Path.cwd())
     plan = payload.get("execution_plan")
     if isinstance(plan, dict):
-        inj.annotate_plan_dict(plan)
+        inj.annotate_plan_dict(plan, source_lookup=source_lookup)
     steps = payload.get("steps")
     if isinstance(steps, list):
-        inj.annotate_plan_dict({"steps": steps})
+        inj.annotate_plan_dict({"steps": steps}, source_lookup=source_lookup)
 
 
 _TIP_TEMPLATES: list[tuple[str, str]] = [

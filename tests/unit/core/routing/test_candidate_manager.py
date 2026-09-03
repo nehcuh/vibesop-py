@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from vibesop.core.routing.candidate_manager import CandidateManager
@@ -67,24 +68,47 @@ class TestFilterRoutable:
         assert len(filtered) == 1
 
     def test_archived_lifecycle_filtered_out(self, tmp_path: Path) -> None:
-        """ARCHIVED lifecycle is not routable."""
+        """ARCHIVED lifecycle is not routable (source_file backed — dropped by
+        the lifecycle gate, not by the no-content gate)."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "old", "enabled": True, "lifecycle": "archived", "scope": "global"}]
+        candidates = [
+            {
+                "id": "old",
+                "enabled": True,
+                "lifecycle": "archived",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "old"),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 0
 
     def test_draft_lifecycle_filtered_out(self, tmp_path: Path) -> None:
-        """DRAFT lifecycle is not routable."""
+        """DRAFT lifecycle is not routable (source_file backed)."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "draft", "enabled": True, "lifecycle": "draft", "scope": "global"}]
+        candidates = [
+            {
+                "id": "draft",
+                "enabled": True,
+                "lifecycle": "draft",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "draft"),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 0
 
     def test_deprecated_is_not_routable(self, tmp_path: Path) -> None:
-        """DEPRECATED lifecycle is NOT routable (filtered out)."""
+        """DEPRECATED lifecycle is NOT routable (source_file backed)."""
         mgr = CandidateManager(tmp_path)
         candidates = [
-            {"id": "dep-skill", "enabled": True, "lifecycle": "deprecated", "scope": "global"}
+            {
+                "id": "dep-skill",
+                "enabled": True,
+                "lifecycle": "deprecated",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "dep-skill"),
+            }
         ]
         filtered, _warnings = mgr.filter_routable(candidates)
         # DEPRECATED is not routable — filtered out entirely
@@ -346,6 +370,31 @@ class TestCacheInvalidation:
 
         # Old cache is now stale
         assert mgr._load_from_disk_cache([search_path]) is None
+
+    def test_disk_cache_with_foreign_schema_discarded(self, tmp_path: Path) -> None:
+        """A cache file without the current schema_version (hand-written or
+        from a future/old format) is discarded even when paths_hash matches."""
+        mgr = CandidateManager(tmp_path)
+        search_path = tmp_path / "skills"
+        search_path.mkdir()
+        (search_path / "SKILL.md").write_text("id: x\n", encoding="utf-8")
+        paths_hash = mgr._compute_paths_hash([search_path])
+
+        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
+        cache_path.parent.mkdir(parents=True)
+        cache_path.write_text(
+            json.dumps({"paths_hash": paths_hash, "candidates": [{"id": "foreign"}]}),
+            encoding="utf-8",
+        )
+        assert mgr._load_from_disk_cache([search_path]) is None
+
+        # Non-dict top level (hand-corrupted) must be discarded, not raise.
+        cache_path.write_text(json.dumps([{"id": "array"}]), encoding="utf-8")
+        assert mgr._load_from_disk_cache([search_path]) is None
+
+        mgr._save_to_disk_cache([{"id": "current"}], paths_hash)
+        loaded = mgr._load_from_disk_cache([search_path])
+        assert loaded == [{"id": "current"}]
 
     def test_skill_mtimes_captures_deep_files(self, tmp_path: Path) -> None:
         """_compute_skill_mtimes must include files below depth 1."""

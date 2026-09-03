@@ -64,6 +64,12 @@ class TestAlwaysLoadedLayoutContract:
         cursor entry would print a redeploy command that silently no-ops."""
         assert "cursor" not in main_module._ALWAYS_LOADED_LAYOUT
 
+    def test_opencode_routing_doc_scanned(self) -> None:
+        """opencode renders docs/routing.md (historically carried guess-path
+        copy); kimi-cli already scans its own — the two must stay in parity."""
+        assert "docs/routing.md" in main_module._ALWAYS_LOADED_LAYOUT["opencode"][1]
+        assert "docs/routing.md" in main_module._ALWAYS_LOADED_LAYOUT["kimi-cli"][1]
+
     def test_layout_shape(self) -> None:
         for config_dir, rel_paths in main_module._ALWAYS_LOADED_LAYOUT.values():
             assert isinstance(config_dir, Path)
