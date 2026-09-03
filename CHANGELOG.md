@@ -244,6 +244,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings.json — user commands such as PowerShell hooks no longer fail
   verification. Non-win32 hosts additionally surface Windows-form vibesop
   commands (drive-letter paths) that previously passed silently.
+- **demote 不再静默 + 编排 plan 不可解析步骤标注（pull-20260903 三路评审批A
+  P1-1/P2-3/P2-5）**：content-missing / 注入异常降级时，notice（re-install
+  指引或注入失败说明）经 notice-only 分支送达宿主，errors 记录
+  matched-but-broken；新增 `AgentRuntimeResult.demoted_skill_id` 与 span
+  metadata 同名键，遥测可区分「坏安装」与「真 no-match」（miss 判定刻意
+  不变，仅可观测）。`to_hook_response` 的 activation-skip 从文本前缀嗅探
+  改为只认 notice_only flag——`[VibeSOP` 开头的真实正文恢复 ACTIVE SKILL
+  banner。`annotate_plan_dict` 对无法解析 skill_file 的真实技能步骤补
+  `skill_file_note`（禁止猜路径 + `vibe skills info` 指引）。
+- **行为变化：empty-content demote 计入 errors → `success=False`（批A）**：
+  loop executor 不再把降级运行计为成功技能执行——8.1.4 前的成功率统计
+  口径把「匹配到但内容坏」混进成功桶，升级后此类运行进入失败桶（仅统计
+  口径修正，路由/执行行为不变）。
+- **source_file 全链路穿透 + 无文件候选不可路由 + 注入器根序对齐
+  CandidateManager（pull-20260903 三路评审批B P1-2/P1-3/P2-1/P2-2/P2-6）**：
+  match ⇄ 可注入正文的识别器-生成器同构在 routing 侧收口——新增
+  `candidate_manager.with_source_file()` 共享助手，token-overlap 索引层、
+  AI triage 三构造点（缓存命中/LLM 结构化/last-good）与
+  `matcher_pipeline._metadata_with_source` 全部收敛到它（全仓 21 处
+  SkillRoute 构造点枚举确认无漏网）；`filter_routable` 对 None/空
+  source_file 硬丢弃（带警告），注册表 stub 永不可路由（build 端保留池内
+  可见性用于诊断）；空内容门禁改精确占位头 startswith，真实正文引用
+  marker 文本不再被误降级；CLI `attach_skill_file_payload` 单模降级
+  （mode→no_match / skill_id 清空 / demoted_skill_id 记录），
+  orchestrated payload 豁免；`annotate_plan_*` 增可选 `source_lookup`。
+- **行为变化：注入器搜索根重排（批B）**：`~/.config/skills` 与
+  `~/.config/opencode/skills` 提前到 `~/.claude` / `~/.kimi` 之前，与
+  CandidateManager 同序——同一 skill 双处安装时，注入的就是路由索引的
+  那份（中心存储优先）；此前优先平台散装目录，可能出现「索引 A 注入 B」。
+  `test_load_skill_claude_code_dir_preferred` 相应反转为
+  central-storage-first 新契约。
 - **存量部署与声明面修复（pull-20260903 三路评审批C）**: wheel 升级只换
   hook Python 代码，不会刷新已渲染的 always-loaded 文件——8.1.4 声明收窄
   见该条目内事后更正。`vibe doctor` 新增 **Deployment Freshness** 检查：
@@ -305,9 +336,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Kimi 注入器不可达兜底去猜路径**：content 门上游拦截后仍保留的
     else 分支不再指 `~/.kimi-code/skills/{flat}/SKILL.md`，改
     `vibe skills info` 取真实 Source file。
-  - **`vibe skills remove` 文档化缓存自愈**（P2-8）：删除不清理派生缓存
-    （candidates/triage/embeddings/skill-index），docstring 与命令输出
-    均注明下次路由自愈。
+  - **`vibe skills remove` 文档化缓存自愈**（P2-8）：删除不清理派生缓存；
+    routing 缓存（candidates/triage/embeddings）下次路由自愈（mtime/hash），
+    `skill-index.json` 持续到下次 `vibe skills index`——INDEX 层在该窗口
+    仍可能召回已删 id（grok 复审 NIT-3 拆分口径）。
   - **docstring 收口**：`filter_routable` 补 source_file 门说明；
     `with_source_file` 收窄为「从 candidate 构建路由元数据的站点」。
   - **pi extension 版本标记回归钉**：`_render_extension`（install_hooks
@@ -316,6 +348,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     opencode/kimi-cli `docs/routing.md` 奇偶性钉。NEXT STEP 的 posix 路径
     渲染维持现状——Windows E2E（Gate44/46）全绿实证各 Agent Read 接受
     posix 形态。
+  - **grok 只读复审 APPROVE（NIT×4 全采纳）**：顶层 `skill_file` 与
+    `_resolve_step_source` 同优先级（metadata hint → 权威池 lookup →
+    注入器 glob，原仅靠 metadata）；`candidate_source_lookup` 回归钉
+    （池路径放 `.vibe/skills` 外证明 lookup 优先于 glob 且救回 demote；
+    MagicMock 路由安全）；`candidates` 内层非 list 弃用；remove 文案
+    拆分见上。
   - 已知残留（backlog）：decomposer 技能目录未过 lifecycle 过滤
     （`_build_skill_catalog` 直用缓存池，draft/deprecated 技能可被 LLM
     指派进 plan——执行期路由会拦，但计划面仍可见）；`execute_build`
