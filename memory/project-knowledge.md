@@ -2,6 +2,26 @@
 
 ## Technical Pitfalls
 
+### session-end 三条「去读文件」命令只有一条能拿到路径 (2026-09-03 S62)
+
+**Issue**: 路由失败后的 session-end 回退曾写成 `vibe route --slash "/session-end"`。`--slash` 只接受 `/vibe-*`，该命令 Exit(1)。改成 `vibe route "session-end"` 也不行：短查询旁路 + 守卫技能（无显式告别信号）→ `fallback-llm`、`skill_file` 空。
+
+**Solution**: 用 `vibe skills info builtin/session-end`，它打印真实 `Source file`。不要猜 `skills/session-end/SKILL.md`。
+
+**Files**: `_generation.py`, `kimi_cli.py`, `templates/claude-code/docs/session-lifecycle.md.j2`
+
+### `vibe build pi` 会无条件覆盖仓库根 AGENTS.md (2026-09-03 S63)
+
+**Issue**: 本仓根 `AGENTS.md` 是手维护的 Multi 平台索引。`PiCodingAgentAdapter.render_config` 总是用 `AGENTS.md.j2` 写 cwd `AGENTS.md`，会丢掉 do-not-guess 文案并改回 `.pi/skills/<matched-skill>`。CHANGELOG 已记过测试泄漏。
+
+**Solution**: 刷新签入的 `.pi/` 生成物用外科补丁（对模板）。不要在本仓根对 pi 跑 `vibe build`。grok-build 默认输出 `.vibe/dist/`，不碰 `.grok/`，除非显式 `--output .grok`。
+
+### 无人值守 `claude -p`：`--tools ""` 在 2.1.220 会直接报错；stdin 无权限模式会挂死 (2026-09-03)
+
+**Issue**: 旧解法 `claude -p --tools ""` 现在报 `option '--tools' argument missing`。把 30KB prompt 喂 stdin 且不给权限模式时，进程零输出挂到超时（工具权限提示无人点）。
+
+**Solution**: `claude -p --permission-mode dontAsk "<短 prompt 指向文件>"`，用 Python `subprocess.run(['claude','-p','--permission-mode','dontAsk', prompt])` 避开 PowerShell 把后续参数吞进 `--disallowedTools`。`kimi -p` 必须带 prompt 参数（stdin 不算）；不能和 `--auto`/`--yolo` 组合。
+
 ### 发现能看见的技能，注入器未必能加载 — match 必须 fail-closed (2026-09-03 S58)
 
 **Issue**: Windows 上 `vibe route` 命中 `fuck-my-shit-mountain`（82%），agent 读不到 SKILL.md。不是路径分隔符。`SkillLoader.discover_all` rglob `*.md` 能看见 `.vibe/skills/cross-cutting/{id}.skill/SKILL.md`，候选 id 是 frontmatter 裸 id；`SkillInjector` 只猜 `{base}/{id}/SKILL.md`，且 `**/{leaf}.skill` glob 曾被挡在 `if "/" in skill_id`。Hook 已写 `VibeSOP routed` + `[ACTIVE SKILL]`。GBK SKILL.md 的 `UnicodeDecodeError` 不是 `OSError`，会被 `handle_query` 裸 except 吞掉并留下 skill_id。`has_content` 曾嗅探用户文案 `"no injectable content"`，改 notice 就静默失效。

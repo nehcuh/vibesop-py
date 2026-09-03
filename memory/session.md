@@ -1,6 +1,12 @@
 
 ## Current Session
 
+### S64 (2026-09-03) [vibesop-py] 保存并提交远程 — session-end flush
+
+- 代码已在 `origin/main` `c67c82a`。工作区无未提交源码；未入库 `.omx/`、`.grok/workflows/`、`examples/datasets/`。
+- fail-closed 栈收口：match ⇔ 可注入正文；编排/模板/hook/插件跟 `skill_file`。存量 `~/.claude` 需本机 `vibe build`。
+- Recorded: yes — session-end 三条命令只有 skills info 能拿到路径；`vibe build pi` 砸根 AGENTS.md；claude -p 用 dontAsk 不是 `--tools ""`
+
 ### S63 (2026-09-03) [vibesop-py] 剩余目录/过期生成物
 
 - 顺序：skills.md.j2 → 签入 `.pi/prompts/vibe-route.md` + routing-protocol.md → Pi skills 目录 → AGENTS 表 → USE_CASES。未跑 `vibe build pi`（会砸 Multi AGENTS.md）。
@@ -217,7 +223,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **S52 深度治理主线**（active）— 分支 `governance/s52-deep-clean` 已建（= e9b52dc），Phase 1 六路对抗诊断未跑。next_action: 六 lane 诊断 → 合成 P0/P1/P2 → 分批修复；已知存量:`tests/security/test_skill_auditor.py::test_pack_audit_detects_python_json_ts_rce` 在该分支失败。updated: 2026-08-28
+- **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
 - **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
 - **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25

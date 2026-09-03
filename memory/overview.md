@@ -1,12 +1,22 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-03 (S58 — fail-closed inject + 对外叙事复审收口)
+**Last Updated**: 2026-09-03 (S64 — fail-closed skill_file 栈已推 origin/main `c67c82a`)
 
 ---
 
 ## Goals
 
-### Current Week (August 23-30, 2026)
+### Current Week (August 31 - September 3, 2026)
+
+1. **fail-closed：匹配必须可注入 SKILL.md** ✅ (Completed - Sep 3，`c67c82a`)
+   - 根因是发现/注入路径学分裂，不是 Windows 分隔符。栈：inject glob + source_file → 编排 skill_file → 模板禁止猜扁平路径 → 双路吸收 session-end 死命令与 Pi/OpenCode 插件。
+   - 存量机器需自行 `vibe build`（不要在本仓对 pi 全量 build）。
+2. **对外叙事对抗复审收口** ✅ (`b066276` + #118)
+3. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
+4. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
+5. **R5 第二轮人评 / GIF 发版 gate** — 仍待用户
+
+### Previous Week (August 23-30, 2026)
 
 1. **Claude Code 2.1.220 hook 形态修复** ✅ (Completed - Aug 28, PR #115 merged `f6f32c6`)
    - 实机探针证伪 S51 前提（宿主改 `bash -c` + 会话 CWD spawn）；生成器/rewrite/verify/e2e 四层统一 `bash <posix-abs>`；CI 11/11 job 绿；本机 `~/.claude` 已重部署
@@ -17,10 +27,8 @@
 3. **S52 深度治理主线** ✅ (Completed - Aug 30，S54 确认已并入 main 后删分支 `governance/s52-deep-clean`)
 4. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
-5. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
-6. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
-7. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
-8. **gate42/43 后续验收**（cron 触发）：8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
+5. **verifier 真实数据点**（等用户）：cmspark 用新流程 promote/dismiss，看徽章分布
+6. **gate42/43 后续验收**（cron 触发）：8-31 一周+T+7 / 9-7 T+14，durable one-shot 自动带检查提示词
 
 ### Previous Weeks (July 26 - August 16, 2026) — Completed
 
