@@ -336,6 +336,19 @@ with self._path.open("a") as f:
 
 ## Reusable Patterns
 
+### 实验复盘类科普文的叙事模式：「借口排雷记」+ 选题直觉先行 (2026-09-03 S68)
+
+**Context**: skill-routing-explained.md 两轮用户复审反馈：v1「深度/专业度不够」；v2「中段实验叙事太干，读者容易绕丢/划走」。定位澄清：文章是思考分享，不是项目推广。
+
+**Pattern**:
+1. 每轮实验先交代「怎么选的题、为什么当时觉得技能该赢」——三条选题直觉明说，并预告它们会被逐个教育；
+2. 「借口排雷记」主线：每轮结局出来 → 顺手给「技能为什么没显灵」找个借口 → 下一轮专门冲着这个借口去。读者全程只需跟一条线；
+3. 拟人化配角承担 dry 事实：监考老师发小抄（路由）/ 开考前封卷（预注册）/ 考完验药（有效性三验）/ 差点开香槟→收回冰箱（R6 翻面）；
+4. 旅程图（R1→R6 借口链 mermaid）代替结果总表给全景，数据只进叙事正文；
+5. 每节结尾留钩子，把读者推进下一节的中心论点（「技能是 spec 的泛化」）。
+
+**How to apply**: 下次写 R8 / 三臂设计等实验复盘直接复用此结构；技术报告体（总表+要点罗列）最多做附录，不做正文。
+
 ### Spawn-`vibe` hooks inherit PATH the hard way (2026-08-26)
 
 Bash hook templates already prepend `$HOME/.local/bin`. Any **new** hook that is not bash (Grok JSON `command`, Pi/OpenCode `execSync("vibe ...")`) does **not** get that prefix. Lift the lesson: either bake an absolute `vibe` path at render time, or `vibe verify` must check `shutil.which("vibe")`, plus a stdin hook smoke on the real host. Docker e2e having `vibe` on PATH is not this check.

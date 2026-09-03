@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-03 (S64 — fail-closed skill_file 栈已推 origin/main `c67c82a`)
+**Last Updated**: 2026-09-03 (S68 — 科普文 skill-routing-explained v2 重写：「借口排雷记」实验叙事 + 「技能是 spec 的泛化」中心论点)
 
 ---
 
@@ -11,7 +11,7 @@
 1. **fail-closed：匹配必须可注入 SKILL.md** ✅ (Completed - Sep 3，`c67c82a`)
    - 根因是发现/注入路径学分裂，不是 Windows 分隔符。栈：inject glob + source_file → 编排 skill_file → 模板禁止猜扁平路径 → 双路吸收 session-end 死命令与 Pi/OpenCode 插件。
    - 存量机器需自行 `vibe build`（不要在本仓对 pi 全量 build）。
-2. **对外叙事对抗复审收口** ✅ (`b066276` + #118)
+2. **对外叙事** ✅ 对抗复审收口 (`b066276` + #118)；科普文 v2：skill-routing-explained 重写为「借口排雷记」实验叙事 + 「技能是 spec 的泛化」论点 (S68)
 3. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
 4. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
 5. **R5 第二轮人评 / GIF 发版 gate** — 仍待用户

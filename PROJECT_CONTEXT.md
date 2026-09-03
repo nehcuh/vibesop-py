@@ -3,6 +3,21 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-09-03 S68 [vibesop-py] 科普文 v2：skill-routing-explained 重写
+
+**Session Summary**:
+- 两轮用户复审迭代：v1 补深度 + 完整实验流程（为什么设计→目的→发现→结果→反思→改进）；v2 中段去干——§3 改「考试/封卷/验药」语感，§4 重写为「借口排雷记」连续剧结构（三条选题直觉先行 → 每轮怎么选题/为什么该赢 → 结局 → 借口 → 下轮冲借口去）。
+- 中心论点（用户洞察）：spec 写满时 LLM+Harness 无需技能；skill = 需求设计的泛化、spec 的补充（spec 一次一图 / skill 图集 / 老师傅手感=没画出来的施工图）；grill-me = spec 缺口探测器（事实它查/决策你拍，`disable-model-invocation` 只能人点名）。
+- 7 张 mermaid；数据全部对齐 R1-R6 报告；§9 新增「泛化框架是假设非定理」诚实条目。
+
+**Key Decisions**:
+- 文章定位 = 思考分享，不是项目推广；技术报告体最多做附录
+- R6 完成度差距不归因技能内容；协议偏离注脚随正文走
+
+**Next Steps**:
+1. R8 结算后回写 §9 假设条目；该文即公众号素材
+2. S66/S67 对抗评审修复仍未提交（非本 session 文件，未动）
+
 ### 2026-09-03 S64 [vibesop-py] fail-closed skill_file 栈已推 origin/main
 
 **Session Summary**:
