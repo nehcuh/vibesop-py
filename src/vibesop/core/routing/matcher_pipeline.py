@@ -30,13 +30,14 @@ def _metadata_with_source(
     candidates: list[dict[str, Any]],
     skill_id: str,
 ) -> dict[str, Any]:
+    from vibesop.core.routing.candidate_manager import with_source_file
+
     meta = dict(metadata or {})
     if meta.get("source_file"):
         return meta
     for c in candidates:
-        if c.get("id") == skill_id and c.get("source_file"):
-            meta["source_file"] = str(c["source_file"])
-            break
+        if c.get("id") == skill_id:
+            return with_source_file(meta, c)
     return meta
 
 

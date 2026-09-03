@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from vibesop.core.models import ExecutionPlan
 
 logger = logging.getLogger(__name__)
@@ -138,7 +140,7 @@ class SkillInjector:
         # a data problem, not a security finding — report it as such instead
         # of letting the placeholder text (or an empty payload) reach the
         # agent context.
-        if not skill_content.strip() or CONTENT_NOT_FOUND_MARKER in skill_content:
+        if not skill_content.strip() or self._is_placeholder_content(skill_id, skill_content):
             from vibesop.security.runtime_scan import empty_content_notice
 
             logger.warning(
@@ -239,6 +241,15 @@ class SkillInjector:
                 skill_id="multi-step-plan",
             )
 
+    @staticmethod
+    def _is_placeholder_content(skill_id: str, skill_content: str) -> bool:
+        """True only for the exact placeholder header this loader emits.
+
+        Substring matching anywhere in the body would false-demote a real
+        SKILL.md that merely mentions the marker text mid-body.
+        """
+        return skill_content.startswith(f"# Skill: {skill_id}\n\n{CONTENT_NOT_FOUND_MARKER}")
+
     def _load_skill_content(self, skill_id: str, source_file: str | Path | None = None) -> str:
         """Load skill content from filesystem."""
         path = self._resolve_skill_md(skill_id, source_file=source_file)
@@ -280,14 +291,17 @@ class SkillInjector:
            skills (W4/W5 promote materialization target; nested by skill_id)
         2b. ``skills/{skill_id}/SKILL.md`` — SkillLoader default project root
             (adapters also write here; discovered unless strict_search_paths)
-        3. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
-        4. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
-        5. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
+        3. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
+        4. ``~/.config/opencode/skills/{...}/SKILL.md`` — OpenCode install
+        5. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
         6. ``~/.kimi/skills/{...}/SKILL.md`` — Kimi home install (CandidateManager)
-        7. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
-        8. ``~/.config/opencode/skills/{...}/SKILL.md`` — OpenCode install
+        7. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
+        8. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
         9. ``~/.vibe/skills/{skill_id}/SKILL.md`` — global-scope promoted custom
            skills (``skill promote --scope global`` target)
+
+        Roots 3-6 mirror CandidateManager._build_search_paths order exactly;
+        7-9 are injector-only (see ``_find_skill_md_path``).
 
         For each path, lookup strategies are tried in order:
         - Exact nested id: ``{base}/{skill_id}/SKILL.md`` (namespaced ids only —
@@ -330,6 +344,37 @@ class SkillInjector:
             logger.debug("SkillLoader source_file lookup failed for %s", skill_id, exc_info=True)
         return None
 
+    def _search_roots(self) -> list[Path]:
+        """Search roots for ``_find_skill_md_path``, CM-isomorphic.
+
+        Keep this a superset of CandidateManager._build_search_paths AND
+        keep the shared roots in the same relative order (recognizer–
+        generator isomorphism: the file the router ranks first must also be
+        the file the injector resolves first, or a lower-priority root can
+        shadow the indexed one). CM order: builtin, .vibe/skills,
+        ~/.config/skills, ~/.config/opencode/skills, ~/.claude/skills,
+        ~/.kimi/skills (project skills/ comes from SkillLoader's root,
+        slotted after .vibe/skills as before). Injector-only roots (pi,
+        kimi-code, global .vibe) trail for platform installs the router
+        does not currently index.
+        """
+        home = Path.home()
+
+        from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+        return [
+            resolve_builtin_skills_dir(self.project_root),
+            self.project_root / ".vibe" / "skills",
+            self.project_root / "skills",
+            home / ".config" / "skills",
+            home / ".config" / "opencode" / "skills",
+            home / ".claude" / "skills",
+            home / ".kimi" / "skills",
+            home / ".pi" / "agent" / "skills",
+            home / ".kimi-code" / "skills",
+            home / ".vibe" / "skills",
+        ]
+
     def _find_skill_md_path(self, skill_id: str) -> Path | None:
         """Walk install layouts; return the first existing SKILL.md."""
         flat_id = skill_id.replace("/", "-")
@@ -337,22 +382,7 @@ class SkillInjector:
 
         from vibesop.utils.bundled import resolve_builtin_skills_dir
 
-        # Keep this a superset of CandidateManager._build_search_paths so a
-        # discovered skill is injectable. Extra injector-only roots (pi,
-        # kimi-code, global .vibe) stay here for platform installs the
-        # router does not currently index.
-        candidate_dirs: list[Path] = [
-            resolve_builtin_skills_dir(self.project_root),
-            self.project_root / ".vibe" / "skills",
-            self.project_root / "skills",
-            home / ".claude" / "skills",
-            home / ".pi" / "agent" / "skills",
-            home / ".kimi-code" / "skills",
-            home / ".kimi" / "skills",
-            home / ".config" / "skills",
-            home / ".config" / "opencode" / "skills",
-            home / ".vibe" / "skills",
-        ]
+        candidate_dirs: list[Path] = self._search_roots()
 
         if "/" in skill_id:
             name_only = skill_id.split("/", 1)[1]
@@ -548,8 +578,20 @@ You MUST follow this skill's workflow. Do not skip steps.
             truncated=truncated,
         )
 
-    def annotate_plan_skill_files(self, plan: ExecutionPlan) -> None:
-        """Fill each step's ``skill_file`` with the injectable SKILL.md path."""
+    def annotate_plan_skill_files(
+        self,
+        plan: ExecutionPlan,
+        source_lookup: Callable[[str], str | None] | None = None,
+    ) -> None:
+        """Fill each step's ``skill_file`` with the injectable SKILL.md path.
+
+        Args:
+            plan: The execution plan whose steps get annotated.
+            source_lookup: Optional ``skill_id → source_file`` resolver
+                (e.g. the router's candidate index). When it yields a path,
+                it is tried before this injector's own resolution — the same
+                file the router indexed is the authoritative answer.
+        """
         for step in plan.steps:
             sid = step.skill_id
             if not sid or sid == "fallback-llm":
@@ -557,10 +599,13 @@ You MUST follow this skill's workflow. Do not skip steps.
                 continue
             if step.skill_file:
                 continue
-            path = self.resolve_skill_md(sid)
-            step.skill_file = path.as_posix() if path is not None else ""
+            step.skill_file = self._resolve_step_source(sid, source_lookup)
 
-    def annotate_plan_dict(self, plan: dict[str, Any]) -> None:
+    def annotate_plan_dict(
+        self,
+        plan: dict[str, Any],
+        source_lookup: Callable[[str], str | None] | None = None,
+    ) -> None:
         """Same as ``annotate_plan_skill_files`` for a serialized plan dict."""
         steps = plan.get("steps")
         if not isinstance(steps, list):
@@ -574,8 +619,7 @@ You MUST follow this skill's workflow. Do not skip steps.
                 continue
             if step.get("skill_file"):
                 continue
-            path = self.resolve_skill_md(sid)
-            step["skill_file"] = path.as_posix() if path is not None else ""
+            step["skill_file"] = self._resolve_step_source(sid, source_lookup)
             if not step["skill_file"]:
                 # Raw-JSON plan consumers (hook orchestrate branch) see no
                 # formatted envelope — without this note an empty skill_file
@@ -584,6 +628,21 @@ You MUST follow this skill's workflow. Do not skip steps.
                     "not found — do not guess skills/<id>/SKILL.md "
                     f"(run `vibe skills info {sid}` to locate)"
                 )
+
+    def _resolve_step_source(
+        self,
+        skill_id: str,
+        source_lookup: Callable[[str], str | None] | None,
+    ) -> str:
+        """Resolve one step's SKILL.md: hinted source_file first, then inject."""
+        if source_lookup is not None:
+            hinted = source_lookup(skill_id)
+            if hinted:
+                hit = self._if_file(Path(hinted))
+                if hit is not None:
+                    return hit.as_posix()
+        path = self.resolve_skill_md(skill_id)
+        return path.as_posix() if path is not None else ""
 
     @staticmethod
     def _skill_md_bullet(skill_id: str, skill_file: str) -> str:

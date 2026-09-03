@@ -950,6 +950,10 @@ class TestInjectFailClosed:
         assert result.notice_only is True
         assert result.demoted_skill_id == "some-skill"
         assert result.errors  # matched-but-broken is recorded, not silent
+        # The recorded error flips success — the loop executor counts a
+        # demoted run as a failure, not a healthy skill execution.
+        assert result.success is False
+        assert any("no injectable content" in e for e in result.errors)
         hook = result.to_hook_response()
         assert "VibeSOP routed" not in hook
         assert "ACTIVE SKILL" not in hook

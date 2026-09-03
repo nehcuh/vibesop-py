@@ -740,7 +740,9 @@ class AgentRuntime:
                     return result
 
                 if isinstance(result.plan, dict):
-                    self.injector.annotate_plan_dict(result.plan)
+                    self.injector.annotate_plan_dict(
+                        result.plan, source_lookup=self._lookup_routed_source_file
+                    )
 
                 # 6. Inject skill content. A routed id with no SKILL.md body
                 # is not a match — demote to no-match rather than hand the

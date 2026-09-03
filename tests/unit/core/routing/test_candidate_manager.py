@@ -7,13 +7,29 @@ from pathlib import Path
 from vibesop.core.routing.candidate_manager import CandidateManager
 
 
+def _source_file(tmp_path: Path, skill_id: str) -> str:
+    """Create a real SKILL.md so the candidate passes the routability gate."""
+    path = tmp_path / "sources" / skill_id / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"---\nid: {skill_id}\n---\n# body\n", encoding="utf-8")
+    return str(path)
+
+
 class TestFilterRoutable:
     """Test candidate filtering by enablement, scope, and lifecycle."""
 
     def test_enabled_candidate_passes(self, tmp_path: Path) -> None:
         """Enabled candidates pass through filter."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "test", "enabled": True, "lifecycle": "active", "scope": "global"}]
+        candidates = [
+            {
+                "id": "test",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "test"),
+            }
+        ]
         filtered, warnings = mgr.filter_routable(candidates)
         assert len(filtered) == 1
         assert filtered[0]["id"] == "test"
@@ -23,7 +39,13 @@ class TestFilterRoutable:
         """Disabled candidates are filtered out."""
         mgr = CandidateManager(tmp_path)
         candidates = [
-            {"id": "enabled", "enabled": True, "lifecycle": "active", "scope": "global"},
+            {
+                "id": "enabled",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "enabled"),
+            },
             {"id": "disabled", "enabled": False, "lifecycle": "active", "scope": "global"},
         ]
         filtered, _ = mgr.filter_routable(candidates)
@@ -33,7 +55,14 @@ class TestFilterRoutable:
     def test_enabled_defaults_to_true(self, tmp_path: Path) -> None:
         """Missing 'enabled' key defaults to True (passes filter)."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "test", "lifecycle": "active", "scope": "global"}]
+        candidates = [
+            {
+                "id": "test",
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "test"),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 1
 
@@ -103,7 +132,15 @@ class TestFilterRoutable:
     def test_invalid_lifecycle_defaults_to_active(self, tmp_path: Path) -> None:
         """Invalid lifecycle string defaults to ACTIVE (passes filter)."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "bad", "enabled": True, "lifecycle": "nonexistent", "scope": "global"}]
+        candidates = [
+            {
+                "id": "bad",
+                "enabled": True,
+                "lifecycle": "nonexistent",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "bad"),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 1
 
@@ -111,7 +148,13 @@ class TestFilterRoutable:
         """Mixed candidates: enabled+active pass, disabled/archived/deprecated filtered."""
         mgr = CandidateManager(tmp_path)
         candidates = [
-            {"id": "good1", "enabled": True, "lifecycle": "active", "scope": "global"},
+            {
+                "id": "good1",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "good1"),
+            },
             {"id": "disabled", "enabled": False, "lifecycle": "active", "scope": "global"},
             {"id": "deprecated", "enabled": True, "lifecycle": "deprecated", "scope": "global"},
             {"id": "archived", "enabled": True, "lifecycle": "archived", "scope": "global"},
@@ -124,7 +167,15 @@ class TestFilterRoutable:
     def test_global_scope_always_passes(self, tmp_path: Path) -> None:
         """Global-scoped skills pass regardless of project root."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "global", "enabled": True, "lifecycle": "active", "scope": "global"}]
+        candidates = [
+            {
+                "id": "global",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "global"),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 1
 
@@ -142,6 +193,33 @@ class TestFilterRoutable:
         ]
         filtered, _ = mgr.filter_routable(candidates)
         assert filtered == []
+
+    def test_stub_without_source_file_is_not_routable(self, tmp_path: Path) -> None:
+        """A registry stub (no source_file at all) must never be routable.
+
+        Fail-closed match⇔injectable-content: an indexed-but-fileless entry
+        would produce a "match" the injector can only serve a notice for.
+        """
+        mgr = CandidateManager(tmp_path)
+        candidates = [
+            {"id": "stub-none", "enabled": True, "lifecycle": "active", "scope": "global"},
+            {
+                "id": "stub-empty",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": "",
+            },
+            {
+                "id": "real",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "global",
+                "source_file": _source_file(tmp_path, "real"),
+            },
+        ]
+        filtered, _ = mgr.filter_routable(candidates)
+        assert [c["id"] for c in filtered] == ["real"]
 
     def test_source_file_for_returns_indexed_path(self, tmp_path: Path) -> None:
         mgr = CandidateManager(tmp_path)

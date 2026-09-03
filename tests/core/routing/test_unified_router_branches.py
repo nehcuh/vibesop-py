@@ -23,6 +23,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _sf(tmp_path: Path, skill_id: str) -> str:
+    """Real SKILL.md for a fixture candidate (routability gate needs a file)."""
+    path = tmp_path / "fixtures" / skill_id.replace("/", "-") / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"---\nid: {skill_id}\n---\n# body\n", encoding="utf-8")
+    return str(path)
+
+
 class TestRouteExplicitLayer:
     """Test explicit override layer (Layer 0)."""
 
@@ -126,6 +134,7 @@ class TestRouteMatcherPipeline:
                 "description": "Debug systematically",
                 "namespace": "builtin",
                 "enabled": True,
+                "source_file": _sf(tmp_path, "systematic-debugging"),
             }
         ]
         result = router._single_skill_route("systmatic", candidates=candidates)
@@ -167,6 +176,7 @@ class TestKeywordRoutingFallback:
                 "description": "Deep diagnosis and optimization of the whole project",
                 "namespace": "builtin",
                 "keywords": ["diagnosis", "optimization", "deep"],
+                "source_file": _sf(tmp_path, "builtin/deep-diagnosis-optimization"),
             }
         ]
         result = router._single_skill_route(
@@ -350,8 +360,14 @@ class TestSessionEndLayer:
                 "description": "Session wrap-up",
                 "namespace": "builtin",
                 "triggers": ["that's all for now", "拜拜", "我要离开了", "先走了"],
+                "source_file": _sf(tmp_path, "builtin/session-end"),
             },
-            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+            {
+                "id": "debug-skill",
+                "description": "Debug things",
+                "namespace": "builtin",
+                "source_file": _sf(tmp_path, "debug-skill"),
+            },
         ]
 
         result = router._single_skill_route("我要离开了", candidates=candidates)
@@ -371,8 +387,14 @@ class TestSessionEndLayer:
                 "description": "Session wrap-up",
                 "namespace": "builtin",
                 "triggers": ["i'm done", "heading out", "gotta go"],
+                "source_file": _sf(tmp_path, "builtin/session-end"),
             },
-            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+            {
+                "id": "debug-skill",
+                "description": "Debug things",
+                "namespace": "builtin",
+                "source_file": _sf(tmp_path, "debug-skill"),
+            },
         ]
 
         result = router._single_skill_route("I'm done", candidates=candidates)
@@ -436,8 +458,14 @@ class TestSessionEndLeavingSignal:
                 "namespace": "builtin",
                 # Mirrors core/skills/session-end/SKILL.md triggers.
                 "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
+                "source_file": _sf(tmp_path, "builtin/session-end"),
             },
-            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+            {
+                "id": "debug-skill",
+                "description": "Debug things",
+                "namespace": "builtin",
+                "source_file": _sf(tmp_path, "debug-skill"),
+            },
         ]
 
         result = router._single_skill_route("我先离开了", candidates=candidates)
@@ -455,7 +483,7 @@ class TestGuardedSkillMatcherGate:
     keyword-matched riper-workflow (0.86) via 'workflow' ⊂ 'riper-workflow'.
     """
 
-    def _candidates(self) -> list[dict]:
+    def _candidates(self, tmp_path: Path) -> list[dict]:
         return [
             {
                 "id": "builtin/session-end",
@@ -464,6 +492,7 @@ class TestGuardedSkillMatcherGate:
                 "namespace": "builtin",
                 "keywords": ["session", "会话", "结束", "总结"],
                 "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
+                "source_file": _sf(tmp_path, "builtin/session-end"),
             },
             {
                 "id": "builtin/riper-workflow",
@@ -473,12 +502,14 @@ class TestGuardedSkillMatcherGate:
                 "namespace": "builtin",
                 "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
                 "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+                "source_file": _sf(tmp_path, "builtin/riper-workflow"),
             },
             {
                 "id": "debug-skill",
                 "name": "debug-skill",
                 "description": "Debug things",
                 "namespace": "builtin",
+                "source_file": _sf(tmp_path, "debug-skill"),
             },
         ]
 
@@ -487,7 +518,7 @@ class TestGuardedSkillMatcherGate:
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router._single_skill_route(
-            "似乎有其他进程没有关闭，帮我先关闭了", candidates=self._candidates()
+            "似乎有其他进程没有关闭，帮我先关闭了", candidates=self._candidates(tmp_path)
         )
 
         assert result.primary is None or result.primary.skill_id != "builtin/session-end"
@@ -497,7 +528,8 @@ class TestGuardedSkillMatcherGate:
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router._single_skill_route(
-            "使用合适的 workflow 在独立的 worktree 上进行开发吧", candidates=self._candidates()
+            "使用合适的 workflow 在独立的 worktree 上进行开发吧",
+            candidates=self._candidates(tmp_path),
         )
 
         assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"
@@ -508,7 +540,7 @@ class TestGuardedSkillMatcherGate:
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router._single_skill_route(
-            "use riper workflow for this feature", candidates=self._candidates()
+            "use riper workflow for this feature", candidates=self._candidates(tmp_path)
         )
 
         assert result.has_match
@@ -542,8 +574,11 @@ class TestGuardedExplicitPromotion:
         "namespace": "builtin",
     }
 
-    def _candidates(self) -> list[dict]:
-        return [dict(self._RIPER_CANDIDATE), dict(self._OTHER_CANDIDATE)]
+    def _candidates(self, tmp_path: Path) -> list[dict]:
+        return [
+            {**self._RIPER_CANDIDATE, "source_file": _sf(tmp_path, "builtin/riper-workflow")},
+            {**self._OTHER_CANDIDATE, "source_file": _sf(tmp_path, "debug-skill")},
+        ]
 
     def test_uppercase_skill_name_token_promotes(self, tmp_path: Path) -> None:
         """All-caps mention of the distinctive name token routes to riper."""
@@ -552,7 +587,7 @@ class TestGuardedExplicitPromotion:
 
         result = router._single_skill_route(
             "Build the exporter using the RIPER method end to end",
-            candidates=self._candidates(),
+            candidates=self._candidates(tmp_path),
         )
 
         assert result.primary is not None
@@ -566,7 +601,7 @@ class TestGuardedExplicitPromotion:
 
         result = router._single_skill_route(
             "Please run the RiPeR workflow on this migration",
-            candidates=self._candidates(),
+            candidates=self._candidates(tmp_path),
         )
 
         assert result.primary is not None
@@ -579,7 +614,7 @@ class TestGuardedExplicitPromotion:
 
         result = router._single_skill_route(
             "tidy up the parser module structure",
-            candidates=self._candidates(),
+            candidates=self._candidates(tmp_path),
         )
 
         assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"

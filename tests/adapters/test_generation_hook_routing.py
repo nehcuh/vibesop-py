@@ -197,9 +197,7 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
         assert "skill_file" in text
 
     def test_slash_route_skill_does_not_guess_flat_path(self) -> None:
-        skill = (
-            Path(__file__).resolve().parents[2] / "core" / "skills" / "slash-route" / "SKILL.md"
-        )
+        skill = Path(__file__).resolve().parents[2] / "core" / "skills" / "slash-route" / "SKILL.md"
         text = skill.read_text(encoding="utf-8")
         _assert_no_guessed_flat_skill_path(text, "slash-route SKILL.md")
 

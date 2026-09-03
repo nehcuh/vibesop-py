@@ -380,3 +380,74 @@ class TestRenderCompactReport:
         render_compact_report(result, console=console)
         text = output.getvalue()
         assert "No match" in text
+
+
+class TestAttachSkillFilePayload:
+    """CLI demote contract: unresolvable single-mode match is not a match."""
+
+    def test_single_mode_unresolvable_demotes(self, tmp_path, monkeypatch) -> None:
+        from types import SimpleNamespace
+
+        from vibesop.cli.render import attach_skill_file_payload
+
+        monkeypatch.chdir(tmp_path)
+        primary = SimpleNamespace(skill_id="ghost-skill-xyz-123", metadata={"source_file": None})
+        result = SimpleNamespace(primary=primary)
+        payload = {
+            "mode": "single",
+            "skill_id": "ghost-skill-xyz-123",
+            "has_match": True,
+            "primary": {"skill_id": "ghost-skill-xyz-123"},
+        }
+
+        attach_skill_file_payload(payload, result)
+
+        assert payload["skill_file"] == ""
+        assert payload["demoted_skill_id"] == "ghost-skill-xyz-123"
+        assert payload["skill_id"] == ""
+        assert payload["has_match"] is False
+        assert payload["mode"] == "no_match"
+        assert payload["primary"]["skill_id"] == ""
+
+    def test_orchestrated_mode_unresolvable_keeps_match(self, tmp_path, monkeypatch) -> None:
+        """Orchestrate payloads are exempt — the plan is the payload."""
+        from types import SimpleNamespace
+
+        from vibesop.cli.render import attach_skill_file_payload
+
+        monkeypatch.chdir(tmp_path)
+        primary = SimpleNamespace(skill_id="step-skill-abc", metadata={})
+        result = SimpleNamespace(primary=primary)
+        payload = {
+            "mode": "orchestrated",
+            "skill_id": "step-skill-abc",
+            "has_match": True,
+            "steps": [{"step": 1, "skill_id": "step-skill-abc"}],
+        }
+
+        attach_skill_file_payload(payload, result)
+
+        assert payload["skill_file"] == ""
+        assert "demoted_skill_id" not in payload
+        assert payload["skill_id"] == "step-skill-abc"
+        assert payload["has_match"] is True
+        assert payload["mode"] == "orchestrated"
+
+    def test_resolvable_skill_file_attached(self, tmp_path, monkeypatch) -> None:
+        from types import SimpleNamespace
+
+        from vibesop.cli.render import attach_skill_file_payload
+
+        monkeypatch.chdir(tmp_path)
+        skill = tmp_path / ".vibe" / "skills" / "real-skill" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nid: real-skill\n---\n# body\n", encoding="utf-8")
+
+        primary = SimpleNamespace(skill_id="real-skill", metadata={})
+        result = SimpleNamespace(primary=primary)
+        payload = {"mode": "single", "skill_id": "real-skill"}
+
+        attach_skill_file_payload(payload, result)
+
+        assert payload["skill_file"] == skill.as_posix()
+        assert "demoted_skill_id" not in payload

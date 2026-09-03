@@ -21,7 +21,21 @@ from vibesop.core.routing.unified import UnifiedRouter
 if TYPE_CHECKING:
     import pytest
 
-_CANDIDATES = [{"id": "test-skill", "description": "Test skill", "namespace": "project"}]
+
+def _candidates(tmp_path: Path) -> list[dict]:
+    sf = tmp_path / "fixtures" / "test-skill" / "SKILL.md"
+    sf.parent.mkdir(parents=True, exist_ok=True)
+    sf.write_text("---\nid: test-skill\n---\n# body\n", encoding="utf-8")
+    return [
+        {
+            "id": "test-skill",
+            "description": "Test skill",
+            "namespace": "project",
+            "source_file": str(sf),
+        }
+    ]
+
+
 _NO_MATCH_QUERY = "xyzqwerty_no_match_12345"
 
 
@@ -52,7 +66,7 @@ def test_hit_records_mode_single_when_opted_in(
     monkeypatch.setenv("VIBE_ANALYTICS_ENABLED", "true")
     router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=False))
 
-    result = router.route("/test-skill", candidates=_CANDIDATES)
+    result = router.route("/test-skill", candidates=_candidates(tmp_path))
 
     assert result.has_match
     records = _read_records(tmp_path)
@@ -102,7 +116,7 @@ def test_nothing_written_when_opted_out(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.delenv("VIBE_ANALYTICS_ENABLED", raising=False)
     router = UnifiedRouter(project_root=tmp_path, config=_no_match_config())
 
-    router.route("/test-skill", candidates=_CANDIDATES)  # hit
+    router.route("/test-skill", candidates=_candidates(tmp_path))  # hit
     router.route(_NO_MATCH_QUERY)  # miss
 
     assert not _analytics_file(tmp_path).exists()
@@ -160,7 +174,7 @@ def test_miss_counter_fires_on_fallback_llm(tmp_path: Path) -> None:
 def test_miss_counter_not_fired_on_hit(tmp_path: Path) -> None:
     router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=False))
 
-    result = router.route("/test-skill", candidates=_CANDIDATES)
+    result = router.route("/test-skill", candidates=_candidates(tmp_path))
 
     assert result.has_match
     assert not _miss_file(tmp_path).exists()

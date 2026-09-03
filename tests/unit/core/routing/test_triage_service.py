@@ -679,6 +679,55 @@ class TestFreshCacheHit:
         assert metadata["candidates_sent"] == 0
         assert metadata["recall_method"] is None
 
+    def test_fresh_hit_carries_candidate_source_file(self) -> None:
+        """Fresh-hit route metadata must carry the discovered source_file.
+
+        Match⇔injectable-content isomorphism: every AI-triage SkillRoute
+        construction site threads the candidate's SKILL.md path so the
+        injector can load the same file the router matched.
+        """
+        service = self._make_service_with_fresh_hit(
+            {
+                "skill_id": "debug-skill",
+                "confidence": 0.9,
+                "source": "builtin/debug-skill",
+                "description": "debug things",
+            }
+        )
+        candidates = [{**c, "source_file": f"/skills/{c['id']}/SKILL.md"} for c in self._CANDIDATES]
+
+        result = service.try_ai_triage("debug this", candidates)
+
+        service._llm.call.assert_not_called()
+        assert result is not None
+        assert result.match.metadata["source_file"] == "/skills/debug-skill/SKILL.md"
+
+    def test_llm_match_carries_candidate_source_file(self) -> None:
+        """LLM-path route metadata must carry the discovered source_file."""
+        service = _make_service()
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+        service._llm.call.return_value = MagicMock(
+            content="debug-skill",
+            model="test",
+            tokens_used=10,
+            input_tokens=5,
+            output_tokens=5,
+        )
+        candidates = [
+            {"id": "debug-skill", "intent": "debug things", "source_file": "/s/debug/SKILL.md"}
+        ]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "debug-skill", "structured": True, "confidence": 0.9},
+        ):
+            result = service.try_ai_triage("debug this", candidates)
+
+        assert result is not None
+        assert result.match.metadata["source_file"] == "/s/debug/SKILL.md"
+
 
 class TestBudgetExhaustedLogging:
     """Budget exhaustion must produce exactly one log (the trip warning)."""
@@ -829,6 +878,21 @@ class TestLastGoodRecallMethod:
         assert result is not None
         assert result.match.metadata["last_good"] is True
         assert result.match.metadata["recall_method"] is None
+
+    def test_last_good_carries_candidate_source_file(self) -> None:
+        """Last-good route metadata must carry the discovered source_file."""
+        service = self._make_service_with_llm()
+        self._run_successful_triage(service)
+
+        service._cost_tracker.get_monthly_cost.return_value = 5.5
+        service._triage_cache.lookup.return_value = (None, self._STALE_ENTRY)
+        candidates = [{**c, "source_file": f"/skills/{c['id']}/SKILL.md"} for c in self._CANDIDATES]
+
+        result = service.try_ai_triage("debug", candidates)
+
+        assert result is not None
+        assert result.match.metadata["last_good"] is True
+        assert result.match.metadata["source_file"] == "/skills/debug-skill/SKILL.md"
 
 
 class TestLlmUnconfiguredCacheLookup:

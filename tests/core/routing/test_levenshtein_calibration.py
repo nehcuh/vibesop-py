@@ -27,7 +27,20 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _candidate(skill_id: str, name: str, keywords: list[str] | None = None) -> dict[str, Any]:
+def _candidate(
+    skill_id: str,
+    name: str,
+    keywords: list[str] | None = None,
+    tmp_path: Path | None = None,
+) -> dict[str, Any]:
+    # Production candidates always carry a discovered SKILL.md path (the
+    # routability gate drops fileless stubs); create a real one per fixture.
+    source_file = ""
+    if tmp_path is not None:
+        sf = tmp_path / "fixtures" / skill_id.replace("/", "-") / "SKILL.md"
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(f"---\nid: {skill_id}\n---\n# {name}\n", encoding="utf-8")
+        source_file = str(sf)
     return {
         "id": skill_id,
         "name": name,
@@ -36,21 +49,25 @@ def _candidate(skill_id: str, name: str, keywords: list[str] | None = None) -> d
         "keywords": keywords or [],
         "namespace": "builtin",
         "enabled": True,
+        "source_file": source_file,
     }
+
+
+def _incident_candidates(tmp_path: Path) -> list[dict[str, Any]]:
+    # Candidate set mimicking the routing_pending.jsonl incident skills.
+    return [
+        _candidate("builtin/code-review", "code review", ["review", "代码审查"], tmp_path),
+        _candidate("omx/tdd", "tdd", ["tdd", "test"], tmp_path),
+        _candidate(
+            "superpowers/systematic-debugging", "systematic debugging", ["debug", "调试"], tmp_path
+        ),
+        _candidate("kimi-gated-fix", "kimi gated fix", ["gated", "fix"], tmp_path),
+    ]
 
 
 def _router(tmp_path: Path) -> UnifiedRouter:
     config = RoutingConfig(enable_ai_triage=False)
     return UnifiedRouter(project_root=tmp_path, config=config)
-
-
-# Candidate set mimicking the routing_pending.jsonl incident skills.
-INCIDENT_CANDIDATES = [
-    _candidate("builtin/code-review", "code review", ["review", "代码审查"]),
-    _candidate("omx/tdd", "tdd", ["tdd", "test"]),
-    _candidate("superpowers/systematic-debugging", "systematic debugging", ["debug", "调试"]),
-    _candidate("kimi-gated-fix", "kimi gated fix", ["gated", "fix"]),
-]
 
 
 class TestLevenshteinLastResort:
@@ -61,7 +78,7 @@ class TestLevenshteinLastResort:
         score must not override them."""
         router = _router(tmp_path)
         primary, _alts, _detail = router._run_matcher_pipeline_levenshtein_last(
-            "使用 review", INCIDENT_CANDIDATES, None
+            "使用 review", _incident_candidates(tmp_path), None
         )
         assert primary is not None
         assert primary.skill_id == "builtin/code-review"
@@ -72,7 +89,7 @@ class TestLevenshteinLastResort:
         via levenshtein (last resort is not "never")."""
         router = _router(tmp_path)
         candidates = [
-            _candidate("systematic-debugging", "systematic debugging", ["debug"]),
+            _candidate("systematic-debugging", "systematic debugging", ["debug"], tmp_path),
         ]
         primary, _alts, _detail = router._run_matcher_pipeline_levenshtein_last(
             "systmatic", candidates, None
@@ -85,7 +102,7 @@ class TestLevenshteinLastResort:
         """End-to-end: the two-pass pipeline keeps typo routing working."""
         router = _router(tmp_path)
         candidates = [
-            _candidate("systematic-debugging", "systematic debugging", ["debug"]),
+            _candidate("systematic-debugging", "systematic debugging", ["debug"], tmp_path),
         ]
         result = router.route("systmatic", candidates=candidates)
         assert result.has_match
@@ -113,7 +130,9 @@ class TestLevenshteinLastResort:
 
         router._matcher_pipeline.try_matcher_pipeline = slow_pipeline
 
-        candidates = [_candidate("systematic-debugging", "systematic debugging", ["debug"])]
+        candidates = [
+            _candidate("systematic-debugging", "systematic debugging", ["debug"], tmp_path)
+        ]
         errors: list[BaseException] = []
         primaries: list[Any] = []
 
@@ -163,11 +182,12 @@ class TestSlashExplicitRouting:
         assert skill_id == "omx/tdd"
 
     def test_unit_unknown_slash_falls_through(self) -> None:
-        skill_id, _remainder = check_explicit_override("/nosuchskill", INCIDENT_CANDIDATES)
+        candidates = [_candidate("builtin/code-review", "code review")]
+        skill_id, _remainder = check_explicit_override("/nosuchskill", candidates)
         assert skill_id is None
 
     def test_route_slash_review_is_explicit(self, tmp_path: Path) -> None:
-        result = _router(tmp_path).route("/review", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("/review", candidates=_incident_candidates(tmp_path))
         assert result.has_match
         assert result.primary is not None
         assert result.primary.skill_id == "builtin/code-review"
@@ -175,7 +195,7 @@ class TestSlashExplicitRouting:
         assert result.primary.confidence == 1.0
 
     def test_route_slash_tdd_is_explicit(self, tmp_path: Path) -> None:
-        result = _router(tmp_path).route("/tdd", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("/tdd", candidates=_incident_candidates(tmp_path))
         assert result.has_match
         assert result.primary is not None
         assert result.primary.skill_id == "omx/tdd"
@@ -183,7 +203,7 @@ class TestSlashExplicitRouting:
 
     def test_route_unknown_slash_no_fuzzy_garbage(self, tmp_path: Path) -> None:
         """An unknown slash command must not fall into a 1.0 levenshtein hit."""
-        result = _router(tmp_path).route("/nosuchskill", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("/nosuchskill", candidates=_incident_candidates(tmp_path))
         assert result.primary is None or result.primary.layer in (
             RoutingLayer.FALLBACK_LLM,
             RoutingLayer.NO_MATCH,
@@ -218,8 +238,10 @@ class TestUserQueryUnwrap:
 
     def test_route_wrapped_query_matches_unwrapped(self, tmp_path: Path) -> None:
         router = _router(tmp_path)
-        wrapped = router.route("<user_query>/review</user_query>", candidates=INCIDENT_CANDIDATES)
-        bare = router.route("/review", candidates=INCIDENT_CANDIDATES)
+        wrapped = router.route(
+            "<user_query>/review</user_query>", candidates=_incident_candidates(tmp_path)
+        )
+        bare = router.route("/review", candidates=_incident_candidates(tmp_path))
         assert wrapped.primary is not None and bare.primary is not None
         assert wrapped.primary.skill_id == bare.primary.skill_id == "builtin/code-review"
         assert wrapped.primary.layer == RoutingLayer.EXPLICIT
@@ -228,7 +250,7 @@ class TestUserQueryUnwrap:
         """Unwrapping must not smuggle harness markup past the junk guard."""
         result = _router(tmp_path).route(
             "<user_query><system-reminder>junk</system-reminder></user_query>",
-            candidates=INCIDENT_CANDIDATES,
+            candidates=_incident_candidates(tmp_path),
         )
         assert result.primary is None
 
@@ -239,7 +261,7 @@ class TestUserQueryUnwrap:
         router = _router(tmp_path)
         result = router.route(
             "<user_query><system-reminder>junk</system-reminder></user_query>",
-            candidates=INCIDENT_CANDIDATES,
+            candidates=_incident_candidates(tmp_path),
         )
         assert result.primary is None
         miss_file = tmp_path / ".vibe" / "miss_counter.json"
@@ -260,7 +282,7 @@ class TestUserQueryUnwrap:
         sunk unwrap + junk re-check must reject wrapped markup here too."""
         result = _router(tmp_path)._single_skill_route(
             "<user_query><system-reminder>junk</system-reminder></user_query>",
-            candidates=INCIDENT_CANDIDATES,
+            candidates=_incident_candidates(tmp_path),
         )
         assert result.primary is None
         assert not result.has_match
@@ -270,7 +292,7 @@ class TestUserQueryUnwrap:
         fuzzy-match a skill (it used to hit an unrelated matcher result)."""
         result = _router(tmp_path).orchestrate(
             "<user_query><system-reminder>junk</system-reminder></user_query>",
-            candidates=INCIDENT_CANDIDATES,
+            candidates=_incident_candidates(tmp_path),
         )
         assert result.primary is None
 
@@ -280,26 +302,28 @@ class TestIncidentRegressions:
 
     def test_shiyong_review_not_inflated_levenshtein(self, tmp_path: Path) -> None:
         """ "使用 review" used to route to kimi-gated-fix @1.0 via levenshtein."""
-        result = _router(tmp_path).route("使用 review", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("使用 review", candidates=_incident_candidates(tmp_path))
         assert result.primary is not None
         assert result.primary.skill_id == "builtin/code-review"
         assert result.primary.layer != RoutingLayer.LEVENSHTEIN
 
     def test_review_my_code_routes_to_review_skill(self, tmp_path: Path) -> None:
-        result = _router(tmp_path).route("review my code", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route(
+            "review my code", candidates=_incident_candidates(tmp_path)
+        )
         assert result.primary is not None
         assert result.primary.skill_id == "builtin/code-review"
         assert result.primary.skill_id != "kimi-gated-fix"
 
     def test_debug_this_routes_to_debugging(self, tmp_path: Path) -> None:
-        result = _router(tmp_path).route("debug this", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("debug this", candidates=_incident_candidates(tmp_path))
         assert result.primary is not None
         assert "debug" in result.primary.skill_id
 
     def test_keyi_no_garbage_match(self, tmp_path: Path) -> None:
         """ "可以" is conversational noise — no skill may claim it, least of
         all at an inflated 1.0."""
-        result = _router(tmp_path).route("可以", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("可以", candidates=_incident_candidates(tmp_path))
         assert result.primary is None or result.primary.layer in (
             RoutingLayer.FALLBACK_LLM,
             RoutingLayer.NO_MATCH,
@@ -308,7 +332,7 @@ class TestIncidentRegressions:
     def test_wrapped_keyi_no_garbage_match(self, tmp_path: Path) -> None:
         """The exact routing_pending.jsonl shape: wrapper + noise query."""
         result = _router(tmp_path).route(
-            "<user_query>\n可以\n</user_query>", candidates=INCIDENT_CANDIDATES
+            "<user_query>\n可以\n</user_query>", candidates=_incident_candidates(tmp_path)
         )
         assert result.primary is None or result.primary.layer in (
             RoutingLayer.FALLBACK_LLM,
@@ -317,7 +341,7 @@ class TestIncidentRegressions:
 
     def test_xiu_bug_no_inflated_levenshtein(self, tmp_path: Path) -> None:
         """ "修 bug" may match or miss, but never via a 1.0 levenshtein hit."""
-        result = _router(tmp_path).route("修 bug", candidates=INCIDENT_CANDIDATES)
+        result = _router(tmp_path).route("修 bug", candidates=_incident_candidates(tmp_path))
         assert not (
             result.primary is not None
             and result.primary.layer == RoutingLayer.LEVENSHTEIN

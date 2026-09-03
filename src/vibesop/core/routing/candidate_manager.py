@@ -20,6 +20,21 @@ from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 logger = logging.getLogger(__name__)
 
 
+def with_source_file(metadata: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *metadata* carrying the candidate's source_file.
+
+    Single source of truth for attaching discovered SKILL.md paths to
+    routing results — every SkillRoute construction site must go through
+    this helper so match ⇔ injectable-content stays isomorphic.
+    """
+    sf = candidate.get("source_file")
+    if not sf:
+        return dict(metadata)
+    enriched = dict(metadata)
+    enriched["source_file"] = str(sf)
+    return enriched
+
+
 class CandidateManager:
     """Manages skill candidate discovery, filtering, and caching.
 
@@ -183,7 +198,16 @@ class CandidateManager:
             if canonical_id in seen_ids:
                 continue
             source_file = definition.source_file
-            if source_file is not None:
+            if source_file is None:
+                # Registry stub with no backing file: keep it in the POOL
+                # (visible via skills list for diagnosis) — the routability
+                # gate below (filter_routable) is what keeps it unroutable.
+                logger.warning(
+                    "Skill %s indexed without a source_file (registry stub?); "
+                    "it will not be routable",
+                    metadata.id,
+                )
+            else:
                 try:
                     if not Path(source_file).is_file():
                         logger.warning(
@@ -412,17 +436,28 @@ class CandidateManager:
             if not c.get("enabled", True):
                 continue
             source_file = c.get("source_file")
-            if source_file:
-                try:
-                    if not Path(str(source_file)).is_file():
-                        logger.warning(
-                            "Dropping skill %s from routing: content file missing (%s)",
-                            c.get("id"),
-                            source_file,
-                        )
-                        continue
-                except OSError:
+            if not source_file:
+                logger.warning(
+                    "Dropping skill %s from routing: no source_file "
+                    "(registry stub without backing content)",
+                    c.get("id"),
+                )
+                continue
+            try:
+                if not Path(str(source_file)).is_file():
+                    logger.warning(
+                        "Dropping skill %s from routing: content file missing (%s)",
+                        c.get("id"),
+                        source_file,
+                    )
                     continue
+            except OSError:
+                logger.warning(
+                    "Dropping skill %s from routing: source_file not resolvable (%s)",
+                    c.get("id"),
+                    source_file,
+                )
+                continue
             lifecycle_str = c.get("lifecycle", "active")
             try:
                 lifecycle = SkillLifecycle(lifecycle_str)

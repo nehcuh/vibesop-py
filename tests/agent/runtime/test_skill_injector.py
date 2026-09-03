@@ -106,6 +106,79 @@ class TestSkillInjector:
         assert "no injectable content" in str(empty.payload)
         assert "SECURITY" not in str(empty.payload)
 
+    def test_marker_substring_in_real_body_does_not_demote(self, tmp_path) -> None:
+        """A real SKILL.md that merely QUOTES the marker text must inject.
+
+        The empty-content gate used to substring-match the marker anywhere in
+        the body, so a legitimate skill documenting the placeholder text was
+        falsely demoted to a no-match notice. The gate keys on the exact
+        placeholder header, not on substring presence.
+        """
+        injector = SkillInjector(project_root=tmp_path)
+
+        real_body = (
+            "# Troubleshooting guide\n\n"
+            "Step 1: if you ever see '*Skill content not found at expected "
+            "locations.*' the install is broken — reinstall the pack.\n"
+            "Step 2: proceed with the normal workflow.\n"
+        )
+        with patch.object(injector, "_load_skill_content", return_value=real_body):
+            result = injector.inject_single_skill("troubleshooting", PlatformType.GENERIC)
+
+        assert result.content_missing is not True
+        assert result.notice_only is not True
+        assert "Troubleshooting guide" in str(result.payload)
+
+    def test_annotate_plan_source_lookup_preferred(self, tmp_path) -> None:
+        """Plan annotation: the hinted source_file wins over path-guessing.
+
+        The router's candidate index knows the file it indexed; annotation
+        must resolve to that same file even when the injector's own roots
+        would find a different copy first.
+        """
+        hinted = tmp_path / "elsewhere" / "hinted.skill" / "SKILL.md"
+        hinted.parent.mkdir(parents=True)
+        hinted.write_text("---\nid: hinted-skill\n---\n# from lookup\n", encoding="utf-8")
+
+        guessed = tmp_path / ".vibe" / "skills" / "hinted-skill" / "SKILL.md"
+        guessed.parent.mkdir(parents=True)
+        guessed.write_text("---\nid: hinted-skill\n---\n# from glob\n", encoding="utf-8")
+
+        injector = SkillInjector(project_root=tmp_path)
+        plan = {"plan_id": "p1", "steps": [{"step_number": 1, "skill_id": "hinted-skill"}]}
+        injector.annotate_plan_dict(plan, source_lookup=lambda _sid: str(hinted))
+
+        assert plan["steps"][0]["skill_file"] == hinted.as_posix()
+
+        # Without a lookup, the injector's own resolution still applies.
+        plan2 = {"plan_id": "p2", "steps": [{"step_number": 1, "skill_id": "hinted-skill"}]}
+        injector.annotate_plan_dict(plan2)
+        assert plan2["steps"][0]["skill_file"] == guessed.as_posix()
+
+    def test_shared_root_order_isomorphic_with_candidate_manager(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Recognizer–generator isomorphism, structural form.
+
+        Every root CandidateManager scans must appear in the injector's root
+        list, in the SAME relative order — otherwise the injector can resolve
+        a different copy of a matched skill than the one the router indexed.
+        """
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+        (tmp_path / "home").mkdir(exist_ok=True)
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
+
+        cm_roots = [r.as_posix() for r in CandidateManager(tmp_path)._build_search_paths()]
+        inj_roots = [r.as_posix() for r in SkillInjector(project_root=tmp_path)._search_roots()]
+
+        # Superset: every CM root is an injector root.
+        assert set(cm_roots) <= set(inj_roots)
+        # Same relative order on the shared subset.
+        shared_in_inj = [r for r in inj_roots if r in set(cm_roots)]
+        assert shared_in_inj == cm_roots
+
     def test_opencode_injection(self, tmp_path) -> None:
         injector = SkillInjector(project_root=tmp_path)
 
@@ -364,8 +437,17 @@ class TestSkillInjector:
         content = injector._load_skill_content("diagnose")
         assert "Diagnose via central nested storage" in content
 
-    def test_load_skill_claude_code_dir_preferred(self, tmp_path, monkeypatch) -> None:
-        """v7.3.5: Claude Code install dir takes priority over central storage."""
+    def test_load_skill_central_storage_ranked_before_claude_code(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Recognizer–generator isomorphism: shared roots keep CM's order.
+
+        CandidateManager scans ~/.config/skills before ~/.claude/skills, so
+        the indexed SKILL.md (and therefore the injected one) is the central
+        copy when the same skill exists in both. An injector that ranked
+        ~/.claude first would inject a different file than the router
+        indexed for the same match.
+        """
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         # Install in both locations with different content
@@ -379,7 +461,7 @@ class TestSkillInjector:
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("gstack/review")
-        assert "Claude Code install" in content
+        assert "Review from central storage" in content
 
     def test_load_skill_strips_builtin_namespace(self, tmp_path) -> None:
         """builtin/{name} id must resolve to core/skills/{name}/SKILL.md.

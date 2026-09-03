@@ -59,6 +59,21 @@ def attach_skill_file_payload(payload: dict[str, Any], result: Any) -> None:
                 hinted = meta.get("source_file")
         resolved = resolve_routed_skill_md(sid, source_file=hinted)
         payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
+        if resolved is None and payload.get("mode") in (None, "", "single"):
+            # Single-mode demote (mirror handle_query): a matched id whose
+            # SKILL.md cannot be resolved is not a match. Orchestrated
+            # payloads are exempt — the plan is the payload, and steps
+            # carry their own per-step resolution + skill_file_note below.
+            payload["demoted_skill_id"] = sid
+            if "skill_id" in payload:
+                payload["skill_id"] = ""
+            if "has_match" in payload:
+                payload["has_match"] = False
+            if "mode" in payload:
+                payload["mode"] = "no_match"
+            primary_dict = payload.get("primary")
+            if isinstance(primary_dict, dict) and str(primary_dict.get("skill_id") or "") == sid:
+                primary_dict["skill_id"] = ""
     else:
         payload["skill_file"] = ""
     from vibesop.agent.runtime.skill_injector import SkillInjector

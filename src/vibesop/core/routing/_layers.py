@@ -28,11 +28,11 @@ logger = logging.getLogger(__name__)
 
 def _with_source_file(metadata: dict[str, Any], candidate: dict[str, Any] | None) -> dict[str, Any]:
     """Copy the candidate's discovered SKILL.md path onto route metadata."""
-    meta = dict(metadata)
-    sf = (candidate or {}).get("source_file")
-    if sf:
-        meta["source_file"] = str(sf)
-    return meta
+    from vibesop.core.routing.candidate_manager import with_source_file
+
+    if candidate is None:
+        return dict(metadata)
+    return with_source_file(metadata, candidate)
 
 
 def try_explicit_layer(
@@ -727,11 +727,14 @@ def try_index_layer(
         layer=RoutingLayer.SEMANTIC_INDEX,
         source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
-        metadata={
-            "index_hit": True,
-            "index_score": round(best_score, 3),
-            "scenarios": index[best_skill_id].scenarios[:3],
-        },
+        metadata=_with_source_file(
+            {
+                "index_hit": True,
+                "index_score": round(best_score, 3),
+                "scenarios": index[best_skill_id].scenarios[:3],
+            },
+            candidate,
+        ),
     )
     return match, LayerDetail(
         layer=RoutingLayer.SEMANTIC_INDEX,

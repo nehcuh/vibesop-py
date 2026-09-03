@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
+from vibesop.core.routing.candidate_manager import with_source_file
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
 from vibesop.core.routing.triage_cache import TriageCache
@@ -196,6 +197,9 @@ class TriageService:
         # prefiltering; a changed set demotes the entry to stale, and
         # _last_good_route then re-validates the skill still exists.
         stale_entry: dict[str, Any] | None = None
+        candidate_lookup: dict[str, dict[str, Any]] = {
+            c["id"]: c for c in candidates if c.get("id")
+        }
         if self._triage_cache is not None:
             fresh_entry, stale_entry = self._triage_cache.lookup(
                 augmented_query, candidates, self._cache_ttl_hours()
@@ -228,19 +232,22 @@ class TriageService:
                             layer=RoutingLayer.AI_TRIAGE,
                             source=str(fresh_entry.get("source", "")),
                             description=str(fresh_entry.get("description", "")),
-                            metadata={
-                                "ai_triage": True,
-                                "persistent_cache": True,
-                                # Cache hit: nothing was sent to the LLM (the
-                                # prefilter below was skipped), so there is no
-                                # real model or parse mode — fixed placeholders
-                                # keep the metadata keys identical to the LLM
-                                # path ("cache" marks the provenance).
-                                "structured": False,
-                                "model": "cache",
-                                "candidates_sent": 0,
-                                "recall_method": None,
-                            },
+                            metadata=with_source_file(
+                                {
+                                    "ai_triage": True,
+                                    "persistent_cache": True,
+                                    # Cache hit: nothing was sent to the LLM (the
+                                    # prefilter below was skipped), so there is no
+                                    # real model or parse mode — fixed placeholders
+                                    # keep the metadata keys identical to the LLM
+                                    # path ("cache" marks the provenance).
+                                    "structured": False,
+                                    "model": "cache",
+                                    "candidates_sent": 0,
+                                    "recall_method": None,
+                                },
+                                candidate_lookup.get(skill_id) or {},
+                            ),
                         )
                         return LayerResult(match=route, layer=RoutingLayer.AI_TRIAGE)
                 except (KeyError, TypeError, ValueError) as e:
@@ -419,13 +426,16 @@ class TriageService:
                         layer=RoutingLayer.AI_TRIAGE,
                         source=source,
                         description=str(candidate.get("description", "")),
-                        metadata={
-                            "ai_triage": True,
-                            "structured": parsed.get("structured", False),
-                            "model": getattr(response, "model", "unknown"),
-                            "candidates_sent": len(triage_candidates),
-                            "recall_method": self._last_recall_method,
-                        },
+                        metadata=with_source_file(
+                            {
+                                "ai_triage": True,
+                                "structured": parsed.get("structured", False),
+                                "model": getattr(response, "model", "unknown"),
+                                "candidates_sent": len(triage_candidates),
+                                "recall_method": self._last_recall_method,
+                            },
+                            candidate,
+                        ),
                     )
                     if self._triage_cache is not None:
                         # Hash the full candidate set so a later lookup can
@@ -887,21 +897,27 @@ class TriageService:
                 layer=RoutingLayer.AI_TRIAGE,
                 source=str(stale_entry.get("source", "")),
                 description=str(stale_entry.get("description", "")),
-                metadata={
-                    "ai_triage": True,
-                    "last_good": True,
-                    "last_good_original_confidence": original_confidence,
-                    # Last-good: nothing was sent to the LLM (the gates
-                    # closed or the call failed before a new prompt).
-                    "candidates_sent": 0,
-                    # No recall fed this route: it replays a stale cache
-                    # entry, so reporting self._last_recall_method here would
-                    # leak the previous request's value (or, on the
-                    # LLM-failure path, a recall whose result was discarded)
-                    # in long-lived processes. Fixed None, same convention as
-                    # the fresh-cache path above.
-                    "recall_method": None,
-                },
+                metadata=with_source_file(
+                    {
+                        "ai_triage": True,
+                        "last_good": True,
+                        "last_good_original_confidence": original_confidence,
+                        # Last-good: nothing was sent to the LLM (the gates
+                        # closed or the call failed before a new prompt).
+                        "candidates_sent": 0,
+                        # No recall fed this route: it replays a stale cache
+                        # entry, so reporting self._last_recall_method here would
+                        # leak the previous request's value (or, on the
+                        # LLM-failure path, a recall whose result was discarded)
+                        # in long-lived processes. Fixed None, same convention as
+                        # the fresh-cache path above.
+                        "recall_method": None,
+                    },
+                    next(
+                        (c for c in candidates if str(c.get("id", "")).lower() == skill_id.lower()),
+                        {},
+                    ),
+                ),
             )
         except (KeyError, TypeError, ValueError) as e:
             logger.debug("Failed to build last-good route: %s", e)

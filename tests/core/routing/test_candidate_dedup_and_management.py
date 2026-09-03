@@ -84,9 +84,7 @@ class TestDeduplication:
         live_path.parent.mkdir()
         live_path.write_text("# live\n", encoding="utf-8")
         live.source_file = live_path
-        candidates = _get_candidates(
-            candidate_manager, {"ghost-skill": ghost, "live-skill": live}
-        )
+        candidates = _get_candidates(candidate_manager, {"ghost-skill": ghost, "live-skill": live})
         assert [c["id"] for c in candidates] == ["live-skill"]
 
     def test_deduplicates_across_namespaces(self, candidate_manager: Any) -> None:

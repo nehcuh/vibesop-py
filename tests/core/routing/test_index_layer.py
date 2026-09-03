@@ -172,6 +172,51 @@ class TestTryIndexLayer:
         assert detail.matched is True
         assert "index match" in detail.reason.lower()
 
+    def test_index_match_carries_candidate_source_file(self, tmp_path: Path) -> None:
+        """Token-overlap index routes must thread the discovered source_file.
+
+        Same isomorphism contract as the embedding fallback: the injector
+        needs the exact file the router matched.
+        """
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        router._get_skill_source = lambda sid, ns: "builtin"
+
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.0.0",
+                    "skills": {
+                        "gstack/review": {
+                            "skill_id": "gstack/review",
+                            "scenarios": ["code review"],
+                            "query_patterns": ["review this code"],
+                            "differentiation": "",
+                            "confidence_boosters": ["review"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        candidates = [
+            {
+                "id": "gstack/review",
+                "description": "Review code",
+                "namespace": "gstack",
+                "source_file": "/skills/gstack/review/SKILL.md",
+            }
+        ]
+
+        match, _detail = try_index_layer(router, "review this code please", candidates)
+
+        assert match is not None
+        assert match.metadata.get("source_file") == "/skills/gstack/review/SKILL.md"
+
     def test_index_match_skill_not_in_candidates(self, tmp_path: Path) -> None:
         """Stale profiles (skill no longer installed) are skipped up front.
 
