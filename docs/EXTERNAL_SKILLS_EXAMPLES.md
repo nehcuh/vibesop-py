@@ -1,6 +1,6 @@
 # VibeSOP 外部技能 - 完整示例
 
-> **版本**: 8.1.3 (applicable to VibeSOP 8.0.0+)
+> **版本**: 8.1.4 (applicable to VibeSOP 8.0.0+)
 > **目标**: 展示如何创建和使用外部技能
 
 ---

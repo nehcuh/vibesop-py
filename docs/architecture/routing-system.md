@@ -1,6 +1,6 @@
 # Routing System Architecture
 
-> **Version**: 8.1.3
+> **Version**: 8.1.4
 > **Last Updated**: 2026-09-02
 >
 > 对外「技能路由是什么、实验说明了什么」见 **[技能路由对外叙事](../skill-routing-explained.md)**。  

@@ -1,6 +1,6 @@
 # Platform registry and install-status invariants
 
-> **Version**: 8.1.3
+> **Version**: 8.1.4
 > **Updated**: 2026-08-26
 
 These rules exist because the 8.1.0 release shipped with Docker e2e green while

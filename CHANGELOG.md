@@ -9,10 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Documentation
-
-- **技能路由对外叙事**（`docs/skill-routing-explained.md`）：从 Warp Skill 自进化对照讲入口与出口；hermetic 硬门是指纹 + 逐条 ok1（当前基线 30/34=88%，不是 fail_under）；影子徽章永不阻断；pytest 73% 测 Python、不进效果表但仍挡 CI。写入 R6 失败观察（27B / 0 读取，n=1 上两次路由 no-match，不当起源神话）；R7 仅 session 笔记；R8 未完成，不把「找错可能比没找更伤」当已成立发现。Improver 标为缺口。另附纯文本变体 `docs/article-x-plain.txt`。
-
 ### Added
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
@@ -63,28 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **匹配必须可注入 SKILL.md（fail-closed）**: 发现层 rglob 能看见
-  `.vibe/skills/cross-cutting/{id}.skill/`，注入器按裸 id 重猜路径，
-  hook 会发出 `VibeSOP routed` 但 agent 读不到正文。注入器对所有 id
-  glob `**/{leaf}.skill/SKILL.md`；候选缺少 `source_file` 不可路由；
-  空内容 / GBK 解码失败 / 运行时扫描拒绝不再包装成 `[ACTIVE SKILL]`。
-  删除跟踪包 `fuck-my-shit-mountain.skill`（无正文仍进候选）。
-  注入优先发现层 `source_file`（SkillLoader，再 glob）；hook NEXT STEP
-  与 `vibe route` JSON/`SKILL.md:` 行使用真实路径，不再猜
-  `core/skills/<id>/SKILL.md`。路由命中把候选 `source_file` 写入
-  SkillRoute.metadata，hook 注入按该路径加载。编排逐步「去读 SKILL.md」
-  使用每步 ``skill_file`` 真实路径，禁止猜 ``skills/<id>/SKILL.md``。
-  平台模板 / AGENTS 生成文案与 always-loaded 路由规则同步：``[ACTIVE SKILL]``
-  跟注入正文或 ``NEXT STEP`` / ``skill_file``，编排逐步读 ``skill_file``，
-  不再命令 agent 去猜 ``skills/<id>/SKILL.md``（Pi 生成树 ``.pi/skills/`` 除外）。
-  session-end 路由失败回退改为 ``vibe skills info builtin/session-end``
-  （打印真实 Source file）；``vibe route --slash "/session-end"`` 会 Exit(1)，
-  ``vibe route "session-end"`` 会因短查询/守卫技能 miss。
-  目录文案（``docs/skills.md.j2``）、签入的 Pi 生成物（``.pi/prompts/vibe-route.md``、
-  ``.pi/docs/routing-protocol.md``）与 USE_CASES 示例同步：跟 ``skill_file`` /
-  ``NEXT STEP``，不把扁平 ``skills/<id>/SKILL.md`` 当路由后读路径。
-  hook 失败分支不再输出 ``skills/<id>/SKILL.md``；Pi ``vibesop-route.ts`` 与
-  OpenCode 插件优先消费 JSON ``skill_file``。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实
@@ -270,6 +244,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings.json — user commands such as PowerShell hooks no longer fail
   verification. Non-win32 hosts additionally surface Windows-form vibesop
   commands (drive-letter paths) that previously passed silently.
+
+## [8.1.4] — 2026-09-03
+
+### Documentation
+
+- **技能路由对外叙事**（`docs/skill-routing-explained.md`）：从 Warp Skill 自进化对照讲入口与出口；hermetic 硬门是指纹 + 逐条 ok1（当前基线 30/34=88%，不是 fail_under）；影子徽章永不阻断；pytest 73% 测 Python、不进效果表但仍挡 CI。写入 R6 失败观察（27B / 0 读取，n=1 上两次路由 no-match，不当起源神话）；R7 仅 session 笔记；R8 未完成，不把「找错可能比没找更伤」当已成立发现。Improver 标为缺口。另附纯文本变体 `docs/article-x-plain.txt`。
+
+### Fixed
+
+- **匹配必须可注入 SKILL.md（fail-closed）**: 发现层 rglob 能看见
+  `.vibe/skills/cross-cutting/{id}.skill/`，注入器按裸 id 重猜路径，
+  hook 会发出 `VibeSOP routed` 但 agent 读不到正文。注入器对所有 id
+  glob `**/{leaf}.skill/SKILL.md`；候选缺少 `source_file` 不可路由；
+  空内容 / GBK 解码失败 / 运行时扫描拒绝不再包装成 `[ACTIVE SKILL]`。
+  删除跟踪包 `fuck-my-shit-mountain.skill`（无正文仍进候选）。
+  注入优先发现层 `source_file`（SkillLoader，再 glob）；hook NEXT STEP
+  与 `vibe route` JSON/`SKILL.md:` 行使用真实路径，不再猜
+  `core/skills/<id>/SKILL.md`。路由命中把候选 `source_file` 写入
+  SkillRoute.metadata，hook 注入按该路径加载。编排逐步「去读 SKILL.md」
+  使用每步 ``skill_file`` 真实路径，禁止猜 ``skills/<id>/SKILL.md``。
+  平台模板 / AGENTS 生成文案与 always-loaded 路由规则同步：``[ACTIVE SKILL]``
+  跟注入正文或 ``NEXT STEP`` / ``skill_file``，编排逐步读 ``skill_file``，
+  不再命令 agent 去猜 ``skills/<id>/SKILL.md``（Pi 生成树 ``.pi/skills/`` 除外）。
+  session-end 路由失败回退改为 ``vibe skills info builtin/session-end``
+  （打印真实 Source file）；``vibe route --slash "/session-end"`` 会 Exit(1)，
+  ``vibe route "session-end"`` 会因短查询/守卫技能 miss。
+  目录文案（``docs/skills.md.j2``）、签入的 Pi 生成物（``.pi/prompts/vibe-route.md``、
+  ``.pi/docs/routing-protocol.md``）与 USE_CASES 示例同步：跟 ``skill_file`` /
+  ``NEXT STEP``，不把扁平 ``skills/<id>/SKILL.md`` 当路由后读路径。
+  hook 失败分支不再输出 ``skills/<id>/SKILL.md``；Pi ``vibesop-route.ts`` 与
+  OpenCode 插件优先消费 JSON ``skill_file``。
 
 ## [8.1.3] — 2026-09-01
 

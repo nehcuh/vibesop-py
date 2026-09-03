@@ -1,6 +1,6 @@
 # VibeSOP Architecture
 
-> **Version**: 8.1.3
+> **Version**: 8.1.4
 > **Last Updated**: 2026-06-05
 
 ## Three-Pillar Architecture (v5.5.0+)
