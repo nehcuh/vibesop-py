@@ -23,7 +23,7 @@ installed or failed), run:
 
     vibe route "<user_request>"
 
-then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+then read the SKILL.md path from the routing result (`skill_file` in JSON, or the `SKILL.md:` / `NEXT STEP` line). Do not guess `skills/<id>/SKILL.md`.
 
 User-typed `/vibe-*` commands still go through `vibe route --slash`
 (see Quick Commands). Human-invoked CLI discovery is unchanged.

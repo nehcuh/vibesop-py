@@ -2,7 +2,7 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "77630ba6bd56545e95a536befe6cb47f95e377294f283c7e40cd935594a1ea83",
+    "sha": "3f18bddd9059511d50966b48912ac90a4c7c0cc952af464570afc708b124819d",
     "inputs": {
       "registry.yaml": "f997c3baa48c35098d05b6509230da865ffad068d964cf683eaca864948e56fa",
       "dataset": "80470cef6457385e88b0b6fd15391ab10e9d63cdcb4657cc5a01aa4dc8e54128",
@@ -33,7 +33,7 @@
         "slash-install/SKILL.md": "b7c7b9234e2c5668d250d709f2c1eab96bbc2e3de0a4dc6d5f9a2bc7f2e5f8ab",
         "slash-list/SKILL.md": "5bd9fba9ee97a1407c9d7728156fcf9b95842d01aeb81e0ed5050cae6a2207b3",
         "slash-orchestrate/SKILL.md": "3a42b575cc20a09e75499f86cb747d29c5b82ea1fe4c3e59e5c759956ac585cf",
-        "slash-route/SKILL.md": "e1a1dbd413fa45f3a28c332ad85ff48c4c1d9e1eba2ed4b649f6cb90636a7a80",
+        "slash-route/SKILL.md": "d1fed7e4dc165ecf54a9cf60ad4901f63b53f21c5e40c608ebc253aa5bc20d55",
         "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
         "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279"
       },

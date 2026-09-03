@@ -30,7 +30,7 @@ If the recommended SKILL.md does NOT match the user's request:
 When `vibe route` returns an orchestration plan (2+ intents):
 
 1. Execute each step in order
-2. Read each step's `SKILL.md` before executing
+2. Read each step's `skill_file` path (or the SKILL.md line on that step). Do not guess `skills/<id>/SKILL.md`
 3. Report progress: "Step N complete"
 4. Wait for dependencies before starting dependent steps
 5. Parallel steps may run simultaneously

@@ -6,14 +6,14 @@
 
 ### [ACTIVE SKILL: xxx]
 
-1. Read `skills/<skill-id>/SKILL.md`
+1. Follow the injected skill body. If a `NEXT STEP` / `skill_file` path is present, read that file — do not guess `skills/<id>/SKILL.md`
 2. Follow the skill's steps exactly — do not skip
 3. Report completion using the skill's defined marker
 
 ### [EXECUTION PLAN] injected
 
 1. Follow steps in order
-2. Read each step's `SKILL.md` before executing
+2. Read each step's `skill_file` path (or the SKILL.md line on that step). Do not guess `skills/<id>/SKILL.md`
 3. Report progress: "Step N complete"
 4. Wait for dependencies before starting dependent steps
 5. Parallel steps may run simultaneously

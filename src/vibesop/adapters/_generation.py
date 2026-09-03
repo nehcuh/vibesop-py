@@ -21,6 +21,18 @@ from vibesop.utils.jinja_safety import make_shell_safe_env
 
 logger = logging.getLogger(__name__)
 
+# After vibe route / hook inject, the real file is skill_file / NEXT STEP —
+# often `.vibe/skills/**/{id}.skill/SKILL.md`, not skills/<id>/SKILL.md.
+READ_ROUTED_SKILL_MD = (
+    "then read the SKILL.md path from the routing result "
+    "(`skill_file` in JSON, or the `SKILL.md:` / `NEXT STEP` line). "
+    "Do not guess `skills/<id>/SKILL.md`."
+)
+READ_STEP_SKILL_MD = (
+    "Read each step's `skill_file` path (or the SKILL.md line on that step). "
+    "Do not guess `skills/<id>/SKILL.md`."
+)
+
 
 def render_route_hook(
     *,
@@ -132,7 +144,7 @@ Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`
 """
 
     if hook_routing:
-        routing_protocol = """\
+        routing_protocol = f"""\
 Routing is automatic when a VibeSOP hook is installed. If the current
 user prompt arrives with a hook injection — look for `VibeSOP routed:`,
 `[ACTIVE SKILL:`, `NEXT STEP (MANDATORY): read`, or
@@ -144,19 +156,20 @@ installed or failed), run:
 
     vibe route "<user_request>"
 
-then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+{READ_ROUTED_SKILL_MD}
 
 User-typed `/vibe-*` commands still go through `vibe route --slash`
 (see Quick Commands). Human-invoked CLI discovery is unchanged."""
     else:
-        routing_protocol = """\
+        then_read = READ_ROUTED_SKILL_MD[0].upper() + READ_ROUTED_SKILL_MD[1:]
+        routing_protocol = f"""\
 **MANDATORY: Call `vibe route` before any non-trivial task.**
 
 ```bash
 vibe route "<user_request>"
 ```
 
-Then read `skills/<matched-skill>/SKILL.md` and follow its steps."""
+{then_read}"""
 
     tool_env = detect_tool_environment()
     if tool_env:
@@ -224,7 +237,7 @@ def generate_docs_routing(*, hook_routing: bool = False) -> str:
    `vibe route`.
 2. **Route** (fallback, only when no injection is present):
    `vibe route "<user_request>"` — use the user's EXACT words
-3. **Read**: `read skills/<matched-skill>/SKILL.md`
+3. **Read**: the `skill_file` / `NEXT STEP` / `SKILL.md:` path — do not guess `skills/<id>/SKILL.md`
 4. **Execute**: Follow the skill's steps exactly
 5. **Verify**: Run checks the skill requires"""
     else:
@@ -232,7 +245,7 @@ def generate_docs_routing(*, hook_routing: bool = False) -> str:
 ## Workflow (execute in order)
 
 1. **Route**: `vibe route "<user_request>"` — use the user's EXACT words
-2. **Read**: `read skills/<matched-skill>/SKILL.md`
+2. **Read**: the `skill_file` / `SKILL.md:` path — do not guess `skills/<id>/SKILL.md`
 3. **Execute**: Follow the skill's steps exactly
 4. **Verify**: Run checks the skill requires"""
 
@@ -258,7 +271,7 @@ Override without these 4 steps is a violation.
 When `vibe route` returns an orchestration plan (2+ intents):
 
 1. Execute each step in order
-2. Read each step's `SKILL.md` before executing
+2. {READ_STEP_SKILL_MD}
 3. Report progress: "Step N complete"
 4. Parallel steps may run simultaneously
 
@@ -344,7 +357,7 @@ When the user signals the end of a session, you MUST run `session-end`.
 ### If routing fails
 
 - Do NOT skip session-end because `vibe route` returned fallback-llm
-- Run the skill directly: `read skills/session-end/SKILL.md` and execute
+- Run `vibe route --slash "/session-end"` and read the printed `skill_file` / `NEXT STEP` path. Do not guess `skills/session-end/SKILL.md`.
 - This is a P0 mandatory skill — skipping it is a protocol violation
 """
 

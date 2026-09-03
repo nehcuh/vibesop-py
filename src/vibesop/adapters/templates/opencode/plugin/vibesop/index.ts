@@ -201,6 +201,11 @@ function buildExecutionPlanPrompt(plan: any): string {
   for (const step of plan.steps) {
     lines.push(`## Step ${step.step_number}: ${step.intent}`);
     lines.push(`- Skill: ${step.skill_id}`);
+    if (step.skill_file) {
+      lines.push(`- SKILL.md: ${step.skill_file}`);
+    } else {
+      lines.push("- SKILL.md: not found — do not guess skills/<id>/SKILL.md");
+    }
     lines.push(`- Task: ${step.input_query || step.intent}`);
     if (step.dependencies?.length) {
       lines.push(`- Depends on: ${step.dependencies.join(", ")}`);
@@ -211,7 +216,7 @@ function buildExecutionPlanPrompt(plan: any): string {
 
   lines.push("---");
   lines.push("Rules:");
-  lines.push("1. Read each step's SKILL.md before executing");
+  lines.push("1. Read each step's skill_file / SKILL.md line. Do not guess skills/<id>/SKILL.md");
   lines.push("2. Follow the skill workflow strictly");
   lines.push("3. Report completion after each step");
   lines.push("4. Parallel steps may be executed simultaneously");

@@ -41,7 +41,7 @@ Prefer small, reversible, single-purpose changes. Each change should have a clea
 ### 1.4 Progressive Disclosure (VibeSOP Routing)
 
 1. Call `vibe route "<original-user-query>"` using the user's EXACT words — never rewrite, summarize, or translate before routing
-2. Read the recommended skill file
+2. Read the recommended skill file from `skill_file` / `NEXT STEP` — do not guess `skills/<id>/SKILL.md`
 3. Follow the skill's steps
 4. Complete with verification (see 1.1)
 

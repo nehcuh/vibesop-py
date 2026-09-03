@@ -28,7 +28,7 @@ The output shows:
 - **Matched skill** with confidence score
 - **Routing decision tree** (which layers fired)
 - **Alternative candidates**
-- **Next step**: read `skills/<matched-skill>/SKILL.md`
+- **Next step**: read the `skill_file` / `SKILL.md:` / `NEXT STEP` path from the routing result (do not guess `skills/<id>/SKILL.md`)
 
 ## When to Use
 
@@ -49,6 +49,6 @@ The output shows:
 ## After Routing
 
 Once VibeSOP returns a recommendation:
-1. Read the recommended skill file: `skills/<skill-id>/SKILL.md`
+1. Read the recommended skill file from that path — do not guess `skills/<id>/SKILL.md`
 2. Follow the skill's workflow
 3. Run verification when done

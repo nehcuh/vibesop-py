@@ -173,7 +173,7 @@ failed), call `vibe route` to find the best skill:
 vibe route "<user_request>"
 ```
 
-Then read the matched skill's SKILL.md and follow its instructions.
+Then read the SKILL.md path from the routing result (`skill_file` in JSON, or the `SKILL.md:` / `NEXT STEP` line). Do not guess `skills/<id>/SKILL.md`.
 
 ## How It Works
 

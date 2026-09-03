@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from vibesop.adapters._generation import READ_ROUTED_SKILL_MD
 from vibesop.adapters.file_based import FileBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
 
@@ -127,7 +128,7 @@ class OpenCodeAdapter(FileBasedAdapter):
             "```bash\n"
             'vibe route "<user_request>"\n'
             "```\n\n"
-            "Then read `skills/<matched-skill>/SKILL.md` and follow its steps.\n\n"
+            f"{READ_ROUTED_SKILL_MD[0].upper() + READ_ROUTED_SKILL_MD[1:]}\n\n"
             "## Quick Commands\n\n"
             "```bash\n"
             'vibe route --slash "/vibe-help"\n'
