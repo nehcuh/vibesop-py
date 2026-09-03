@@ -116,7 +116,10 @@ class CandidateManager:
             if data.get("schema_version") != _CANDIDATES_CACHE_SCHEMA_VERSION:
                 return None
             if data.get("paths_hash") == current_hash:
-                return data.get("candidates", [])
+                candidates = data.get("candidates", [])
+                if not isinstance(candidates, list):
+                    return None
+                return candidates
         except (json.JSONDecodeError, KeyError, OSError, UnicodeDecodeError):
             pass
         return None

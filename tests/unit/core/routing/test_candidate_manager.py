@@ -392,6 +392,13 @@ class TestCacheInvalidation:
         cache_path.write_text(json.dumps([{"id": "array"}]), encoding="utf-8")
         assert mgr._load_from_disk_cache([search_path]) is None
 
+        # Non-list candidates value is likewise discarded, not cached.
+        cache_path.write_text(
+            json.dumps({"schema_version": 2, "paths_hash": paths_hash, "candidates": "oops"}),
+            encoding="utf-8",
+        )
+        assert mgr._load_from_disk_cache([search_path]) is None
+
         mgr._save_to_disk_cache([{"id": "current"}], paths_hash)
         loaded = mgr._load_from_disk_cache([search_path])
         assert loaded == [{"id": "current"}]

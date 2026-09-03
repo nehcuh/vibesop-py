@@ -82,6 +82,10 @@ def attach_skill_file_payload(
             meta = getattr(primary, "metadata", None) or {}
             if isinstance(meta, dict):
                 hinted = meta.get("source_file")
+        if hinted is None and source_lookup is not None:
+            # Same priority as _resolve_step_source: metadata hint (candidate
+            # pool already) → authoritative pool lookup → injector glob.
+            hinted = source_lookup(sid)
         resolved = resolve_routed_skill_md(sid, source_file=hinted)
         payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
         if resolved is None and payload.get("mode") in (None, "", "single"):

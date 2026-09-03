@@ -452,6 +452,54 @@ class TestAttachSkillFilePayload:
         assert payload["skill_file"] == skill.as_posix()
         assert "demoted_skill_id" not in payload
 
+    def test_source_lookup_beats_glob_and_rescues_demote(self, tmp_path, monkeypatch) -> None:
+        """candidate_source_lookup pins the main.py wiring: the authoritative
+        pool path (outside .vibe/skills, so the injector glob cannot find it)
+        fills both the top-level skill_file and plan steps — without the
+        lookup the same payload demotes."""
+        from types import SimpleNamespace
+
+        from vibesop.cli.render import attach_skill_file_payload, candidate_source_lookup
+
+        monkeypatch.chdir(tmp_path)
+        pooled = tmp_path / "central" / "pooled-skill" / "SKILL.md"
+        pooled.parent.mkdir(parents=True)
+        pooled.write_text("---\nid: pooled-skill\n---\n# body\n", encoding="utf-8")
+
+        cm = SimpleNamespace(
+            source_file_for=lambda sid: str(pooled) if sid == "pooled-skill" else None
+        )
+        router = SimpleNamespace(_router=SimpleNamespace(_candidate_manager=cm))
+        lookup = candidate_source_lookup(router)
+        assert lookup("pooled-skill") == str(pooled)
+        assert lookup("other") is None
+
+        primary = SimpleNamespace(skill_id="pooled-skill", metadata={})
+        result = SimpleNamespace(primary=primary)
+        payload = {
+            "mode": "single",
+            "skill_id": "pooled-skill",
+            "steps": [{"step": 1, "skill_id": "pooled-skill"}],
+        }
+        attach_skill_file_payload(payload, result, source_lookup=lookup)
+        assert payload["skill_file"] == pooled.as_posix()
+        assert "demoted_skill_id" not in payload
+        assert payload["steps"][0]["skill_file"] == pooled.as_posix()
+
+        bare = {"mode": "single", "skill_id": "pooled-skill"}
+        attach_skill_file_payload(bare, result)
+        assert bare["skill_file"] == ""
+        assert bare["demoted_skill_id"] == "pooled-skill"
+
+    def test_candidate_source_lookup_mock_router_safe(self) -> None:
+        """MagicMock routers must yield None, never a Mock in skill_file."""
+        from unittest.mock import MagicMock
+
+        from vibesop.cli.render import candidate_source_lookup
+
+        lookup = candidate_source_lookup(MagicMock())
+        assert lookup("any-skill") is None
+
     def test_real_orchestration_to_dict_payload_annotated(self, tmp_path, monkeypatch) -> None:
         """Pin the REAL OrchestrationResult.to_dict() shape (not a hand-crafted
         dict): execution_plan steps must flow through annotate and get the
