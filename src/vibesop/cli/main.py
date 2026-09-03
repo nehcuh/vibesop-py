@@ -1818,6 +1818,22 @@ def _check_stale_skills_post_route() -> None:
         logger.warning("Unhandled error: %s", e)
 
 
+# Advisory checks: rendered as ⚠️ warnings and excluded from the exit code —
+# doctor stays a diagnostic (environment drift like "no agent CLIs installed
+# yet" or "redeploy needed" must not hard-fail scripts).
+_YELLOW_CHECKS = frozenset({"Platform Integrations", "Hook Status", "Deployment Freshness"})
+
+
+def _doctor_exit_ok(checks: list[tuple[str, tuple[bool, str]]]) -> bool:
+    """Exit-code aggregation: only hard-red checks fail; advisory ⚠️ checks warn.
+
+    checks elements are (name, (status, message)) — read the inner status.
+    (The original `all(status for status, _ in checks)` bound `status` to the
+    check NAME — always truthy — so doctor never exited nonzero.)
+    """
+    return all(result[0] for name, result in checks if name not in _YELLOW_CHECKS)
+
+
 @app.command()
 def doctor() -> None:
     """Check environment and configuration."""
@@ -1835,30 +1851,19 @@ def doctor() -> None:
     ]
 
     for name, (status, message) in checks:
-        icon = (
-            "✅"
-            if status
-            else "⚠️ "
-            if name in ["Platform Integrations", "Hook Status", "Deployment Freshness"]
-            else "❌"
-        )
-        color = (
-            "green"
-            if status
-            else "yellow"
-            if name in ["Platform Integrations", "Hook Status", "Deployment Freshness"]
-            else "red"
-        )
+        icon = "✅" if status else "⚠️ " if name in _YELLOW_CHECKS else "❌"
+        color = "green" if status else "yellow" if name in _YELLOW_CHECKS else "red"
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
     _print_platform_availability(console)
 
-    # checks elements are (name, (status, message)) — iterate the inner status.
-    # (The original `all(status for status, _ in checks)` bound `status` to the
-    # check NAME — always truthy — so doctor never exited nonzero.)
-    all_ok = all(result[0] for _, result in checks)
-    if all_ok:
-        console.print("\n[bold green]✨ All checks passed![/bold green]")
+    if _doctor_exit_ok(checks):
+        has_advisories = any(not result[0] for name, result in checks if name in _YELLOW_CHECKS)
+        console.print(
+            "\n[bold green]✨ All checks passed!"
+            + (" (see ⚠️ advisories above)" if has_advisories else "")
+            + "[/bold green]"
+        )
         raise typer.Exit(0)
     else:
         console.print("\n[bold red]⚠️  Some checks failed. Please fix the issues above.[/bold red]")
@@ -2133,11 +2138,13 @@ def _check_hooks() -> tuple[bool, str]:
 
 # Always-loaded files deployed per platform config dir — rel paths match what
 # each adapter actually renders (verified via fresh `vibe build` per platform):
-# grok-build renders only rules/routing.md (+hooks); kimi-cli/opencode use
-# docs/skills-catalog.md (no rules/); pi renders AGENTS.md to the *project*
-# root, so only its user-level output_dir files are scanned here. Central
-# slash-skill copies are shared across platforms. cursor is absent because
-# `vibe build cursor` renders nothing (ConfigRenderer rejects it).
+# grok-build renders only rules/routing.md (+hooks, no version marker there);
+# kimi-cli/opencode also render docs/routing.md; pi renders AGENTS.md and
+# prompts/vibe-route.md to the *project* tree (.pi/, root AGENTS.md), which
+# varies per project and is out of scope for this user-level scan — only its
+# user-level output_dir files are scanned here. Central slash-skill copies
+# are shared across platforms. cursor is absent because `vibe build cursor`
+# renders nothing (ConfigRenderer rejects it).
 _ALWAYS_LOADED_LAYOUT: dict[str, tuple[Path, tuple[str, ...]]] = {
     "claude-code": (
         Path.home() / ".claude",
@@ -2156,7 +2163,7 @@ _ALWAYS_LOADED_LAYOUT: dict[str, tuple[Path, tuple[str, ...]]] = {
     ),
     "opencode": (
         Path.home() / ".config" / "opencode",
-        ("AGENTS.md", "docs/skills-catalog.md", "docs/session-lifecycle.md"),
+        ("AGENTS.md", "docs/routing.md", "docs/skills-catalog.md", "docs/session-lifecycle.md"),
     ),
     "pi": (
         Path.home() / ".pi" / "agent",
@@ -2172,9 +2179,14 @@ _CENTRAL_SKILLS_DIR = Path.home() / ".config" / "skills"
 # `<skill-id>`/`<id>` still appear in legit `.pi/skills/...` references.
 # session-end is the known sibling whose OLD copies point at concrete dead
 # paths (`.pi/skills/session-end/SKILL.md`, `builtin-session-end` variant).
+# The left boundary (`(?<![\w./~-])`) keeps REAL source paths such as
+# `core/skills/session-end/SKILL.md` or `~/.claude/skills/session-end/...`
+# out of the match — only a standalone/relative command path is a guess.
 _GUESS_MATCHED_SKILL_RE = re.compile(r"skills/<matched-skill>/SKILL\.md")
 _GUESS_PATH_RE = re.compile(r"(?<!\.pi/)skills/<(?:skill-id|id)>/SKILL\.md")
-_GUESS_SESSION_END_RE = re.compile(r"(?:\.pi/)?skills/(?:builtin-)?session-end/SKILL\.md")
+_GUESS_SESSION_END_RE = re.compile(
+    r"(?<![\w./~-])(?:\.pi/)?skills/(?:builtin-)?session-end/SKILL\.md"
+)
 
 
 def _scan_guess_path_residue(content: str) -> bool:

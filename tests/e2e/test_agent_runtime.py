@@ -643,11 +643,15 @@ class TestCrossPlatformConsistency:
         assert CursorAdapter._route_hook_registered is False
         assert OpenCodeAdapter._route_hook_registered is False
 
-    def test_pi_faces_reference_prefixed_skill_paths(self):
-        """P1-4 (20260831 review): every skill/doc path the pi templates tell
-        the agent to read must live under `.pi/` — bare `skills/` paths
-        resolve to nothing in the generated tree (recognizer/generator
-        isomorphism: the reader must point where the writer writes)."""
+    def test_pi_faces_follow_skill_file_paths(self):
+        """P1-4 (20260831 review) + pull-20260903 批C: pi faces must point
+        agents at the routing result's `skill_file` path — guessed
+        `skills/<id>/SKILL.md` paths may only appear inside "do not guess"
+        prohibitions (recognizer/generator isomorphism: the reader must point
+        where the writer writes). Reuses the production residue scanner so
+        the e2e contract and `vibe doctor` cannot drift apart."""
+        from vibesop.cli.main import _scan_guess_path_residue
+
         templates_dir = (
             Path(__file__).parent.parent.parent / "src" / "vibesop" / "adapters" / "templates"
         )
@@ -659,9 +663,16 @@ class TestCrossPlatformConsistency:
             "pi vibe-route prompt": (
                 templates_dir / "pi" / "prompts" / "vibe-route.md.j2"
             ).read_text(encoding="utf-8"),
+            "pi skills catalog": (templates_dir / "pi" / "docs" / "skills.md.j2").read_text(
+                encoding="utf-8"
+            ),
         }
         for name, text in faces.items():
-            assert ".pi/skills/<matched-skill>/SKILL.md" in text, f"{name}: skill read instruction"
+            assert "skill_file" in text, f"{name}: routing-result path referenced"
+            assert not _scan_guess_path_residue(text), f"{name}: guessed-path command leaked"
+            assert "read .pi/skills/" not in text, (
+                f"{name}: commands reading the (possibly empty) generated tree"
+            )
             for pattern in (
                 r"(?<!\.pi/)skills/<matched-skill>/SKILL\.md",
                 r"(?<!\.pi/)docs/routing-protocol\.md",

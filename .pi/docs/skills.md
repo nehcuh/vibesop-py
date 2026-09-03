@@ -15,13 +15,15 @@ vibe skills info <skill-id>
 vibe skills list
 ```
 
-After `vibe route`, read the `skill_file` / `NEXT STEP` path when present.
-Generated-tree copies live at `.pi/skills/<skill-id>/SKILL.md`. Do not guess
-a path without the `.pi/` prefix.
+After `vibe route`, read the `skill_file` / `NEXT STEP` path it prints —
+that is the real skill body location. A generated tree may exist at
+`.pi/skills/<skill-id>/SKILL.md`, but it can be empty: do not guess paths,
+follow the routing result.
 
-Use Pi's `read` tool to load a skill file when the routing result recommends one:
+Use Pi's `read` tool to load the skill file at the `skill_file` path the
+routing result prints:
 ```
-read .pi/skills/<skill-id>/SKILL.md
+read <skill_file>
 ```
 
 ## Installing New Skill Packs

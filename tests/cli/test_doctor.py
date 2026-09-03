@@ -124,6 +124,16 @@ class TestScanGuessPathResidue:
             "file (`skill_file`). Do not guess `.pi/skills/session-end/SKILL.md`."
         )
 
+    def test_real_source_path_not_flagged(self) -> None:
+        """Absolute/real session-end Source paths (what `vibe skills info`
+        prints) are not guesses — only standalone relative command paths are."""
+        assert not main_module._scan_guess_path_residue(
+            "Source file: /Users/x/Projects/vibesop-py/core/skills/session-end/SKILL.md"
+        )
+        assert not main_module._scan_guess_path_residue(
+            "installed at ~/.claude/skills/session-end/SKILL.md"
+        )
+
 
 class TestCheckAlwaysLoadedFreshness:
     """Deployment-freshness check over patched layout/central dirs."""
@@ -193,11 +203,63 @@ class TestCheckAlwaysLoadedFreshness:
         assert ok, msg
         assert "0 always-loaded files current" in msg
 
-    def test_doctor_exits_nonzero_with_residue(self, monkeypatch, tmp_path: Path) -> None:
+    def test_doctor_reports_residue_as_advisory(self, monkeypatch, tmp_path: Path) -> None:
+        """Residue surfaces as a ⚠️ line; exit code is driven by hard-red
+        checks only (Deployment Freshness is advisory)."""
         config_dir = _hermetic_layout(monkeypatch, tmp_path)
         (config_dir / "CLAUDE.md").write_text(
             "then read `skills/<matched-skill>/SKILL.md`", encoding="utf-8"
         )
         result = runner.invoke(app, ["doctor"])
-        assert result.exit_code == 1
         assert "Deployment Freshness" in result.stdout
+        assert "guess-path wording" in result.stdout
+        assert "redeploy" in result.stdout
+
+
+class TestDoctorExitAggregation:
+    """Exit-code semantics: hard-red checks fail, advisory ⚠️ checks warn."""
+
+    @staticmethod
+    def _checks(**override: bool) -> list[tuple[str, tuple[bool, str]]]:
+        base = {
+            "Python version": True,
+            "Dependencies": True,
+            "Configuration": True,
+            "LLM Provider": True,
+            "Platform Integrations": True,
+            "Hook Status": True,
+            "Skill Health": True,
+            "Deployment Freshness": True,
+        }
+        base.update(override)
+        return [(name, (ok, "msg")) for name, ok in base.items()]
+
+    def test_all_green_exits_ok(self) -> None:
+        assert main_module._doctor_exit_ok(self._checks())
+
+    def test_yellow_only_failure_stays_ok(self) -> None:
+        assert main_module._doctor_exit_ok(
+            self._checks(**{"Deployment Freshness": False, "Hook Status": False})
+        )
+
+    def test_red_failure_fails(self) -> None:
+        assert not main_module._doctor_exit_ok(self._checks(**{"Skill Health": False}))
+
+    def test_doctor_exits_zero_when_only_advisory_red(self, monkeypatch, tmp_path: Path) -> None:
+        """End-to-end pin: advisory failures (freshness residue, no hooks)
+        must not fail `vibe doctor`; only hard-red checks drive exit 1."""
+        config_dir = _hermetic_layout(monkeypatch, tmp_path)
+        (config_dir / "CLAUDE.md").write_text(
+            "then read `skills/<matched-skill>/SKILL.md`", encoding="utf-8"
+        )
+        for red_check in (
+            "_check_python_version",
+            "_check_dependencies",
+            "_check_config",
+            "_check_llm_provider",
+            "_check_skill_health",
+        ):
+            monkeypatch.setattr(main_module, red_check, lambda: (True, "ok"))
+        result = runner.invoke(app, ["doctor"])
+        assert result.exit_code == 0
+        assert "All checks passed" in result.stdout

@@ -115,7 +115,11 @@ TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "src" / "vibesop" / "adapt
 
 def _assert_no_guessed_flat_skill_path(text: str, name: str) -> None:
     for needle in GUESSED_FLAT_PATHS:
-        assert needle not in text, f"{name} still tells the agent to guess {needle}"
+        # `.pi/`-prefixed generated-tree notes are legit when guarded by a
+        # do-not-guess instruction (same exemption as the production
+        # scanner's `(?<!\.pi/)` lookbehind) — strip them before the check.
+        stripped = text.replace(f".pi/{needle}", "")
+        assert needle not in stripped, f"{name} still tells the agent to guess {needle}"
     assert "skill_file" in text, f"{name}: missing skill_file"
     lowered = text.lower()
     assert "do not guess" in lowered, f"{name}: missing do-not-guess instruction"
@@ -182,12 +186,16 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
             "pi/AGENTS.md.project.j2",
             "pi/prompts/vibe-route.md.j2",
             "pi/docs/routing-protocol.md.j2",
+            "pi/docs/skills.md.j2",
             "pi/docs/session-lifecycle.md.j2",
         )
         for rel in rels:
             text = (TEMPLATES_DIR / rel).read_text(encoding="utf-8")
             _assert_no_guessed_flat_skill_path(text, rel)
             assert "read skills/session-end/SKILL.md" not in text, rel
+            assert "read .pi/skills/" not in text, (
+                f"{rel}: commands reading the (possibly empty) generated tree"
+            )
 
     def test_session_lifecycle_doc_does_not_guess(self) -> None:
         from vibesop.adapters._generation import generate_docs_session_lifecycle
@@ -208,11 +216,14 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
         repo = Path(__file__).resolve().parents[2]
         for rel in (
             ".pi/prompts/vibe-route.md",
+            ".pi/docs/routing-protocol.md",
+            ".pi/docs/skills.md",
             ".pi/docs/session-lifecycle.md",
             ".pi/extensions/vibesop-track.ts",
         ):
             text = (repo / rel).read_text(encoding="utf-8")
             _assert_no_guessed_flat_skill_path(text, rel)
+            assert "read .pi/skills/" not in text, f"{rel}: commands reading the generated tree"
 
     def test_pi_route_extension_prefers_skill_file(self) -> None:
         rel = "pi/extensions/vibesop-route.ts.j2"

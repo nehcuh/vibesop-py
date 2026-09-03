@@ -123,12 +123,17 @@ class SdkBasedAdapter(PlatformAdapter):
         result.add_file(settings_path)
 
     # ---- Extension rendering ----
-    def _render_extension(self, template_name: str, version: str = "0.0.0") -> str:
+    def _render_extension(self, template_name: str, version: str = "") -> str:
         """Render an extension template standalone (without manifest context)."""
         try:
+            from vibesop._version import __version__
+
             env = self._get_template_env()
             template = env.get_template(f"extensions/{template_name}")
-            return template.render(version=version)
+            # Markers must bind the package version (vibe doctor freshness
+            # compares against it), not a placeholder constant.
+            pkg = version or __version__
+            return template.render(version=pkg, vibesop_version=pkg)
         except Exception as e:
             logger.warning(f"Failed to render extension template {template_name}: {e}")
             return ""
