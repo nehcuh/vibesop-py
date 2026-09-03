@@ -1,6 +1,6 @@
 # Skill Security Audit & Trust Store
 
-> **版本**: 8.1.4
+> **版本**: 8.2.0
 > **适用版本**: VibeSOP 8.0.0+
 > **相关模块**: `vibesop.security`, `vibesop.core.skills.trust`
 

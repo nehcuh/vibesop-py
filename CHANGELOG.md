@@ -57,6 +57,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   及各平台 `builtin-instinct-learning` 部署副本、`~/.vibe/skill-index.json`
   条目）需手动清理残留，否则已删技能在本机继续可路由。
 
+## [8.2.0] — 2026-09-03
+
+### Changed
+
+- **产品决策记录：四个 demo 内置技能保持 always-on（S51 M4 采 option 2）**：
+  `systematic-debugging` / `test-generation` / `code-review` /
+  `commit-message` 随 wheel 强制内置且默认参与路由（不设 `--demos` 开关）。
+  理由：keyless aha 时刻与 gate46 验证的免 key 路由底线依赖它们常开；
+  opt-in 默认关会让 fresh install 的 aha 演示失效。代价（路由胜者变化，
+  按 minor 而非 patch 对待）与缓解（steal tags/triggers 已剥离、
+  Levenshtein 兜底层排除 demo 技能、SKILLS_GUIDE 定位为 P1 aha 而非
+  P0 必须）随决策一并落地。完整裁决表见
+  `docs/decisions/_fix-s51-m1-m7.md`。
+- **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度
+  ≥ `auto_select_threshold`（0.6）的路由自动放行，仅低置信度/编排分歧时弹出
+  确认。`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」
+  相抵触——每条路由都要人点一次头，系统本身成了瓶颈。已有用户配置不受影响
+  （仅默认值变更）。来源：Kimi 深度评价报告的四路对抗评审（多空双向独立
+  点名此矛盾）。
+- **README「配置 LLM API」不再声称「无法复用 Agent 的内部 LLM」**：该限制
+  仅适用于 CLI 子进程路径；进程内 Python 集成（`AgentRouter.set_llm()`）
+  可复用宿主 Agent 的 LLM，无需 API key。Agent 集成指南提升到 README 文档
+  索引一级入口。
+
 ### Fixed
 
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
@@ -172,30 +196,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   演示底线（"why is this broken"）跌到 fallback-llm——该 query 靠模糊层
   命中。已改注释为归档口径并用测试钉死「systematic-debugging 必须留在
   模糊层」。
-
-### Changed
-
-- **产品决策记录：四个 demo 内置技能保持 always-on（S51 M4 采 option 2）**：
-  `systematic-debugging` / `test-generation` / `code-review` /
-  `commit-message` 随 wheel 强制内置且默认参与路由（不设 `--demos` 开关）。
-  理由：keyless aha 时刻与 gate46 验证的免 key 路由底线依赖它们常开；
-  opt-in 默认关会让 fresh install 的 aha 演示失效。代价（路由胜者变化，
-  按 minor 而非 patch 对待）与缓解（steal tags/triggers 已剥离、
-  Levenshtein 兜底层排除 demo 技能、SKILLS_GUIDE 定位为 P1 aha 而非
-  P0 必须）随决策一并落地。完整裁决表见
-  `docs/decisions/_fix-s51-m1-m7.md`。
-- **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度
-  ≥ `auto_select_threshold`（0.6）的路由自动放行，仅低置信度/编排分歧时弹出
-  确认。`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」
-  相抵触——每条路由都要人点一次头，系统本身成了瓶颈。已有用户配置不受影响
-  （仅默认值变更）。来源：Kimi 深度评价报告的四路对抗评审（多空双向独立
-  点名此矛盾）。
-- **README「配置 LLM API」不再声称「无法复用 Agent 的内部 LLM」**：该限制
-  仅适用于 CLI 子进程路径；进程内 Python 集成（`AgentRouter.set_llm()`）
-  可复用宿主 Agent 的 LLM，无需 API key。Agent 集成指南提升到 README 文档
-  索引一级入口。
-
-### Fixed
 
 - **Runtime 安全扫描误报（自产 stub 被判「疑似篡改」）**：`DefaultHeuristicAnalyzer`
   的 `\n{5,}`（"过多换行 = 注入企图"）规则把 VibeSOP 自己生成的 manifest

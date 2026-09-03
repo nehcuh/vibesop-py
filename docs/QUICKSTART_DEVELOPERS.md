@@ -322,5 +322,5 @@ A: 可以。没有 API key 时，VibeSOP 使用关键词和 TF-IDF 匹配（准�
 
 ---
 
-**版本 Version**: 8.1.4
+**版本 Version**: 8.2.0
 **更新时间 Last Updated**: 2026-06-05

@@ -1,7 +1,7 @@
 # VibeSOP Project Status
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.1.4
+> **Version**: 8.2.0
 > **Status**: 🟢 Production Ready (SkillOS — Spec v3.0, Conformance Suite, Agent Runtime, Multi-Agent Squad)
 
 ## Executive Summary
@@ -263,7 +263,7 @@ The combination of intelligent routing, secure execution, cross-platform compati
 
 ---
 
-**Version**: 8.1.4
+**Version**: 8.2.0
 **Status**: 🟢 Production Ready — Skill Protocol Standard + Multi-Agent Squad
 **Last Updated**: 2026-07-18
 **Repository**: https://github.com/nehcuh/vibesop-py
