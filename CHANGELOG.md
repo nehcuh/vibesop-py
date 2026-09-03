@@ -80,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session-end 路由失败回退改为 ``vibe skills info builtin/session-end``
   （打印真实 Source file）；``vibe route --slash "/session-end"`` 会 Exit(1)，
   ``vibe route "session-end"`` 会因短查询/守卫技能 miss。
+  目录文案（``docs/skills.md.j2``）、签入的 Pi 生成物（``.pi/prompts/vibe-route.md``、
+  ``.pi/docs/routing-protocol.md``）与 USE_CASES 示例同步：跟 ``skill_file`` /
+  ``NEXT STEP``，不把扁平 ``skills/<id>/SKILL.md`` 当路由后读路径。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实

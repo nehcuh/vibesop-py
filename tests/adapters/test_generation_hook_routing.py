@@ -8,6 +8,7 @@ copy (hook-less platforms).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from vibesop.adapters._generation import (
@@ -177,6 +178,7 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
             "claude-code/rules/routing.md.j2",
             "claude-code/docs/routing-protocol.md.j2",
             "claude-code/docs/session-lifecycle.md.j2",
+            "claude-code/docs/skills.md.j2",
             "pi/docs/routing-protocol.md.j2",
         )
         for rel in rels:
@@ -200,3 +202,16 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
         )
         text = skill.read_text(encoding="utf-8")
         _assert_no_guessed_flat_skill_path(text, "slash-route SKILL.md")
+
+    def test_checked_in_pi_vibe_route_prompt_uses_prefixed_path(self) -> None:
+        repo = Path(__file__).resolve().parents[2]
+        text = (repo / ".pi" / "prompts" / "vibe-route.md").read_text(encoding="utf-8")
+        assert ".pi/skills/<matched-skill>/SKILL.md" in text
+        assert re.search(r"(?<!\.pi/)skills/<matched-skill>/SKILL\.md", text) is None
+
+    def test_use_cases_docs_do_not_teach_guessed_next_step(self) -> None:
+        repo = Path(__file__).resolve().parents[2]
+        for rel in ("docs/USE_CASES.md", "docs/USE_CASES.en.md"):
+            text = (repo / rel).read_text(encoding="utf-8")
+            assert "skills/superpowers-systematic-debugging/SKILL.md" not in text, rel
+            assert "skill_file" in text, rel

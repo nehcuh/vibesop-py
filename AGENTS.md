@@ -36,16 +36,21 @@ Then read the SKILL.md path from the routing result (`skill_file` in JSON,
 or the `SKILL.md:` / `NEXT STEP` line). Do not guess `skills/<id>/SKILL.md`
 or the platform-layout table below.
 
-### Platform-Specific Skill Paths
+### Platform-generated skill copies
 
-| Platform | Skill Path |
-|----------|-----------|
+These are where `vibe build` may drop copies. Nested packs often live under
+`.vibe/skills/**/{id}.skill/SKILL.md`. After routing, still use `skill_file` /
+`NEXT STEP` — do not treat the table as the post-route read path.
+
+| Platform | Generated-tree copy |
+|----------|---------------------|
 | Pi Coding Agent | `.pi/skills/<skill>/SKILL.md` |
 | Claude Code | `.claude/skills/<skill>/SKILL.md` or `~/.claude/skills/<skill>/SKILL.md` |
 | Grok Build | `~/.grok/skills/<skill>/SKILL.md` or `.grok/skills/<skill>/SKILL.md` |
 | Kimi Code | `.kimi-code/skills/<skill>/SKILL.md` or `~/.kimi-code/skills/<skill>/SKILL.md` |
 
-Built-in skills are always available at `core/skills/<skill>/SKILL.md`.
+Built-in sources are at `core/skills/<skill>/SKILL.md`. Confirm with
+`vibe skills info <skill-id>` (Source file).
 
 For routing details, override protocol, and multi-intent handling, read the
 routing doc of your platform's render: `.pi/docs/routing-protocol.md`,

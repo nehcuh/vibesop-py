@@ -56,7 +56,8 @@ vibe route "debug asyncio coroutine never awaited error"
 ```
 🎯 VibeSOP routed: superpowers/systematic-debugging (94% confidence)
 
-NEXT STEP (MANDATORY): read skills/superpowers-systematic-debugging/SKILL.md
+NEXT STEP (MANDATORY): read the `skill_file` path from this result
+Do NOT guess skills/<id>/SKILL.md.
 Do NOT proceed without reading this file.
 
 [ACTIVE SKILL: superpowers/systematic-debugging]

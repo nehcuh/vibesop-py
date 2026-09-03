@@ -43,7 +43,7 @@ function writeState(state: VibeSOPState): void {
 interface RouteResult {
   mode?: string;
   primary?: { skill_id?: string; confidence?: number };
-  execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
+  execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; skill_file?: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
   message?: string;
 }
 

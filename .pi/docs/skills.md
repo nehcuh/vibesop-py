@@ -15,7 +15,9 @@ vibe skills info <skill-id>
 vibe skills list
 ```
 
-Skill definitions are at `.pi/skills/<skill-id>/SKILL.md`.
+After `vibe route`, read the `skill_file` / `NEXT STEP` path when present.
+Generated-tree copies live at `.pi/skills/<skill-id>/SKILL.md`. Do not guess
+a path without the `.pi/` prefix.
 
 Use Pi's `read` tool to load a skill file when the routing result recommends one:
 ```
