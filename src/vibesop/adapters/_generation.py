@@ -357,7 +357,7 @@ When the user signals the end of a session, you MUST run `session-end`.
 ### If routing fails
 
 - Do NOT skip session-end because `vibe route` returned fallback-llm
-- Run `vibe route --slash "/session-end"` and read the printed `skill_file` / `NEXT STEP` path. Do not guess `skills/session-end/SKILL.md`.
+- Run `vibe skills info builtin/session-end` and read the printed Source file path (that is the real `skill_file`). Do not guess `skills/session-end/SKILL.md`.
 - This is a P0 mandatory skill — skipping it is a protocol violation
 """
 

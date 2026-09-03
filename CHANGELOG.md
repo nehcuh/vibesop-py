@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   平台模板 / AGENTS 生成文案与 always-loaded 路由规则同步：``[ACTIVE SKILL]``
   跟注入正文或 ``NEXT STEP`` / ``skill_file``，编排逐步读 ``skill_file``，
   不再命令 agent 去猜 ``skills/<id>/SKILL.md``（Pi 生成树 ``.pi/skills/`` 除外）。
+  session-end 路由失败回退改为 ``vibe skills info builtin/session-end``
+  （打印真实 Source file）；``vibe route --slash "/session-end"`` 会 Exit(1)，
+  ``vibe route "session-end"`` 会因短查询/守卫技能 miss。
 - **pi 安装测试泄漏重写仓库根 AGENTS.md（20260831 调研发现）**:
   `test_pi_extensions_survive_install` 调 `VibeSOPInstaller().install("pi",
   tmp)`，但 `PiCodingAgentAdapter` 的 `project_root` 默认 `"."` 解析到真实

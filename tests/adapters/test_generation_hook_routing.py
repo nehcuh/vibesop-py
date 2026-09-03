@@ -169,6 +169,7 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
             _assert_no_guessed_flat_skill_path(text, name)
             assert "read skills/systematic-debugging/SKILL.md" not in text, name
             assert "read skills/session-end/SKILL.md" not in text, name
+            assert 'vibe route --slash "/session-end"' not in text, name
 
     def test_claude_and_pi_routing_templates(self) -> None:
         rels = (
@@ -188,6 +189,8 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
 
         text = generate_docs_session_lifecycle()
         assert "read skills/session-end/SKILL.md" not in text
+        assert 'vibe route --slash "/session-end"' not in text
+        assert "vibe skills info builtin/session-end" in text
         assert "Do not guess `skills/session-end/SKILL.md`" in text
         assert "skill_file" in text
 

@@ -1,12 +1,20 @@
 
 ## Current Session
 
+### S62 (2026-09-03) [vibesop-py] 95ed6d2 双路复审 → 吸收 session-end 死命令
+
+- Kimi REQUEST CHANGES（P1）：`vibe route --slash "/session-end"` 非 `/vibe-*`，CLI Exit(1)。
+- Claude APPROVE（冻结 95ed6d2）；P2 不阻塞。
+- [executed] `--slash "/session-end"` Exit(1)；`vibe route "session-end"` fallback-llm（短查询+守卫技能），`skill_file` 空；`vibe skills info builtin/session-end` 打印 `core/skills/session-end/SKILL.md`。
+- 回退文案改为 skills info。定向 36 passed。
+- Recorded: no
+
 ### S61 (2026-09-03) [vibesop-py] 模板/always-loaded 禁止猜 skills/<id>/SKILL.md
 
 - 两路 explore 均 REQUEST CHANGES：runtime 已给 skill_file / NEXT STEP，生成配置仍命令猜扁平路径。
 - 改：`_generation.py` 常量、claude/kimi/cursor/opencode/grok 生成文案、routing.md.j2 `[ACTIVE SKILL]`/`[EXECUTION PLAN]`、slash-route SKILL.md、OpenCode 计划信封。Pi `.pi/skills/` 不动。
 - [executed] 定向 36 passed；ruff 绿；生成面无 `skills/<matched-skill>/SKILL.md`；hermetic 30/34，fingerprint 因 slash-route 正文刷新，ok1 无翻转。
-- 未做：claude `docs/skills.md.j2` 目录说明仍写扁平路径（非路由热路径）；本 diff 未跑 kimi/Claude 双路复审。
+- 双路：Kimi REQUEST CHANGES（P1 session-end --slash）/ Claude APPROVE → 吸收见 S62。
 - Recorded: no
 
 ### S60 (2026-09-03) [vibesop-py] 编排逐步 SKILL.md 真实路径
