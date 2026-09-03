@@ -4,7 +4,7 @@ name: {{ skill.name }}
 description: "{{ skill.description | replace('\\', '\\\\') | replace('"', '\\"') }}"
 trigger_when: "{{ skill.trigger_when | replace('\\', '\\\\') | replace('"', '\\"') }}"
 type: prompt
-generated_by: VibeSOP v{{ version }}
+generated_by: VibeSOP v{{ vibesop_version }}
 ---
 {% if skill.description %}
 # {{ skill.name }}

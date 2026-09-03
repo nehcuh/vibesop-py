@@ -528,11 +528,12 @@ class KimiCliAdapter(FileBasedAdapter):
         """Generate slim AGENTS.md index for Kimi Code CLI."""
         from vibesop.adapters._shared import generate_slim_agents_index
 
+        # No explicit version: the default (package __version__) is the
+        # deployment-freshness marker `vibe doctor` compares against.
         return generate_slim_agents_index(
-            version=manifest.metadata.version,
             platform_name="Kimi Code CLI",
             config_dir_label="~/.kimi-code",
-            include_skills_reference=True,
+            include_skills_reference=bool(manifest.skills),
             hook_routing=True,
         )
 

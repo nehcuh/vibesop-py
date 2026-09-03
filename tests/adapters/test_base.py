@@ -197,6 +197,11 @@ class TestPlatformAdapter:
         assert context["skills"] == [skill]
         assert context["platform"] == "dummy-platform"
         assert context["version"] == "1.0.0"
+        # Deployment-freshness markers must bind the PACKAGE version, not the
+        # manifest config-format constant (vibe doctor compares against it).
+        from vibesop import __version__
+
+        assert context["vibesop_version"] == __version__
 
     def test_create_render_result(self) -> None:
         """Test create_render_result."""

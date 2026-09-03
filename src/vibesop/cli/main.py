@@ -22,6 +22,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -1830,24 +1831,32 @@ def doctor() -> None:
         ("Platform Integrations", _check_integrations()),
         ("Hook Status", _check_hooks()),
         ("Skill Health", _check_skill_health()),
+        ("Deployment Freshness", _check_always_loaded_freshness()),
     ]
 
     for name, (status, message) in checks:
         icon = (
-            "✅" if status else "⚠️ " if name in ["Platform Integrations", "Hook Status"] else "❌"
+            "✅"
+            if status
+            else "⚠️ "
+            if name in ["Platform Integrations", "Hook Status", "Deployment Freshness"]
+            else "❌"
         )
         color = (
             "green"
             if status
             else "yellow"
-            if name in ["Platform Integrations", "Hook Status"]
+            if name in ["Platform Integrations", "Hook Status", "Deployment Freshness"]
             else "red"
         )
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
     _print_platform_availability(console)
 
-    all_ok = all(status for status, _ in checks)
+    # checks elements are (name, (status, message)) — iterate the inner status.
+    # (The original `all(status for status, _ in checks)` bound `status` to the
+    # check NAME — always truthy — so doctor never exited nonzero.)
+    all_ok = all(result[0] for _, result in checks)
     if all_ok:
         console.print("\n[bold green]✨ All checks passed![/bold green]")
         raise typer.Exit(0)
@@ -2120,6 +2129,127 @@ def _check_hooks() -> tuple[bool, str]:
         return False, "No platforms checked"
     except Exception as e:
         return False, f"Failed to check: {e}"
+
+
+# Always-loaded files deployed per platform config dir — rel paths match what
+# each adapter actually renders (verified via fresh `vibe build` per platform):
+# grok-build renders only rules/routing.md (+hooks); kimi-cli/opencode use
+# docs/skills-catalog.md (no rules/); pi renders AGENTS.md to the *project*
+# root, so only its user-level output_dir files are scanned here. Central
+# slash-skill copies are shared across platforms. cursor is absent because
+# `vibe build cursor` renders nothing (ConfigRenderer rejects it).
+_ALWAYS_LOADED_LAYOUT: dict[str, tuple[Path, tuple[str, ...]]] = {
+    "claude-code": (
+        Path.home() / ".claude",
+        (
+            "CLAUDE.md",
+            "rules/routing.md",
+            "rules/behaviors.md",
+            "docs/skills.md",
+            "docs/session-lifecycle.md",
+        ),
+    ),
+    "grok-build": (Path.home() / ".grok", ("rules/routing.md",)),
+    "kimi-cli": (
+        Path.home() / ".kimi-code",
+        ("AGENTS.md", "docs/routing.md", "docs/skills-catalog.md", "docs/session-lifecycle.md"),
+    ),
+    "opencode": (
+        Path.home() / ".config" / "opencode",
+        ("AGENTS.md", "docs/skills-catalog.md", "docs/session-lifecycle.md"),
+    ),
+    "pi": (
+        Path.home() / ".pi" / "agent",
+        ("docs/skills.md", "docs/session-lifecycle.md", "extensions/vibesop-track.ts"),
+    ),
+}
+
+_CENTRAL_SKILLS_DIR = Path.home() / ".config" / "skills"
+
+# Old deployments commanded the agent to READ a guessed path; current
+# templates only mention guessed paths inside a "do not guess" prohibition.
+# `<matched-skill>` is emitted by no current template — flag it anywhere;
+# `<skill-id>`/`<id>` still appear in legit `.pi/skills/...` references.
+# session-end is the known sibling whose OLD copies point at concrete dead
+# paths (`.pi/skills/session-end/SKILL.md`, `builtin-session-end` variant).
+_GUESS_MATCHED_SKILL_RE = re.compile(r"skills/<matched-skill>/SKILL\.md")
+_GUESS_PATH_RE = re.compile(r"(?<!\.pi/)skills/<(?:skill-id|id)>/SKILL\.md")
+_GUESS_SESSION_END_RE = re.compile(r"(?:\.pi/)?skills/(?:builtin-)?session-end/SKILL\.md")
+
+
+def _scan_guess_path_residue(content: str) -> bool:
+    """True if *content* commands reading a guessed SKILL.md path.
+
+    Paragraph-granular: a hit only counts when the surrounding paragraph
+    lacks a "not guess" prohibition (current templates split the sentence
+    across lines) and the path is not a `.pi/skills/...` generated-tree
+    reference.
+    """
+    for para in content.split("\n\n"):
+        if "not guess" in para.lower():
+            continue
+        if (
+            _GUESS_MATCHED_SKILL_RE.search(para)
+            or _GUESS_PATH_RE.search(para)
+            or _GUESS_SESSION_END_RE.search(para)
+        ):
+            return True
+    return False
+
+
+def _check_always_loaded_freshness() -> tuple[bool, str]:
+    """Detect stale always-loaded deployments that fight the routing hook.
+
+    Wheel upgrades replace the `vibe` CLI but NOT the rendered always-loaded
+    files (CLAUDE.md / AGENTS.md, rules/, docs/, central slash-skill copies).
+    Old wording tells the agent to read a guessed `skills/<id>/SKILL.md`
+    path, which conflicts with the real injected path. Flag such residue and
+    version-marker staleness, and point at the redeploy command.
+    """
+    version_re = re.compile(r"Generated by VibeSOP v([^\s*]+)")
+    stale: list[str] = []
+    checked = 0
+    for platform, (config_dir, rel_paths) in _ALWAYS_LOADED_LAYOUT.items():
+        deployed = [p for p in (config_dir / r for r in rel_paths) if p.is_file()]
+        if not deployed:
+            continue
+        platform_stale: list[str] = []
+        for path in deployed:
+            checked += 1
+            try:
+                content = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if _scan_guess_path_residue(content):
+                platform_stale.append(f"{path.name} (guess-path wording)")
+                continue
+            m = version_re.search(content)
+            if m and m.group(1) != __version__:
+                platform_stale.append(f"{path.name} (deployed v{m.group(1)})")
+        if platform_stale:
+            stale.append(
+                f"{platform}: {', '.join(platform_stale)} "
+                f"→ redeploy: vibe build {platform} --output {config_dir}"
+            )
+
+    central = _CENTRAL_SKILLS_DIR
+    central_stale: list[str] = []
+    for skill_md in sorted(central.glob("slash-*/SKILL.md")):
+        checked += 1
+        try:
+            content = skill_md.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _scan_guess_path_residue(content):
+            central_stale.append(skill_md.parent.name)
+    if central_stale:
+        stale.append(
+            f"central skills: {', '.join(central_stale)} → re-sync: vibe skills sync <platform> --force"
+        )
+
+    if stale:
+        return False, "; ".join(stale)
+    return True, f"{checked} always-loaded files current"
 
 
 # ── W3: Replay prompt helper ──────────────────────────────────────────────────

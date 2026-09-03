@@ -4,7 +4,7 @@
 
 When the user signals they are ending the session, Pi should:
 
-1. Read the session-end skill: `.pi/skills/session-end/SKILL.md`
+1. Run `vibe skills info builtin/session-end` and read the printed Source file (that is the real `skill_file`). Do not guess `.pi/skills/session-end/SKILL.md`.
 2. Follow all steps including:
    - Recording experiences and learnings
    - Updating session memory files

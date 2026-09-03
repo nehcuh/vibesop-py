@@ -8,7 +8,6 @@ copy (hook-less platforms).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from vibesop.adapters._generation import (
@@ -179,7 +178,11 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
             "claude-code/docs/routing-protocol.md.j2",
             "claude-code/docs/session-lifecycle.md.j2",
             "claude-code/docs/skills.md.j2",
+            "pi/AGENTS.md.j2",
+            "pi/AGENTS.md.project.j2",
+            "pi/prompts/vibe-route.md.j2",
             "pi/docs/routing-protocol.md.j2",
+            "pi/docs/session-lifecycle.md.j2",
         )
         for rel in rels:
             text = (TEMPLATES_DIR / rel).read_text(encoding="utf-8")
@@ -201,11 +204,15 @@ class TestGeneratedCopyDoesNotGuessFlatSkillPath:
         text = skill.read_text(encoding="utf-8")
         _assert_no_guessed_flat_skill_path(text, "slash-route SKILL.md")
 
-    def test_checked_in_pi_vibe_route_prompt_uses_prefixed_path(self) -> None:
+    def test_checked_in_pi_copies_follow_skill_file(self) -> None:
         repo = Path(__file__).resolve().parents[2]
-        text = (repo / ".pi" / "prompts" / "vibe-route.md").read_text(encoding="utf-8")
-        assert ".pi/skills/<matched-skill>/SKILL.md" in text
-        assert re.search(r"(?<!\.pi/)skills/<matched-skill>/SKILL\.md", text) is None
+        for rel in (
+            ".pi/prompts/vibe-route.md",
+            ".pi/docs/session-lifecycle.md",
+            ".pi/extensions/vibesop-track.ts",
+        ):
+            text = (repo / rel).read_text(encoding="utf-8")
+            _assert_no_guessed_flat_skill_path(text, rel)
 
     def test_pi_route_extension_prefers_skill_file(self) -> None:
         rel = "pi/extensions/vibesop-route.ts.j2"

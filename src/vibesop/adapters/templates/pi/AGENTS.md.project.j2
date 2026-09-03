@@ -20,7 +20,7 @@ installed or no skill matched), run:
 
     vibe route "<user_request>"
 
-then read `.pi/skills/<matched-skill>/SKILL.md` and follow its steps.
+then read the SKILL.md path from the routing result (`skill_file` in JSON, or the `SKILL.md:` / `NEXT STEP` line) and follow its steps. Do not guess `.pi/skills/<id>/SKILL.md` — the generated tree there may be empty.
 
 For override protocol: read `.pi/docs/routing-protocol.md`.
 

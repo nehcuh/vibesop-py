@@ -735,9 +735,11 @@ class ClaudeCodeAdapter(HookBasedAdapter):
     ) -> None:
         """Render the vibesop-track.sh hook script."""
         try:
+            from vibesop._version import __version__
+
             env = self._get_template_env()
             template = env.get_template("hooks/vibesop-track.sh.j2")
-            hook_content = template.render(version="5.2.0")
+            hook_content = template.render(version=__version__)
             hook_path = output_dir / "hooks" / "vibesop-track.sh"
             self.write_file_atomic(hook_path, hook_content, validate_security=False)
             hook_path.chmod(0o755)
@@ -890,9 +892,11 @@ exit 0
         # Install Agent Runtime track hook
         track_hook_path = config_dir / "hooks" / "vibesop-track.sh"
         try:
+            from vibesop._version import __version__
+
             env = self._get_template_env()
             template = env.get_template("hooks/vibesop-track.sh.j2")
-            track_content = template.render(version="5.2.0")
+            track_content = template.render(version=__version__)
             track_hook_path.parent.mkdir(parents=True, exist_ok=True)
             self.write_file_atomic(track_hook_path, track_content, validate_security=False)
             track_hook_path.chmod(0o755)

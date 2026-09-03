@@ -1051,6 +1051,11 @@ class StepManifest:
     skill_id: str
     skill_name: str = ""
     skill_path: str = ""
+    # Intentionally NOT capped by SkillInjector.MAX_INJECT_LENGTH: the
+    # manifest is the sole instruction surface for orchestrated execution
+    # (the agent executes the step from this body), while hook injection
+    # (inject_single_skill) only nudges a conversation and truncates at
+    # 3000 chars. The two channels are internally consistent by design.
     skill_content: str = ""
     input_context: str = ""
     output_slot: str = ""

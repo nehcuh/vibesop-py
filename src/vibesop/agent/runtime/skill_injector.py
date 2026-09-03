@@ -104,7 +104,10 @@ class SkillInjector:
         <InjectionMethod.INSTRUCTION: 'instruction'>
     """
 
-    # Max characters to inject (to avoid context overflow)
+    # Max characters to inject (to avoid context overflow). Hook injection
+    # only nudges a conversation, so it truncates; the execution-manifest
+    # channel (StepManifest.skill_content) deliberately inlines the full
+    # body — it is the sole instruction surface for orchestrated steps.
     MAX_INJECT_LENGTH: int = 3000
 
     def __init__(self, project_root: str | Path = ".") -> None:
