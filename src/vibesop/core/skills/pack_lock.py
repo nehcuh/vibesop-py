@@ -54,6 +54,11 @@ class PackLockStore:
     def __init__(self, locks_dir: Path | None = None) -> None:
         self._dir = locks_dir or self.LOCKS_DIR
 
+    @property
+    def directory(self) -> Path:
+        """Locks directory (public accessor for sibling files, e.g. caches)."""
+        return self._dir
+
     def _path(self, pack_name: str) -> Path:
         sanitized = sanitize_pack_name(pack_name)
         return self._dir / f"{sanitized}.json"
@@ -68,6 +73,29 @@ class PackLockStore:
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.warning("Corrupt pack lock %s, ignoring: %s", path, e)
             return None
+
+    def list_all(self) -> list[PackLock]:
+        """Return every readable lock, sorted by pack name.
+
+        Dotfiles are skipped: unlike the ``glob`` module, ``Path.glob("*.json")``
+        DOES match hidden files, so the sibling update cache
+        (``.update-cache.json``) must be filtered explicitly. Locks without a
+        ``pack_name`` (corrupt shape) are dropped as well.
+        """
+        if not self._dir.exists():
+            return []
+        locks: list[PackLock] = []
+        for path in sorted(self._dir.glob("*.json")):
+            if path.name.startswith("."):
+                continue  # derived caches (update_checker), not locks
+            try:
+                lock = PackLock.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, TypeError, ValueError, OSError) as e:
+                logger.warning("Corrupt pack lock %s, ignoring: %s", path, e)
+                continue
+            if lock.pack_name:
+                locks.append(lock)
+        return locks
 
     def write(self, lock: PackLock) -> None:
         """Atomically persist a pack lock."""

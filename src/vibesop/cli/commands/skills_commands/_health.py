@@ -293,3 +293,62 @@ def _display_health_status(health_status: Any, verbose: bool = False) -> None:
             console.print(f"  [dim]• {reason}[/dim]")
 
     console.print("")
+
+
+def outdated(
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help="Force a fresh upstream check (default: reuse results younger than 24h)",
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Check installed skill packs for upstream updates.
+
+    Compares each pack lock's recorded commit SHA against the upstream HEAD
+    (git ls-remote). Verdicts are cached for 24 hours; `vibe status` surfaces
+    them from the cache without ever touching the network.
+
+    \b
+    Examples:
+        vibe skills outdated                # Check (uses 24h cache when fresh)
+        vibe skills outdated --refresh      # Force re-check against upstream
+        vibe skills outdated --json         # Machine-readable output
+    """
+    from vibesop.core.skills.update_checker import check_pack_updates
+
+    statuses = check_pack_updates(refresh=refresh)
+
+    if json_output:
+        import json
+
+        console.print(json.dumps([s.to_dict() for s in statuses], indent=2))
+        return
+
+    if not statuses:
+        console.print(
+            "[dim]No installed packs with lock records found "
+            "(packs are installed via `vibe install <pack>`).[/dim]"
+        )
+        return
+
+    update_count = 0
+    for s in sorted(statuses, key=lambda x: x.pack_name):
+        if s.state == "update_available":
+            update_count += 1
+            console.print(
+                f"[yellow]↑[/yellow] [bold]{s.pack_name}[/bold] — update available "
+                f"[dim]({s.installed_sha[:8]} → {s.remote_sha[:8]})[/dim]"
+            )
+            console.print(f"  [dim]run:[/dim] [cyan]vibe install {s.pack_name} --upgrade[/cyan]")
+        elif s.state == "up_to_date":
+            console.print(f"[green]✓[/green] {s.pack_name} [dim]— up to date[/dim]")
+        else:
+            console.print(
+                f"[dim]?[/dim] {s.pack_name} [dim]— unknown "
+                f"(offline or no commit recorded; try --refresh)[/dim]"
+            )
+
+    console.print("")
+    if update_count:
+        console.print(f"[yellow]{update_count} pack(s) can be upgraded.[/yellow]")

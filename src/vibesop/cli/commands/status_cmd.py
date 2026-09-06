@@ -201,6 +201,28 @@ def _load_warnings(project_root: Path) -> Panel:
     except Exception as e:
         logger.warning("Unhandled error: %s", e)
 
+    # Pack update + registry staleness hints. Cache-only by design: `vibe
+    # status` must stay fast and offline-safe. The cache is populated by
+    # `vibe skills outdated` (see core/skills/update_checker.py).
+    try:
+        from vibesop.core.skills.update_checker import cached_pack_updates, registry_age_days
+
+        for s in cached_pack_updates():
+            if s.state == "update_available":
+                warnings.append(
+                    f"[yellow]{s.pack_name}[/yellow] — pack update available, "
+                    f"run [cyan]vibe install {s.pack_name} --upgrade[/cyan]"
+                )
+
+        age = registry_age_days(project_root)
+        if age is not None and age > 30:
+            warnings.append(
+                f"[yellow]featured registry[/yellow] — {int(age)} days old, "
+                f"run [cyan]vibe sync-registry[/cyan]"
+            )
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)
+
     if not warnings:
         return Panel(
             "[green]No warnings — ecosystem looks healthy![/green]",

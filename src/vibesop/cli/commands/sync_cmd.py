@@ -93,6 +93,12 @@ def sync(
             f"([dim]{before}[/dim] → [bold]{registry.count()}[/bold])"
         )
     else:
+        # A successful sync with nothing new still refreshes the registry's
+        # `updated_at` — but only when a local file already exists. Exporting
+        # built-in defaults into a fresh local file would mask newer defaults
+        # shipped by future wheel upgrades (the local file wins in _load()).
+        if (project_root / ".vibe" / "featured-skills.json").exists():
+            registry.export_local()
         console.print(f"[green]Already up to date.[/green] [dim]({registry.count()} skills)[/dim]")
 
     # Show stack coverage

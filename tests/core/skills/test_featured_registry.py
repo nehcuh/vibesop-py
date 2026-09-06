@@ -169,6 +169,19 @@ class TestFeaturedRegistry:
         assert "skills" in data
         assert len(data["skills"]) > 0
 
+    def test_export_local_writes_real_timestamp(self, tmp_path: Path):
+        """updated_at must be a parseable ISO timestamp so staleness checks
+        (update_checker.registry_age_days) can work — it used to be ""."""
+        from datetime import UTC, datetime
+
+        reg = FeaturedRegistry(project_root=tmp_path)
+        path = reg.export_local()
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+        ts = datetime.fromisoformat(data["updated_at"])  # raises if "" or malformed
+        assert ts.tzinfo is not None
+        assert (datetime.now(UTC) - ts).total_seconds() < 60
+
     def test_merge_remote(self):
         reg = FeaturedRegistry()
         before = reg.count()

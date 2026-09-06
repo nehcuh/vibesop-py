@@ -15,6 +15,7 @@ Usage:
     vibe skills sync <platform> [--root PATH] [--force]
     vibe skills status
     vibe skills health [--pack P] [--verbose] [--ecosystem]
+    vibe skills outdated [--refresh] [--json]
     vibe skills enable <skill_id>
     vibe skills disable <skill_id>
     vibe skills report [--grade G] [--suggest-removal]
@@ -51,6 +52,7 @@ from vibesop.cli.commands.skills_commands._discovery import (
 )
 from vibesop.cli.commands.skills_commands._health import (
     health,
+    outdated,
     status,
 )
 from vibesop.cli.commands.skills_commands._index import (
@@ -84,6 +86,7 @@ __all__ = [
     "lifecycle",
     "link",
     "list_skills",
+    "outdated",
     "rate",
     "ratings",
     "recommended",

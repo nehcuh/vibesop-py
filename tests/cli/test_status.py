@@ -121,3 +121,94 @@ class TestStatusPanels:
             result = _load_badges()
             # Without a badges file, should handle gracefully
             assert result is not None or result is None  # Either is fine
+
+
+class TestStatusUpdateWarnings:
+    """Cache-only pack-update / registry-staleness hints in the Warnings panel.
+
+    ``PackLockStore.LOCKS_DIR`` is redirected to tmp_path so the panel never
+    reads the developer's real ``~/.config/skills/.pack-locks/``.
+    """
+
+    def _prime_cache(self, tmp_path: Path, *, state: str, pack: str = "demo") -> None:
+        import json
+        from datetime import UTC, datetime
+
+        from vibesop.core.skills.update_checker import CACHE_FILENAME
+
+        payload = {
+            "checked_at": datetime.now(UTC).isoformat(),
+            "packs": {
+                pack: {
+                    "pack_name": pack,
+                    "source_url": f"https://github.com/u/{pack}",
+                    "installed_sha": "b" * 40,
+                    "remote_sha": "a" * 40,
+                    "state": state,
+                    "checked_at": datetime.now(UTC).isoformat(),
+                }
+            },
+        }
+        locks_dir = tmp_path / "pack-locks"
+        locks_dir.mkdir(parents=True, exist_ok=True)
+        (locks_dir / CACHE_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_update_available_shows_warning(self, tmp_path: Path, monkeypatch):
+        from vibesop.cli.commands.status_cmd import _load_warnings
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        monkeypatch.setattr(PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks")
+        self._prime_cache(tmp_path, state="update_available")
+
+        panel = _load_warnings(tmp_path)
+        content = str(panel.renderable)
+        assert "update available" in content
+        assert "vibe install demo --upgrade" in content
+
+    def test_up_to_date_cache_adds_no_warning(self, tmp_path: Path, monkeypatch):
+        from vibesop.cli.commands.status_cmd import _load_warnings
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        monkeypatch.setattr(PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks")
+        self._prime_cache(tmp_path, state="up_to_date")
+
+        panel = _load_warnings(tmp_path)
+        assert "update available" not in str(panel.renderable)
+
+    def test_stale_registry_shows_sync_hint(self, tmp_path: Path, monkeypatch):
+        import json
+        from datetime import UTC, datetime, timedelta
+
+        from vibesop.cli.commands.status_cmd import _load_warnings
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        monkeypatch.setattr(PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks")
+        vibe_dir = tmp_path / ".vibe"
+        vibe_dir.mkdir(exist_ok=True)
+        stale = (datetime.now(UTC) - timedelta(days=45)).isoformat()
+        (vibe_dir / "featured-skills.json").write_text(
+            json.dumps({"updated_at": stale, "skills": []}), encoding="utf-8"
+        )
+
+        panel = _load_warnings(tmp_path)
+        content = str(panel.renderable)
+        assert "featured registry" in content
+        assert "vibe sync-registry" in content
+
+    def test_fresh_registry_shows_no_hint(self, tmp_path: Path, monkeypatch):
+        import json
+        from datetime import UTC, datetime
+
+        from vibesop.cli.commands.status_cmd import _load_warnings
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        monkeypatch.setattr(PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks")
+        vibe_dir = tmp_path / ".vibe"
+        vibe_dir.mkdir(exist_ok=True)
+        (vibe_dir / "featured-skills.json").write_text(
+            json.dumps({"updated_at": datetime.now(UTC).isoformat(), "skills": []}),
+            encoding="utf-8",
+        )
+
+        panel = _load_warnings(tmp_path)
+        assert "featured registry" not in str(panel.renderable)

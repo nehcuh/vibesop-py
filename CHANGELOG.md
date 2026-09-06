@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   返回路径（含 fail-fast）统一携带 `plan_id`；`Message.metadata`
   固化 `plan_id` / `step_id` 约定键，外部消费方（面板/回放）可把
   对话消息块深链到计划步骤。
+- **推荐/已安装技能的更新自动检测（`vibe skills outdated`，20260907）**:
+  pack lock 一直记录 `commit_sha`+`source_url` 但从不与上游比对，
+  推荐 pack（superpowers/mattpocock/omx 等）静默过期。新增
+  `core/skills/update_checker`：`git ls-remote` 比对上游 HEAD，三态
+  判定（up_to_date / update_available / unknown），verdict 缓存 24h
+  （`.update-cache.json`；`PackLockStore.list_all()` 显式跳过 dotfile——
+  `Path.glob` 匹配隐藏文件，与 `glob` 模块行为相反），离线永不抛错。
+  新 CLI `vibe skills outdated [--refresh] [--json]`；`vibe status`
+  Warnings 面板纯缓存读取（零网络）提示 pack 升级与 registry 超 30 天
+  提示 `sync-registry`。同修 staleness 不可判定的根因：
+  `export_local()` 的 `updated_at` 原写死空串，改写真实 ISO 时间戳；
+  `sync-registry` 0 新增时仅在本地文件已存在才刷新时间戳（避免把
+  内置默认固化成本地覆盖文件、遮蔽未来 wheel 升级的新默认）。
+  新增 41 测试。
 
 ### Removed
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -357,7 +358,7 @@ class FeaturedRegistry:
         local_file.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "version": self.DEFAULT_VERSION,
-            "updated_at": "",
+            "updated_at": datetime.now(UTC).isoformat(),
             "skills": [s.to_dict() for s in self.skills],
         }
         local_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

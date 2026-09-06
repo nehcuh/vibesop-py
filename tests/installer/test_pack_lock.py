@@ -63,3 +63,44 @@ def test_path_traversal_names_are_rejected(tmp_path: Path) -> None:
         store.get("../.trusted")
     with pytest.raises(ValueError):
         store.clear("../.trusted")
+
+
+def test_list_all_sorted_and_skips_corrupt(tmp_path: Path) -> None:
+    store = PackLockStore(locks_dir=tmp_path)
+    store.write(PackLock("b", "u", "2", "h2", "t"))
+    store.write(PackLock("a", "u", "1", "h1", "t"))
+    (tmp_path / "broken.json").write_text("{not valid json", encoding="utf-8")
+
+    locks = store.list_all()
+    assert [lk.pack_name for lk in locks] == ["a", "b"]
+
+
+def test_list_all_empty_dir(tmp_path: Path) -> None:
+    assert PackLockStore(locks_dir=tmp_path).list_all() == []
+
+
+def test_list_all_ignores_dotfile_caches(tmp_path: Path) -> None:
+    """Sibling cache files (update_checker) must not be parsed as locks.
+
+    Note: ``Path.glob("*.json")`` DOES match dotfiles (unlike the ``glob``
+    module) — list_all filters them explicitly.
+    """
+    store = PackLockStore(locks_dir=tmp_path)
+    store.write(PackLock("a", "u", "1", "h1", "t"))
+    (tmp_path / ".update-cache.json").write_text("{}", encoding="utf-8")
+
+    assert [lk.pack_name for lk in store.list_all()] == ["a"]
+
+
+def test_clear_all_sweeps_sibling_caches(tmp_path: Path) -> None:
+    """clear_all is the data-purge path — derived caches go too."""
+    store = PackLockStore(locks_dir=tmp_path)
+    store.write(PackLock("a", "u", "1", "h1", "t"))
+    (tmp_path / ".update-cache.json").write_text("{}", encoding="utf-8")
+
+    assert store.clear_all() == 2
+    assert not (tmp_path / ".update-cache.json").exists()
+
+
+def test_directory_property_exposes_locks_dir(tmp_path: Path) -> None:
+    assert PackLockStore(locks_dir=tmp_path).directory == tmp_path
