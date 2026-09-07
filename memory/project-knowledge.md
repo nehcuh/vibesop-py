@@ -2,6 +2,22 @@
 
 ## Technical Pitfalls
 
+### Typer ≥0.26 运行时对象不是 click 子类 — 反射命令树必须 duck typing (2026-09-07 S70)
+
+**Issue**: 写 `vibe help`/`vibe man` 时按 click 常识写 `isinstance(cmd, click.Group)` 判组、`isinstance(param, click.Option)` 判选项，全部 False。Typer ≥0.26 运行在自带 `typer._click` 兼容层上（`TyperGroup` MRO = TyperGroup→Command(ABC)→object，与 `click.Group` 无继承关系），但 `pyproject` 只锁 `typer>=0.15,<1.0`——老版本又是真 click 类。同一份代码要兼容两种运行时。
+
+**Solution**: 反射命令树一律 duck typing：组 = `hasattr(cmd, "get_command") and hasattr(cmd, "list_commands")`；选项 = `param.param_type_name == "option"`；子 context = `sub.context_class(sub, info_name=part, parent=ctx)`（vendor 层与 click 签名一致）。`cmd.get_help(ctx)` 在 rich 路径打印后返回空串，echo 返回值要判非空（plain-click 才返回文本）。另外 rich `Console.print` 没有 `err=` 参数，stderr 输出要 `Console(stderr=True)`。`-h` 短帮助在 root app 设 `context_settings={"help_option_names": ["-h", "--help"]}` 即可全树继承；已占用 `-h` 的命令（`vibe dashboard -h`=--host、`vibe skills feedback -h`=--helpful）自动退化为只保留 `--help`，无需迁移。
+
+**Files**: `src/vibesop/cli/commands/help_cmd.py`, `src/vibesop/cli/main.py`（root Typer context_settings）
+
+### `Path.glob("*.json")` 匹配 dotfile，`glob` 模块不匹配 — 隐藏文件语义相反 (2026-09-07 S69)
+
+**Issue**: 在 pack-locks 目录放 `.update-cache.json` 缓存时，按 `glob` 模块的常识假设 `Path.glob("*.json")` 不会匹配隐藏文件（`*` 不匹配前导点）。实测**相反**：`pathlib.Path.glob` 用 `fnmatch.translate`，`*` 翻成 `.*`，dotfile 全中——`clear_all()` 把缓存当 lock 删掉、`list_all()` 把缓存当 lock 解析。测试首轮即抓到（clear_all 计数 2≠1）。
+
+**Solution**: pathlib glob 结果要排除隐藏文件必须显式 `if path.name.startswith("."): continue`，不能靠 pattern 语义。反向利用：data-purge 类遍历（clear_all）用 pathlib 反而能顺带清掉 dotfile 派生缓存，是正确语义。写"某目录扫某后缀"代码前先想清楚用的哪个 glob。
+
+**Files**: `src/vibesop/core/skills/pack_lock.py`（list_all 显式跳过）, `src/vibesop/core/skills/update_checker.py`（缓存文件）
+
 ### basedpyright 本地与 CI 同版本不同结果 — 判"净增"必须对基线差，不看绝对数 (2026-09-03 S66/S67)
 
 **Issue**: 本地 `uv run basedpyright` 报 29-30 errors（含 confirmation.py 私有跨模块导入、dashboard Flask 路由被报 unused 等），而 CI Type Check 同一 commit 全绿。**版本相同**（本地=lock=CI 均 1.39.9），无参数调用方式也相同——不是版本漂移，是环境性结果分叉（平台/stub 解析差异未定位）。绝对数会误导：看到 30 errors 会以为 CI 要红。

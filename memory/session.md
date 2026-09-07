@@ -1,6 +1,25 @@
 
 ## Current Session
 
+### S70 (2026-09-07) [vibesop-py] CLI help/man 三入口支持（-h / vibe help / vibe man）
+
+- 用户：项目不支持 `help`/`-h` 太不方便；同时支持 `vibe help`、`vibe --help`、`vibe -h` 三入口 + 新增 `man` 查询具体指令细节
+- Ship：root Typer 加 `context_settings={"help_option_names": ["-h", "--help"]}` 全树继承（vendor/click 两层均确认 context 级传播）；新模块 `cli/commands/help_cmd.py`：`vibe help [COMMAND...]`（嵌套路径 + difflib 相似建议 + 非组遍历报错）、`vibe man [COMMAND...]`（终端 man 风格 NAME/SYNOPSIS/DESCRIPTION/OPTIONS/COMMANDS + default/required 标注）、`--roff` 输出真 roff 可喂系统 man
+- 冲突保护零破坏：`vibe dashboard -h`=--host、`vibe skills feedback -h`=--helpful 保留，该两命令 help 自动退化为仅 `--help`
+- 实测 [executed]：macOS 系统 man 渲染 roff 正常（修了 NAME 行 `\-` 被 `_roff_text` 二次转义成 `\e\-`）；macOS BSD man 无 `-l` 管道 → `--roff` help 文案分平台写法（Linux `man -l -` / macOS 存 .1 文件）
+- 验证 [executed]：新测试 19 过；tests/cli 928 过；全量 6801 passed / 15 skipped / 3 deselected（HF 惯例）
+- 关键坑：Typer ≥0.26 运行时走自带 `typer._click` 层，`TyperGroup`/`TyperOption` **不是** click 子类（isinstance 恒 False）→ 反射命令树必须 duck typing；rich `Console.print` 无 `err=` 参数
+- 未提交；Next: 用户确认后可拆 commit（main.py 三处 + 新模块 + 测试）
+- Recorded: yes — Typer vendor 层 duck typing 坑 + `-h` 冲突退化机制入 project-knowledge
+
+### S69 (2026-09-07) [vibesop-py] 推荐技能更新自动检测 ship + 并行 session 同号冲突收口
+
+- 用户疑问「推荐的技能不会自动检测更新」诊断坐实 [inspected]：pack lock 记 `commit_sha`+`source_url` 但全库无一处与上游比对（重装不带 --upgrade 直接短路 already installed）；registry `export_local` 的 `updated_at` 写死空串 → staleness 不可判定
+- Ship（`a5ec10f`，已 push）：`core/skills/update_checker`（git ls-remote 三态判定 + 24h 缓存 `.update-cache.json`，离线永不抛错）+ `vibe skills outdated [--refresh] [--json]` + `vibe status` Warnings 纯缓存告警（pack 升级 / registry >30d 提示 sync-registry）+ `export_local` 真实 ISO 时间戳 + sync-registry 0 新增仅在本地文件存在时刷新（防固化内置默认遮蔽 wheel 升级新默认）
+- rebase 冲突：远端 `1435d57`（S68 文章线）与本地 `bf8030f`（S67 发版线）= 并行 session 同号不同文（S57 先例重演）；session.md 双线保留 + 并行线标注、overview.md 取时间在后的 S68 侧、PROJECT_CONTEXT 双 handoff 保留
+- 验证 [executed]：全量 6785 passed / 15 skipped；rebase 后定向 62 passed；ruff check+format 干净；basedpyright 改动文件 0 errors；`vibe skills outdated --help` 冒烟通过；CI push 后 in_progress（watch 中）
+- Recorded: yes — Path.glob dotfile 行为入 project-knowledge
+
 ### S68 (2026-09-03) [vibesop-py] 重写 skill-routing-explained.md → 实验叙事 + 「技能是 spec 的泛化」中心论点
 
 - 用户判断：旧文深度/专业度不够；文章定位是思考分享不是项目推广；要科普 skill/memory/harness + 完整实验流程（为什么设计→目的→发现→结果→反思→改进）
