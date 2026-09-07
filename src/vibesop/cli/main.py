@@ -45,6 +45,7 @@ from vibesop.cli.commands import (
     dashboard_cmd,
     data_cmd,
     deviation_cmd,
+    help_cmd,
     instinct_cmd,
     loop_cmd,
     market_cmd,
@@ -154,6 +155,11 @@ app = typer.Typer(
     name="vibe",
     help="VibeSOP - AI-powered workflow SOP",
     no_args_is_help=False,
+    # -h as short help alias; Click propagates help_option_names to every
+    # subcommand context. Commands that already use -h for their own option
+    # (e.g. `vibe dashboard -h` for --host) keep it — Click drops -h from
+    # the help names for those commands only.
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 console = Console()
 
@@ -192,6 +198,8 @@ app.add_typer(optimize_cmd.app, name="optimize")
 app.add_typer(data_cmd.app, name="data")
 app.command(name="trust")(trust_module.trust)
 app.command(name="dashboard")(dashboard_cmd.dashboard)
+app.command(name="help")(help_cmd.help_command)
+app.command(name="man")(help_cmd.man_command)
 
 
 @app.command()
