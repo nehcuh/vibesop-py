@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-07 (S70 — CLI help/man 三入口 + -h 全树支持 ship，push CI 全绿)
+**Last Updated**: 2026-09-07 (S75 — 喷气机 R5/R6 预览恢复 + 起停脚本)
 
 ---
 
@@ -13,7 +13,7 @@
 2. **推荐技能更新自动检测** ✅ (Completed - Sep 7，`a5ec10f`) — `vibe skills outdated` + status 缓存告警 + registry 时间戳修复
 3. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
 4. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
-5. **R5 第二轮人评 / verifier 真实数据点** — 仍待用户
+5. **R5 第二轮人评 / verifier 真实数据点** — 预览已恢复（`./scripts/ab-jet-preview.sh start`，8801/8802 grok 双臂 + 8803 27B）；用户已截图，分数仍待回
 
 ### Previous Week (August 31 - September 3, 2026)
 
@@ -29,7 +29,7 @@
    - 教训入 project-knowledge：hook 规范形态必须对用户实际版本实机探针钉死
 2. **A/B 效果验证系列 R1-R6 收官** ✅ (Completed - Aug 29-30，`855de0a`+`05d9e29` push CI 全绿)
    - 强模型四连平手 → harness 假说（结构层赢提示词层）；R6 弱模型：treatment 22/25 vs control 零产物×2，但路由 2/2 no-match 零技能消费——**路由层是弱模型第一瓶颈**；公众号深度调研报告已成稿
-   - 待办：R5 第二轮人评（8801/8802，封盘前最后一步）
+   - 待办：R5 第二轮人评（预览脚本已落地；分数仍待用户）
 3. **S52 深度治理主线** ✅ (Completed - Aug 30，S54 确认已并入 main 后删分支 `governance/s52-deep-clean`)
 4. **Adoption 推广线：块0 打包回退 + gate46 块2 quickstart 双平台 aha** ✅ (Completed - Aug 27；块0+块2 已 push，CI 全绿)
    - 待办：GIF 录制（W5 发布 gate）；recall 演示 defer 独立 mini-gate；W1 test.pypi 发版无限期 defer
@@ -140,6 +140,7 @@
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
 
 **Recent Changes** (2026-09-07):
+- ✅ 喷气机 R5/R6 预览可再起：`.vibe/experiments/ab-jet-preview/` 缓存 + `scripts/ab-jet-preview.sh`；R5 从 grok `after_snapshots` 还原（/tmp 已失）
 - ✅ CLI help/man 三入口（`987cf95`）：`vibe -h` 全树继承 + `vibe help [COMMAND...]` 嵌套路径 + `vibe man [COMMAND...]`/`--roff`；Typer≥0.26 vendored `typer._click` 层非 click 子类，反射走 duck typing
 - ✅ 推荐技能更新自动检测（`a5ec10f`）：`vibe skills outdated` + status 纯缓存告警 + registry 时间戳
 - ✅ CI 10/10 job 绿 + Quickstart E2E + CodeQL

@@ -1,6 +1,16 @@
 
 ## Current Session
 
+### S75 (2026-09-07) [vibesop-py] 喷气机 R5/R6 预览恢复 → 停服务 → 起停备忘
+
+- 用户要看 grok 双臂网页截图：主机 `/tmp/ab-jet-out` 已无；从 `vibesop-ab-treat/ctrl` 的 grok `after_snapshots` 还原 R5（8/1987 与 9/2491 行对上报告），R6 仍在 treat `/work`
+- 预览：8801 R5 treatment（JT-Edu 1）/ 8802 R5 control（TJ-88）/ 8803 R6 27B
+- 用户看完要求停容器服务并记下再起步骤
+- 缓存落到 `.vibe/experiments/ab-jet-preview/`（避开 /tmp）；脚本 `scripts/ab-jet-preview.sh`；备忘 `.omx/artifacts/ab-jet-preview.md`
+- 停：8801–8803 http.server + `docker stop vibesop-ab-{treat,ctrl,base}`（不 rm）
+- Next: 人评分未回；再看 `./scripts/ab-jet-preview.sh start`。禁止 `docker rm` 那三个容器
+- Recorded: yes — /tmp 易失 + 禁止 docker rm → project-knowledge.md
+
 ### S74 (2026-09-07) [vibesop-py] 命令手册：分层 + docker 录制
 
 - 用户：命令太多没层次；要用 docker 录每条怎么用、场景、输出/预期，单独成手册
@@ -371,7 +381,8 @@
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
 - **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
-- **gate42/43 cron 验收**（active）— 8-31 / 9-7 one-shot。next_action: 到期自动跑，勿提前执行。updated: 2026-08-25
+- **gate42/43 cron 验收**（active）— gate43 T+14 到期日=2026-09-07。next_action: 到期自动跑，勿在本 session 提前执行。updated: 2026-09-07
+- **R5 第二轮人评**（active）— 预览已恢复：`./scripts/ab-jet-preview.sh start`（8801/8802/8803）。用户已截图，分数未回。禁止 `docker rm vibesop-ab-treat/ctrl`。updated: 2026-09-07
 
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
 
