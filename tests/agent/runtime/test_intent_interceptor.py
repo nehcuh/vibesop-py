@@ -61,13 +61,13 @@ class TestIntentInterceptor:
         assert decision.should_route
         assert decision.mode == InterceptionMode.SINGLE
 
-    def test_long_query_defaults_to_orchestrate(self) -> None:
+    def test_long_query_defaults_to_single(self) -> None:
         interceptor = IntentInterceptor()
         decision = interceptor.should_intercept(
-            "请帮我仔细分析当前项目的架构设计，然后给出性能优化的具体建议"
+            "请帮我仔细分析当前项目的架构设计给出性能优化的具体建议"
         )
         assert decision.should_route
-        assert decision.mode == InterceptionMode.ORCHESTRATE
+        assert decision.mode in (InterceptionMode.SINGLE, InterceptionMode.SINGLE_AGENT)
 
     def test_multi_intent_markers_trigger_orchestrate(self) -> None:
         interceptor = IntentInterceptor()
@@ -81,8 +81,8 @@ class TestIntentInterceptor:
             assert decision.should_route, f"Should route: {query}"
             assert decision.mode == InterceptionMode.ORCHESTRATE, f"Should orchestrate: {query}"
 
-    def test_multi_intent_markers_with_multi_role_promotes_to_squad(self) -> None:
-        """≥2 distinct professional roles + multi-intent markers → squad."""
+    def test_multi_intent_markers_with_multi_role_do_not_squad(self) -> None:
+        """Role words + 然后 must not auto-open a squad or expert plan."""
         interceptor = IntentInterceptor()
         queries = [
             "first review the code then refactor the implementation",
@@ -92,11 +92,9 @@ class TestIntentInterceptor:
         for query in queries:
             decision = interceptor.should_intercept(query)
             assert decision.should_route, f"Should route: {query}"
-            assert decision.mode == InterceptionMode.MULTI_AGENT_SQUAD, (
-                f"Should promote to squad (multi-role): {query}"
+            assert decision.mode != InterceptionMode.MULTI_AGENT_SQUAD, (
+                f"Must not auto-squad on role words: {query}"
             )
-            assert decision.analysis is not None
-            assert len(decision.analysis.suggested_roles) >= 2
 
     def test_normal_query_with_context(self) -> None:
         interceptor = IntentInterceptor()
@@ -132,16 +130,13 @@ class TestIntentInterceptor:
         assert decision.analysis is not None
         assert "architect" in decision.analysis.suggested_roles
 
-    def test_long_query_without_markers_can_select_multi_agent_squad(self) -> None:
+    def test_long_query_without_parallel_tokens_stays_single(self) -> None:
         interceptor = IntentInterceptor()
         decision = interceptor.should_intercept(
             "design the system architecture, implement the core service layer, and conduct a security audit for vulnerabilities"
         )
         assert decision.should_route
-        assert decision.mode == InterceptionMode.MULTI_AGENT_SQUAD
-        assert decision.analysis is not None
-        assert decision.analysis.squad_needed is True
-        assert len(decision.analysis.suggested_roles) >= 2
+        assert decision.mode != InterceptionMode.MULTI_AGENT_SQUAD
 
     def test_long_single_role_query_selects_single_agent(self) -> None:
         interceptor = IntentInterceptor()
@@ -153,22 +148,11 @@ class TestIntentInterceptor:
         assert decision.analysis is not None
         assert "red_team" in decision.analysis.suggested_roles
 
-    def test_multi_intent_markers_with_distinct_roles_promotes_to_squad_when_long(self) -> None:
-        """Long query with multi-intent markers AND ≥2 distinct roles → squad.
-
-        The fast role-keyword path overrides the legacy orchestrate decision
-        when architect + implementer + red_team are all present.
-        """
+    def test_explicit_parallel_workers_selects_squad(self) -> None:
         interceptor = IntentInterceptor()
-        decision = interceptor.should_intercept(
-            "first design the system architecture and then implement the core service layer and finally run a security audit"
-        )
+        decision = interceptor.should_intercept("用并行工人同时做前端 A 和后端 B，独立上下文开工")
         assert decision.should_route
         assert decision.mode == InterceptionMode.MULTI_AGENT_SQUAD
-        assert decision.analysis is not None
-        assert {"architect", "implementer", "red_team"}.issubset(
-            set(decision.analysis.suggested_roles)
-        )
 
     # ── Fast role-keyword detection matrix (P1 fix) ───────────────────────────
 
@@ -183,17 +167,17 @@ class TestIntentInterceptor:
             (
                 "设计架构并写代码实现",
                 ["architect", "implementer"],
-                InterceptionMode.MULTI_AGENT_SQUAD,
+                None,
             ),
             (
                 "请帮我设计微服务架构、然后用Python实现核心模块、最后做安全审查",
                 ["architect", "implementer", "red_team"],
-                InterceptionMode.MULTI_AGENT_SQUAD,
+                None,
             ),
             (
                 "design architecture, implement code, security review",
                 ["architect", "implementer", "red_team"],
-                InterceptionMode.MULTI_AGENT_SQUAD,
+                None,
             ),
             ("帮我对比微服务和单体架构", ["debater", "architect"], None),
         ]

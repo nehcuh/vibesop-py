@@ -52,7 +52,11 @@ from vibesop.core.routing._layers import _with_source_file
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
-from vibesop.core.routing.matcher_pipeline import MatcherPipeline, filter_management_candidates
+from vibesop.core.routing.matcher_pipeline import (
+    MatcherPipeline,
+    filter_invocation_disabled_candidates,
+    filter_management_candidates,
+)
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.orchestrator import Orchestrator
@@ -684,6 +688,7 @@ class UnifiedRouter(
         # (EXPLICIT above is intentionally exempt; matcher layers gate
         # themselves via apply_prefilter).
         early_candidates = filter_management_candidates(query, candidates)
+        early_candidates = filter_invocation_disabled_candidates(early_candidates)
 
         # Step 1: Early layers (scenario+index best-of for keyword, index only for LLM)
         early_match = self._try_early_layers(

@@ -131,6 +131,9 @@ def build_spec(
     # v3 fields that were previously discarded
     commands = _parse_list_field(data.get("commands"))
     user_invocable = bool(data.get("user_invocable", False))
+    disable_model_invocation = bool(
+        data.get("disable_model_invocation") or data.get("disable-model-invocation") or False
+    )
     allowed_tools = _parse_list_field(data.get("allowed_tools") or data.get("allowed-tools"))
     mode = data.get("mode", "")
     routing_patterns = _parse_list_field(
@@ -202,6 +205,7 @@ def build_spec(
         algorithms=algorithms,
         commands=commands,
         user_invocable=user_invocable,
+        disable_model_invocation=disable_model_invocation,
         allowed_tools=allowed_tools,
         mode=mode,
         lifecycle=lifecycle,

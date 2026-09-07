@@ -319,13 +319,19 @@ def main() -> int:
         alts = [a.skill_id for a in (result.alternatives or [])][:2]
         top3 = ([primary] if primary else []) + alts
 
-        ok1 = (
-            (primary in expect)
-            if expect
-            else (primary not in reject)
-            if reject
-            else not result.has_match  # empty expect + empty reject = no-match assertion
-        )
+        category = e.get("category")
+        if category == "must_not_inject":
+            # No real skill. FALLBACK_LLM is the router's no-match sentinel
+            # (has_match is False); a real skill id is a fail.
+            ok1 = not result.has_match
+        else:
+            ok1 = (
+                (primary in expect)
+                if expect
+                else (primary not in reject)
+                if reject
+                else not result.has_match  # empty expect + empty reject = no-match assertion
+            )
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3
@@ -337,6 +343,7 @@ def main() -> int:
                 "primary": primary,
                 "layer": layer,
                 "ok1": bool(ok1),
+                "category": category,
             }
         )
         per_query.append(
@@ -438,6 +445,23 @@ def main() -> int:
         )
         # Absorption guard (review F-1): refreshing after a fingerprint
         # change must not silently fold regressions into the new baseline.
+        must_not_inject_fails = [
+            r
+            for r in baseline_records
+            if r.get("category") == "must_not_inject" and not r.get("ok1")
+        ]
+        if must_not_inject_fails:
+            print(
+                "\nREFUSED: must_not_inject entries must pass (ok1 true); "
+                "--force cannot absorb these:",
+                file=sys.stderr,
+            )
+            for rec in must_not_inject_fails:
+                print(
+                    f"  {rec['query'][:60]!r}: {rec.get('primary')} ({rec.get('layer')})",
+                    file=sys.stderr,
+                )
+            return 1
         guard = None if args.force else check_update_absorption(baseline_path, baseline_records)
         if guard is not None and guard.exit_code == 1:
             print(

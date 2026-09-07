@@ -92,14 +92,15 @@ vibe route "给 src/auth/token.py 写 TDD 测试"
 
 **痛点**：你想让 AI 审查你的 PR，但**不知道有哪些审查角度**（安全？性能？可读性？）。
 
-**VibeSOP 方案**：触发多角色 Squad——implementer + reviewer + red-team。
+**VibeSOP 方案**：默认单 agent。要并行工人时**显式开口**（独立上下文 / 同时开工），或 CLI `--strategy parallel`。不要靠「安全+性能+可读性」自动拉专家小队。
 
 **命令**：
 ```bash
-vibe route --guided "审查 PR #234 的安全性、性能、可读性三个维度"
+vibe route "审查 PR #234 的安全性、性能、可读性三个维度"
+vibe orchestrate --strategy parallel "用并行工人同时做安全审查 A 和性能审查 B"
 ```
 
-**预期**：VibeSOP 检测到"三个维度"是多角色查询，自动进入 MULTI_AGENT_SQUAD 模式，分配三个 agent 各审一个维度，最后汇总。
+**预期**：第一句走单 agent（可点名审查技能）。第二句才进入并行工人编排。
 
 ---
 

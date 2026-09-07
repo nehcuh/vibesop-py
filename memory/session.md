@@ -1,6 +1,17 @@
 
 ## Current Session
 
+### S73 (2026-09-07) [vibesop-py] next-opt 设计三路对抗 + kimi/pi 确认锁 v1
+
+- 用户要求：多路独立对抗明确「下一步优化」设计，再 kimi+pi 复审，没问题就往下
+- 路由命中 kimi-gated-fix（修代码用）——本题是设计锁不是修批；改走 pull-tri-lane 形态（固件→三路互不见面→合成亲证→确认轮）
+- 固件 v0：`.omx/artifacts/next-opt-design-v0.md`
+- 三路均 NEEDS_FIX：A 证据 / B 架构 / C kimi 产品面。P0 共识：D3 若只 grep `[ACTIVE SKILL]`/`skill_content` 会把「写公众号→Execution Plan」测成全绿；D2 只删 ROLE_KEYWORDS 不够；D1 不能用 filter_routable
+- 仲裁亲证代码后出 v1：`.omx/artifacts/next-opt-design-v1.md` + 合成 `.omx/artifacts/next-opt-review-synthesis.md`
+- Confirm：kimi APPROVE_WITH_NITS、pi APPROVE_WITH_NITS（12/12 确认项落位；NIT 已吸进 v1：W1.1 清单、known-fail 禁、D5 正负 grep、extra 不改 forbid、ROADMAP:380）
+- 往下：`docs/ROADMAP.md` 换当前方向为 W1/W2 锁
+- **W1 代码已开工**（标准流程 TDD 竖切）：D1 字段+parser+候选 stamp+EXPLICIT 后剥离；D2 拆角色小队/同源编制，显式并行工人才 SQUAD；D3 must_not_inject + hook 禁 Execution Plan；D5 生成规则改口；USE_CASES/CHANGELOG/GOALS/architecture 已改。hermetic --check exit 0。已提交推远程
+
 ### S72 (2026-09-07) [vibesop-py] enterprise-agent-methodology 按评审彻底重梳
 
 - 用户要求按 grok 深入评审 + 社区证据重写 `docs/enterprise-agent-methodology.md`

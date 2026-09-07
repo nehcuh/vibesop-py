@@ -17,6 +17,7 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 from vibesop.core.models import IntentAnalysis
+from vibesop.core.orchestration.parallel_intent import is_explicit_parallel_workers
 from vibesop.core.orchestration.patterns import (
     EXPLICIT_SKILL_PATTERNS,
     MULTI_INTENT_REGEX_PATTERNS,
@@ -242,13 +243,9 @@ class IntentInterceptor:
                 reason="Meta-query about VibeSOP system",
             )
 
-        # 3. Check for explicit skill override → fast-path single routing.
-        #    Skip this check when multi-role detection would yield a richer
-        #    squad decision (e.g. "用Python实现" alone shouldn't pin the query
-        #    to a single skill when other roles are also mentioned).
+        # 3. Explicit skill override always wins (role words must not steal it).
         explicit_skill = self._extract_explicit_skill(original_query)
-        detected_roles_for_skill = self._detect_roles(original_query)
-        if explicit_skill and len(detected_roles_for_skill) < self.SQUAD_ROLE_THRESHOLD:
+        if explicit_skill:
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.SINGLE,
@@ -256,22 +253,24 @@ class IntentInterceptor:
                 query=original_query,
             )
 
-        # 4. Fast multi-role detection: ≥ threshold distinct professional roles
-        #    → MULTI_AGENT_SQUAD (no LLM needed). Checked before multi-intent
-        #    markers so that "design + implement + audit" yields a squad even
-        #    when sequential markers ("然后"/"最后") are present.
-        if len(detected_roles_for_skill) >= self.SQUAD_ROLE_THRESHOLD:
-            analysis = self._build_quick_squad_analysis(original_query, detected_roles_for_skill)
+        # 4. Squad only on explicit parallel-worker intent, never role personas.
+        if is_explicit_parallel_workers(original_query):
+            analysis = self._build_quick_squad_analysis(original_query, ["orchestrator"])
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.MULTI_AGENT_SQUAD,
-                reason=f"Multi-role detected: {', '.join(detected_roles_for_skill)}",
+                reason="Explicit parallel-worker intent",
                 query=original_query,
                 analysis=analysis,
             )
 
-        # 5. Explicit multi-intent markers without multi-role → orchestrate.
-        if self._has_multi_intent_markers(original_query):
+        # 5. Sequential multi-intent markers → workflow orchestrate, not a squad.
+        #    Role-pair queries (实现+审查) must not get an Execution Plan just
+        #    because they contain 并/then.
+        if (
+            self._has_multi_intent_markers(original_query)
+            and len(self._detect_roles(original_query)) < self.SQUAD_ROLE_THRESHOLD
+        ):
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.ORCHESTRATE,
@@ -291,15 +290,11 @@ class IntentInterceptor:
         """Fast path for short queries; uses heuristic analyzer (no LLM)."""
         analysis = self._semantic_analyzer.analyze(query)
 
-        # Preserve legacy behavior: multi-intent short queries go to ORCHESTRATE.
-        if len(analysis.suggested_roles) >= 2 or analysis.complexity in (
-            "composite",
-            "multi_agent",
-        ):
+        if is_explicit_parallel_workers(query):
             return InterceptionDecision(
                 should_route=True,
-                mode=InterceptionMode.ORCHESTRATE,
-                reason=f"Short query with composite intent: {analysis.facets}",
+                mode=InterceptionMode.MULTI_AGENT_SQUAD,
+                reason="Explicit parallel-worker intent",
                 query=query,
                 analysis=analysis,
             )
@@ -314,7 +309,6 @@ class IntentInterceptor:
                 analysis=analysis,
             )
 
-        # Default legacy behavior: short focused query → SINGLE.
         return InterceptionDecision(
             should_route=True,
             mode=InterceptionMode.SINGLE,
@@ -329,26 +323,27 @@ class IntentInterceptor:
         analysis: IntentAnalysis,
     ) -> InterceptionDecision:
         """Map a semantic IntentAnalysis to an InterceptionDecision."""
-        if analysis.squad_needed or analysis.complexity == "multi_agent":
+        if is_explicit_parallel_workers(query):
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.MULTI_AGENT_SQUAD,
-                reason=f"Multi-agent squad needed: {analysis.suggested_roles}",
+                reason="Explicit parallel-worker intent",
                 query=query,
                 analysis=analysis,
             )
 
-        if analysis.complexity == "composite":
+        if self._has_multi_intent_markers(query) and len(self._detect_roles(query)) < (
+            self.SQUAD_ROLE_THRESHOLD
+        ):
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.ORCHESTRATE,
-                reason=f"Composite task: {analysis.facets}",
+                reason=f"Sequential multi-intent: {analysis.facets}",
                 query=query,
                 analysis=analysis,
             )
 
-        # Simple but specific role → give it per-agent skills and role context.
-        if analysis.suggested_roles:
+        if analysis.suggested_roles and analysis.suggested_roles[0] in self._SINGLE_AGENT_ROLES:
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.SINGLE_AGENT,
@@ -357,11 +352,10 @@ class IntentInterceptor:
                 analysis=analysis,
             )
 
-        # Default backward-compatible fallback.
         return InterceptionDecision(
             should_route=True,
-            mode=InterceptionMode.ORCHESTRATE,
-            reason="Default: check for multi-intent via orchestration",
+            mode=InterceptionMode.SINGLE,
+            reason="No explicit parallel workers; stay single-agent",
             query=query,
             analysis=analysis,
         )

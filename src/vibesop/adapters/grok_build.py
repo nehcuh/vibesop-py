@@ -167,7 +167,8 @@ routing has already run for this turn: follow that result and do NOT
 re-run `vibe route`.
 
 If no such injection is present on this turn (hook not installed or
-failed), call `vibe route` to find the best skill:
+failed), call `vibe route` to look up whether a skill applies.
+No match is a successful outcome — proceed in normal mode; do not invent a skill:
 
 ```bash
 vibe route "<user_request>"

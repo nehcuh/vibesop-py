@@ -18,6 +18,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 - `vibe install --list` 展示可信技能包
 - `vibe install --auto` 一键安装推荐包
 - `vibe skills recommended` 基于技术栈和协同过滤推荐
+  - **本周期冻结增量**（2026-09 next-opt v1）：不扩张协同过滤 / SkillMarket 未完成子项
 - `vibe skills featured` 浏览精选技能注册表
 - `vibe sync-registry` 远程同步精选注册表
 - 已内置 superpowers, gstack, omx, mattpocock 四个可信包

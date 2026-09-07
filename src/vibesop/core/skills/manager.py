@@ -174,6 +174,9 @@ class SkillManager:
                 "type": definition.metadata.skill_type.value,
                 "source": "filesystem",
                 "source_file": str(definition.source_file) if definition.source_file else None,
+                "disable_model_invocation": bool(
+                    getattr(definition.metadata, "disable_model_invocation", False)
+                ),
             }
 
         # Try registry

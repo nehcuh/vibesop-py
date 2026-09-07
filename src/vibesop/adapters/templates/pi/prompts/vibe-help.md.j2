@@ -5,7 +5,7 @@ description: Show VibeSOP help and available commands
 Show the user all available VibeSOP commands:
 
 ```bash
-vibe route "<query>"       # Route a request to the best skill
+vibe route "<query>"       # Look up whether a skill applies (no match is ok)
 vibe route --slash "/..."  # Handle slash commands
 vibe install <package>     # Install a skill package
 vibe skills list           # List all skills

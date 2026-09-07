@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 #: Bump when the candidates cache entry format changes; mismatched caches are
 #: discarded instead of misread (old files simply miss the key → treated as
 #: foreign-format and rebuilt).
-_CANDIDATES_CACHE_SCHEMA_VERSION = 2
+_CANDIDATES_CACHE_SCHEMA_VERSION = 3
 
 
 def with_source_file(metadata: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
@@ -267,6 +267,9 @@ class CandidateManager:
                     "lifecycle": lifecycle,
                     "source_file": str(definition.source_file) if definition.source_file else None,
                     "management_only": is_management,
+                    "disable_model_invocation": bool(
+                        getattr(metadata, "disable_model_invocation", False)
+                    ),
                 }
             )
         return candidates

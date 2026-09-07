@@ -133,6 +133,13 @@ class SkillSpec(BaseModel):
         default=False,
         description="Whether this skill can be invoked by the user via slash command",
     )
+    disable_model_invocation: bool = Field(
+        default=False,
+        description=(
+            "When true, the skill is invisible to auto-routing and only loads "
+            "on EXPLICIT invocation (slash / use <id> / !id)."
+        ),
+    )
     allowed_tools: list[str] = Field(
         default_factory=list,
         description="Tool names the skill is allowed to use (e.g. ['Read', 'Write', 'Bash'])",

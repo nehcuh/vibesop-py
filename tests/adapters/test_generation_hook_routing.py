@@ -36,13 +36,15 @@ class TestSlimAgentsIndexHookRouting:
 
     def test_hook_false_keeps_imperative_copy(self) -> None:
         text = generate_slim_agents_index(hook_routing=False)
-        assert "MANDATORY: Call `vibe route`" in text
+        assert "Call `vibe route`" in text
+        assert "No match is a successful outcome" in text
         assert 'vibe route "<user_request>"' in text
         assert "Routing is automatic" not in text
 
     def test_default_is_false(self) -> None:
         text = generate_slim_agents_index()
-        assert "MANDATORY: Call `vibe route`" in text
+        assert "Call `vibe route`" in text
+        assert "No match is a successful outcome" in text
         assert "Routing is automatic" not in text
 
 

@@ -147,6 +147,22 @@
   expect: []
   category: adversarial
   note: 应 no-match / fallback
+- query: 写公众号总结
+  expect: []
+  category: must_not_inject
+  note: 日常长句不得注入技能或 fallback-llm
+- query: 写一篇微信文章
+  expect: []
+  category: must_not_inject
+- query: 翻译这段英文
+  expect: []
+  category: must_not_inject
+- query: 今天天气怎么样
+  expect: []
+  category: must_not_inject
+- query: 帮我出一道考试题，不要实现
+  expect: []
+  category: must_not_inject
 
 # In-universe external-pack load (gate45 P1): the checked-in
 # tests/fixtures/benchmark-pack exercises pack-shaped skills inside the

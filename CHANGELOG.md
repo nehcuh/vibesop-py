@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **W1 图书管理员（next-opt v1）**: 角色词不再自动拉 `MULTI_AGENT_SQUAD`（撤回 v7 auto-trigger）。小队只在显式并行工人意图下进入；`disable-model-invocation` 成为一等 SkillSpec 字段（EXPLICIT 可点名，其余层剥离）；负例 `must_not_inject` 进 hermetic 闸；生成规则改口为 no-match 是正常输出。详见 `.omx/artifacts/next-opt-design-v1.md`。
+
 ### Added
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:

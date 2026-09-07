@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from vibesop.core.exceptions import LLMError
 from vibesop.core.models import IntentAnalysis
+from vibesop.core.orchestration.parallel_intent import is_explicit_parallel_workers
 from vibesop.core.orchestration.patterns import (
     INTENT_DOMAIN_KEYWORDS,
     MULTI_INTENT_REGEX,
@@ -152,7 +153,10 @@ class SemanticIntentAnalyzer:
             raise LLMError(getattr(self._llm, "provider_name", "unknown"), str(e)) from e
 
         content = getattr(response, "content", str(response))
-        return self._parse_response(content)
+        result = self._parse_response(content)
+        if result.squad_needed and not is_explicit_parallel_workers(query):
+            result = result.model_copy(update={"squad_needed": False, "complexity": "simple"})
+        return result
 
     def _build_prompt(self, query: str) -> str:
         """Build the LLM prompt for semantic intent analysis."""
@@ -165,23 +169,17 @@ class SemanticIntentAnalyzer:
             "- simple: one clear task in one professional domain\n"
             "- composite: one domain but multiple dependent sub-steps\n"
             "- multi_agent: 2+ distinct professional domains needing role collaboration\n\n"
-            "## Role detection rules (IMPORTANT)\n"
-            "Scan the user request for the role keywords below. If 2+ DIFFERENT "
-            "roles match, set squad_needed=true and complexity=multi_agent.\n\n"
-            "| Role | Keywords (zh / en) |\n"
-            "|------|--------------------|\n"
-            "| architect | 架构、设计、系统设计、技术选型、模块划分、architecture、system design |\n"
-            "| implementer | 实现、编码、写代码、开发、编程、implement、code、coding、develop |\n"
-            "| reviewer | 审查、评审、代码审查、质量检查、review、code review |\n"
-            "| tester | 测试、单元测试、集成测试、覆盖率、test、testing、coverage |\n"
-            "| red_team | 安全、安全审查、安全审计、渗透、漏洞、security、audit、vulnerability |\n"
-            "| debater | 对比、方案对比、选型对比、trade-off、pros and cons |\n"
-            "| orchestrator | 协调、汇总、整合、综合、orchestrate、synthesize |\n\n"
+            "## Squad rules (IMPORTANT)\n"
+            "Set squad_needed=true ONLY if the user explicitly asked for parallel "
+            "independent workers (phrases like 并行工人 / 同时开工 / 独立上下文 / "
+            "parallel workers) AND named at least two work items. Do NOT set "
+            "squad_needed because the query mentions 实现, 审查, 架构, or 测试.\n\n"
             "Examples:\n"
-            "- 'help me debug this error' → single agent (implementer only)\n"
-            "- 'design the architecture and implement the code' → multi_agent (architect + implementer)\n"
-            "- '设计架构、实现代码、做安全审查' → multi_agent (architect + implementer + red_team)\n"
-            "- '分析这个项目的架构' → single agent (architect only)\n\n"
+            "- 'help me debug this error' → single agent\n"
+            "- 'design the architecture and implement the code' → single agent "
+            "(role words are not a squad)\n"
+            "- '用并行工人同时做前端 A 和后端 B' → multi_agent (explicit workers)\n"
+            "- '分析这个项目的架构' → single agent\n\n"
             "## Collaboration protocols\n"
             "- sequential: pipeline dependency A→B→C\n"
             "- parallel: independent sub-tasks run concurrently\n"
@@ -322,18 +320,18 @@ class SemanticIntentAnalyzer:
             kw in query_lower
             for kw in ("多agent", "multi-agent", "multi agent", "agent squad", "agent 团队")
         )
-        if len(matched_facets) >= 3 or explicit_multi_agent:
-            roles = self._roles_from_facets(matched_facets)
+        if is_explicit_parallel_workers(query) or explicit_multi_agent:
+            roles = self._roles_from_facets(matched_facets) or ["orchestrator"]
             return IntentAnalysis(
                 complexity="multi_agent",
-                facets=matched_facets,
+                facets=matched_facets or ["parallel"],
                 squad_needed=True,
                 suggested_roles=roles,
-                collaboration_protocol=self._infer_protocol(roles),
+                collaboration_protocol="parallel",
                 per_agent_skills=self._skills_for_roles(roles),
                 handoff_points=list(range(1, len(roles))),
                 confidence=0.7,
-                reasoning=f"Heuristic: {len(matched_facets)} facets detected -> multi_agent squad",
+                reasoning="Heuristic: explicit parallel-worker intent -> squad",
             )
 
         # Composite: multiple intent markers or 2 facets.

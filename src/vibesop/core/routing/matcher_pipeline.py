@@ -41,6 +41,16 @@ def _metadata_with_source(
     return meta
 
 
+def filter_invocation_disabled_candidates(
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop skills flagged disable-model-invocation.
+
+    EXPLICIT must see the full pool (call this only after that layer).
+    """
+    return [c for c in candidates if not c.get("disable_model_invocation")]
+
+
 def filter_management_candidates(
     query: str,
     candidates: list[dict[str, Any]],
@@ -230,4 +240,5 @@ class MatcherPipeline:
     ) -> list[dict[str, Any]]:
         """Exclude management-only skills from matcher layers unless the query
         shows tool-management intent (see filter_management_candidates)."""
-        return filter_management_candidates(query, candidates)
+        gated = filter_management_candidates(query, candidates)
+        return filter_invocation_disabled_candidates(gated)

@@ -40,14 +40,12 @@ class TestSemanticIntentAnalyzer:
         assert result.squad_needed is False
         assert len(result.suggested_roles) >= 1
 
-    def test_explicit_multi_agent_keyword_triggers_squad(self) -> None:
+    def test_explicit_parallel_workers_triggers_squad(self) -> None:
         analyzer = SemanticIntentAnalyzer(llm_client=None)
-        result = analyzer.analyze("multi-agent: 设计架构、实现代码、做安全审查")
+        result = analyzer.analyze("用并行工人同时做前端 A 和后端 B")
 
         assert result.complexity == "multi_agent"
         assert result.squad_needed is True
-        assert len(result.suggested_roles) >= 2
-        assert "red_team" in result.suggested_roles
 
     def test_llm_path_parses_valid_json(self) -> None:
         mock_llm = Mock()
@@ -75,12 +73,8 @@ class TestSemanticIntentAnalyzer:
             "I need to design the overall architecture for a new payment gateway and perform a comprehensive security review to identify potential attack surfaces and risks"
         )
 
-        assert result.complexity == "multi_agent"
-        assert result.squad_needed is True
-        assert "architect" in result.suggested_roles
-        assert "red_team" in result.suggested_roles
-        assert result.collaboration_protocol == "red_team"
-        assert result.confidence == pytest.approx(0.92)
+        # LLM may claim a squad; W1 strips it unless the query named parallel workers.
+        assert result.squad_needed is False
         assert mock_llm.call.called
 
     def test_llm_path_parses_markdown_fenced_json(self) -> None:

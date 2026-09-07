@@ -231,7 +231,9 @@ def info(
             f"\n[bold]Intent[/bold]\n"
             f"{skill_info_data.get('intent', 'No intent specified')}\n"
             f"\n[bold]Tags[/bold]\n"
-            f"{', '.join(skill_info_data.get('tags') or []) or 'None'}",
+            f"{', '.join(skill_info_data.get('tags') or []) or 'None'}"
+            f"\n\n[dim]disable-model-invocation:[/dim] "
+            f"{skill_info_data.get('disable_model_invocation', False)}",
             title="[bold]Skill Info[/bold]",
             border_style="blue",
         )

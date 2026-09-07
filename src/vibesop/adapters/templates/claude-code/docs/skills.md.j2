@@ -5,7 +5,7 @@
 ## How to Use Skills
 
 ```bash
-# Route to the best skill for your request
+# Look up whether a skill applies (no match is a successful outcome)
 vibe route "<your request>"
 
 # View a specific skill's definition

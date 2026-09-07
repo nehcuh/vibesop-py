@@ -1,12 +1,42 @@
 # VibeSOP Roadmap
 
-> **Version**: 8.0.0.dev0
-> **版本 Version**: 8.0.0.dev0
-> **最后更新 Last Updated**: 2026-06-14
+> **Version**: 8.2.0
+> **最后更新 Last Updated**: 2026-09-07
+> **当前锁**：`.omx/artifacts/next-opt-design-v1.md`（三路对抗 + kimi/pi 确认 APPROVE_WITH_NITS）
 
 ---
 
-## Current State (v7.0.0)
+## Current direction (2026-09) — 图书管理员先可信
+
+方法论与八轮实验把产品命题改了口：技能图集是可点名方法卡，不是常驻专家编制；找不到匹配是成功。当前代码与此拧着（角色词自动小队、`disable-model-invocation` 未实现、负例几乎不进 CI）。下一阶段按 v1 锁执行，**不**再扩张编排/市场/专家团。
+
+### W1 — 产品停止自相矛盾（下一实现切片）
+
+锁：D1–D5，详见 v1。摘要：
+
+- [ ] **D1** `disable-model-invocation` 一等字段；EXPLICIT 全量池、其后剥离（不得用 `filter_routable`）；orchestrate 剥计划步骤
+- [ ] **D2** 拆除角色词小队及同源编制（短查询 composite、heuristic `squad_needed`、LLM 角色表、默认长句开会）；保留 `--strategy parallel` 等显式入口
+- [ ] **D3** 负例 CI：`must_not_inject` 不得经 fallback / known-fail 过关；hook 探针打 Execution Plan 而非不存在的 `skill_content`
+- [ ] **D5** 生成规则改口：no-match 是正常输出；改模板源 + grep 验收
+- [ ] 文档：USE_CASES / architecture / GOALS 冻结项 / CHANGELOG 记 v7 squad auto-trigger 行为变更
+
+### W2 — 实验（不阻塞 W1）
+
+- [ ] E1 弱模型路由质量（命中/拒判，不谈成品）
+- [ ] E2 信息型技能 A/B（项目 runbook）
+- [ ] E3 三臂：裸 / dump / 智能路由（50+ 技能）
+- [ ] E4 整机设计院→施工队（硬依赖 R8 盲评结算）
+
+### 本周期冻结 / 撤回
+
+- **撤回**：v7.0 已完成的 Multi-Agent Squad auto-trigger（角色词 ≥2 → 小队）。能力改为显式入口，不是默认。
+- **冻结增量**：SkillMarket 未完成子项、协同过滤推荐、主动推荐专家、SkillMarket「50+ packs」未来指标。已发布的 `vibe market search/install` 保持可用。
+- **维持**：gate38 自动 deprecate = 显式 flag。不标 won't-do。
+- **禁止**：把整机流水线做成 CLI；把 LLM 评审当放行闸；为叙事跑墙钟时间对比。
+
+---
+
+## Historical: Current State (v7.0.0)
 
 ### ✅ Completed in v7.0 (2026-06-14)
 

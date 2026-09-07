@@ -89,6 +89,7 @@ class TestAll29Fields:
             "algorithms",
             "commands",
             "user_invocable",
+            "disable_model_invocation",
             "allowed_tools",
             "mode",
             "lifecycle",

@@ -440,8 +440,8 @@ single entry point for both the CLI (`vibe route`) and the hook path
 | `SLASH_COMMAND` | Query starts with `/vibe-*` | Built-in slash execution |
 | `SINGLE` | Explicit skill override (`use gstack/review`) **or** short focused query | `router.route()` → primary skill |
 | `SINGLE_AGENT` | Single complex role in short query (e.g. architect, red_team) | Route + role prompt + per-agent skill allowlist |
-| `MULTI_AGENT_SQUAD` | ≥ 2 distinct professional roles detected | Per-role squad steps (see [Squad Decision Tree](#squad-decision-tree)) |
-| `ORCHESTRATE` | Multi-intent markers (`然后`/`最后`/`and then`) without multi-role | Decompose + PlanBuilder sequential/parallel plan |
+| `MULTI_AGENT_SQUAD` | Explicit parallel-worker intent (独立上下文 / 同时开工 / parallel workers) plus ≥2 named work items — **not** 实现/审查/架构/测试 role words | Per-worker squad steps |
+| `ORCHESTRATE` | Sequential multi-intent markers (`先`/`再`/`第一步`) **without** a role-pair auto-plan | Decompose + PlanBuilder sequential/parallel plan |
 
 ### Squad Decision Tree
 

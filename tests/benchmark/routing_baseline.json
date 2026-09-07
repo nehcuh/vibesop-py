@@ -2,10 +2,10 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "3f18bddd9059511d50966b48912ac90a4c7c0cc952af464570afc708b124819d",
+    "sha": "87eea499f27c1115cb494aaa392a7badbdf120644221e44503fab91172c5f920",
     "inputs": {
       "registry.yaml": "f997c3baa48c35098d05b6509230da865ffad068d964cf683eaca864948e56fa",
-      "dataset": "80470cef6457385e88b0b6fd15391ab10e9d63cdcb4657cc5a01aa4dc8e54128",
+      "dataset": "8c8323e5d7fdb5e952f02841e0e254537a2d07ac6345e6e42ca79c36edec7444",
       "posture": {
         "enable_embedding": false,
         "enable_ai_triage": false,
@@ -52,7 +52,8 @@
       "reject": [],
       "primary": "fallback-llm",
       "layer": "fallback_llm",
-      "ok1": false
+      "ok1": false,
+      "category": "diagnosis"
     },
     {
       "query": "run a deep diagnosis of the codebase and suggest optimizations",
@@ -62,7 +63,8 @@
       "reject": [],
       "primary": "builtin/deep-diagnosis-optimization",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "diagnosis"
     },
     {
       "query": "全面审查这个仓库的代码质量",
@@ -72,7 +74,8 @@
       "reject": [],
       "primary": "builtin/deep-diagnosis-optimization",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "diagnosis"
     },
     {
       "query": "让 agent 自主运行一组实验并汇报评估结果",
@@ -82,7 +85,8 @@
       "reject": [],
       "primary": "builtin/autonomous-experiment",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "experiment"
     },
     {
       "query": "start an autonomous experiment loop with prediction evaluation",
@@ -92,7 +96,8 @@
       "reject": [],
       "primary": "builtin/autonomous-experiment",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "experiment"
     },
     {
       "query": "把最近踩过的坑沉淀下来，以后别再犯了",
@@ -102,7 +107,8 @@
       "reject": [],
       "primary": "builtin/experience-evolution",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "learning"
     },
     {
       "query": "accumulate what we learned from practice into project knowledge",
@@ -112,7 +118,8 @@
       "reject": [],
       "primary": "builtin/experience-evolution",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "learning"
     },
     {
       "query": "查看一下我的 instinct 学习状态",
@@ -122,7 +129,8 @@
       "reject": [],
       "primary": "builtin/instinct",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "learning"
     },
     {
       "query": "show my coding instincts and their confidence",
@@ -132,7 +140,8 @@
       "reject": [],
       "primary": "builtin/instinct",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "learning"
     },
     {
       "query": "从我的工作流里学习一个新的本能模式",
@@ -142,7 +151,8 @@
       "reject": [],
       "primary": "builtin/instinct",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "learning"
     },
     {
       "query": "用 RIPER 流程来做这个功能",
@@ -152,7 +162,8 @@
       "reject": [],
       "primary": "builtin/riper-workflow",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "workflow"
     },
     {
       "query": "run the riper workflow for this feature",
@@ -162,7 +173,8 @@
       "reject": [],
       "primary": "builtin/riper-workflow",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "workflow"
     },
     {
       "query": "收工了",
@@ -172,7 +184,8 @@
       "reject": [],
       "primary": "builtin/session-end",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "session"
     },
     {
       "query": "that's all for now, heading out",
@@ -182,7 +195,8 @@
       "reject": [],
       "primary": "builtin/session-end",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "session"
     },
     {
       "query": "今天就到这里，保存一下进度",
@@ -192,7 +206,8 @@
       "reject": [],
       "primary": "builtin/session-end",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "session"
     },
     {
       "query": "把这段对话提炼成一个新技能",
@@ -202,7 +217,8 @@
       "reject": [],
       "primary": "builtin/skill-craft",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "skill_mgmt"
     },
     {
       "query": "craft a new skill from this session's patterns",
@@ -212,7 +228,8 @@
       "reject": [],
       "primary": "builtin/skill-craft",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "skill_mgmt"
     },
     {
       "query": "评估一下这些技能的使用质量和效果",
@@ -222,7 +239,8 @@
       "reject": [],
       "primary": "builtin/slash-evaluate",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "skill_mgmt"
     },
     {
       "query": "which skills are performing well and which need attention",
@@ -232,7 +250,8 @@
       "reject": [],
       "primary": "fallback-llm",
       "layer": "fallback_llm",
-      "ok1": false
+      "ok1": false,
+      "category": "skill_mgmt"
     },
     {
       "query": "/help",
@@ -243,7 +262,8 @@
       "reject": [],
       "primary": "builtin/slash-help",
       "layer": "explicit",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "vibe 这个工具怎么用",
@@ -254,7 +274,8 @@
       "reject": [],
       "primary": "builtin/slash-help",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "/install superpowers",
@@ -264,7 +285,8 @@
       "reject": [],
       "primary": "builtin/slash-install",
       "layer": "explicit",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "帮我安装一个技能包",
@@ -274,7 +296,8 @@
       "reject": [],
       "primary": "builtin/slash-install",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "/list",
@@ -284,7 +307,8 @@
       "reject": [],
       "primary": "builtin/slash-list",
       "layer": "explicit",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "列出所有可用技能",
@@ -294,7 +318,8 @@
       "reject": [],
       "primary": "builtin/slash-list",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "/orchestrate 同时做安全审查和补测试",
@@ -304,7 +329,8 @@
       "reject": [],
       "primary": "builtin/slash-orchestrate",
       "layer": "explicit",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "/route 这个查询到合适的技能",
@@ -314,7 +340,8 @@
       "reject": [],
       "primary": "builtin/slash-route",
       "layer": "explicit",
-      "ok1": true
+      "ok1": true,
+      "category": "slash"
     },
     {
       "query": "来一次全维度代码库审计",
@@ -324,7 +351,8 @@
       "reject": [],
       "primary": "fallback-llm",
       "layer": "fallback_llm",
-      "ok1": false
+      "ok1": false,
+      "category": "cross_cutting"
     },
     {
       "query": "help me write a unit test for this function",
@@ -334,7 +362,8 @@
       ],
       "primary": "builtin/test-generation",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "adversarial"
     },
     {
       "query": "help me fix this bug in the login flow",
@@ -344,7 +373,8 @@
       ],
       "primary": "builtin/systematic-debugging",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "adversarial"
     },
     {
       "query": "审计一下第三方依赖的供应链安全",
@@ -354,7 +384,8 @@
       "reject": [],
       "primary": "fallback-llm",
       "layer": "fallback_llm",
-      "ok1": false
+      "ok1": false,
+      "category": "adversarial"
     },
     {
       "query": "xyzq 什么都不相关的乱码查询 blargh",
@@ -362,7 +393,53 @@
       "reject": [],
       "primary": "fallback-llm",
       "layer": "fallback_llm",
-      "ok1": true
+      "ok1": true,
+      "category": "adversarial"
+    },
+    {
+      "query": "写公众号总结",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true,
+      "category": "must_not_inject"
+    },
+    {
+      "query": "写一篇微信文章",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true,
+      "category": "must_not_inject"
+    },
+    {
+      "query": "翻译这段英文",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true,
+      "category": "must_not_inject"
+    },
+    {
+      "query": "今天天气怎么样",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true,
+      "category": "must_not_inject"
+    },
+    {
+      "query": "帮我出一道考试题，不要实现",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "layer": "fallback_llm",
+      "ok1": true,
+      "category": "must_not_inject"
     },
     {
       "query": "add this to the quokka-todo list before we forget",
@@ -372,7 +449,8 @@
       "reject": [],
       "primary": "benchpack/quokka-todo",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "benchmark_pack"
     },
     {
       "query": "take a wombat-snapshot of the workspace before the risky edit",
@@ -382,7 +460,8 @@
       "reject": [],
       "primary": "benchpack/wombat-snapshot",
       "layer": "keyword",
-      "ok1": true
+      "ok1": true,
+      "category": "benchmark_pack"
     }
   ]
 }

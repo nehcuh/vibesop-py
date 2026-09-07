@@ -92,14 +92,15 @@ vibe route "write TDD tests for src/auth/token.py"
 
 **Pain**: You want AI to review your PR but **don't know which review angles exist** (security? performance? readability?).
 
-**VibeSOP approach**: Trigger a multi-role Squad — implementer + reviewer + red-team.
+**VibeSOP approach**: Default single agent. Parallel workers require an **explicit ask** (independent contexts / start together) or `vibe orchestrate --strategy parallel`. Role words do not auto-open an expert squad.
 
 **Commands**:
 ```bash
-vibe route --guided "review PR #234 across security, performance, and readability dimensions"
+vibe route "review PR #234 across security, performance, and readability"
+vibe orchestrate --strategy parallel "use parallel workers on security review A and performance review B"
 ```
 
-**Expected**: VibeSOP detects "three dimensions" as a multi-role query, auto-enters MULTI_AGENT_SQUAD mode, assigns three agents one dimension each, aggregates at the end.
+**Expected**: The first query stays single-agent (you may name a review skill). The second enters parallel-worker orchestration.
 
 ---
 

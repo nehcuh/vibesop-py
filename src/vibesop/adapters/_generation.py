@@ -163,7 +163,9 @@ User-typed `/vibe-*` commands still go through `vibe route --slash`
     else:
         then_read = READ_ROUTED_SKILL_MD[0].upper() + READ_ROUTED_SKILL_MD[1:]
         routing_protocol = f"""\
-**MANDATORY: Call `vibe route` before any non-trivial task.**
+**Call `vibe route` before any non-trivial task** to look up whether a skill
+applies. No match is a successful outcome — proceed in normal mode; do not
+invent a skill.
 
 ```bash
 vibe route "<user_request>"

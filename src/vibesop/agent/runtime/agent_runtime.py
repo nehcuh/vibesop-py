@@ -631,9 +631,11 @@ class AgentRuntime:
                         )
                         if orch_result.get("is_multi_intent"):
                             result.mode = "orchestrate"
-                            plan = orch_result.get("plan", {})
+                            plan = orch_result.get("plan", {}) or {}
+                            if isinstance(plan, dict):
+                                plan = self._strip_disabled_skill_ids_from_plan(plan)
                             result.plan = plan
-                            steps = plan.get("steps", [])
+                            steps = plan.get("steps", []) if isinstance(plan, dict) else []
                             # Multi-intent verdict (gate20 claude NIT-1):
                             # PlanBuilder steps CAN carry
                             # skill_id="fallback-llm" (plan_builder.py
@@ -654,6 +656,13 @@ class AgentRuntime:
                                 result.alternatives.append(
                                     {"skill_id": step.get("skill_id", ""), "confidence": 0.7}
                                 )
+                            if not result.router_matched:
+                                # Empty/disabled/all-fallback plan is a miss,
+                                # not an Execution Plan injection.
+                                result.mode = "single"
+                                result.plan = {}
+                                result.skill_id = ""
+                                result.skill_name = ""
                         else:
                             single = orch_result.get("single_result", {})
                             result.skill_id = single.get("skill_id", "") or ""
@@ -996,6 +1005,29 @@ class AgentRuntime:
             step_query,
             context={"step": step_number, "phase": phase},
         )
+
+    def _disabled_skill_ids(self) -> set[str]:
+        try:
+            manager = getattr(self.router, "_candidate_manager", None)
+            if manager is None:
+                return set()
+            return {
+                str(c.get("id"))
+                for c in manager.get_cached_candidates()
+                if c.get("disable_model_invocation")
+            }
+        except Exception:
+            return set()
+
+    def _strip_disabled_skill_ids_from_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
+        disabled = self._disabled_skill_ids()
+        if not disabled:
+            return plan
+        steps = [s for s in (plan.get("steps") or []) if isinstance(s, dict)]
+        kept = [s for s in steps if s.get("skill_id") not in disabled]
+        stripped = dict(plan)
+        stripped["steps"] = kept
+        return stripped
 
     def handle_query_for_hook(
         self,
