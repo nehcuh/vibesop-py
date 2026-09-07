@@ -2,6 +2,8 @@
 
 Complete reference for all VibeSOP CLI commands (v8.0.0+).
 
+> Looking for *when to use what*? Use the layered **[命令手册](COMMAND_HANDBOOK.md)** (Docker-recorded). This page is the flag encyclopedia.
+
 ---
 
 ## Table of Contents

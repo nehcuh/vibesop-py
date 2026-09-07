@@ -1,0 +1,46 @@
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────╮
+│   [query]      TEXT  Natural language query to route                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────╮
+│ --hook                           Hook mode: read the host agent's hook event JSON    │
+│                                  from stdin (deployed as the grok UserPromptSubmit   │
+│                                  JSON hook — gate33). Prints the hook response       │
+│                                  envelope and always exits 0.                        │
+│ --platform                TEXT   Hook mode only: platform whose injection format to  │
+│                                  use. When passed, the flag wins over the stdin JSON │
+│                                  'platform' field. Default grok-build.               │
+│ --min-confidence  -c      FLOAT  Minimum confidence threshold (0.0-1.0)              │
+│ --json            -j             Output as JSON                                      │
+│ --slash                          Treat query as a quick command (e.g., --slash       │
+│                                  '/vibe-help')                                       │
+│ --validate        -V             Validate routing configuration                      │
+│ --verbose         -v             Show full routing decision tree (now the default)   │
+│ --explain         -e             Alias for --verbose (backward compatibility)        │
+│ --quiet           -q             Suppress routing decision tree, show compact        │
+│                                  summary only                                        │
+│ --yes             -y             Skip confirmation prompt (alias for                 │
+│                                  confirmation_mode=never)                            │
+│ --guided          -x             Enter interactive step-by-step guided execution     │
+│                                  mode after plan confirmation                        │
+│ --no-session                     Disable session-state-aware routing for this query  │
+│ --trace                          Enable per-layer routing trace (inspired by         │
+│                                  SkillTree)                                          │
+│ --agents                  TEXT   Comma-separated agent pool for orchestration        │
+│                                  (claude-code,opencode,kimi-cli,cursor)              │
+│ --strategy        -s      TEXT   Force execution strategy: auto, sequential,         │
+│                                  parallel, hybrid                                    │
+│ --conversation    -C      TEXT   Conversation ID for multi-turn context              │
+│                                  (auto-generated if omitted)                         │
+│ --pattern         -p      TEXT   Force workflow pattern: sequential, parallel,       │
+│                                  fan_out, adversarial, prompt_chain                  │
+│ --verify                         Enable adversarial verification for execution steps │
+│ --strictness              TEXT   Verification strictness: lenient, standard, strict  │
+│                                  [default: standard]                                 │
+│ --output-dir      -O      TEXT   Output directory for prompt chain files (default:   │
+│                                  .vibe/prompts)                                      │
+│ --minimal         -m             Minimal JSON output for sub-agent consumption       │
+│                                  (requires --json)                                   │
+│ --no-replay                      Suppress auto-prompt for replaying gold-standard    │
+│                                  prior traces                                        │
+│ --help            -h             Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────╯

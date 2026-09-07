@@ -1,0 +1,48 @@
+╭───────────────────────────────── Welcome to VibeSOP ─────────────────────────────────╮
+│ Welcome to VibeSOP!  Your AI-powered skill operating system.                         │
+│                                                                                      │
+│ Getting started:                                                                     │
+│   vibe route "help me debug this"  — route a query to the best skill                 │
+│   vibe skills list             — browse your 45+ available skills                    │
+│   vibe status                   — return to this dashboard                           │
+│                                                                                      │
+│ VibeSOP manages your skills so your AI agent can focus on execution.                 │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+╭────────────────────────────────── Ecosystem Health ──────────────────────────────────╮
+│ 22 skills installed                                                                  │
+│                                                                                      │
+│ No evaluation data yet. Skills are evaluated as you use them.                        │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────── Recent Activity ───────────────────────────────────╮
+│ No routing activity yet.                                                             │
+│ Try vibe route "help me debug this error" to get started!                            │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────── For You ───────────────────────────────────────╮
+│ mattpocock/tdd — [Python] Test-driven development with red-green-refactor loop. Use  │
+│ when building                                                                        │
+│ mattpocock/diagnosing-bugs — [Python] Systematic diagnosis loop for hard bugs and    │
+│ performance regressions. Re                                                          │
+│ superpowers/test-driven-development — [Python] Test-driven development with          │
+│ red-green-refactor. Write the test first,                                            │
+│ mattpocock/improve-codebase-architecture — [Python] Find deepening opportunities in  │
+│ a codebase informed by domain language                                               │
+│ superpowers/systematic-debugging — Essential debugging workflow                      │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────── Warnings ──────────────────────────────────────╮
+│ No warnings — ecosystem looks healthy!                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────── Routing Health ───────────────────────────────────╮
+│ Routing grade: F (0% hit rate, 0 routes in 30d)                                      │
+│ 0 last 24h  ·  0 last 7d                                                             │
+│   AI triage: 504 calls  ·  $0.720 cost  ·  100% success                              │
+│                                                                                      │
+│ Suggestions:                                                                         │
+│   • Hit rate is 0% (grade F). Consider adding skills for frequently-missed queries.  │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────── Skill Suggestions ──────────────────────────────────╮
+│ 5 new skill pattern(s) detected from your workflows                                  │
+│ Run vibe skills suggestions to review and create skills                              │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+Commands: vibe route <query> | vibe skills list | vibe --help

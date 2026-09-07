@@ -75,7 +75,8 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Guides & References
 
-- **[CLI Reference](user/CLI_REFERENCE.md)** — Complete command-line interface reference
+- **[命令手册](user/COMMAND_HANDBOOK.md)** — 分层场景 + Docker 录制输出（每天用 / 装配 / 少碰）。**日常以这篇为准。**
+- **[CLI Reference](user/CLI_REFERENCE.md)** — Complete flag encyclopedia (not layered; prefer the handbook + `vibe man`)
 - **[Getting Started](user/getting-started.md)** — Step-by-step first-time user guide
 - **[Session Intelligent Routing](user/session-intelligent-routing.md)** — Multi-turn conversation and context-aware routing
 - **[Workflows](user/workflows.md)** — Cross-cutting workflow definitions and usage

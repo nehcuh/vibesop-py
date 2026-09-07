@@ -1,0 +1,41 @@
+╭───────────────────────────── 🔍 Routing Decision Report ─────────────────────────────╮
+│ Query: 今天天气怎么样                                                                │
+│ 🤖 Fallback Mode: fallback-llm (no skill matched)                                    │
+│ Total duration: 1198.2ms                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────── 🧠 Context Awareness ────────────────────────────────╮
+│ Conversation: cli-816fc349                                                           │
+│ Project type: python                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+Layer Execution
+├── ❌ EXPLICIT
+│   └── No @skill_id syntax detected
+├── ❌ KEYWORD
+│   └── No explicit session-end signal detected
+├── ❌ KEYWORD
+│   └── No explicit guarded-skill signal detected
+├── ❌ SCENARIO
+│   └── No scenario keywords matched
+├── ❌ SEMANTIC_INDEX (1.3ms)
+│   └── sentence-transformers not available for embedding fallback
+├── ❌ AI_TRIAGE (0.0ms)
+│   └── Short-query bypass (<15 chars): falling through to traditional matchers
+├── ❌ LEVENSHTEIN (2.3ms)
+│   └── No matcher produced a confident match
+└── ✅ FALLBACK_LLM
+    └── No confident skill match; falling back to raw LLM
+
+╭──────────────────────────────── 🚨 Override Protocol ────────────────────────────────╮
+│ AGENT INSTRUCTION (MANDATORY)                                                        │
+│                                                                                      │
+│ 1. Read the skill file at the SKILL.md path from this result (do not guess           │
+│ skills/<id>/SKILL.md)                                                                │
+│ 2. Execute the skill workflow exactly as defined                                     │
+│                                                                                      │
+│ If you choose NOT to use the recommended skill, you MUST:                            │
+│   • State your explicit reasoning                                                    │
+│   • Show why the skill is unsuitable                                                 │
+│   • Propose your alternative approach                                                │
+│   • WAIT for user confirmation before proceeding                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+Search GitHub: vibe market search "今天天气怎么样"

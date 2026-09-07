@@ -1,0 +1,26 @@
+╭───────────────────────────────────── Skill Info ─────────────────────────────────────╮
+│ session-end                                                                          │
+│                                                                                      │
+│ ID: builtin/session-end                                                              │
+│ Type: prompt                                                                         │
+│ Namespace: builtin                                                                   │
+│ Version: 2.1.0                                                                       │
+│ Author:                                                                              │
+│ Source: filesystem                                                                   │
+│                                                                                      │
+│ Description                                                                          │
+│ Session wrap-up - update handoff + commit + auto-record experience                   │
+│                                                                                      │
+│ Intent                                                                               │
+│ Session end and wrap-up — capture handoff, update memory, and commit changes when    │
+│ the user signals they are leaving or done                                            │
+│                                                                                      │
+│ Tags                                                                                 │
+│ session, wrap, handoff, commit, summary, end, 会话, 结束, 总结, done, finished,      │
+│ leaving, heading out, wrap up, that's all, gotta go, 离开, 走了, 拜拜, 再见, 先撤,   │
+│ 就到这里, 今天就到这里                                                               │
+│                                                                                      │
+│ disable-model-invocation: False                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+Source file: /repo/core/skills/session-end/SKILL.md

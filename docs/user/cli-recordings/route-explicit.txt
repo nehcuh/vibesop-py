@@ -1,0 +1,44 @@
+╭───────────────────────────── 🔍 Routing Decision Report ─────────────────────────────╮
+│ Query: use builtin/session-end                                                       │
+│ Selected: builtin/session-end (confidence: 100%)                                     │
+│ SKILL.md: /repo/core/skills/session-end/SKILL.md                                     │
+│ Total duration: 1136.3ms                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────── 🧠 Context Awareness ────────────────────────────────╮
+│ Conversation: cli-816fc349                                                           │
+│ Project type: python                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+Layer Execution
+└── ✅ EXPLICIT
+    ├── Explicit override: @builtin/session-end
+    └──   • cleaned_query: use builtin/session-end
+
+                                   Alternative Skills                                   
+                                                                                        
+  Rank   Skill ID                    Description                  Confidence   Layer    
+ ────────────────────────────────────────────────────────────────────────────────────── 
+     1   kimi-gated-fix              已诊断到具体代码位置的 bu…          23%   keyword  
+                                     → 动态工作流 + kimi                                
+                                     改动前复审 + 构建验证                              
+                                     的...                                              
+     2   builtin/deep-diagnosis-o…   Run a multi-phase deep              36%   keyword  
+                                     diagnosis of a codebas...                          
+     3   builtin/systematic-debug…   Debug a defect by forming           33%   keyword  
+                                     and verifying hypot...                             
+     4   builtin/test-generation     Generate focused,                   33%   keyword  
+                                     deterministic unit tests                           
+                                     fo...                                              
+                                                                                        
+
+╭──────────────────────────────── 🚨 Override Protocol ────────────────────────────────╮
+│ AGENT INSTRUCTION (MANDATORY)                                                        │
+│                                                                                      │
+│ 1. Read the skill file at /repo/core/skills/session-end/SKILL.md                     │
+│ 2. Execute the skill workflow exactly as defined                                     │
+│                                                                                      │
+│ If you choose NOT to use the recommended skill, you MUST:                            │
+│   • State your explicit reasoning                                                    │
+│   • Show why the skill is unsuitable                                                 │
+│   • Propose your alternative approach                                                │
+│   • WAIT for user confirmation before proceeding                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────╯

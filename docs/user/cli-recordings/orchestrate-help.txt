@@ -1,0 +1,16 @@
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────╮
+│ *    query      TEXT  Multi-intent query to orchestrate into sub-tasks [required]    │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────╮
+│ --json          -j            Output as JSON                                         │
+│ --verbose       -v            Show full decomposition and planning details           │
+│ --strategy      -s      TEXT  Force execution strategy: auto, sequential, parallel,  │
+│                               hybrid                                                 │
+│ --conversation  -C      TEXT  Conversation ID for multi-turn context                 │
+│ --pattern       -p      TEXT  Force workflow pattern: sequential, parallel, fan_out, │
+│                               adversarial                                            │
+│ --verify                      Enable adversarial verification for execution steps    │
+│ --strictness            TEXT  Verification strictness: lenient, standard, strict     │
+│                               [default: standard]                                    │
+│ --help          -h            Show this message and exit.                            │
+╰──────────────────────────────────────────────────────────────────────────────────────╯

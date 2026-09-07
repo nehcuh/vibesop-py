@@ -1,0 +1,74 @@
+VibeSOP 8.2.0                        VIBE-ROUTE(1)
+
+NAME
+    vibe route — Route a query to the appropriate skill using unified orchestration.    
+
+SYNOPSIS
+    vibe route [OPTIONS] [QUERY]                                                        
+
+DESCRIPTION
+    Route a query to the appropriate skill using unified orchestration.                 
+                                                                                        
+    Detects single vs. multi-intent queries automatically. For multi-intent             
+    queries, decomposes into sub-tasks and builds an execution plan.                    
+    For single-intent queries, routes to the best matching skill directly.              
+                                                                                        
+    VibeSOP is a Skill Operating System (SkillOS) — it manages the full                 
+    lifecycle of skills: discovers, routes, orchestrates, evaluates, and                
+    retains or deprecates. Skill execution is delegated to your AI Agent                
+    (Claude Code, Cursor, OpenCode).                                                    
+                                                                                        
+    Confirmation defaults to 'ambiguous_only': low-confidence or contested              
+    routing asks for confirmation, confident matches proceed automatically.             
+    Set routing.confirmation_mode to 'always' to confirm every time, or                 
+    'never' for fully automatic selection; --yes skips confirmation once.               
+                                                                                        
+    Use --verbose to inspect the full routing decision tree.                            
+    Use --slash to invoke a quick command explicitly (e.g., --slash '/vibe-help').      
+
+OPTIONS
+    --hook                      Hook mode: read the host agent's hook event JSON from   
+                                stdin (deployed as the grok UserPromptSubmit JSON hook —
+                                gate33). Prints the hook response envelope and always   
+                                exits 0.                                                
+    --platform TEXT             Hook mode only: platform whose injection format to use. 
+                                When passed, the flag wins over the stdin JSON          
+                                'platform' field. Default grok-build.                   
+    --min-confidence, -c FLOAT  Minimum confidence threshold (0.0-1.0)                  
+    --json, -j                  Output as JSON                                          
+    --slash                     Treat query as a quick command (e.g., --slash           
+                                '/vibe-help')                                           
+    --validate, -V              Validate routing configuration                          
+    --verbose, -v               Show full routing decision tree (now the default)       
+    --explain, -e               Alias for --verbose (backward compatibility)            
+    --quiet, -q                 Suppress routing decision tree, show compact summary    
+                                only                                                    
+    --yes, -y                   Skip confirmation prompt (alias for                     
+                                confirmation_mode=never)                                
+    --guided, -x                Enter interactive step-by-step guided execution mode    
+                                after plan confirmation                                 
+    --no-session                Disable session-state-aware routing for this query      
+    --trace                     Enable per-layer routing trace (inspired by SkillTree)  
+    --agents TEXT               Comma-separated agent pool for orchestration            
+                                (claude-code,opencode,kimi-cli,cursor)                  
+    --strategy, -s TEXT         Force execution strategy: auto, sequential, parallel,   
+                                hybrid                                                  
+    --conversation, -C TEXT     Conversation ID for multi-turn context (auto-generated  
+                                if omitted)                                             
+    --pattern, -p TEXT          Force workflow pattern: sequential, parallel, fan_out,  
+                                adversarial, prompt_chain                               
+    --verify                    Enable adversarial verification for execution steps     
+    --strictness TEXT           Verification strictness: lenient, standard, strict      
+                                [default: standard]                                     
+    --output-dir, -O TEXT       Output directory for prompt chain files (default:       
+                                .vibe/prompts)                                          
+    --minimal, -m               Minimal JSON output for sub-agent consumption (requires 
+                                --json)                                                 
+    --no-replay                 Suppress auto-prompt for replaying gold-standard prior  
+                                traces                                                  
+    --help, -h                  Show this message and exit.                             
+
+SEE ALSO
+    vibe help route                                                                     
+
+VIBE-ROUTE(1)                         VibeSOP 8.2.0                        VIBE-ROUTE(1)

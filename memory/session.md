@@ -1,6 +1,16 @@
 
 ## Current Session
 
+### S74 (2026-09-07) [vibesop-py] 命令手册：分层 + docker 录制
+
+- 用户：命令太多没层次；要用 docker 录每条怎么用、场景、输出/预期，单独成手册
+- 路由命中 skill-craft（从会话抽技能）——本题是 CLI 手册，META-0 推翻
+- 产出：`docs/user/COMMAND_HANDBOOK.md`（0–4 层）+ `scripts/record_cli_handbook.sh` + `docs/user/cli-recordings/*`（镜像 `vibesop-val-base:py3.12` 实录 [executed]）
+- 发现：docker 里 `skills list`=0 而 `status`=22（两套名单）；no-match 仍印 Override Protocol 框（无 ACTIVE SKILL 正文）
+- INDEX + CLI_REFERENCE 入口改指向手册
+- 已提交推远程
+
+
 ### S73 (2026-09-07) [vibesop-py] next-opt 设计三路对抗 + kimi/pi 确认锁 v1
 
 - 用户要求：多路独立对抗明确「下一步优化」设计，再 kimi+pi 复审，没问题就往下

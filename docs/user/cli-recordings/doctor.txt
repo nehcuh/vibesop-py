@@ -1,0 +1,21 @@
+VibeSOP environment...
+
+✅ Python version: 3.12.13
+✅ Dependencies: All dependencies installed
+✅ Configuration: Found at /repo/.vibe
+❌ LLM Provider: No API key found (set ANTHROPIC_API_KEY, OPENAI_API_KEY, 
+DEEPSEEK_API_KEY, KIMI_API_KEY, or ZHIPU_API_KEY)
+⚠️  Platform Integrations: No integrations installed (0/1)
+⚠️  Hook Status: claude-code: not installed; kimi-cli: not installed; opencode: not 
+installed; pi: not installed; grok-build: not installed
+❌ Skill Health: 1/4 packs healthy, 3 critical (18 skills)
+✅ Deployment Freshness: 0 always-loaded files current
+
+Platform Availability (AI Agents that execute skills):
+  ❌ claude-code  not found
+  ❌ opencode     not found
+  ❌ kimi-cli     not found
+  ❌ cursor       not found
+  ❌ pi           not found
+
+⚠️  Some checks failed. Please fix the issues above.

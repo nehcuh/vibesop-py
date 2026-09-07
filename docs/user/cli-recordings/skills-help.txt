@@ -1,0 +1,35 @@
+╭─ Options ────────────────────────────────────────────────────────────────────────────╮
+│ --help  -h        Show this message and exit.                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────╮
+│ add           Add and configure a skill with intelligent auto-configuration.         │
+│ list          List installed skills.                                                 │
+│ available     List all available skills from all sources.                            │
+│ info          Show detailed information about a skill.                               │
+│ install       Install a skill to central storage.                                    │
+│ link          Link a skill to a platform.                                            │
+│ unlink        Unlink a skill from a platform.                                        │
+│ remove        Remove a skill from central storage.                                   │
+│ sync          Sync all project skills to a platform.                                 │
+│ status        Show skill storage and health status.                                  │
+│ health        Check skill pack health status.                                        │
+│ outdated      Check installed skill packs for upstream updates.                      │
+│ index         Build skill embedding index for AI_TRIAGE.                             │
+│ enable        Enable a skill for routing.                                            │
+│ disable       Disable a skill from routing.                                          │
+│ report        Show skill quality report with grades.                                 │
+│ scope         Get or set a skill's scope.                                            │
+│ feedback      Record post-execution feedback for a skill.                            │
+│ create        Create a new skill from natural language, template, or auto-detected   │
+│               pattern.                                                               │
+│ lifecycle     Show or change a skill's lifecycle state.                              │
+│ suggestions   Show auto-detected skill suggestions from usage patterns.              │
+│ distill       Distill a repeated workflow into a SKILL.md via an LLM provider.       │
+│ rate          Rate a skill (1-5 stars) with optional review.                         │
+│ ratings       View skill ratings and reviews.                                        │
+│ recommended   Show personalized skill recommendations.                               │
+│ featured      Browse the curated featured skills registry.                           │
+│ stale         Detect stale or underperforming skills.                                │
+│ end-check     Run end-of-session checks: retention + skill suggestions.              │
+│ cleanup       Interactively review and clean up low-quality or stale skills.         │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
