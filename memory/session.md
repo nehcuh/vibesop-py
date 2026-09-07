@@ -1,6 +1,34 @@
 
 ## Current Session
 
+### S72 (2026-09-07) [vibesop-py] enterprise-agent-methodology 按评审彻底重梳
+
+- 用户要求按 grok 深入评审 + 社区证据重写 `docs/enterprise-agent-methodology.md`
+- 路由命中 oneshot-web-spec（82%）——网页规格技能，与方法论文重写无关；META-0 推翻，直接改文档
+- 结构 9 节 → 10 节：新增独立 §3「专家是点名的，不是预装的」；速度/质量/成本/落地全部按评审改口径
+- 口径修正：①R6 22/25 不与 R5 23.5 写成 1.5 分等价（对照零产物、零读取、事后豁免、n=1）②整机是假设、零件是八轮 ③差路由负资产用 5/7@82% 探针，不用「八轮反复验证」④LLM 评审是咨询不是放行闸 ⑤并行工人 ≠ 专家委员会 ⑥社区技能包当图集不当编制（grill-me disable-model-invocation）
+- 社区对照写入 §3 + 相关阅读：Anthropic 规定角色无差别、TeamBench 团队不赢单打 / Verifier ~49% 假放行、MAST、人格提示无增益、MetaGPT 赢在 SOP、CooperBench / 专家被稀释
+- INDEX.md 条目改写；5 张 mermaid mermaid-cli 全绿 [executed]
+- 已提交并推远程（同批：skill-routing-explained R7/R8 回写 + R7 report / R8 prereg 制品）
+
+### S71 (2026-09-07) [vibesop-py] skill-routing-explained 回写 R7/R8 + 新文档 enterprise-agent-methodology
+
+- 续：用户在此基础上要求形成「企业内部编程实践方法论」完整文档：Agent=LLM+Harness（System/User 分层）→ 速度+质量双维增强（workflow/swarm/tmux 指挥-工人拓扑 / 上下文隔离+对抗评审+外部LLM交叉复审+E2E）→ vibesop-py 落地（AGENTS.md/CLAUDE.md 渐进披露 + 社区技能包 + 自动记录发现）
+- 用户 prompt 带 [VibeSOP Execution Plan] hook 注入，把写作任务误拆成 analyze_architecture/implement_feature/ci_cd 五步（fallback-llm 100%）——按 META-0 点名推翻不跟（差路由把题目弄脏的活例，正是自家文档写的模式）
+- 我的补漏（用户采纳路径）：①spec/编排层进框架（实验最大教训原提纲缺席）②成本维度（模型分级：最贵模型用在决策/评审，最便宜用在执行）③纠正三去处（任务书/图集/记忆）④防自欺纪律（预注册/有效性三验/盲评）
+- 产出：`docs/enterprise-agent-methodology.md`（9 节 + 5 张 mermaid，装修公司类比贯穿：设计院/施工队/监理/档案馆）+ INDEX.md 登记；5 图全部 mermaid-cli 渲染验证通过 [executed]
+- Recorded: yes — 见下
+- 用户补两点已入文档：①「指令写 prompt 是建议、焊 hook 才是规矩」——升级路径单行道（反复被违反+验证关键 → 人写成 hook），§1 + §7 + System Harness 图加 hook；②「专家是点名的不是预装的」——预设评审方法（图集），专家人设在评审关口按需点名/现场生成，常驻预设专家=路由负资产（R6 零读取为证），§4
+- 本轮 prompt 又遭 hook 误路由：用户消息含「prompt」关键词 → 注入 prompt-chain-validator（生成提示词链+容器验证技能），与改文档任务无关，按 META-0 再次点名推翻
+
+### S71b (2026-09-07) [vibesop-py] skill-routing-explained.md 回写 R7/R8 完结 + 双结论 + 大模型编排小模型执行流水线
+
+- 用户纠正：量化工作台（R7）旧稿写「只有工作记录/未完成」，实际已完成并有公开报告；R8 双臂也已建成（Kimi 独立命题的粗任务书）
+- 用户新发现（写入文档）：①spec 写满时技能介入与否无影响（R7 双臂隐藏 API 全绿，评委分裂 Grok 16.5/17.0、Kimi 20/15）；②spec 很粗时技能极大增强完成能力（R8 人评：技能组明显更完整，盲评未结算）；③spec 清晰时小模型（Qwen3.8-27B）也能完成得不错（R6 22/25 vs 强模型 23.5）
+- 文档落点：§4 旅程图外两轮改写 + 结果表三行重构（写满=冗余/粗=显形/弱模型=路由瓶颈但 22/25）+ §5 新小节「两个结论，和一条流水线」（大模型画图、小模型施工：最强模型拿技能图集拆解 → 写满的子任务书 → 小模型执行 → 人审图人验收）+ §8 下一步补「整机实验」+ §9 不声称更新（R8 人评≠盲评；流水线整机未检验）+ 相关阅读补 R7 report / R8 prereg 链接
+- 全篇口径：六轮→八轮、五次平手；「技能是 spec 的泛化」与八轮观察相容但仍为假设
+- Recorded: yes — R7/R8 状态 + 双结论 → auto-memory；未 commit（用户未要求）
+
 ### S70 (2026-09-07) [vibesop-py] CLI help/man 三入口支持（-h / vibe help / vibe man）
 
 - 用户：项目不支持 `help`/`-h` 太不方便；同时支持 `vibe help`、`vibe --help`、`vibe -h` 三入口 + 新增 `man` 查询具体指令细节

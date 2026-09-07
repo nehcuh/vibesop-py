@@ -27,6 +27,7 @@ These files remain in the project root for discoverability and tool integration:
 ### Getting Started
 
 - **[给 AI 找对说明书](skill-routing-explained.md)** — 技能路由科普（对照实验发现、和同类差别、怎么用和进化）。**对外叙事以这篇为准。**
+- **[企业 AI 编程实践方法论](enterprise-agent-methodology.md)** — Agent = LLM + Harness：设计院 / 施工队 / 监理 / 档案馆；专家是点名的方法卡，不是常驻编制；放行权在确定性闸和人，不在评委打分
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
   - 18 built-in skills + community packs explained (superpowers, gstack, omx)
   - 4-stage routing cascade详解
