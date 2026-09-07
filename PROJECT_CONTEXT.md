@@ -3,6 +3,22 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-09-07 S70 [vibesop-py] CLI help/man 三入口 + -h 全树支持（已 push CI 全绿）
+
+**Session Summary**:
+- 用户反馈 CLI 不支持 help/-h 不方便。Ship：`vibe -h`/`--help`/`vibe help [COMMAND...]` 三入口 + `vibe man [COMMAND...]` 手册查询（`--roff` 输出真 roff 可喂系统 man，Linux `man -l -` / macOS 存 .1 文件）。
+- 实现要点：root Typer `context_settings={"help_option_names": ["-h","--help"]}` 全树继承；已占用 -h 的命令（dashboard=--host、skills feedback=--helpful）自动退化仅 --help，零破坏。
+- 3 commits 已 push（`987cf95` feat + `7cf81fc` chore skill-index 刷新 + `67d14c4` docs memory）；CI 10/10 job 绿 + Quickstart E2E 绿 + CodeQL 3/3 绿；全量 6801 passed。
+
+**Key Decisions**:
+- Typer≥0.26 运行时是 vendored `typer._click` 层，命令/参数对象**不是** click 子类——反射命令树一律 duck typing（get_command/list_commands/param_type_name），兼容老版本真 click
+- `vibe help` 未知命令给 difflib 相似建议（git 风格）；man 终端渲染优先于 roff（Windows 无 man）
+
+**Next Steps**:
+1. 本机 dogfood：`uv tool install --reinstall --force .` 后重验 help/man（CLI surface 变化，按 dogfood checklist）
+2. Dependabot 9 PR（#102-114）非 major 批量合；openai 3.x / anthropic 1.0 单独评估
+3. R5 第二轮人评 + GIF 发版 gate（等用户）
+
 ### 2026-09-03 S68 [vibesop-py] 科普文 v2：skill-routing-explained 重写
 
 **Session Summary**:
@@ -17,36 +33,4 @@
 **Next Steps**:
 1. R8 结算后回写 §9 假设条目；该文即公众号素材
 2. S66/S67 对抗评审修复仍未提交（非本 session 文件，未动）
-
-### 2026-09-03 S67 [vibesop-py] pull-20260903 评审修复闭环 + 8.2.0 发版（CI 全绿）（并行线，与 S68 提及的对抗评审线 S65-S67 同号不同文）
-
-**Session Summary**:
-- 三路评审 5 P1 / 8 P2 / 4 NIT 分四批全修（925d4ad→14f96b5，每批 kimi 门禁 + grok 只读复审双 APPROVE）；主线是识别器-生成器同构收口：demote 信号面、source_file 全穿（stub 不可路由）、doctor 部署新鲜度、真实载荷测试。
-- 8.2.0 发版（967e134 + tag，已 push）：CHANGELOG 收录 8-28 以来全部；v8.3 契约 Added + instinct-learning Removed 留守 Unreleased；33 文件版本串扫荡。
-- 全量 6638 passed；basedpyright 本地 29 错=环境分叉（CI 同 commit 绿），净增判据=与 origin/main 基线差。
-
-**Key Decisions**:
-- minor 依据：demo 技能 always-on（路由胜者变化）、confirmation_mode 默认 ambiguous_only、demote 计入 success=False、注入器根序中心存储优先
-- 跨模块导入的符号不用下划线私有名（basedpyright reportUnusedFunction 只盯私有名）
-- origin/main 的 CI Lint 曾红（7f2de48 三文件未 format），批A/B 顺带修复
-
-**Next Steps**:
-1. Dependabot 9 PR（#102-114）：非 major 批量合，openai 3.x / anthropic 1.0 单独评估
-2. R5 第二轮人评 + GIF 发版 gate（等用户）
-3. backlog：decomposer 未过滤池、execute_build 假成功、非 CLI 面三处 annotate 无 lookup
-
-### 2026-09-03 S64 [vibesop-py] fail-closed skill_file 栈已推 origin/main
-
-**Session Summary**:
-- 头：`c67c82a`。match ⇔ 可注入 SKILL.md；编排/模板/hook/Pi 扩展/OpenCode 插件跟 `skill_file`，找不到则不要猜 `skills/<id>/SKILL.md`。
-- 双路：模板层 Kimi REQUEST CHANGES（session-end `--slash` 死命令，已吸收）/ Claude APPROVE；剩余目录层 Kimi COMMENT / Claude APPROVE，已吸收 runtime 失败 hint + Pi/OpenCode。
-- Pi `.pi/skills/` 生成树前缀保留。未跑 `vibe build pi`。`.omx/` 仍不入库。
-
-**Key Decisions**:
-- session-end 回退用 `vibe skills info builtin/session-end`，不用 `--slash "/session-end"` 也不用 `vibe route "session-end"`
-- 刷新本仓 `.pi/` 用外科补丁，不用全量 `vibe build pi`
-
-**Next Steps**:
-1. 存量 `~/.claude` / PATH 上的旧 `vibe` 需本机 `vibe build` / `uv tool install`
-2. Dependabot / R5 人评 / GIF 发版 gate 未动
 <!-- handoff:end -->

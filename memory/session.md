@@ -9,7 +9,7 @@
 - 实测 [executed]：macOS 系统 man 渲染 roff 正常（修了 NAME 行 `\-` 被 `_roff_text` 二次转义成 `\e\-`）；macOS BSD man 无 `-l` 管道 → `--roff` help 文案分平台写法（Linux `man -l -` / macOS 存 .1 文件）
 - 验证 [executed]：新测试 19 过；tests/cli 928 过；全量 6801 passed / 15 skipped / 3 deselected（HF 惯例）
 - 关键坑：Typer ≥0.26 运行时走自带 `typer._click` 层，`TyperGroup`/`TyperOption` **不是** click 子类（isinstance 恒 False）→ 反射命令树必须 duck typing；rich `Console.print` 无 `err=` 参数
-- 未提交；Next: 用户确认后可拆 commit（main.py 三处 + 新模块 + 测试）
+- 已提交已 push（`987cf95` feat + `7cf81fc` chore(skill-index 刷新) + `67d14c4` docs(memory)）；CI 10/10 job 绿（job 级确认）+ Quickstart E2E 绿 + CodeQL 3/3 绿
 - Recorded: yes — Typer vendor 层 duck typing 坑 + `-h` 冲突退化机制入 project-knowledge
 
 ### S69 (2026-09-07) [vibesop-py] 推荐技能更新自动检测 ship + 并行 session 同号冲突收口

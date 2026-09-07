@@ -1,20 +1,26 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-03 (S68 — 科普文 skill-routing-explained v2 重写：「借口排雷记」实验叙事 + 「技能是 spec 的泛化」中心论点)
+**Last Updated**: 2026-09-07 (S70 — CLI help/man 三入口 + -h 全树支持 ship，push CI 全绿)
 
 ---
 
 ## Goals
 
-### Current Week (August 31 - September 3, 2026)
+### Current Week (September 4-10, 2026)
+
+1. **CLI 可发现性：help/man 三入口** ✅ (Completed - Sep 7，`987cf95`+`7cf81fc`+`67d14c4` push CI 10/10 绿 + E2E + CodeQL)
+   - `vibe -h`/`--help`/`vibe help [COMMAND...]`（嵌套路径+相似建议）+ `vibe man [COMMAND...]`（终端手册 + `--roff` 喂系统 man）；dashboard/skills feedback 的 `-h` 冲突自动退化为仅 `--help`，零破坏
+2. **推荐技能更新自动检测** ✅ (Completed - Sep 7，`a5ec10f`) — `vibe skills outdated` + status 缓存告警 + registry 时间戳修复
+3. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
+4. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
+5. **R5 第二轮人评 / verifier 真实数据点** — 仍待用户
+
+### Previous Week (August 31 - September 3, 2026)
 
 1. **fail-closed：匹配必须可注入 SKILL.md** ✅ (Completed - Sep 3，`c67c82a`)
    - 根因是发现/注入路径学分裂，不是 Windows 分隔符。栈：inject glob + source_file → 编排 skill_file → 模板禁止猜扁平路径 → 双路吸收 session-end 死命令与 Pi/OpenCode 插件。
    - 存量机器需自行 `vibe build`（不要在本仓对 pi 全量 build）。
 2. **对外叙事** ✅ 对抗复审收口 (`b066276` + #118)；科普文 v2：skill-routing-explained 重写为「借口排雷记」实验叙事 + 「技能是 spec 的泛化」论点 (S68)
-3. **Dependabot 积压 9 PR**（#102-114）— 小版本批量合；openai 3.x / anthropic 1.0 major 需单独评估
-4. **grok 真实会话 probe**（hooks 已部署；等真实使用确认 span 落盘）
-5. **R5 第二轮人评 / GIF 发版 gate** — 仍待用户
 
 ### Previous Week (August 23-30, 2026)
 
@@ -122,7 +128,7 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.1.1+ (hook 命令规范 `bash <posix-abs>` 四层统一 PR #115；CI Windows 为 required gate)
+**Status**: v8.2.0+ (CI Windows 为 required gate；CLI 三入口 help/man 已 ship)
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
 **Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
@@ -132,6 +138,11 @@
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
+
+**Recent Changes** (2026-09-07):
+- ✅ CLI help/man 三入口（`987cf95`）：`vibe -h` 全树继承 + `vibe help [COMMAND...]` 嵌套路径 + `vibe man [COMMAND...]`/`--roff`；Typer≥0.26 vendored `typer._click` 层非 click 子类，反射走 duck typing
+- ✅ 推荐技能更新自动检测（`a5ec10f`）：`vibe skills outdated` + status 纯缓存告警 + registry 时间戳
+- ✅ CI 10/10 job 绿 + Quickstart E2E + CodeQL
 
 **Recent Changes** (2026-08-28):
 - ✅ Claude Code 2.1.220 hook 形态翻转修复：实机探针（4 形态对照）证伪 S51 config-relative 前提
