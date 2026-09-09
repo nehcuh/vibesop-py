@@ -64,7 +64,8 @@ def attach_skill_file_payload(
     source_lookup: Any = None,
 ) -> None:
     """Add ``skill_file`` so CLI consumers do not guess ``core/skills/<id>``."""
-    if not isinstance(payload, dict):
+    # Public export: silently ignore non-dict payloads (callers may pass Any).
+    if not isinstance(payload, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
         return
     sid = str(payload.get("skill_id") or "")
     if not sid:
@@ -113,7 +114,25 @@ def attach_skill_file_payload(
         inj.annotate_plan_dict(plan, source_lookup=source_lookup)
     steps = payload.get("steps")
     if isinstance(steps, list):
-        inj.annotate_plan_dict({"steps": steps}, source_lookup=source_lookup)
+        # Minimal formatting omits source paths and verification flags. Restore
+        # them from the actual plan before checking whether it can be handed off.
+        execution_plan = getattr(result, "execution_plan", None)
+        if execution_plan is not None:
+            by_number = {step.step_number: step for step in execution_plan.steps}
+            for step in steps:
+                original = by_number.get(step.get("step", step.get("step_number")))
+                if original is not None:
+                    step["skill_file"] = original.skill_file
+                    step["is_verification_step"] = original.is_verification_step
+            payload.setdefault("metadata", {}).update(execution_plan.metadata)
+        plan = payload
+        inj.annotate_plan_dict(plan, source_lookup=source_lookup)
+    if isinstance(plan, dict) and plan.get("metadata", {}).get("execution_ready") is False:
+        payload["has_match"] = False
+        if "confidence" in payload:
+            payload["confidence"] = 0.0
+        payload["notice_only"] = True
+        payload["notice"] = inj.blocked_plan_notice(plan)
 
 
 _TIP_TEMPLATES: list[tuple[str, str]] = [

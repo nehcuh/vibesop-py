@@ -325,6 +325,74 @@ class TestFeedbackLoop:
         assert report["actions"]["boost"] == 1
 
 
+class TestFeedbackLoopAwareLastUsed:
+    """Aware ``last_used`` regression (health-20260909 claude F1).
+
+    ``candidate_manager.record_usage`` writes ``usage_stats.last_used`` as
+    ``datetime.now(UTC).isoformat()`` (aware), and the evaluator prefers it
+    over feedback timestamps. The stale-skill rules used to subtract that
+    aware value from a naive ``now``, raising TypeError that was swallowed
+    — deprecate / warn / archive silently never fired for any routed skill.
+    """
+
+    @staticmethod
+    def _aware_days_ago(days: int) -> str:
+        return (datetime.now(UTC) - timedelta(days=days)).isoformat()
+
+    def _evaluation(
+        self,
+        skill_id: str,
+        grade_quality: float,
+        *,
+        routes: int,
+        last_used: str,
+    ) -> SkillEvaluation:
+        return SkillEvaluation(
+            skill_id=skill_id,
+            total_routes=routes,
+            routing_accuracy=grade_quality,
+            user_satisfaction=grade_quality,
+            execution_success=grade_quality,
+            usage_frequency=0.5,
+            health_score=0.5,
+            last_used=last_used,
+        )
+
+    def _loop_with(self, evaluation: SkillEvaluation) -> FeedbackLoop:
+        evaluator = MagicMock()
+        evaluator.evaluate_all_skills.return_value = {evaluation.skill_id: evaluation}
+        return FeedbackLoop(evaluator=evaluator)
+
+    def test_aware_f_grade_deprecates(self) -> None:
+        evaluation = self._evaluation(
+            "test/aware-f", 0.3, routes=5, last_used=self._aware_days_ago(45)
+        )
+        assert evaluation.grade == "F"
+        suggestions = self._loop_with(evaluation).analyze_all(auto_deprecate=False)
+        assert [s.action for s in suggestions] == ["deprecate"]
+
+    def test_aware_c_grade_archives(self) -> None:
+        evaluation = self._evaluation(
+            "test/aware-c", 0.65, routes=5, last_used=self._aware_days_ago(100)
+        )
+        suggestions = self._loop_with(evaluation).analyze_all(auto_deprecate=False)
+        assert [s.action for s in suggestions] == ["archive"]
+
+    def test_aware_d_grade_warns(self) -> None:
+        evaluation = self._evaluation(
+            "test/aware-d", 0.45, routes=5, last_used=self._aware_days_ago(100)
+        )
+        suggestions = self._loop_with(evaluation).analyze_all(auto_deprecate=False)
+        assert [s.action for s in suggestions] == ["warn"]
+
+    def test_aware_recent_use_not_disposed(self) -> None:
+        evaluation = self._evaluation(
+            "test/aware-active", 0.65, routes=10, last_used=self._aware_days_ago(1)
+        )
+        suggestions = self._loop_with(evaluation).analyze_all(auto_deprecate=False)
+        assert suggestions == []
+
+
 class TestFeedbackLoopOptIn:
     """gate38: lifecycle writes are strictly opt-in (auto_deprecate=True)."""
 

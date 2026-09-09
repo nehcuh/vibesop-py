@@ -106,7 +106,7 @@ class TestAgentRuntimeFullChain:
         assert present_result.structured is not None
         assert present_result.structured.get("primary", {}).get("skill_id") == "gstack-review"
 
-    def test_multi_intent_orchestration_chain(self) -> None:
+    def test_multi_intent_orchestration_chain(self, tmp_path) -> None:
         """E2E: User asks multi-intent query -> orchestration plan generated."""
         query = "分析项目架构并优化整体性能"
 
@@ -143,6 +143,15 @@ class TestAgentRuntimeFullChain:
             execution_mode=ExecutionMode.SEQUENTIAL,
         )
 
+        for step in plan.steps:
+            skill_file = tmp_path / step.skill_id / "SKILL.md"
+            skill_file.parent.mkdir(parents=True)
+            skill_file.write_text(
+                "# Workflow\nInspect inputs, perform the requested task, and verify results.\n",
+                encoding="utf-8",
+            )
+            step.skill_file = str(skill_file)
+
         orch_result = OrchestrationResult(
             mode=OrchestrationMode.ORCHESTRATED,
             original_query=query,
@@ -165,7 +174,7 @@ class TestAgentRuntimeFullChain:
         assert "superpowers-optimize" in present_result.message
         assert "execute_plan" in present_result.actions or "accept" in present_result.actions
 
-        executor = PlanExecutor()
+        executor = PlanExecutor(project_root=tmp_path)
         guide = executor.build_guide(plan)
 
         assert isinstance(guide, ExecutionGuide)
@@ -174,6 +183,8 @@ class TestAgentRuntimeFullChain:
         assert "superpowers-architect" in guide.prompt
         assert "superpowers-optimize" in guide.prompt
         assert guide.completion_check != ""
+        assert plan.metadata["execution_ready"] is True
+        assert all(step.skill_file in guide.prompt for step in plan.steps)
 
         transition = executor.build_step_transition_prompt(plan, 1)
         assert "步骤" in transition or "step" in transition.lower()

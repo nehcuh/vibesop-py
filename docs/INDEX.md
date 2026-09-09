@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.2.0
+> **Version**: 8.3.0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -29,7 +29,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[给 AI 找对说明书](skill-routing-explained.md)** — 技能路由科普（对照实验发现、和同类差别、怎么用和进化）。**对外叙事以这篇为准。**
 - **[企业 AI 编程实践方法论](enterprise-agent-methodology.md)** — Agent = LLM + Harness：设计院 / 施工队 / 监理 / 档案馆；专家是点名的方法卡，不是常驻编制；放行权在确定性闸和人，不在评委打分
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
-  - 18 built-in skills + community packs explained (superpowers, gstack, omx)
+  - 19 built-in skills + community packs explained (superpowers, gstack, omx)
   - 4-stage routing cascade详解
   - Priority decision mechanism and scenario-based selection
 - **[Quick Start - Users](QUICKSTART_USERS.md)** — User-facing installation and basic usage
@@ -171,10 +171,10 @@ These files remain in the project root for discoverability and tool integration:
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 8.2.0 |
+| **Version** | 8.3.0 |
 | **Tests** | 4,066+ pytest passing |
 | **Coverage** | ~73% (target: 75%) |
-| **Skills Supported** | 18 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
+| **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
 | **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
 | **Routing Model** | 4-Stage Cascade |

@@ -25,6 +25,14 @@ as the misfire metric. The precision side is completed by
 against the P0 rules, and any would-fire target different from the
 observed skill is a hijack risk (gate32 pi MAJOR-1).
 
+Miss rows whose own metadata records a real route or a demotion
+(``skill_id`` set / ``demoted_skill_id`` set despite ``has_match=False``
+— legacy pre-gate40/41 fallback-plan leaks, and router-matched-but-
+injection-failed rows) are NOT unanswered queries: they are excluded from
+the P0 benefit evaluation and counted under
+``baseline.misses_with_recorded_route`` instead of silently averaging
+into the honest no-match pool.
+
 Usage:
     uv run python scripts/replay_routing_baseline.py --project-root <path> \
         [--out report.json] [--sample-adjudicate N] [--no-semantic]
@@ -175,6 +183,32 @@ def p0_shadow(query: str, trigger_index: list[tuple[str, str, str]]) -> list[dic
     return matches
 
 
+def _recorded_route_reason(meta: dict[str, Any]) -> str | None:
+    """Why a ``has_match=False`` (miss) row is internally inconsistent with
+    its own route attribution.
+
+    Producers write miss rows without a real skill (gate40/41: empty
+    ``skill_id``, zero ``confidence``), but two contradictory shapes exist in
+    recorded history and cannot be trusted as unanswered queries:
+
+    - legacy pre-gate40/41 single-agent rows that leaked the all-fallback
+      plan's first real-skill step into ``skill_id`` with a positive
+      ``confidence``;
+    - demoted routes (``demoted_skill_id`` set): the router matched but
+      skill-body injection failed — a DIFFERENT miss per
+      ``agent_runtime``/``gold_detection``, not "no skill found".
+
+    Returns the reason string when the row records a route, else None.
+    """
+    demoted = meta.get("demoted_skill_id")
+    if demoted:
+        return f"demoted_skill_id:{demoted}"
+    skill_id = meta.get("skill_id")
+    if isinstance(skill_id, str) and skill_id and skill_id != "fallback-llm":
+        return f"skill_id:{skill_id}"
+    return None
+
+
 def build_identity_diff(
     records: list[dict[str, Any]],
     trigger_index: list[tuple[str, str, str]],
@@ -189,6 +223,14 @@ def build_identity_diff(
     their would-fire pairs are counted separately
     (``agent_shape_would_fire``) — the precision-side answer to "how often
     would P0 misfire on garbage queries" (gate32 pi MAJOR-1).
+
+    Measurement-integrity guard (health-check 2026-09): miss rows whose own
+    metadata records a real route or a demotion (see
+    ``_recorded_route_reason``) are NOT unanswered queries — counting them
+    would let P0 shadow claim "recovery" on queries that already got a
+    route. They are excluded from ``misses_evaluated`` / would-fire and
+    surfaced under ``misses_with_recorded_route`` for adjudication instead
+    of silently averaging into the honest no-match pool.
     """
     entries: list[dict[str, Any]] = []
     counters = {
@@ -196,12 +238,18 @@ def build_identity_diff(
         "agent_prompt_shape_misses": 0,
         "agent_shape_would_fire_queries": 0,
         "agent_shape_would_fire_pairs": 0,
+        "misses_with_recorded_route": 0,
         "misses_evaluated": 0,
     }
     for rec in records:
         if not rec["is_miss"]:
             continue
         counters["misses"] += 1
+        # Integrity guard FIRST: a row that records a real route/demotion is
+        # not an unanswered query regardless of its query shape.
+        if _recorded_route_reason(rec["metadata"]) is not None:
+            counters["misses_with_recorded_route"] += 1
+            continue
         if _is_agent_prompt_shape(rec["query"]):
             counters["agent_prompt_shape_misses"] += 1
             agent_matches = p0_shadow(rec["query"], trigger_index)
@@ -461,6 +509,7 @@ def run(
             "truncated_queries": sum(1 for r in records if r["truncated"]),
             "unique_miss_queries": len({normalize(r["query"]) for r in misses}),
             "agent_prompt_shape_misses": diff_counters["agent_prompt_shape_misses"],
+            "misses_with_recorded_route": diff_counters["misses_with_recorded_route"],
         },
         "p0_shadow": {
             "skills_loaded": len(skills),
@@ -519,6 +568,7 @@ def _print_summary(report: dict[str, Any]) -> None:
         f"agent-prompt-shaped misses excluded: {b['agent_prompt_shape_misses']} "
         f"(evaluated: {p['misses_evaluated']})"
     )
+    print(f"miss rows with a recorded route/demotion excluded: {b['misses_with_recorded_route']}")
     print(
         f"P0-shadow would-fire: {p['would_fire_queries']} queries, "
         f"{p['would_fire_pairs']} pairs "

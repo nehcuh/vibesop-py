@@ -409,29 +409,49 @@ class TestAttachSkillFilePayload:
         assert payload["mode"] == "no_match"
         assert payload["primary"]["skill_id"] == ""
 
-    def test_orchestrated_mode_unresolvable_keeps_match(self, tmp_path, monkeypatch) -> None:
-        """Orchestrate payloads are exempt — the plan is the payload."""
-        from types import SimpleNamespace
-
+    def test_orchestrated_mode_unresolvable_blocks_plan(self, tmp_path, monkeypatch) -> None:
+        """An unavailable required verifier blocks the plan and stays in diagnostics."""
         from vibesop.cli.render import attach_skill_file_payload
+        from vibesop.core.models import (
+            ExecutionPlan,
+            ExecutionStep,
+            OrchestrationMode,
+            OrchestrationResult,
+        )
+        from vibesop.core.routing.lightweight_api import LightweightRouter
 
         monkeypatch.chdir(tmp_path)
-        primary = SimpleNamespace(skill_id="step-skill-abc", metadata={})
-        result = SimpleNamespace(primary=primary)
-        payload = {
-            "mode": "orchestrated",
-            "skill_id": "step-skill-abc",
-            "has_match": True,
-            "steps": [{"step": 1, "skill_id": "step-skill-abc"}],
-        }
+        plan = ExecutionPlan(
+            plan_id="missing-verifier",
+            steps=[
+                ExecutionStep(
+                    step_id="verify",
+                    step_number=1,
+                    skill_id="step-skill-abc",
+                    skill_file=str(tmp_path / "missing" / "SKILL.md"),
+                    intent="Verify acceptance",
+                    is_verification_step=True,
+                )
+            ],
+        )
+        result = OrchestrationResult(mode=OrchestrationMode.ORCHESTRATED, execution_plan=plan)
+        payload = LightweightRouter._format_result(result)
 
         attach_skill_file_payload(payload, result)
 
         assert payload["skill_file"] == ""
         assert "demoted_skill_id" not in payload
         assert payload["skill_id"] == "step-skill-abc"
-        assert payload["has_match"] is True
+        assert payload["has_match"] is False
         assert payload["mode"] == "orchestrated"
+        assert payload["notice_only"] is True
+        assert "Do not execute" in payload["notice"]
+        assert payload["metadata"]["execution_ready"] is False
+        assert payload["metadata"]["blocked_steps"][0]["skill_id"] == "step-skill-abc"
+        assert len(payload["steps"]) == 1
+        assert payload["steps"][0]["skill_id"] == "step-skill-abc"
+        assert payload["steps"][0]["is_verification_step"] is True
+        assert "not found" in payload["steps"][0]["skill_file_note"]
 
     def test_resolvable_skill_file_attached(self, tmp_path, monkeypatch) -> None:
         from types import SimpleNamespace

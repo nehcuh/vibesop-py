@@ -805,3 +805,20 @@ skills:
       - Read
       - Bash
     safety_level: trusted_builtin
+
+  - id: verify-result
+    namespace: builtin
+    entrypoint: skills/verify-result/SKILL.md
+    intent: 按任务类型核验证据，给出 passed、failed 或 blocked
+    trigger_mode: manual
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Grep
+      - Bash
+    safety_level: trusted_builtin

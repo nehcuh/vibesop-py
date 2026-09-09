@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import RenderResult
@@ -44,12 +44,12 @@ class GrokBuildAdapter(PlatformAdapter):
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
-    cli_binary: str = "grok"
+    cli_binary: ClassVar[str] = "grok"
 
     # Grok Build adapter does NOT deploy skills (only rules + hooks).
     # The ``~/.grok/skills/`` directory may contain Grok's own builtin
     # skills — orphan cleanup must not touch them.
-    manages_skills: bool = False
+    manages_skills: ClassVar[bool] = False
 
     @property
     def platform_name(self) -> str:

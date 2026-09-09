@@ -191,13 +191,27 @@ class TaskDecomposer:
         return text or "sub-task"
 
     def _parse_regex_response(self, content: str) -> list[SubTask]:
-        """Fallback regex-based extraction."""
+        """Read an explicit prose list, never reinterpret broken JSON.
+
+        The LLM's JSON can be truncated at the response limit. Treating its
+        ``"intent": ...`` and ``"query": ...`` lines as prose invents tasks
+        from schema keys, so structured-looking responses fail closed.
+        """
+        if re.search(
+            r'(?m)^\s*[\[{]|"(?:tasks|intent|query|skill_id|task_type|original_intent)"\s*:',
+            content,
+        ):
+            return []
         # Look for numbered or bulleted items
         lines = content.strip().split("\n")
         tasks: list[SubTask] = []
         for line in lines:
+            # Preserve the documented bold-heading prose form as well.
+            prose_line = (
+                "- " + line.lstrip() if re.match(r"^\s*\*\*[^*]+\*\*\s*[:\-]", line) else line
+            )
             # Match patterns like "1. intent: query" or "- intent: query"
-            match = re.match(r"^[\s\-\d\.]*\s*(.+?)[:\-]\s*(.+)$", line)
+            match = re.match(r"^\s*(?:\d+[.)]|[-*+])\s+(.+?)\s*[:\-]\s*(.+)$", prose_line)
             if match:
                 intent_text = self._clean_intent(match.group(1))
                 query_text = match.group(2).strip()

@@ -100,7 +100,7 @@ class VerificationLoop:
             Action to take: CONTINUE, RETRY, ESCALATE, or TERMINATE
         """
         state = self.get_state(step.step_id)
-        status = verification_result.get("status", "passed")
+        status = verification_result.get("status", "error")
 
         state.last_status = status
 
@@ -317,7 +317,7 @@ def execute_plan_with_verification(
         except Exception as e:
             logger.error("Step %s execution failed: %s", step.step_id, e)
             results[step.step_id] = {"error": str(e)}
-            continue
+            break
 
         # Verify if this is an adversarial plan
         if plan.workflow_pattern == "adversarial":
@@ -370,13 +370,22 @@ def execute_plan_with_verification(
                 )
                 action = loop.decide_action(step, verification_result.to_dict())
 
-            if action == VerificationLoopAction.ESCALATE:
-                logger.warning("Step %s verification failed, escalating to user", step.step_id)
-                # In a real implementation, this would prompt the user
+            # A retry exception leaves RETRY as the last action. Its error
+            # must survive, and no later step may consume the failed output.
+            if action == VerificationLoopAction.RETRY:
+                break
+
+            if action in (VerificationLoopAction.ESCALATE, VerificationLoopAction.TERMINATE):
+                logger.warning("Step %s verification halted execution: %s", step.step_id, action)
                 results[step.step_id] = {
-                    "error": "Verification failed, user intervention required",
+                    "error": (
+                        "Verification failed, user intervention required"
+                        if action == VerificationLoopAction.ESCALATE
+                        else "Verification failed, execution terminated"
+                    ),
                     "verification_result": verification_result.to_dict(),
                 }
+                break
 
     return {
         "results": results,

@@ -283,14 +283,22 @@ Criteria:
     def _parse_llm_response(
         self,
         parsed: dict[str, Any],
-        rubric_dimensions: list[str],  # noqa: ARG002
+        rubric_dimensions: list[str],
     ) -> VerificationResult:
         """Parse LLM response into VerificationResult."""
-        status_str = parsed.get("status", "passed").lower()
+        status_str = parsed.get("status", "error").lower()
         try:
             status = VerificationStatus(status_str)
         except ValueError:
-            status = VerificationStatus.PASSED
+            status = VerificationStatus.ERROR
+
+        if status == VerificationStatus.ERROR:
+            return VerificationResult(
+                status=VerificationStatus.ERROR,
+                confidence=0.0,
+                reasoning="Verification response has a missing or invalid status",
+                rubric_scores=dict.fromkeys(rubric_dimensions, 0.0),
+            )
 
         issues = []
         for issue_data in parsed.get("issues", []):

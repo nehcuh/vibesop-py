@@ -117,6 +117,23 @@ class TestComputeFingerprint:
 
 
 class TestCompareEntries:
+    def test_legacy_missing_primary_is_not_assumed_to_be_no_match(self) -> None:
+        current = _entry("q1", ok1=False, primary="builtin/other")
+        legacy = dict(current)
+        legacy.pop("primary")
+        legacy.pop("layer")
+        outcome = compare_entries([legacy], [current])
+        assert outcome.exit_code == 0
+        assert not outcome.new_fails
+
+    def test_unknown_current_route_is_not_reported_as_an_improvement(self) -> None:
+        baseline = _entry("q1", ok1=False, primary="builtin/other")
+        unknown = dict(baseline)
+        unknown.pop("primary")
+        unknown.pop("layer")
+        outcome = compare_entries([baseline], [unknown])
+        assert not outcome.drift_warnings
+
     def test_new_fail_exits_1(self) -> None:
         baseline = [_entry("q1", ok1=True, primary="s1")]
         current = [_entry("q1", ok1=False, primary="fallback-llm", layer="fallback_llm")]
@@ -148,6 +165,65 @@ class TestCompareEntries:
         assert outcome.exit_code == 0
         assert not outcome.new_fails and not outcome.new_passes and not outcome.drift_warnings
         assert outcome.known_fails == 1
+
+    def test_known_fail_degrading_no_match_to_active_misroute_exits_1(self) -> None:
+        """A known fail that flips from benign no-match/fallback (nothing
+        injected) into an ACTIVE wrong real-skill match is a new fail, not a
+        silent known fail — ok1 stays false both ways, so the gate must key
+        on the recorded primary/layer class."""
+        baseline = [_entry("q1", ok1=False, primary="fallback-llm", layer="fallback_llm")]
+        current = [_entry("q1", ok1=False, primary="builtin/session-end", layer="keyword")]
+        outcome = compare_entries(baseline, current)
+        assert outcome.exit_code == 1
+        assert len(outcome.new_fails) == 1
+        assert outcome.new_fails[0]["query"] == "q1"
+        assert outcome.new_fails[0].get("kind_degraded") is True
+        assert "no-match/fallback" in outcome.new_fails[0]["baseline"]
+        assert "active wrong-skill match" in outcome.new_fails[0]["current"]
+        assert outcome.known_fails == 0
+
+    def test_known_fail_primary_none_to_real_misroute_exits_1(self) -> None:
+        """Same class degrade with a None primary (fallback_mode=disabled
+        no-match shape) in the baseline."""
+        baseline = [_entry("q1", ok1=False, primary="fallback-llm", layer="fallback_llm")]
+        current = [_entry("q1", ok1=False, primary="fallback-llm", layer="fallback_llm")]
+        # Both still no-match: no degrade.
+        assert compare_entries(baseline, current).exit_code == 0
+        baseline_none = [
+            {
+                "query": "q1",
+                "expect": [],
+                "reject": [],
+                "primary": None,
+                "layer": None,
+                "ok1": False,
+            }
+        ]
+        current_active = [_entry("q1", ok1=False, primary="builtin/other", layer="tfidf")]
+        outcome = compare_entries(baseline_none, current_active)
+        assert outcome.exit_code == 1
+        assert len(outcome.new_fails) == 1
+
+    def test_known_fail_wrong_skill_to_different_wrong_skill_warns_not_fails(self) -> None:
+        """An active misroute replaced by a different active misroute keeps
+        the same failure class — drift warning, not a new fail."""
+        baseline = [_entry("q1", ok1=False, primary="builtin/a", layer="keyword")]
+        current = [_entry("q1", ok1=False, primary="builtin/b", layer="tfidf")]
+        outcome = compare_entries(baseline, current)
+        assert outcome.exit_code == 0
+        assert not outcome.new_fails
+        assert len(outcome.drift_warnings) == 1
+        assert outcome.known_fails == 1
+
+    def test_known_fail_improving_to_no_match_warns_not_fails(self) -> None:
+        """An active misroute improving to a benign fallback is not a
+        regression; it surfaces as an improvement note."""
+        baseline = [_entry("q1", ok1=False, primary="builtin/a", layer="keyword")]
+        current = [_entry("q1", ok1=False, primary="fallback-llm", layer="fallback_llm")]
+        outcome = compare_entries(baseline, current)
+        assert outcome.exit_code == 0
+        assert not outcome.new_fails
+        assert any("improved to no-match" in w for w in outcome.drift_warnings)
 
 
 class TestEvaluateAgainstBaseline:
@@ -257,6 +333,27 @@ class TestCheckUpdateAbsorption:
         guard = check_update_absorption(path, [_entry("q1", ok1=False, primary="x")])
         assert guard is not None and guard.exit_code == 1
         assert len(guard.new_fails) == 1
+
+    def test_absorbing_no_match_to_active_misroute_degrade_is_flagged(self, tmp_path: Path) -> None:
+        """The absorption guard must refuse a refresh that would fold a
+        known-fail class degrade (benign fallback -> active wrong real
+        skill) into the new baseline — same class-keyed rule as --check."""
+        baseline = [
+            {
+                "query": "q1",
+                "expect": [],
+                "reject": [],
+                "primary": "fallback-llm",
+                "layer": "fallback_llm",
+                "ok1": False,
+            }
+        ]
+        path, _ = self._write(tmp_path, baseline)
+        current = [_entry("q1", ok1=False, primary="builtin/session-end", layer="keyword")]
+        guard = check_update_absorption(path, current)
+        assert guard is not None and guard.exit_code == 1
+        assert len(guard.new_fails) == 1
+        assert guard.new_fails[0].get("kind_degraded") is True
 
     def test_clean_refresh_is_allowed(self, tmp_path: Path) -> None:
         path, _ = self._write(tmp_path, [_entry("q1", ok1=True, primary="s1")])

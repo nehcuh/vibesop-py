@@ -12,7 +12,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import type { Plugin } from "@opencode-ai/plugin";
 
 const OPCODE_DIR = path.join(require("os").homedir(), ".opencode");
@@ -192,9 +192,12 @@ async function setActivePlan(sessionId: string, plan: string): Promise<void> {
 
 async function routeWithVibeSOP(query: string, sessionId: string): Promise<RouteResult | null> {
   try {
-    const convArg = sessionId ? `--conversation "${sessionId.slice(0, 16)}"` : "";
-    const cmd = `vibe route ${convArg} --json "${query.replace(/"/g, '\\"')}" 2>/dev/null`;
-    const output = execSync(cmd, { timeout: 5000, encoding: "utf-8" });
+    const args = ["route"];
+    if (sessionId) args.push("--conversation", sessionId.slice(0, 16));
+    args.push("--json", query);
+    const output = execFileSync("vibe", args, {
+      timeout: 5000, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"],
+    });
     return JSON.parse(output) as RouteResult;
   } catch {
     return null;

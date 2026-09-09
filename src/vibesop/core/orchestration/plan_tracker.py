@@ -7,26 +7,101 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Generator, Iterator
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
 
 from vibesop.core.models import ExecutionPlan, PlanStatus, StepStatus
+from vibesop.utils.file_lock import cross_process_lock
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["PlanTracker", "load_plans_for_trace"]
 
 
+def _lock_path_for(plans_path: Path) -> Path:
+    """Sibling lock file per file_lock gate44 contract (never the data file)."""
+    return plans_path.with_name(plans_path.name + ".lock")
+
+
+@contextmanager
+def _read_lock(plans_path: Path) -> Generator[None, None, None]:
+    """Read-only mounts cannot create a lock; retain best-effort reads there.
+
+    Only lock acquisition can fall back. Writers always require the lock.
+    The line reader skips incomplete records if a non-cooperating writer races.
+    """
+    with ExitStack() as stack:
+        try:
+            stack.enter_context(cross_process_lock(_lock_path_for(plans_path), shared=True))
+        except OSError as exc:
+            logger.warning("Cannot lock plan store for reading %s: %s", plans_path, exc)
+        yield
+
+
+def _iter_valid_plans(plans_path: Path) -> Iterator[tuple[str, ExecutionPlan]]:
+    """Yield ``(plan_id, plan)`` for every *valid* line, skipping corrupt ones.
+
+    Uniform line semantics for get/list/load_plans_for_trace: a line that is
+    truncated JSON, legal JSON of a non-object type, or an object whose schema
+    cannot rebuild an ExecutionPlan is skipped WITHOUT aborting the rest of the
+    file and WITHOUT masking an earlier valid version of the same plan_id.
+    """
+    if not plans_path.exists():
+        return
+    try:
+        with plans_path.open("rb") as f:
+            for raw_line in f:
+                try:
+                    line = raw_line.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    logger.warning("Skipping invalid UTF-8 plan line in %s", plans_path)
+                    continue
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.debug("Skipping unparseable plan line in %s", plans_path)
+                    continue
+                if not isinstance(data, dict):
+                    logger.debug("Skipping non-object plan line in %s", plans_path)
+                    continue
+                plan_id = data.get("plan_id")
+                if not isinstance(plan_id, str) or not plan_id:
+                    logger.debug("Skipping plan line without string plan_id in %s", plans_path)
+                    continue
+                try:
+                    plan = ExecutionPlan.from_dict(data)
+                except Exception as e:
+                    logger.warning(
+                        "Skipping malformed plan line for %s in %s: %s",
+                        plan_id,
+                        plans_path,
+                        e,
+                    )
+                    continue
+                yield plan_id, plan
+    except OSError as e:
+        logger.warning("Failed to read plans from %s: %s", plans_path, e)
+
+
 class PlanTracker:
     """Tracks execution plan state with append-only JSONL storage.
 
     Each plan update is appended as a new line. Latest state for a plan
-    is found by reading all lines and taking the last one with matching plan_id.
+    is found by reading all lines and taking the last *valid* one with
+    matching plan_id. Reads take a shared cross-process lock and the
+    read-modify-write in ``update_step_status`` holds an exclusive lock,
+    so concurrent step updates from separate processes cannot lose each
+    other's changes.
     """
 
     def __init__(self, storage_dir: str | Path = ".vibe"):
         self.storage_path = Path(storage_dir) / "execution_plans.jsonl"
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_path = _lock_path_for(self.storage_path)
 
     def create_plan(self, plan: ExecutionPlan) -> None:
         """Persist a new plan."""
@@ -42,27 +117,34 @@ class PlanTracker:
     ) -> None:
         """Update a step's status within a plan.
 
-        Reads latest plan state, updates the step, and writes back.
+        Reads latest plan state, updates the step, and writes back — the
+        whole read-modify-write cycle holds the exclusive cross-process
+        lock so parallel updates to different steps of the same plan are
+        serialized instead of losing one update.
         """
-        plan = self.get_plan(plan_id)
-        if plan is None:
-            logger.warning("Plan %s not found for step update", plan_id)
-            return
+        with cross_process_lock(self._lock_path):
+            latest: ExecutionPlan | None = None
+            for pid, plan in self._iter_plans():
+                if pid == plan_id:
+                    latest = plan
+            if latest is None:
+                logger.warning("Plan %s not found for step update", plan_id)
+                return
 
-        for step in plan.steps:
-            if step.step_id == step_id:
-                step.status = status if isinstance(status, StepStatus) else StepStatus(status)  # pyright: ignore[reportUnnecessaryIsInstance]
-                if result_summary is not None:
-                    step.result_summary = result_summary
-                break
+            for step in latest.steps:
+                if step.step_id == step_id:
+                    step.status = status if isinstance(status, StepStatus) else StepStatus(status)  # pyright: ignore[reportUnnecessaryIsInstance]
+                    if result_summary is not None:
+                        step.result_summary = result_summary
+                    break
 
-        # Update plan status if all steps completed
-        if all(s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in plan.steps):
-            plan.status = PlanStatus.COMPLETED
-        elif any(s.status == StepStatus.IN_PROGRESS for s in plan.steps):
-            plan.status = PlanStatus.ACTIVE
+            # Update plan status if all steps completed
+            if all(s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in latest.steps):
+                latest.status = PlanStatus.COMPLETED
+            elif any(s.status == StepStatus.IN_PROGRESS for s in latest.steps):
+                latest.status = PlanStatus.ACTIVE
 
-        self._append(plan.to_dict())
+            self._append_locked(latest.to_dict())
 
     def get_active_plan(self) -> ExecutionPlan | None:
         """Get the most recently created plan that is not completed."""
@@ -73,78 +155,49 @@ class PlanTracker:
         return None
 
     def get_plan(self, plan_id: str) -> ExecutionPlan | None:
-        """Get latest state of a specific plan."""
-        if not self.storage_path.exists():
-            return None
-
-        latest: dict[str, Any] | None = None
-        try:
-            with self.storage_path.open("r", encoding="utf-8") as f:
-                for raw_line in f:
-                    line = raw_line.strip()
-                    if not line:
-                        continue
-                    data = json.loads(line)
-                    if data.get("plan_id") == plan_id:
-                        latest = data
-        except (OSError, json.JSONDecodeError) as e:
-            logger.warning("Failed to read plan %s: %s", plan_id, e)
-            return None
-
-        if latest is None:
-            return None
-
-        return self._dict_to_plan(latest)
+        """Get latest valid state of a specific plan."""
+        latest: ExecutionPlan | None = None
+        with _read_lock(self.storage_path):
+            for pid, plan in self._iter_plans():
+                if pid == plan_id:
+                    latest = plan
+        return latest
 
     def list_plans(self, limit: int = 10) -> list[ExecutionPlan]:
         """List most recently updated plans (unique by plan_id)."""
-        if not self.storage_path.exists():
-            return []
+        plans_by_id: dict[str, ExecutionPlan] = {}
+        last_pos: dict[str, int] = {}
+        with _read_lock(self.storage_path):
+            for pos, (plan_id, plan) in enumerate(self._iter_plans()):
+                plans_by_id[plan_id] = plan
+                last_pos[plan_id] = pos
 
-        seen: set[str] = set()
-        plans: list[ExecutionPlan] = []
-
-        try:
-            with self.storage_path.open("r", encoding="utf-8") as f:
-                lines = f.readlines()
-
-            # Read from end to get latest first
-            for raw_line in reversed(lines):
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                    plan_id = data.get("plan_id")
-                    if plan_id and plan_id not in seen:
-                        seen.add(plan_id)
-                        plans.append(self._dict_to_plan(data))
-                        if len(plans) >= limit:
-                            break
-                except json.JSONDecodeError:
-                    continue
-        except OSError as e:
-            logger.warning("Failed to list plans: %s", e)
-
+        selected = sorted(plans_by_id, key=lambda p: last_pos[p], reverse=True)[:limit]
         # Return oldest-first for consistent ordering
-        return list(reversed(plans))
+        return [plans_by_id[p] for p in reversed(selected)]
+
+    def _iter_plans(self) -> Iterator[tuple[str, ExecutionPlan]]:
+        """Unlocked read of valid lines — used inside critical sections only."""
+        yield from _iter_valid_plans(self.storage_path)
 
     def _append(self, data: dict[str, Any]) -> None:
-        """Append a plan state line to JSONL."""
+        """Append a plan state line to JSONL under the exclusive lock."""
+        with cross_process_lock(self._lock_path):
+            self._append_locked(data)
+
+    def _append_locked(self, data: dict[str, Any]) -> None:
+        """Unlocked append — caller must hold the exclusive lock."""
         try:
-            with self.storage_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(data, ensure_ascii=False) + "\n")
+            with self.storage_path.open("a+b") as f:
+                # A crash can leave an unterminated final line. Separate it
+                # before appending so it cannot swallow the next valid update.
+                if f.tell():
+                    f.seek(-1, 2)
+                    if f.read(1) != b"\n":
+                        f.write(b"\n")
+                f.write((json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8"))
         except OSError as e:
             logger.error("Failed to write plan state: %s", e)
-
-    def _dict_to_plan(self, data: dict[str, Any]) -> ExecutionPlan:
-        """Rehydrate ExecutionPlan from dict.
-
-        Delegates to ExecutionPlan.from_dict() which recursively rebuilds
-        each ExecutionStep via ExecutionStep.from_dict(), ensuring all
-        fields survive the to_dict() → from_dict() round-trip.
-        """
-        return ExecutionPlan.from_dict(data)
 
 
 def load_plans_for_trace(
@@ -158,16 +211,19 @@ def load_plans_for_trace(
     before Task 10 lack ``metadata.trace_id`` and are silently skipped
     (NOT crashed on) so historical data stays readable.
 
+    Line semantics match ``PlanTracker.get_plan()`` / ``list_plans()``:
+    unparseable lines, legal-JSON non-objects, and schema-corrupted objects
+    are skipped per line, and the last *valid* entry per ``plan_id`` wins.
+
     Args:
         trace_id: The root trace id produced by ``orchestrate()``.
         storage_dir: Directory containing ``execution_plans.jsonl``. Defaults
             to ``.vibe`` — same default as ``PlanTracker``.
 
     Returns:
-        Plans whose latest persisted state has ``metadata.trace_id == trace_id``,
-        deduplicated by ``plan_id`` (latest entry wins, mirroring
-        ``PlanTracker.get_plan()`` semantics). Empty list if no match or the
-        JSONL file does not exist.
+        Plans whose latest valid persisted state has
+        ``metadata.trace_id == trace_id``, deduplicated by ``plan_id``.
+        Empty list if no match or the JSONL file does not exist.
 
     .. warning::
         ``storage_dir`` resolves relative to **CWD** when passed as a relative
@@ -181,36 +237,16 @@ def load_plans_for_trace(
     if not plans_path.exists():
         return []
 
-    seen: dict[str, dict[str, Any]] = {}
-    try:
-        with plans_path.open("r", encoding="utf-8") as f:
-            for raw_line in f:
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                plan_id = data.get("plan_id")
-                if plan_id:
-                    # Last write wins — append-only model means later lines
-                    # supersede earlier ones for the same plan_id.
-                    seen[plan_id] = data
-    except OSError as e:
-        logger.warning("Failed to read plans from %s: %s", plans_path, e)
-        return []
+    seen: dict[str, ExecutionPlan] = {}
+    with _read_lock(plans_path):
+        for plan_id, plan in _iter_valid_plans(plans_path):
+            # Last valid write wins — append-only model means later lines
+            # supersede earlier ones for the same plan_id.
+            seen[plan_id] = plan
 
     result: list[ExecutionPlan] = []
-    for data in seen.values():
-        metadata = data.get("metadata") or {}
+    for plan in seen.values():
+        metadata = plan.metadata or {}
         if metadata.get("trace_id") == trace_id:
-            try:
-                result.append(ExecutionPlan.from_dict(data))
-            except Exception as e:
-                logger.warning(
-                    "Skipping malformed plan entry while loading trace %s: %s",
-                    trace_id,
-                    e,
-                )
+            result.append(plan)
     return result

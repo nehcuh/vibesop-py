@@ -43,7 +43,7 @@ def _safe_questionary_select(
         return default
 
 
-def _safe_questionary_confirm(
+def _safe_questionary_confirm(  # pyright: ignore[reportUnusedFunction]  # used by cli.main
     message: str,
     default: bool = True,
 ) -> bool:
@@ -61,7 +61,7 @@ def _safe_questionary_confirm(
         return default
 
 
-def _safe_questionary_text(
+def _safe_questionary_text(  # pyright: ignore[reportUnusedFunction]  # used by cli.main
     message: str,
     default: str = "",
 ) -> str:

@@ -236,18 +236,32 @@ def generate_fallback_skill_content(
     trigger = (
         skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
     )
+    disable_model_invocation = bool(
+        getattr(skill, "disable_model_invocation", False)
+        if not isinstance(skill, dict)
+        else skill.get("disable_model_invocation", False)
+    )
 
     lines = [
         "---",
         f"name: {name}",
         f'description: "{description}"',
-        "---",
-        "",
-        f"# {name}",
-        "",
-        f"{description}",
-        "",
     ]
+    if disable_model_invocation:
+        # The 人工点名 contract must survive the stub: without this line a
+        # platform-native skill loader would auto-invoke a skill that was
+        # declared explicit-only (e.g. grill-me).
+        lines.append("disable-model-invocation: true")
+    lines.extend(
+        [
+            "---",
+            "",
+            f"# {name}",
+            "",
+            f"{description}",
+            "",
+        ]
+    )
     if trigger:
         lines.extend(["## Trigger", "", f"{trigger}", ""])
     lines.extend(["", "*External skill — install the source pack for full content.*", ""])
@@ -312,6 +326,7 @@ def render_skill_md(
             "author",
             "tags",
             "metadata",
+            "disable_model_invocation",
         ):
             if hasattr(skill, attr):
                 skill_dict[attr] = getattr(skill, attr)

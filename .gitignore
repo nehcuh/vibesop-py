@@ -102,6 +102,7 @@ htmlcov/
 .vibe/task_plan.md
 .vibe/experiment.yaml
 .vibe/execution_plans.jsonl
+.vibe/execution_plans.jsonl.lock
 
 # Autonomous-experiment worktree + metadata (never commit experiment artifacts)
 .experiment/

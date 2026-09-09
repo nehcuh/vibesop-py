@@ -138,9 +138,16 @@ class FeedbackLoop:
             try:
                 from datetime import datetime
 
+                # last_used arrives in both formats: naive (FeedbackRecord
+                # timestamps) and aware (usage_stats.last_used written by
+                # candidate_manager.record_usage as datetime.now(UTC).isoformat()).
+                # Mixed subtraction raises TypeError, which the bare except
+                # below used to swallow — silently disabling every stale-skill
+                # rule for routed skills. Normalize both sides to UTC first.
                 last = datetime.fromisoformat(evaluation.last_used)
-                now = datetime.now(UTC).replace(tzinfo=None)
-                days_since = (now - last).days
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=UTC)
+                days_since = (datetime.now(UTC) - last).days
             except (ValueError, TypeError):
                 days_since = None
 

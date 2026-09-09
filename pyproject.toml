@@ -1,6 +1,6 @@
 [project]
 name = "vibesop"
-version = "8.2.0"
+version = "8.3.0"
 description = "AI SkillOS — discover skills, route queries, orchestrate tasks, manage lifecycles. Unified dashboard, interactive cleanup, community sharing."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -185,14 +185,17 @@ exclude = [
     "**/node_modules",
     "**/.venv",
 ]
-
-stubPath = "src/stubs"
+# No stubPath: pyright/basedpyright treats a configured-but-missing stubPath dir as
+# a configuration error (exit 3). The repo has no src/stubs, so rely on defaults.
 
 # Missing type annotations
 reportMissingTypeStubs = false
 reportMissingImports = "warning"
 reportMissingParameterType = "error"
-reportMissingReturnType = "error"
+# NOTE: reportMissingReturnType is NOT a recognized basedpyright/pyright setting
+# (unrecognized settings make basedpyright exit 3 = config error, masking real
+# type errors under the old `|| [ $? -eq 3 ]` gate). Missing-return coverage
+# comes from the reportUnknown*/reportMissingParameterType rules above.
 reportMissingTypeArgument = "warning"
 reportArgumentType = "warning"
 
@@ -213,7 +216,9 @@ reportDuplicateImport = "error"
 
 # Untyped definitions
 reportUntypedFunctionDecorator = "error"
-reportUntypedClassDef = "error"
+# NOTE: reportUntypedClassDef is not a recognized setting either (see the
+# reportMissingReturnType note above); untyped-class coverage uses the
+# reportUntyped*BaseClass/Decorator/NamedTuple rules that DO exist.
 reportUntypedBaseClass = "error"
 
 # Unnecessary code

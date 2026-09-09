@@ -9,11 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.3.0] — 2026-09-09
+
+### Fixed
+
+- **Windows 兼容**：Kimi 配置合并正规化 CRLF，避免文本写回后二次合并失败；Node 路由测试使用 file URL 与原生 CLI 启动器，路径断言按实际序列化合同比较；发布检查测试验证可用 Git Bash，避免误用未安装发行版的 WSL 启动器。Windows 完整回归前新增边界检查，保留原有必需矩阵。
+
+- **本地验收门禁**：Makefile 与发布检查只接受类型检查的成功退出码；发布检查直接读取 pytest 退出状态，修复含有 `passed` 的失败摘要被误判通过。新增测试执行生产脚本的真实阶段。
+- **内置清单一致性**：登记人工/编排专用的 `verify-result`，保持原有路由题集结果不变。
+
+- **类型门禁纠正（basedpyright 1.39.9 锁定实测）**：`[tool.pyright]` 删除基于
+  pyright 不识别、导致退出 3 被旧 `|| [ $? -eq 3 ]` 误当「仅 warning」放行的无效键
+  `reportMissingReturnType` / `reportUntypedClassDef`，以及不存在的 `stubPath`；
+  有效规则不放宽。CI type-check 改为只接受真正成功：
+  `uv run basedpyright --level error`（退出 0 通过；1=类型错误、3=配置错误均失败；
+  warning 经 `--level error` 按项目显式规则保持非阻断）。各入口设置
+  `PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1`，避免 GitHub 输出模式改变 warning 的退出语义。新增
+  `tests/scripts/test_typecheck_gate.py` 真实 subprocess 门禁回归（类型错误拒绝、
+  无效配置拒绝、仅 warning 允许、正常允许、钉 CI 命令完整形状），门禁测试只用 CI
+  同款普通文本命令。
+
+- **Kimi 配置保护**：只替换明确归属 VibeSOP 的 hook，保留用户 hook、注释和嵌套配置；合并后核对完整语义，拒绝破坏配置的结果。
+- **计划持久化与交付**：逐行容忍损坏记录和 UTF-8 断尾，分隔未完成的尾行，并用跨进程锁保护更新；只读查询兼容无法创建锁的环境。缺失、空内容或 fallback 步骤会阻止整份计划交付，保留必需验证步骤和诊断。
+
+- **验收与任务分解**：缺失/未知验收状态不再默认通过；顺序执行辅助函数遇到执行失败、验收终止或升级处置即停止。截断 JSON 不再被正则回退误解为子任务。
+- **平台生成与命令边界**：技能存根保留人工点名限制；Pi 区分无匹配与路由失败并校验结果结构；Pi 与 OpenCode 直接传递路由参数，避免用户输入被 shell 解释。
+- **反馈与评测**：旧技能检查兼容带时区时间；导入反馈严格要求布尔结论并持久化整批记录。基准检查识别已知失败从无匹配变成错误技能的退化，回放排除已有路由决定的矛盾记录。
+
+
 ### Changed
 
 - **W1 图书管理员（next-opt v1）**: 角色词不再自动拉 `MULTI_AGENT_SQUAD`（撤回 v7 auto-trigger）。小队只在显式并行工人意图下进入；`disable-model-invocation` 成为一等 SkillSpec 字段（EXPLICIT 可点名，其余层剥离）；负例 `must_not_inject` 进 hermetic 闸；生成规则改口为 no-match 是正常输出。详见 `.omx/artifacts/next-opt-design-v1.md`。
 
 ### Added
+
+- **验证器与计划交付合同（v8.3 行为变化）**: 默认对抗计划使用随包内置验收技能
+  `builtin/verify-result`（仅在显式/编排选择时使用，不全局自动注入）；按任务类型验收
+  （代码用测试与行为、文档看完整性与来源、分析核数据与计算、部署查已有授权下的实际
+  状态）；缺证据 blocked、实际失败 failed、满足清单才 passed；技能正文不安全或不可用
+  时，所有计划交付入口阻断并给出可区分原因，不能把拒绝提示当技能正文继续生成可执行
+  manifest。合同语义见 `docs/architecture/verification-contract.md`；
+  `tests/integration/test_verification_delivery_contract.py` 以真实模型、临时文件与
+  实际内置技能覆盖默认计划可交付 / 显式指定缺失验证器阻断 / 安全正文改成不安全后拒绝。
+  通过 `build_plan(..., verifier_skill_id="其他技能 ID")` 可显式指定验收技能；
+  非对抗工作流忽略该参数，显式无效值在对抗工作流中会被拒绝。
+
+- **机器验收凭据**：`scripts/record_acceptance.py` 实际执行命令，保存日志、退出码、时间、运行前 Git 状态与产物指纹；区分通过、失败与环境错误，拒绝覆盖已有凭据。使用方法见 `docs/architecture/acceptance-evidence.md`。
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
   `PlanCommand` / `PlanCommandHandler` / `PlanCommandResult` /

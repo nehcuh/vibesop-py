@@ -62,7 +62,7 @@ def get_tracer(
     return _tracer
 
 
-def _reset_tracer_for_tests() -> None:
+def _reset_tracer_for_tests() -> None:  # pyright: ignore[reportUnusedFunction]  # test-only escape hatch
     """Tear down the singleton so the next ``get_tracer()`` call re-creates it.
 
     Test-only escape hatch: the singleton's SpanWriter captures CWD +

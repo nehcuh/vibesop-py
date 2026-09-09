@@ -86,6 +86,12 @@
 
 **Solution**: 这是项目自身 CLI 的再生成行为，不是编辑器改动。任何 diff 评审/commit 分组前把 AGENTS.md 列入显式排除清单，或 `git checkout -- AGENTS.md` 还原；多路并行子代理场景下它会被多次再生，收尾时再还原一次。
 
+### 喷气机 A/B 产物不要放 /tmp，预览用脚本起停 (2026-09-07)
+
+**Issue**: R5 双臂产物当初 `docker cp` 到 `/tmp/ab-jet-out/{treatment,control}` 起 8801/8802；macOS 清 `/tmp` 后主机拷贝消失。R6 重置了同一对容器的 `/work`，R5 网页只剩 grok 会话 `rewind_points.jsonl` 的 `after_snapshots`。R6 网页还在 `vibesop-ab-treat:/work`。
+
+**Solution**: 静态缓存 `.vibe/experiments/ab-jet-preview/`（gitignored）。起停 `./scripts/ab-jet-preview.sh start|stop|down`。操作备忘 `.omx/artifacts/ab-jet-preview.md`。禁止 `docker rm vibesop-ab-treat/ctrl`。
+
 ### 弱模型 agentic 实验三坑：截断即错误 / 思考循环 / 处理静默丢失 (2026-08-29, R6)
 
 **Issue**: R6 弱模型 A/B（27B via oMLX）连续 3 次 treatment 尝试零产物死亡，表面全是"模型不行"，实为三个可修的基础设施问题。

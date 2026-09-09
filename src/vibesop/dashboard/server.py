@@ -127,36 +127,38 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
     """
     plans_path = vibe_dir / "execution_plans.jsonl"
     if plans_path.exists():
-        with plans_path.open("r", encoding="utf-8") as f:
+        with plans_path.open("rb") as f:
             for raw in f:
                 line = raw.strip()
                 if not line:
                     continue
                 try:
                     record = json.loads(line)
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(record, dict):
                     continue
                 meta = record.get("metadata") or {}
                 if isinstance(meta, str):
                     try:
                         meta = json.loads(meta)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
                         meta = {}
-                if meta.get("trace_id") == trace_id:
+                if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
                     return True
 
     spans_path = _spans_path(vibe_dir)
     if spans_path.exists():
-        with spans_path.open("r", encoding="utf-8") as f:
+        with spans_path.open("rb") as f:
             for raw in f:
                 line = raw.strip()
                 if not line:
                     continue
                 try:
                     record = json.loads(line)
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     continue
-                if record.get("trace_id") == trace_id:
+                if isinstance(record, dict) and record.get("trace_id") == trace_id:
                     return True
 
     return False
@@ -188,7 +190,7 @@ def create_app() -> FastAPI:
     # API: Health / Overview  # noqa: ERA001
 
     @app.get("/api/health")
-    async def api_health() -> JSONResponse:
+    async def api_health() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         root = _resolve_project_root()
         vibe_dir = root / ".vibe"
 
@@ -265,7 +267,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/analytics")
-    async def api_analytics(
+    async def api_analytics(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         limit: int = Query(default=50, ge=1, le=500),
         skill: str | None = Query(default=None),
     ) -> JSONResponse:
@@ -286,7 +288,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/traces")
-    async def api_traces(
+    async def api_traces(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         limit: int = Query(default=30, ge=1, le=200),
         source: str = Query(default="all", description="routing | agent | all"),
     ) -> JSONResponse:
@@ -318,7 +320,7 @@ def create_app() -> FastAPI:
         return JSONResponse(traces[:limit])
 
     @app.get("/api/traces/{trace_id}")
-    async def api_trace_detail(trace_id: str) -> JSONResponse:
+    async def api_trace_detail(trace_id: str) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         root = _resolve_project_root()
         path = root / ".vibe" / "traces" / f"{trace_id}.json"
         data = _read_json(path)
@@ -332,7 +334,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/spans")
-    async def api_spans(
+    async def api_spans(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         limit: int = Query(default=50, ge=1, le=500),
         span_kind: str | None = Query(default=None),
         skill_id: str | None = Query(default=None),
@@ -350,7 +352,7 @@ def create_app() -> FastAPI:
         return JSONResponse(records[:limit])
 
     @app.get("/api/spans/{span_id}")
-    async def api_span_detail(span_id: str) -> JSONResponse:
+    async def api_span_detail(span_id: str) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         root = _resolve_project_root()
         spans_path = _spans_path(root / ".vibe")
         if not spans_path.exists():
@@ -374,7 +376,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/orchestration/dag")
-    async def api_orchestration_dag(
+    async def api_orchestration_dag(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         trace_id: str = Query(..., description="Trace root id from orchestrate()"),
     ) -> JSONResponse:
         """Return the reconstructed DAG for a given trace root.
@@ -407,7 +409,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.post("/api/reflections", status_code=201)
-    async def create_reflection(
+    async def create_reflection(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         body: ReflectionCreate,
     ) -> JSONResponse:
         """Append a new reflection to the store.
@@ -432,7 +434,7 @@ def create_app() -> FastAPI:
         return JSONResponse(reflection.to_dict(), status_code=201)
 
     @app.get("/api/reflections")
-    async def list_reflections(
+    async def list_reflections(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         task_id: str | None = Query(default=None),
         target_id: str | None = Query(default=None),
         status: Literal["open", "addressed", "dismissed"] | None = Query(default=None),
@@ -458,7 +460,7 @@ def create_app() -> FastAPI:
         return JSONResponse([r.to_dict() for r in reflections])
 
     @app.patch("/api/reflections/{reflection_id}")
-    async def update_reflection(
+    async def update_reflection(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         reflection_id: str,
         body: ReflectionStatusUpdate,
     ) -> JSONResponse:
@@ -511,7 +513,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/api/discoveries")
-    async def api_discoveries() -> JSONResponse:
+    async def api_discoveries() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         """Read-only Discovery queue aggregated from project + global stores.
 
         Mutation (promote/dismiss/mute) is CLI-only by design (M12 v3 M4:
@@ -525,7 +527,7 @@ def create_app() -> FastAPI:
     # API: Conversations  # noqa: ERA001
 
     @app.get("/api/conversations")
-    async def api_conversations(
+    async def api_conversations(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         limit: int = Query(default=20, ge=1, le=100),
     ) -> JSONResponse:
         root = _resolve_project_root()
@@ -545,7 +547,7 @@ def create_app() -> FastAPI:
         return JSONResponse(conversations)
 
     @app.get("/api/conversations/{conv_id}")
-    async def api_conversation_detail(conv_id: str) -> JSONResponse:
+    async def api_conversation_detail(conv_id: str) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         root = _resolve_project_root()
         path = root / ".vibe" / "conversations" / f"{conv_id}.json"
         data = _read_json(path)
@@ -557,7 +559,7 @@ def create_app() -> FastAPI:
     # API: Sessions  # noqa: ERA001
 
     @app.get("/api/sessions")
-    async def api_sessions(
+    async def api_sessions(  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         limit: int = Query(default=10, ge=1, le=50),
     ) -> JSONResponse:
         root = _resolve_project_root()
@@ -577,7 +579,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    async def index() -> HTMLResponse:
+    async def index() -> HTMLResponse:  # pyright: ignore[reportUnusedFunction]  # FastAPI decorator registers the route
         html_path = _TEMPLATE_DIR / "index.html"
         if html_path.exists():
             return HTMLResponse(html_path.read_text(encoding="utf-8"))

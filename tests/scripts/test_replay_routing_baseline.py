@@ -247,6 +247,7 @@ class TestIdentityDiff:
             "agent_prompt_shape_misses": 1,
             "agent_shape_would_fire_queries": 0,
             "agent_shape_would_fire_pairs": 0,
+            "misses_with_recorded_route": 0,
             "misses_evaluated": 2,
         }
         assert len(entries) == 1
@@ -267,6 +268,74 @@ class TestIdentityDiff:
         assert counters["agent_shape_would_fire_queries"] == 1
         assert counters["agent_shape_would_fire_pairs"] == 1
         # misfires never enter the benefit-side list
+        assert entries == []
+
+    def test_recorded_route_misses_excluded_from_benefit_pool(self) -> None:
+        """A miss row whose own metadata records a real skill_id or a
+        demoted_skill_id is not an unanswered query — it must be excluded
+        from misses_evaluated / would-fire and surfaced separately, so P0
+        cannot claim recovery on queries that already got a route."""
+        records = [
+            {  # recorded as miss but leaked a real routed skill (legacy shape)
+                "query": "review code",
+                "truncated": False,
+                "is_miss": True,
+                "metadata": {
+                    "has_match": False,
+                    "mode": "single_agent",
+                    "skill_id": "custom/topic-a-one",
+                    "confidence": 0.72,
+                },
+            },
+            {  # demoted route: router matched, injection failed
+                "query": "take a snapshot now",
+                "truncated": False,
+                "is_miss": True,
+                "metadata": {
+                    "has_match": False,
+                    "mode": "single",
+                    "skill_id": "",
+                    "demoted_skill_id": "builtin/wombat-snapshot",
+                },
+            },
+            {  # an honest no-match miss: evaluated normally
+                "query": "please run the full test suite for me",
+                "truncated": False,
+                "is_miss": True,
+                "metadata": {"has_match": False, "mode": "single"},
+            },
+        ]
+        index = rrb.build_trigger_index(_skills(("test-skill", ["run the full test suite"])))
+        entries, counters = rrb.build_identity_diff(records, index)
+        assert counters["misses"] == 3
+        assert counters["misses_with_recorded_route"] == 2
+        assert counters["misses_evaluated"] == 1
+        # only the honest no-match miss can produce would-fire benefit
+        assert len(entries) == 1
+        assert entries[0]["query"] == "please run the full test suite for me"
+
+    def test_recorded_route_check_runs_before_agent_shape(self) -> None:
+        """A recorded-route row that also looks agent-shaped is excluded as
+        recorded-route, not double-counted as an agent-shaped misfire."""
+        records = [
+            {
+                "query": "You are a routing assistant. " * 10,
+                "truncated": True,
+                "is_miss": True,
+                "metadata": {
+                    "has_match": False,
+                    "mode": "single_agent",
+                    "skill_id": "builtin/riper-workflow",
+                    "confidence": 0.72,
+                },
+            }
+        ]
+        index = rrb.build_trigger_index(_skills(("router-skill", ["routing assistant"])))
+        entries, counters = rrb.build_identity_diff(records, index)
+        assert counters["misses_with_recorded_route"] == 1
+        assert counters["agent_prompt_shape_misses"] == 0
+        assert counters["agent_shape_would_fire_pairs"] == 0
+        assert counters["misses_evaluated"] == 0
         assert entries == []
 
     def test_collision_counted(self) -> None:
@@ -459,6 +528,7 @@ class TestRunEndToEnd:
         assert b["total_route_spans"] == 6
         assert b["misses"] == 4
         assert b["agent_prompt_shape_misses"] == 1
+        assert b["misses_with_recorded_route"] == 0
         assert b["unique_miss_queries"] == 4  # two "review code" spans, miss + hit
 
         p = report["p0_shadow"]

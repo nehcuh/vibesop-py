@@ -109,15 +109,36 @@ class AgentRuntimeResult:
 
     @property
     def has_match(self) -> bool:
-        return self.intercepted and self.mode in (
-            "single",
-            "orchestrate",
-            "multi_agent_squad",
+        return (
+            not self.notice_only
+            and self.intercepted
+            and self.mode
+            in (
+                "single",
+                "orchestrate",
+                "multi_agent_squad",
+            )
         )
 
     @property
     def success(self) -> bool:
         return len(self.errors) == 0
+
+    def _validate_plan_handoff(self) -> None:
+        if self.mode not in ("orchestrate", "multi_agent_squad") or not isinstance(self.plan, dict):
+            return
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        injector = SkillInjector(project_root=self.project_root or Path.cwd())
+        injector.annotate_plan_dict(self.plan)
+        if not self.plan.get("metadata", {}).get("execution_ready", False):
+            self.notice_only = True
+            self.router_matched = False
+            self.confidence = 0.0
+            self.skill_content = injector.blocked_plan_notice(self.plan)
+            self.decision_message = "Execution plan blocked: required skills unavailable"
+            if self.decision_message not in self.errors:
+                self.errors.append(self.decision_message)
 
     def to_hook_json(self) -> str:
         """Serialize to JSON for consumption by shell hook wrappers.
@@ -127,8 +148,10 @@ class AgentRuntimeResult:
         output and translates it into the platform-specific hook
         response format.
         """
+        self._validate_plan_handoff()
         return json.dumps(
             {
+                "has_match": self.has_match,
                 "intercepted": self.intercepted,
                 "mode": self.mode,
                 "skillId": self.skill_id,
@@ -180,14 +203,10 @@ class AgentRuntimeResult:
                 ensure_ascii=False,
             )
 
-        # Orchestration mode
-        if self.mode == "orchestrate" and self.plan:
-            if isinstance(self.plan, dict):
-                from vibesop.agent.runtime.skill_injector import SkillInjector
+        self._validate_plan_handoff()
 
-                SkillInjector(project_root=self.project_root or Path.cwd()).annotate_plan_dict(
-                    self.plan
-                )
+        # Orchestration mode
+        if self.mode in ("orchestrate", "multi_agent_squad") and self.plan and not self.notice_only:
             plan_text = json.dumps(self.plan, indent=2, ensure_ascii=False)
             response: dict[str, Any] = {
                 "systemMessage": ("🔀 VibeSOP detected multiple intents. Execution plan injected."),
@@ -752,6 +771,7 @@ class AgentRuntime:
                     self.injector.annotate_plan_dict(
                         result.plan, source_lookup=self._lookup_routed_source_file
                     )
+                    result._validate_plan_handoff()
 
                 # 6. Inject skill content. A routed id with no SKILL.md body
                 # is not a match — demote to no-match rather than hand the
@@ -763,7 +783,7 @@ class AgentRuntime:
                 if (
                     result.skill_id
                     and result.skill_id != "fallback-llm"
-                    and result.mode != "orchestrate"
+                    and result.mode not in ("orchestrate", "multi_agent_squad")
                 ):
                     try:
                         source_file = _inject_source or self._lookup_routed_source_file(

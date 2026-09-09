@@ -403,7 +403,8 @@ def _load_route_spans(spans_path: Path) -> list[_RouteSpan]:
     return spans
 
 
-def _as_route_span(record: dict[str, Any]) -> _RouteSpan | None:
+def _as_route_span(record: Any) -> _RouteSpan | None:
+    # ``record`` comes straight from ``json.loads`` — any JSON value shape.
     if not isinstance(record, dict):
         return None
     if record.get("span_kind") != "task":
