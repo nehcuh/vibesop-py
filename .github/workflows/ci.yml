@@ -58,10 +58,15 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run basedpyright
-        # basedpyright exits 3 for warnings-only (no errors); the project
-        # intentionally sets several rules to "warning" (advisory, non-blocking).
-        # Accept exit 0 (clean) or 3 (warnings only); fail on 1 (errors).
-        run: uv run basedpyright || [ $? -eq 3 ]
+        # basedpyright 1.39.9 plain-text exit codes: 0 = success, 1 = type
+        # errors, 3 = configuration error (unrecognized setting, missing
+        # stubPath dir, ...) — 3 is NOT "warnings only". Only exit 0 is a real
+        # pass; errors (1) and config errors (3) must fail the step, so no
+        # `|| [ $? -eq 3 ]` acceptance here.
+        # Warnings stay non-blocking by explicit rule: rules set to "warning"
+        # in [tool.pyright] are advisory, and `--level error` keeps them out of
+        # the exit code while errors/config errors still surface and fail.
+        run: uv run basedpyright --level error
 
   test:
     name: Test (Python ${{ matrix.python-version }})

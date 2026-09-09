@@ -54,3 +54,7 @@
 主控查阅锁定版本 basedpyright 1.39.9 的本地源码并实测：退出码 3 是配置解析错误，不是“只有 warning”。已有两个无效配置键导致退出 3，CI 的 `|| [ $? -eq 3 ]` 将其当通过，掩盖同时报告的类型错误。`type-gate-before.json` 用真实小文件复现“有错误 + 无效键 → 3 → 现门禁放行”。
 
 Pi 在 D 完成后串行移除无效配置键及不存在的 stubPath；不放宽有效规则。纠正 `.github/workflows/ci.yml` 类型检查命令及说明：只接受真正成功，warning 可依项目显式规则保持非阻塞，错误/配置错误必须失败。补真实 subprocess 门禁回归，覆盖有类型错误、无效配置、仅 warning 三类；不得手写假退出码替代锁定工具实测。
+
+## G：相邻本地验收入口（Grok 第二批）
+
+主控同类检查发现 Makefile 的 type-check 和 scripts/verify-release.sh 也放行退出 3；发布检查还用 `pytest ... | grep -q passed` 判断通过，在没有 pipefail 时会把含 passed 字样的失败测试判绿。Grok 只修 Makefile、scripts/verify-release.sh 及新增 tests/scripts/test_release_checks.py：与 CI 一致采用基于实际退出状态的判断，类型错误/配置错误拒绝，pytest 混合通过与失败时必须拒绝。测试执行真实 pytest/锁定类型检查器，不能只断言脚本文本。Pi 已负责 scripts/verify-type-checking.sh，禁止两路同时改它。此批完成后不再扩大扫描范围。
