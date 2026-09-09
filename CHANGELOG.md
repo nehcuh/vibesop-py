@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Kimi 配置保护**：只替换明确归属 VibeSOP 的 hook，保留用户 hook、注释和嵌套配置；合并后核对完整语义，拒绝破坏配置的结果。
+- **计划持久化与交付**：逐行容忍损坏记录和 UTF-8 断尾，分隔未完成的尾行，并用跨进程锁保护更新；只读查询兼容无法创建锁的环境。缺失、空内容或 fallback 步骤会阻止整份计划交付，保留必需验证步骤和诊断。
+
 - **验收与任务分解**：缺失/未知验收状态不再默认通过；顺序执行辅助函数遇到执行失败、验收终止或升级处置即停止。截断 JSON 不再被正则回退误解为子任务。
 - **平台生成与命令边界**：技能存根保留人工点名限制；Pi 区分无匹配与路由失败并校验结果结构；Pi 与 OpenCode 直接传递路由参数，避免用户输入被 shell 解释。
 - **反馈与评测**：旧技能检查兼容带时区时间；导入反馈严格要求布尔结论并持久化整批记录。基准检查识别已知失败从无匹配变成错误技能的退化，回放排除已有路由决定的矛盾记录。
@@ -21,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **W1 图书管理员（next-opt v1）**: 角色词不再自动拉 `MULTI_AGENT_SQUAD`（撤回 v7 auto-trigger）。小队只在显式并行工人意图下进入；`disable-model-invocation` 成为一等 SkillSpec 字段（EXPLICIT 可点名，其余层剥离）；负例 `must_not_inject` 进 hermetic 闸；生成规则改口为 no-match 是正常输出。详见 `.omx/artifacts/next-opt-design-v1.md`。
 
 ### Added
+
+- **机器验收凭据**：`scripts/record_acceptance.py` 实际执行命令，保存日志、退出码、时间、运行前 Git 状态与产物指纹；区分通过、失败与环境错误，拒绝覆盖已有凭据。使用方法见 `docs/architecture/acceptance-evidence.md`。
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:
   `PlanCommand` / `PlanCommandHandler` / `PlanCommandResult` /
