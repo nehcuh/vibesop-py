@@ -115,17 +115,19 @@ class TestPlanBuilderPatternAware:
         builder = self._make_builder()
         sub_tasks = [
             SubTask(intent="fix bug", query="fix the bug"),
+            SubTask(intent="run tests", query="run the tests"),
         ]
         plan = builder.build_plan(
             "test query", sub_tasks, workflow_pattern=WorkflowPattern.ADVERSARIAL
         )
 
         assert plan.workflow_pattern == WorkflowPattern.ADVERSARIAL
-        assert len(plan.steps) == 2  # 1 sub-task + 1 verify step
-        verify = plan.steps[1]
-        assert verify.skill_id == "gstack/investigate"
+        assert len(plan.steps) == 3  # 2 sub-tasks + 1 verify step
+        verify = plan.steps[2]
+        assert verify.skill_id == "builtin/verify-result"
         assert verify.intent == "独立验证执行结果"
-        assert verify.dependencies == [plan.steps[0].step_id]
+        # Verify step depends on ALL original steps, not just the last one
+        assert verify.dependencies == [plan.steps[0].step_id, plan.steps[1].step_id]
 
     def test_adversarial_empty_steps(self):
         builder = self._make_builder()

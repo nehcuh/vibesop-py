@@ -77,6 +77,30 @@ _STEP_TYPE_KEYWORDS: dict[str, list[str]] = {
     "review": ["测试", "test", "验证", "verify", "检查", "check"],
 }
 
+# Default verification skill for adversarial plans. Explicit invalid values are
+# rejected instead of silently falling back to this default.
+DEFAULT_VERIFIER_SKILL_ID: str = "builtin/verify-result"
+_FORBIDDEN_VERIFIER_SKILL_IDS: frozenset[str] = frozenset({"fallback-llm"})
+
+
+def _validate_verifier_skill_id(verifier_skill_id: object) -> str:
+    """Resolve the adversarial verifier skill id, rejecting invalid values.
+
+    Blank, non-string (including ``None``), or forbidden values raise instead
+    of silently falling back to the default.
+    """
+    if not isinstance(verifier_skill_id, str):
+        raise ValueError(
+            f"verifier_skill_id must be a non-empty string, got {type(verifier_skill_id).__name__}"
+        )
+    resolved = verifier_skill_id.strip()
+    if not resolved:
+        raise ValueError("verifier_skill_id must not be blank")
+    if resolved in _FORBIDDEN_VERIFIER_SKILL_IDS:
+        raise ValueError(f"verifier_skill_id must not be '{resolved}'")
+    return resolved
+
+
 # Skill → source file mapping for prompt chain generation
 _SKILL_FILE_MAP: dict[str, list[str]] = {
     "core/routing": [
@@ -263,6 +287,8 @@ class PlanBuilder:
         sub_tasks: list[Any],  # SubTask from task_decomposer
         workflow_pattern: WorkflowPattern = WorkflowPattern.SEQUENTIAL,
         metadata: dict[str, Any] | None = None,
+        *,
+        verifier_skill_id: object = DEFAULT_VERIFIER_SKILL_ID,
     ) -> ExecutionPlan:
         """Build execution plan from sub-tasks with parallel support.
 
@@ -270,6 +296,13 @@ class PlanBuilder:
             original_query: The user's original query
             sub_tasks: Decomposed sub-tasks
             workflow_pattern: Dynamic workflow pattern selected by ClassifierAgent
+            verifier_skill_id: Keyword-only skill id for the ADVERSARIAL
+                verification step. Defaults to ``builtin/verify-result``.
+                For ADVERSARIAL plans an explicit blank, non-string
+                (including ``None``), or forbidden value raises ValueError
+                instead of silently falling back to the default. For any
+                other pattern the argument is ignored and plan generation
+                is unchanged.
         """
         # Detect execution mode (legacy) or use pattern-driven mode
         execution_mode = self._detect_execution_mode(original_query, sub_tasks)
@@ -420,8 +453,9 @@ class PlanBuilder:
             )
             last_step_id = step_id
 
-        # Apply pattern-specific step adjustments
-        steps = self._apply_pattern(steps, workflow_pattern, original_query)
+        # Apply pattern-specific step adjustments; verifier_skill_id is only
+        # consumed (and validated) by the ADVERSARIAL branch of _apply_pattern.
+        steps = self._apply_pattern(steps, workflow_pattern, original_query, verifier_skill_id)
 
         # Agent squad path: replace sub-task steps with squad steps when the
         # pattern is squad-oriented and an IntentAnalysis is present in metadata.
@@ -579,6 +613,7 @@ class PlanBuilder:
         steps: list[ExecutionStep],
         pattern: WorkflowPattern,
         original_query: str,
+        verifier_skill_id: object = DEFAULT_VERIFIER_SKILL_ID,
     ) -> list[ExecutionStep]:
         """Apply workflow pattern to step list.
 
@@ -588,7 +623,7 @@ class PlanBuilder:
         if pattern == WorkflowPattern.FAN_OUT:
             return self._apply_fan_out(steps, original_query)
         if pattern == WorkflowPattern.ADVERSARIAL:
-            return self._apply_adversarial(steps, original_query)
+            return self._apply_adversarial(steps, original_query, verifier_skill_id)
         if pattern == WorkflowPattern.PARALLEL:
             return self._apply_parallel(steps)
         if pattern == WorkflowPattern.LOOP_UNTIL_DRY:
@@ -700,7 +735,7 @@ class PlanBuilder:
                 for skill_id, loaded in discovered.items():
                     skills.append(self._loaded_skill_to_dict(skill_id, loaded))
             except Exception as e:
-                logger.debug("Failed to get capability for skill %s: %s", skill_id, e)
+                logger.debug("Failed to collect global skills: %s", e)
 
         return skills
 
@@ -773,31 +808,45 @@ class PlanBuilder:
     def _apply_adversarial(
         steps: list[ExecutionStep],
         original_query: str,
+        verifier_skill_id: object = DEFAULT_VERIFIER_SKILL_ID,
     ) -> list[ExecutionStep]:
-        """ADVERSARIAL: execute steps, then verify."""
+        """ADVERSARIAL: execute steps, then verify.
+
+        Appends a verification step that depends on ALL original steps and
+        carries the original request, per-step type / expected output /
+        requirements, and itemized-evidence acceptance rules.
+        """
+        resolved_verifier = _validate_verifier_skill_id(verifier_skill_id)
         if not steps:
             return steps
 
         # Steps run sequentially (existing dependency chain)
         # Append a verify step that depends on all previous steps
-        last_step = steps[-1]
         verify_step = ExecutionStep(
             step_id=str(uuid.uuid4())[:8],
             step_number=len(steps) + 1,
-            skill_id="gstack/investigate",  # investigation/review skill for verification
+            skill_id=resolved_verifier,
             intent="独立验证执行结果",
             original_query_segment=original_query,
             input_query=(
-                "独立验证以下步骤的执行结果是否完整、正确:\n"
-                + "\n".join(f"- 步骤 {s.step_number} ({s.skill_id}): {s.intent}" for s in steps)
-                + "\n\n请检查:\n"
-                "1. 所有要求是否都已满足\n"
-                "2. 是否有遗漏或错误\n"
-                "3. 边缘情况是否被考虑"
+                "验收以下步骤的执行结果。原始需求:\n"
+                f"{original_query}\n\n"
+                "待验收步骤:\n"
+                + "\n".join(
+                    f"- 步骤 {s.step_number} ({s.skill_id}, 类型: {s.step_type or 'implementation'})"
+                    f": {s.intent}\n  预期产出: {s.output_as}"
+                    for s in steps
+                )
+                + "\n\n验收要求:\n"
+                "1. 逐项核对每个步骤的预期产出，给出对应证据（文件、日志、测试输出或实际状态），"
+                "不得以代理自述代替证据\n"
+                "2. 缺证据标 blocked，实际失败标 failed，只有全部满足才标 passed\n"
+                "3. 仅做验收：不得修改实现，不得运行未获授权的部署，不得默认通过，"
+                "不得将计划标记为完成"
             ),
             output_as="verification_result",
             status=StepStatus.PENDING,
-            dependencies=[last_step.step_id],
+            dependencies=[s.step_id for s in steps],
             can_parallel=False,
             is_verification_step=True,  # Mark as verification step for Phase 2
             trust_level=TrustLevel.QUARANTINE,  # Verifier runs in quarantine mode
