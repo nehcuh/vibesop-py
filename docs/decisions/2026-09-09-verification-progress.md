@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-**8.3.0 候选的本机/锁定依赖 Docker 验收已完成；真实 Windows 验收发现跨平台问题，现重新进入修复。**四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
+**8.3.0 候选的 Windows 修复已合流并推送，119 项边界用例本机通过，正在进行最终跨平台验收。**四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
 
-已验收代码为 `b5057d6`；本记录后续仅作验收文档整理，应用与测试输入由下方 SHA256 清单固定。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；[代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34344829654) 提供各平台 job 的实时结果。
+当前代码为 `10e33d6`；本轮修复以 `final-inputs-windows.json` 固定输入，下方旧检查点的通过与失败记录均保留。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；[当前代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34348044015) 提供各平台 job 的实时结果。
 
 ## 节点日志
 
@@ -14,7 +14,7 @@
 | M1：明确 spec | 完成 | [验证合同](../specs/2026-09-09-verification-contract.md)，固定文件归属与验收 |
 | M2：四路实现 | 完成 | Claude 计划生成；Grok 内置技能；Kimi 正文拒绝；Pi 版本/文档/集成合同；均从 `99185be` 的独立工作树启动 |
 | M3：审阅及分批集成 | 完成 | B、A/E、C、F/G 及 GitHub 输出修正均获独立 Kimi APPROVE；退回项已修 |
-| M4：整体验收 | 本机 / 容器通过 | 主机 7008 passed；锁定依赖离线 Linux 6998 passed；远程平台结果见 PR 检查页 |
+| M4：整体验收 | 修复后重验中 | 旧检查点本机 / 容器通过，Windows 失败已修；新检查点 119 项本机边界通过，完整结果见下文与 PR |
 | M5：版本与远程收口 | 已推送 | 8.3.0 包元数据 / CLI / 当前文档一致，PR #119；不打发布标签 |
 
 本机过程材料：`.omx/artifacts/verification-20260909/`。失败与未完成结果保留，不以代理自述作为验收通过。
@@ -113,3 +113,19 @@ W1 初稿被主控退回：仅 rstrip 块尾 CR 虽能解析，但生产 `write_
 W1 独立 Kimi 审阅 **APPROVE**，31 项配置合并测试通过；Unicode 专项测试属非阻塞建议，主控已有真实 U+0085/U+2028 往返凭据。Pi W2 修正为已有 adapters 包内相对导入，在原样 `GITHUB_ACTIONS=true uv run pytest` 下 14 passed；没有增加全局 PYTHONPATH 或修改 pytest 配置。
 
 主控合流验收：CI 同款 8 个 Windows 边界文件在 `GITHUB_ACTIONS=true` 下 **119 passed**（12.16s）；ruff 全仓检查与 771 文件格式检查通过，实际类型脚本 **0 errors**。这是本机结果，仍需新提交 Windows 实跑和 Docker 最终凭据，未将该结果记作跨平台完成。
+
+`10e33d6` 已推送四路 Windows 修复及 CHANGELOG；输入清单 `final-inputs-windows.json` 冻结 1427 个文件，新 wheel 单独保存在 `windows-wheels/`，旧验证材料保持原样。本机与离线锁定 Docker 完整回归并行启动；[该提交 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34348044015) 运行中。已取消被新修复替代的 `a3fc2ed` CI 34347617782，取消不算通过。
+
+### Windows 边界实跑反馈
+
+`10e33d6` 的 Windows 3.12 边界步骤在 55.94s 返回 **2 failed / 117 passed / 4 rerun**，日志 `windows-10e33d6-312-clean.log`。原生 Node CLI、路径合同、Git Bash 门禁均已实际通过；剩余两项为语义守卫测试比较 LF 常量与实际 CRLF 文本，导致损坏注入未执行。已委派 Claude 只修测试，增加真实 LF/CRLF 输入及注入发生断言；生产源码无需变化。提前检查失败后完整 Windows suite 按依赖跳过，不算完整通过。
+
+### CRLF 生产修复后的完整本机 / Docker 结果（`10e33d6`）
+
+- 主机 macOS / Python 3.12，`GITHUB_ACTIONS=true`：**7014 passed / 15 skipped / 17 deselected**，145.09s；`host-windows-final/acceptance.json` 为 passed，运行前工作树干净。
+- 离线 Linux ARM64 / Python 3.12：**7004 passed / 25 skipped / 17 deselected**，88.60s；随后真实类型脚本与固定路由检查通过，整条 `linux-windows-final/acceptance.json` 为 passed。
+- 新 wheel 在源码外安装为 8.3.0，内置验收技能 / registry 存在；69 个依赖逐项符合锁文件（NumPy 2.5.2）。wheel SHA256 `3501830287cd4cb9f1d5e77a18cd9c9c1f26935438156aefed7edfbc69e447c5`。
+- 1427 文件输入清单 SHA256 `96521108b2da51ce75930245c8c43febac1064fe20f73357d2fb4019b26a0845`，验证结束时亲核无漂移。
+- Windows 两个版本边界均仍有上述测试注入缺口，待仅测试补丁；以上结果不替代 Windows 完整验收。
+
+Claude 已补齐最后两个用例：用实际存储文本定位注入，显式断言注入发生；LF 分支强制 LF、CRLF 分支写真实字节并检查，避免 Windows 两个参数实际都跑 CRLF。复杂字符串测试增加 U+0085/U+2028 保留断言。主控复跑 **58 passed**，ruff 通过。相对 `10e33d6` 的完整验收输入，仅该测试文件与验收经验文档变化，生产源码 / wheel / 依赖不变；差异记录 `windows-final-test-delta.json`。新提交将执行 Windows 完整矩阵，最终结论以 PR 检查页及 PR 验收记录为准。

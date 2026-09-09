@@ -327,20 +327,32 @@ class TestMergeSemanticPreservation:
             )
 
     @pytest.mark.parametrize("mutation", ["user_hook", "user_setting"])
+    @pytest.mark.parametrize("line_ending", ["lf", "crlf"])
     def test_semantic_guard_refuses_valid_toml_that_loses_user_data(
-        self, tmp_path: Path, monkeypatch, mutation: str
+        self, tmp_path: Path, monkeypatch, mutation: str, line_ending: str
     ) -> None:
         existing = (
             'theme = "dark"\n' + USER_HOOK + '\n[custom]\nvalue = "preserve"\n' + VIBESOP_HOOKS
         )
         config_path = tmp_path / "config.toml"
-        config_path.write_text(existing)
+        if line_ending == "crlf":
+            _write_crlf(config_path, existing)
+        else:
+            config_path.write_text(existing, encoding="utf-8", newline="\n")
+        # Match on the raw stored text the reader actually sees: platform
+        # write_text defaults would emit CRLF on Windows, so comparing
+        # against the LF source string would silently skip the injection.
+        stored = config_path.read_bytes().decode("utf-8")
+        assert ("\r" in stored) == (line_ending == "crlf")
         adapter = KimiCliAdapter()
         split = adapter._split_config_blocks
+        injected = False
 
         def damage_blocks(text):
+            nonlocal injected
             preamble, blocks = split(text)
-            if text == existing:
+            if text == stored:
+                injected = True
                 index = 0 if mutation == "user_hook" else 1
                 blocks.pop(index)
             return preamble, blocks
@@ -348,7 +360,8 @@ class TestMergeSemanticPreservation:
         monkeypatch.setattr(adapter, "_split_config_blocks", damage_blocks)
         with pytest.raises(ValueError, match="change user configuration"):
             adapter._merge_config_with_existing(config_path, NEW_CONFIG)
-        assert config_path.read_text() == existing
+        assert injected
+        assert config_path.read_bytes().decode("utf-8") == stored
 
     def test_nan_user_setting_survives_semantic_validation(self, tmp_path: Path) -> None:
         import math
@@ -405,14 +418,18 @@ class TestWindowsCrlfFiles:
     def test_crlf_nested_subtable_comments_and_multiline_string(self, tmp_path: Path) -> None:
         existing = (
             "# user comment\n" + USER_HOOK + '\n[hooks.env]\nFOO = "bar"\n'
-            '\nmatcher = """begin\nend"""\n' + VIBESOP_HOOKS
+            '\nmatcher = """begin\n\u0085middle\u2028end"""\n' + VIBESOP_HOOKS
         )
         merged = _merge_crlf(tmp_path, existing)
         parsed = tomllib.loads(merged)
 
         # matcher follows [hooks.env], so TOML attaches it to that subtable;
-        # the CRLF inside the multiline string normalizes to LF on parse.
-        assert parsed["hooks"][0]["env"] == {"FOO": "bar", "matcher": "begin\nend"}
+        # the CRLF inside the multiline string normalizes to LF on parse,
+        # while non-newline separators (U+0085 NEL, U+2028 LS) stay intact.
+        assert parsed["hooks"][0]["env"] == {
+            "FOO": "bar",
+            "matcher": "begin\n\u0085middle\u2028end",
+        }
         assert "# user comment" in merged
         assert len(parsed["hooks"]) == 3
 
