@@ -57,3 +57,13 @@ G 初稿测试被主控退回：手写第二套 pytest 验收 if 不能证明生
 - G 获独立 Kimi **APPROVE**，主控复跑 **6 passed**，提交 `a29ff01`。Kimi 随后只为测试补充 Bash/grep 缺失时的明确 skip，主控复审并在 Bash 可用环境确认 6 项实际执行；不按 Windows 整体跳过。评审的“CI 只有 Linux”判断不准确，本项目有 Windows 3.12/3.13 必需检查，以远程实跑为准。既有 post/local 版本正则限制与共享 `/tmp/vibesop-build` 目录列为后续本地发布脚本维护项，不影响此次不打标签的代码交付。
 - Grok 清单补登已合流，主控 RegistrySync + 内置技能 **20 passed**；固定路由检查 **39 题匹配、0 新失败、0 漂移**（保留 4 个已知失败与 2 个环境跳过）。仅更新注册文件输入指纹，所有非指纹数据逐项相等。
 - 最终版本固定为 **8.3.0**（包元数据/CLI 一致），开始冻结输入做主机和离线 Linux 完整常规回归。
+
+### 最终回归发现与修正
+
+- `1267f3d` 已推送版本与文档收口；Docker 在源码目录之外实际安装 wheel，确认 `verify-result` 与 registry 随包包含。
+- 旧远程开发提交的 Ubuntu 3.12 完整日志回收后发现第二个失败：`GITHUB_ACTIONS=true` 会触发 basedpyright 的另一种输出模式，仅 warning 项目即使 `--level error` 仍返回 1。主控在本机亲证 F/G 两个 warning 用例均失败；显式 `PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1` 可恢复普通文本语义。已追加有界修复给 Pi，统一真实入口并覆盖该环境分支，不放宽错误/配置错误拒绝。
+- `1267f3d` 离线 Linux 常规测试 **6993 passed / 25 skipped / 17 deselected**；随后的类型检查正确拒绝了验证容器中缺少 `/work/.venv` 的配置（退出 3），因此整条凭据保留为 **failed**。这是容器将依赖放在 `/opt/venv`、项目配置期望 `.venv` 的环境差异；下一次验证在可写副本补齐环境链接，不更改产品配置。
+
+- `1267f3d` 主机完整常规回归 **7003 passed / 15 skipped / 17 deselected**（143.89s），凭据 `host-final/acceptance.json` 为 passed。后续变化仅 F/G 工具入口与门禁测试，应用源码保持不变；原有输入清单与失败凭据保留，下一轮使用独立 v2 验证材料。
+
+- Pi 已统一 CI、Makefile、两份脚本的普通文本输出设置；主控退回并修正 warning 断言过宽、普通环境继承 GitHub 标记两处测试问题。独立 Kimi 对当前文件 **APPROVE**，亲跑 **16 passed**；主控在 `GITHUB_ACTIONS=true` 下 **16 passed**，真实类型脚本 **0 errors**。新旧输入比较确认仅 5 个工具/测试文件变化，应用源码与待测 wheel 不变。

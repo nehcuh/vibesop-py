@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `reportMissingReturnType` / `reportUntypedClassDef`，以及不存在的 `stubPath`；
   有效规则不放宽。CI type-check 改为只接受真正成功：
   `uv run basedpyright --level error`（退出 0 通过；1=类型错误、3=配置错误均失败；
-  warning 经 `--level error` 按项目显式规则保持非阻断）。新增
+  warning 经 `--level error` 按项目显式规则保持非阻断）。各入口设置
+  `PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1`，避免 GitHub 输出模式改变 warning 的退出语义。新增
   `tests/scripts/test_typecheck_gate.py` 真实 subprocess 门禁回归（类型错误拒绝、
   无效配置拒绝、仅 warning 允许、正常允许、钉 CI 命令完整形状），门禁测试只用 CI
   同款普通文本命令。

@@ -8,10 +8,13 @@ basedpyright 1.39.9, plain-text exit codes are
 - 3 = configuration error (unrecognized setting, missing stubPath dir, ...)
 
 The old gate ``uv run basedpyright || [ $? -eq 3 ]`` treated exit 3 as "warnings
-only" and green-lit runs that also reported type errors. These tests therefore
-run the real pinned basedpyright binary in throwaway projects (no fake return
-codes, no network) and pin the CI command's full shape so the old acceptance
-cannot be reintroduced unnoticed.
+only" and green-lit runs that also reported type errors. Additionally,
+``GITHUB_ACTIONS=true`` switches basedpyright 1.39.9 to GitHub Actions output,
+where a warnings-only run exits 1 even under ``--level error``. Every real gate
+entry point therefore sets ``PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1`` (plain-text
+mode); these tests inherit that production setting by parsing the CI step env
+rather than redefining it, and run each scenario both on a normal machine and
+with a real ``GITHUB_ACTIONS=true`` child environment.
 """
 
 from __future__ import annotations
@@ -20,13 +23,17 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+
+_PLAIN_OPTIONS = ("--level", "error")
 
 
 def _find_basedpyright() -> Path | None:
@@ -47,6 +54,35 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _ci_typecheck_env() -> dict[str, str]:
+    """The real env of the CI ``Run basedpyright`` step (production setting).
+
+    Tests inherit this instead of redefining the environment config, so a change
+    in ci.yml is picked up here automatically.
+    """
+    data = yaml.safe_load(CI_YML.read_text(encoding="utf-8"))
+    steps = data["jobs"]["type-check"]["steps"]
+    for step in steps:
+        if "basedpyright" in str(step.get("run", "")):
+            return {str(k): str(v) for k, v in (step.get("env") or {}).items()}
+    raise AssertionError("ci.yml has no Run basedpyright step env")
+
+
+PROD_ENV = _ci_typecheck_env()
+
+
+def _child_env(*, github: bool) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(PROD_ENV)
+    # ``github=False`` must mean a normal machine: never let an outer
+    # GITHUB_ACTIONS=true leak in; ``github=True`` sets it explicitly.
+    if github:
+        env["GITHUB_ACTIONS"] = "true"
+    else:
+        env.pop("GITHUB_ACTIONS", None)
+    return env
+
+
 def _make_project(tmp_path: Path, *, extra_config: str = "", body: str) -> Path:
     """A throwaway project with a [tool.pyright] config and one source file."""
     (tmp_path / "pyproject.toml").write_text(
@@ -58,103 +94,110 @@ def _make_project(tmp_path: Path, *, extra_config: str = "", body: str) -> Path:
     return tmp_path
 
 
-def _run_gate(project: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
-    """Run the CI-shaped plain-text command (no --outputjson)."""
-    args = [str(BP_BIN)]
-    args.extend(extra_args)
-    args.append("--level")
-    args.append("error")
+def _run_basedpyright(
+    project: Path, args: list[str], *, github: bool
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        args,
+        [str(BP_BIN), *args],
         cwd=project,
         capture_output=True,
         text=True,
         timeout=120,
         check=False,
+        env=_child_env(github=github),
     )
 
 
-def test_clean_project_passes() -> None:
-    """Exit 0 on clean code: the only state the gate may accept."""
-    import tempfile
+def _run_gate(project: Path, *, github: bool) -> subprocess.CompletedProcess[str]:
+    """Run the CI-shaped plain-text command (no --outputjson)."""
+    return _run_basedpyright(project, list(_PLAIN_OPTIONS), github=github)
 
+
+GITHUB_CASES = pytest.mark.parametrize("github", [False, True])
+
+
+@GITHUB_CASES
+def test_clean_project_passes(github: bool) -> None:
+    """Exit 0 on clean code: the only state the gate may accept."""
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(
             Path(td),
             body="def double(x: int) -> int:\n    return x * 2\n",
         )
-        result = _run_gate(project)
+        result = _run_gate(project, github=github)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_type_error_is_rejected() -> None:
+@GITHUB_CASES
+def test_type_error_is_rejected(github: bool) -> None:
     """A type error exits 1 and must fail the gate."""
-    import tempfile
-
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(
             Path(td),
             body='def f(x: int) -> int:\n    return "bad"\n',
         )
-        result = _run_gate(project)
+        result = _run_gate(project, github=github)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "error:" in result.stdout
 
 
-def test_invalid_config_is_rejected_as_config_error() -> None:
+@GITHUB_CASES
+def test_invalid_config_is_rejected_as_config_error(github: bool) -> None:
     """Exit 3 = configuration error in plain-text mode, never accepted.
 
     This is exactly the failure the old ``|| [ $? -eq 3 ]`` gate swallowed.
     """
-    import tempfile
-
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(
             Path(td),
             extra_config='reportMissingReturnType = "error"\n',
             body="def f(x: int) -> int:\n    return x\n",
         )
-        result = _run_gate(project)
-        assert result.returncode == 3, result.stdout + result.stderr
-        assert "unrecognized setting" in result.stderr
+        result = _run_gate(project, github=github)
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "unrecognized setting" in result.stderr
 
 
-def test_warnings_only_is_allowed_under_level_error() -> None:
+_WARNING_BODY = (
+    "class Box:\n"
+    "    def __init__(self) -> None:\n"
+    "        self._secret = 1\n"
+    "\n"
+    "def use(b: Box) -> None:\n"
+    "    print(b._secret)\n"
+)
+
+
+@GITHUB_CASES
+def test_warnings_only_is_allowed_under_level_error(github: bool) -> None:
     """Rules configured as warning stay advisory: non-blocking with --level error.
 
-    Plain-text basedpyright exits 1 when warnings are reported at the default
-    level, so the CI command must use ``--level error`` to keep explicitly
-    warning-severity rules non-blocking while errors still fail.
+    First prove the fixture really produces the configured ``reportPrivateUsage``
+    warning: the same project, production env, WITHOUT ``--level error``, must
+    report the warning with exit 1 and zero errors. Then the gated command
+    (``--level error`` + production plain-text env) must exit 0.
     """
-    import tempfile
-
-    body = (
-        "class Box:\n"
-        "    def __init__(self) -> None:\n"
-        "        self._secret = 1\n"
-        "\n"
-        "def use(b: Box) -> None:\n"
-        "    print(b._secret)\n"
-    )
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(
             Path(td),
             extra_config='reportPrivateUsage = "warning"\n',
-            body=body,
+            body=_WARNING_BODY,
         )
-        plain = subprocess.run(
-            [str(BP_BIN), "."],
-            cwd=project,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        gated = _run_gate(project)
+        # Control: no --level error → the warning is reported and blocks.
+        ungated = _run_basedpyright(project, [], github=github)
+        assert ungated.returncode == 1, ungated.stdout + ungated.stderr
+        assert "0 errors" in ungated.stdout, ungated.stdout
+        assert "reportPrivateUsage" in ungated.stdout, ungated.stdout
+        assert "warning" in ungated.stdout, ungated.stdout
 
-    assert "warning" in plain.stdout.lower()
-    assert plain.returncode == 1  # default level makes warnings block
-    assert gated.returncode == 0  # --level error keeps warnings non-blocking
+        # Gated (CI shape): warnings stay advisory → exit 0.
+        result = _run_gate(project, github=github)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_production_env_is_plain_text() -> None:
+    """The CI step env must force plain-text output (single source of truth)."""
+    assert PROD_ENV.get("PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT") == "1"
 
 
 def test_ci_command_shape_is_pinned() -> None:

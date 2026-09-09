@@ -56,6 +56,10 @@ else
 fi
 
 # Check type hints (same shape as CI: only exit 0; --level error keeps warnings advisory)
+# GITHUB_ACTIONS=true switches basedpyright 1.39.9 to GitHub Actions output where a
+# warnings-only run exits 1 (plain text exits 0); force plain-text mode here so the
+# exit codes match CI and warnings stay advisory.
+export PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1
 echo ""
 echo "4. Checking type hints (basedpyright --level error; only exit 0 accepted)..."
 if uv run basedpyright --level error; then

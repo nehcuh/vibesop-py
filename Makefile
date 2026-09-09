@@ -18,7 +18,7 @@ format: ## Format code
 	uv run ruff format .
 
 type-check: ## Run type checking (basedpyright --level error; only exit 0)
-	uv run basedpyright --level error
+	PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1 uv run basedpyright --level error
 
 test: clean-cov ## Run tests (skip slow/benchmark for reasonable speed)
 	uv run pytest -m "not benchmark and not slow"

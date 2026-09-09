@@ -62,3 +62,7 @@ Pi 在 D 完成后串行移除无效配置键及不存在的 stubPath；不放�
 ## B 补充：清单一致性
 
 完整回归发现内置文件新增但 registry 未登记，使真实 RegistrySync 报告待新增技能。授权 Grok 补齐 `core/registry.yaml` 的人工/编排专用登记，保留现有清单一致性测试断言；不添加自动触发或重写原有技能意图。路由指纹如受影响，只刷新输入指纹，39 道题的预期与结果必须逐项保持不变。
+
+## F/G 补充：GitHub Actions 输出模式
+
+主控亲证 `GITHUB_ACTIONS=true` 时锁定检查器的 GitHub 输出分支与普通文本分支对 warning 的退出行为不同。授权 Pi 串行修复 F/G 六个入口/测试文件，使用工具支持的 `PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1` 固定普通文本模式，并运行真实 GitHub 环境下的成功、错误、配置错误、warning 用例。不得只清理测试环境或使用 JSON 模式绕过问题；错误与无效配置仍必须非 0。

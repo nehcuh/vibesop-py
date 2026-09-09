@@ -58,6 +58,11 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run basedpyright
+        env:
+          # GITHUB_ACTIONS=true switches basedpyright 1.39.9 to GitHub Actions
+          # output where a warnings-only run exits 1 (plain text exits 0). Force
+          # plain-text mode so exit codes stay 0/1/3 and warnings stay advisory.
+          PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT: "1"
         # basedpyright 1.39.9 plain-text exit codes: 0 = success, 1 = type
         # errors, 3 = configuration error (unrecognized setting, missing
         # stubPath dir, ...) — 3 is NOT "warnings only". Only exit 0 is a real

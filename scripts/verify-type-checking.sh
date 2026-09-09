@@ -7,6 +7,11 @@
 # `--level error` keeps rules configured as "warning" advisory/non-blocking
 # while errors (1) and config errors (3) still fail.
 
+# GITHUB_ACTIONS=true switches basedpyright 1.39.9 to GitHub Actions output where
+# a warnings-only run exits 1 (plain text exits 0). Force plain-text mode at every
+# real gate entry point so exit codes stay 0/1/3 and warnings stay advisory.
+export PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1
+
 if ! uv run basedpyright --version &> /dev/null; then
     echo "❌ basedpyright not found in the project environment!"
     echo
