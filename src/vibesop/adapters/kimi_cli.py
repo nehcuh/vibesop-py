@@ -5,7 +5,7 @@ with OpenCode and Cursor adapters.
 """
 
 import logging
-import re
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -204,35 +204,235 @@ class KimiCliAdapter(FileBasedAdapter):
 
         return "\n".join(lines)
 
+    # Hook commands that VibeSOP itself generates into config.toml. Only
+    # [[hooks]] blocks whose command matches one of these exactly are
+    # replaced on merge; user hooks, near-miss script names and any
+    # unknown-but-valid structure are preserved untouched.
+    _VIBESOP_HOOK_COMMANDS = frozenset(
+        {
+            "bash ~/.kimi-code/hooks/vibesop-route.sh",
+            "bash ~/.kimi-code/hooks/vibesop-tool-seq.sh",
+        }
+    )
+
+    @staticmethod
+    def _header_key_path(line: str) -> tuple[list[str], bool] | None:
+        """Return (key path, is_array_of_tables) if line is a TOML table header."""
+        stripped = line.strip()
+        if not stripped.startswith("["):
+            return None
+        try:
+            doc = tomllib.loads(stripped)
+        except tomllib.TOMLDecodeError:
+            return None
+        path: list[str] = []
+        node: Any = doc
+        while isinstance(node, dict) and len(node) == 1:
+            key = next(iter(node))
+            path.append(key)
+            node = node[key]
+        if not path:
+            return None
+        return path, isinstance(node, list)
+
+    @staticmethod
+    def _update_string_state(line: str, in_string: str | None) -> str | None:
+        """Track TOML strings without interpreting quotes in comments or literals."""
+        i = 0
+        while i < len(line):
+            if in_string:
+                # Basic strings escape the next character. This also keeps an
+                # escaped quote from closing a multiline basic string.
+                if in_string.startswith('"') and line[i] == "\\":
+                    i += 2
+                elif line.startswith(in_string, i):
+                    quote = in_string[0]
+                    i += len(in_string)
+                    if len(in_string) == 3:
+                        # TOML allows one/two literal quotes before the closing
+                        # delimiter (a run of four/five quotes in total).
+                        while i < len(line) and line[i] == quote:
+                            i += 1
+                    in_string = None
+                else:
+                    i += 1
+            elif line[i] == "#":
+                break
+            elif line[i] in ("'", '"'):
+                quote = line[i]
+                in_string = quote * 3 if line.startswith(quote * 3, i) else quote
+                i += len(in_string)
+            else:
+                i += 1
+        return in_string
+
+    def _split_config_blocks(self, text: str) -> tuple[list[str], list[dict[str, Any]]]:
+        """Split TOML text into preamble lines and header-anchored blocks.
+
+        Comment lines directly above a header are attached to that header's
+        block so they are dropped/re-added together with it.
+        """
+        preamble: list[str] = []
+        blocks: list[dict[str, Any]] = []
+        current: list[str] | None = None
+        current_header: tuple[list[str], bool] | None = None
+        in_string: str | None = None
+        trailing_comments = 0
+        for line in text.split("\n"):
+            full_line_comment = in_string is None and line.lstrip().startswith("#")
+            header = None if in_string else self._header_key_path(line)
+            if header is not None:
+                container = preamble if current is None else current
+                prefix = container[-trailing_comments:] if trailing_comments else []
+                if trailing_comments:
+                    del container[-trailing_comments:]
+                if current is not None:
+                    blocks.append({"lines": current, "header": current_header})
+                current = [*prefix, line]
+                current_header = header
+            elif current is None:
+                preamble.append(line)
+            else:
+                current.append(line)
+            in_string = self._update_string_state(line, in_string)
+            trailing_comments = trailing_comments + 1 if full_line_comment else 0
+        if current is not None:
+            blocks.append({"lines": current, "header": current_header})
+        return preamble, blocks
+
+    @staticmethod
+    def _parse_hook_block(block: dict[str, Any], source: str) -> dict[str, Any]:
+        """Parse one [[hooks]] block, raising ValueError when unreliable."""
+        try:
+            doc = tomllib.loads("\n".join(block["lines"]))
+            entries = doc["hooks"]
+            if not isinstance(entries, list) or len(entries) != 1:
+                raise TypeError("expected exactly one hook in a hook block")
+            entry = entries[0]
+            if not isinstance(entry, dict):
+                raise TypeError(f"hooks entry is {type(entry).__name__}")
+            return entry
+        except (tomllib.TOMLDecodeError, KeyError, IndexError, TypeError) as exc:
+            raise ValueError(
+                f"Cannot safely merge into {source}: unable to parse a "
+                f"[[hooks]] block reliably ({exc}). File left unchanged."
+            ) from exc
+
+    @staticmethod
+    def _salvage_tail(block: dict[str, Any]) -> list[str]:
+        """Keep blank-separated trailing comments of a dropped block."""
+        lines = block["lines"]
+        i = len(lines)
+        while i > 0 and (not lines[i - 1].strip() or lines[i - 1].strip().startswith("#")):
+            i -= 1
+        tail = lines[i:]
+        if tail and not tail[0].strip():
+            return tail
+        return []
+
     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
         """Merge new VibeSOP config fragment into existing config.toml."""
         # config.toml is user-editable — tolerate locale-encoded (GBK) files
         # via the shared fallback instead of failing on UnicodeDecodeError.
         existing = read_text_with_fallback(config_path)
-        lines = existing.split("\n")
+        try:
+            original = tomllib.loads(existing)
+            generated = tomllib.loads(new_config)
+        except tomllib.TOMLDecodeError as exc:
+            raise ValueError(
+                f"Cannot safely merge into {config_path}: existing or generated config is "
+                f"not valid TOML ({exc}). Fix the file manually; it was left "
+                "unchanged."
+            ) from exc
 
-        result_lines = []
-        in_hooks_section = False
-        for line in lines:
-            if line.startswith("[[hooks]]"):
-                in_hooks_section = True
-                continue
-            if in_hooks_section:
-                if line.startswith("["):
-                    in_hooks_section = False
-                    result_lines.append(line)
-                continue
-            result_lines.append(line)
+        preamble, blocks = self._split_config_blocks(existing)
 
-        while result_lines and result_lines[-1].strip() == "":
-            result_lines.pop()
+        kept: list[list[str]] = [preamble]
+        drop_following_subs = False
+        for block in blocks:
+            path, is_array = block["header"]
+            is_hook_element = is_array and path == ["hooks"]
+            is_hooks_sub = path[0] == "hooks" and not is_hook_element
+            if is_hook_element:
+                entry = self._parse_hook_block(block, str(config_path))
+                drop_following_subs = self._is_owned_hook(entry)
+                if drop_following_subs:
+                    kept.append(self._salvage_tail(block))
+                    continue
+                kept.append(block["lines"])
+            elif is_hooks_sub and drop_following_subs:
+                # A subtable attaches to the last [[hooks]] element; dropping
+                # the element without its subtables would re-attach them to
+                # an unrelated hook.
+                kept.append(self._salvage_tail(block))
+            else:
+                # An unrelated table does not change the latest [[hooks]]
+                # element to which a later [hooks.*] table belongs.
+                kept.append(block["lines"])
 
-        hooks_match = re.search(r"(\[\[hooks\]\].*)", new_config, flags=re.DOTALL)
-        if hooks_match:
-            hooks_section = hooks_match.group(1).rstrip()
-            result_lines.extend(["", "", hooks_section, ""])
+        _, new_blocks = self._split_config_blocks(new_config)
+        new_hook_texts = []
+        for block in new_blocks:
+            path, is_array = block["header"]
+            if is_array and path == ["hooks"]:
+                self._parse_hook_block(block, "generated config")
+                new_hook_texts.append("\n".join(block["lines"]).rstrip())
 
-        return "\n".join(result_lines)
+        out_lines: list[str] = []
+        for part in kept:
+            out_lines.extend(part)
+        while out_lines and not out_lines[-1].strip():
+            out_lines.pop()
+
+        merged = "\n".join(out_lines)
+        if new_hook_texts:
+            merged += "\n\n" + "\n\n".join(new_hook_texts)
+        merged += "\n"
+
+        try:
+            merged_values = tomllib.loads(merged)
+        except tomllib.TOMLDecodeError as exc:
+            raise ValueError(
+                f"Cannot safely merge into {config_path}: merged result is "
+                f"not valid TOML ({exc}). File left unchanged."
+            ) from exc
+        original_hooks = original.get("hooks", [])
+        generated_hooks = generated.get("hooks", [])
+        if not isinstance(original_hooks, list) or not isinstance(generated_hooks, list):
+            raise ValueError(f"Cannot safely merge into {config_path}: hooks must be an array.")
+        retained_hooks = [hook for hook in original_hooks if not self._is_owned_hook(hook)]
+        expected = dict(original)
+        if "hooks" in original or generated_hooks:
+            expected["hooks"] = retained_hooks + generated_hooks
+        if not self._same_config_values(expected, merged_values):
+            raise ValueError(
+                f"Cannot safely merge into {config_path}: merge would change user configuration "
+                "or lose generated hooks. File left unchanged."
+            )
+        return merged
+
+    @classmethod
+    def _is_owned_hook(cls, hook: Any) -> bool:
+        command = hook.get("command") if isinstance(hook, dict) else None
+        return isinstance(command, str) and " ".join(command.split()) in cls._VIBESOP_HOOK_COMMANDS
+
+    @classmethod
+    def _same_config_values(cls, expected: Any, actual: Any) -> bool:
+        """Compare parsed TOML values, including TOML's valid NaN values."""
+        import math
+
+        if isinstance(expected, dict) and isinstance(actual, dict):
+            return expected.keys() == actual.keys() and all(
+                cls._same_config_values(value, actual[key]) for key, value in expected.items()
+            )
+        if isinstance(expected, list) and isinstance(actual, list):
+            return len(expected) == len(actual) and all(
+                cls._same_config_values(left, right)
+                for left, right in zip(expected, actual, strict=True)
+            )
+        if isinstance(expected, float) and isinstance(actual, float):
+            return expected == actual or (math.isnan(expected) and math.isnan(actual))
+        return type(expected) is type(actual) and expected == actual
 
     # ---- Custom config file rendering with merge support ----
     def _render_config_file(
