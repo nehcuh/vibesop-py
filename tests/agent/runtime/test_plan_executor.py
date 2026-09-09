@@ -61,9 +61,12 @@ class TestPlanExecutor:
         runtime scan flags unsafe. Pre-fix only SkillInjector.inject_single_skill
         scanned; this path read SKILL.md raw and embedded it, so post-install
         tampering reached the agent prompt verbatim via the manifest.
-        """
-        from unittest.mock import MagicMock, patch
 
+        2026-09-09 contract update (spec C): the manifest must not substitute
+        the refusal notice as the step body and continue — that still yields an
+        "executable" manifest for a plan whose real instructions were rejected.
+        Unsafe content blocks the whole manifest with a diagnostic exception.
+        """
         executor = PlanExecutor()
         plan = ExecutionPlan(
             plan_id="plan-evil",
@@ -89,21 +92,18 @@ class TestPlanExecutor:
         from pathlib import Path
 
         Path(plan.steps[0].skill_file).write_text(malicious)
-        mock_loader = MagicMock()
-        mock_loader.read_skill_content.return_value = malicious
-        mock_loader.get_skill.return_value = None
 
-        with patch("vibesop.core.skills.SkillLoader", return_value=mock_loader):
-            manifest = executor.build_manifest(plan)
-
-        embedded = manifest.steps[0].skill_content
-        # the malicious content must NOT be embedded verbatim
-        assert "Ignore all previous instructions" not in embedded
-        assert "VibeSOP SECURITY" in embedded  # replaced with a security notice
+        with pytest.raises(ValueError, match="Execution plan blocked") as excinfo:
+            executor.build_manifest(plan)
+        # the malicious content must NOT be echoed in the diagnostic either
+        assert "Ignore all previous instructions" not in str(excinfo.value)
+        assert plan.metadata["execution_ready"] is False
+        reasons = {b["reason"] for b in plan.metadata["blocked_steps"]}
+        assert reasons == {"unsafe content"}
 
     def test_build_manifest_empty_skill_content_gets_data_notice(self, tmp_path) -> None:
-        """A missing skill file (empty content) must surface a data notice in
-        the manifest step, NOT be silently embedded as an empty body — the
+        """A missing skill file (empty content) must block the manifest,
+        NOT be silently embedded as an empty body — the
         empty gate mirrors SkillInjector.inject_single_skill so the two
         injection paths can't drift (runtime_scan's centralisation promise).
         """

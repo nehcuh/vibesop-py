@@ -149,27 +149,24 @@ class PlanExecutor:
 
             raise ValueError(SkillInjector.blocked_plan_notice(plan.to_dict()))
         loader = SkillLoader(project_root=self._project_root)
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+        from vibesop.security.runtime_scan import is_skill_content_safe
+
         steps: list[StepManifest] = []
 
         for step in plan.steps:
+            # Content gates (parallel to SkillInjector.inject_single_skill),
+            # applied to the body ACTUALLY read here — annotation scanned at
+            # handoff time, but the file can be swapped in between. Every
+            # refusal records the blocked state on the plan itself
+            # (block_plan_step) and raises the same diagnostic as the
+            # annotation gate, so a post-annotation refusal never leaves
+            # execution_ready=True behind, and no gate echoes the refused body.
             try:
                 skill_content = Path(step.skill_file).read_text(encoding="utf-8")
             except (OSError, UnicodeError) as exc:
-                raise ValueError(f"Plan blocked: cannot read skill {step.skill_id}") from exc
-            # Content gates (parallel to SkillInjector.inject_single_skill):
-            # 1. Empty gate — a missing file is a data problem: surface a
-            #    notice instead of silently embedding an empty step body.
-            # 2. Runtime security gate — the install-time audit is the only
-            #    other check, so post-install tampering of SKILL.md would
-            #    otherwise reach the agent prompt verbatim via the manifest.
-            #    Refuse (embed a notice) if unsafe.
-            from vibesop.agent.runtime.skill_injector import SkillInjector
-            from vibesop.security.runtime_scan import (
-                empty_content_notice,
-                is_skill_content_safe,
-                unsafe_replacement_notice,
-            )
-
+                SkillInjector.block_plan_step(plan, step, "not found or empty")
+                raise ValueError(SkillInjector.blocked_plan_notice(plan.to_dict())) from exc
             if not skill_content.strip() or SkillInjector._is_placeholder_content(
                 step.skill_id, skill_content
             ):
@@ -177,14 +174,16 @@ class PlanExecutor:
                     "Skill '%s' resolved to no injectable content for manifest step.",
                     step.skill_id,
                 )
-                raise ValueError(empty_content_notice(step.skill_id))
+                SkillInjector.block_plan_step(plan, step, "not found or empty")
+                raise ValueError(SkillInjector.blocked_plan_notice(plan.to_dict()))
             elif not is_skill_content_safe(skill_content):
                 logger.warning(
                     "Refusing to embed skill '%s' in execution manifest: "
                     "runtime security scan flagged the content unsafe.",
                     step.skill_id,
                 )
-                skill_content = unsafe_replacement_notice(step.skill_id)
+                SkillInjector.block_plan_step(plan, step, "unsafe content")
+                raise ValueError(SkillInjector.blocked_plan_notice(plan.to_dict()))
             skill = loader.get_skill(step.skill_id)
             skill_name = skill.metadata.name if skill else step.skill_id
             skill_path = step.skill_file or (

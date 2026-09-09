@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **验证器与计划交付合同（v8.3 行为变化，开发版对齐 `8.3.0.dev1`）**: 新增
+  `docs/architecture/verification-contract.md` 固化交付合同——默认对抗计划应使用
+  随包内置验收技能 `builtin/verify-result`（仅在显式/编排选择时使用，不全局自动注入）；
+  按任务类型验收（代码用测试与行为、文档看完整性与来源、分析核数据与计算、部署查
+  已有授权下的实际状态）；缺证据 blocked、实际失败 failed、满足清单才 passed；技能
+  正文不安全或不可用时，所有计划交付入口阻断并给出可区分原因，不能把拒绝提示当技能
+  正文继续生成可执行 manifest。新增 `tests/integration/test_verification_delivery_contract.py`
+  作为真实集成合同测试：默认计划可交付 / 显式指定缺失验证器阻断 / 安全正文改成不安全
+  后拒绝；测试只走真实模型、临时文件与实际内置技能，不 mock 待验收接口。A 计划生成
+  （`build_plan(..., verifier_skill_id="builtin/verify-result")`）、B 内置验收技能、
+  C 正文拒绝统一尚未集成，集成前本测试按合同预期失败并保留结果，最终 8.3.0 条目在
+  各路合流收口时统一撰写。
+
 - **机器验收凭据**：`scripts/record_acceptance.py` 实际执行命令，保存日志、退出码、时间、运行前 Git 状态与产物指纹；区分通过、失败与环境错误，拒绝覆盖已有凭据。使用方法见 `docs/architecture/acceptance-evidence.md`。
 
 - **v8.3 编排事件/控制面契约从包级导出（P1-1，20260831 评审）**:

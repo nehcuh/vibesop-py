@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from vibesop.core.models import ExecutionPlan
+    from vibesop.core.models import ExecutionPlan, ExecutionStep
 
 logger = logging.getLogger(__name__)
 
@@ -645,15 +645,21 @@ You MUST follow this skill's workflow. Do not skip steps.
             )
             if source:
                 sources[source_key] = source
-            step["skill_file"] = self._resolve_step_source(sid, None, source)
+            step["skill_file"], reason = self._resolve_step_source(sid, None, source)
             if step["skill_file"]:
                 sources[source_key] = step["skill_file"]
             if not step["skill_file"]:
-                reason = "unresolved skill" if sid in ("", "fallback-llm") else "not found or empty"
-                step["skill_file_note"] = (
-                    f"{reason} — do not guess skills/<id>/SKILL.md; "
-                    "restore the skill and rebuild this plan before execution"
-                )
+                if reason == "unsafe content":
+                    step["skill_file_note"] = (
+                        "unsafe content — the runtime security scan refused the "
+                        "skill body; do not read or execute it, audit or reinstall "
+                        "the skill and rebuild this plan before execution"
+                    )
+                else:
+                    step["skill_file_note"] = (
+                        f"{reason} — do not guess skills/<id>/SKILL.md; "
+                        "restore the skill and rebuild this plan before execution"
+                    )
                 blocked.append(
                     {
                         "step_number": step.get("step_number", index),
@@ -671,24 +677,60 @@ You MUST follow this skill's workflow. Do not skip steps.
         skill_id: str,
         source_lookup: Callable[[str], str | None] | None,
         existing: str = "",
-    ) -> str:
-        """Check the authoritative file's body, including previously filled paths."""
+    ) -> tuple[str, str]:
+        """Check the authoritative file's body, including previously filled paths.
+
+        Returns ``(annotated_path, block_reason)``; the reason is ``""`` when the
+        body is usable. Availability failures keep the previous reasons; a body
+        the runtime security scan refuses (flagged unsafe OR scanner failure —
+        the scan fails closed) is reported as ``"unsafe content"`` so blocked
+        steps stay distinguishable from plain missing/empty files.
+        """
         if skill_id in ("", "fallback-llm"):
-            return ""
+            return "", "unresolved skill"
         hinted = source_lookup(skill_id) if source_lookup is not None else None
         source = hinted or existing
         path = Path(source) if source else self.resolve_skill_md(skill_id)
         if path is None:
-            return ""
+            return "", "not found or empty"
         try:
             if not path.is_file():
-                return ""
+                return "", "not found or empty"
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
-            return ""
+            return "", "not found or empty"
         if not content.strip() or self._is_placeholder_content(skill_id, content):
-            return ""
-        return path.resolve().as_posix()
+            return "", "not found or empty"
+        safe, _scan_source = self._is_content_safe(content)
+        if not safe:
+            return "", "unsafe content"
+        return path.resolve().as_posix(), ""
+
+    @staticmethod
+    def block_plan_step(plan: ExecutionPlan, step: ExecutionStep, reason: str) -> None:
+        """Record a refusal observed AFTER annotation (the manifest re-read).
+
+        ``annotate_plan_dict`` blocks what it can see at handoff time, but a
+        body can be swapped between annotation and the manifest's own read of
+        the same file. Once that re-read refuses, the plan must immediately
+        carry the same blocked state — ``execution_ready=False`` plus a
+        per-step reason identical in shape to annotation entries — without
+        re-reading a file that may already have been restored. All steps and
+        ``skill_sources`` are retained; the refused path is cleared from the
+        step so no downstream consumer reads it.
+        """
+        plan.metadata["execution_ready"] = False
+        blocked = plan.metadata.setdefault("blocked_steps", [])
+        if not isinstance(blocked, list):
+            blocked = plan.metadata["blocked_steps"] = []
+        entry = {
+            "step_number": step.step_number,
+            "skill_id": step.skill_id,
+            "reason": reason,
+        }
+        if entry not in blocked:
+            blocked.append(entry)
+        step.skill_file = ""
 
     @staticmethod
     def blocked_plan_notice(plan: dict[str, Any]) -> str:

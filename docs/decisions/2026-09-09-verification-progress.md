@@ -12,7 +12,7 @@
 | M1：明确 spec | 完成 | [验证合同](../specs/2026-09-09-verification-contract.md)，固定文件归属与验收 |
 | M2：四路实现 | 进行中 | Claude 计划生成；Grok 内置技能；Kimi 正文拒绝；Pi 版本/文档/集成合同；均从 `99185be` 的独立工作树启动 |
 | M3：审阅及分批集成 | 进行中 | Grok B、Claude A/E、Pi F 均获独立 Kimi APPROVE；C 修正实读后状态后待终审；G 本地门禁实现中 |
-| M4：整体验收 | 待开始 | 主机、Docker、固定路由及源码指纹 |
+| M4：整体验收 | 进行中 | 主体开发版本已启动主机常规回归；最终版本与 G 合流后冻结输入做最终验证 |
 | M5：版本与远程收口 | 待开始 | 版本一致、PR/CI、最终提交 |
 
 本机过程材料：`.omx/artifacts/verification-20260909/`。失败与未完成结果保留，不以代理自述作为验收通过。
@@ -42,3 +42,7 @@ Kimi C 主控初审：`kimi-swap-review.json` 亲证检查后改文件时 manife
 - Pi D/F：开发版本、配置修正、真实类型门禁测试已集成，独立 Kimi APPROVE（一个非阻塞脚本提示分支 NIT，交回 Pi 清理）。主控 A/B/F 定向 **55 passed**。
 - C 合流后，主控真实 A/B/C/D 集成合同、磁盘交换及类型门禁 **16 passed**；`uv run basedpyright --level error` **0 errors**。C 的报告为 runtime **196 passed**、相关组合 **1192 passed**，独立复审进行中。
 - G：`release-gate-before.json` 记录真实 pytest **1 failed / 1 passed、exit 1**，旧发布流水线却 **exit 0**。同类入口已交 Grok 修复，避免只修云端门禁而保留本地假通过。
+
+`029186e` 已将 A/E 与 Pi 的开发版本/类型门禁推送远程。C 已获独立 Kimi **APPROVE**，主控 Docker 的 C/D/F 相关测试 **26 passed**；评审指出的一处旧测试说明随集成修正为“阻断 manifest”。默认验证器、内容拒绝、真实集成合同至此均已通过定向验收。
+
+G 初稿测试被主控退回：手写第二套 pytest 验收 if 不能证明生产脚本行为，改为提取并执行实际脚本阶段/Makefile 命令。Pi 正在准备 `8.3.0` 版本候选，处理 F 的脚本提示 NIT、删除不必要且不准确的 JSON 模式说明，并整理当前文档和 CHANGELOG。
