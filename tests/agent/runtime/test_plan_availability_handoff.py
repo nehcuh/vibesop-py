@@ -130,7 +130,7 @@ def test_deleted_authoritative_source_cannot_be_replaced_at_serialization(tmp_pa
     injector.annotate_plan_dict(
         payload, source_lookup=lambda key: str(authoritative) if key == sid else None
     )
-    assert payload["steps"][1]["skill_file"] == str(authoritative)
+    assert payload["steps"][1]["skill_file"] == authoritative.as_posix()
     authoritative.unlink()
     result = AgentRuntimeResult(
         intercepted=True,
@@ -166,6 +166,8 @@ def test_minimal_cli_payload_is_blocked_and_keeps_verifier(tmp_path, monkeypatch
 
 
 def test_minimal_cli_ready_plan_keeps_authoritative_paths(tmp_path, monkeypatch):
+    from pathlib import Path
+
     plan = make_plan(tmp_path)
     routed = OrchestrationResult(mode=OrchestrationMode.ORCHESTRATED, execution_plan=plan)
     payload = LightweightRouter._format_result(routed)
@@ -173,7 +175,7 @@ def test_minimal_cli_ready_plan_keeps_authoritative_paths(tmp_path, monkeypatch)
     attach_skill_file_payload(payload, routed)
     assert payload["metadata"]["execution_ready"] is True
     assert "notice_only" not in payload
-    assert payload["steps"][1]["skill_file"] == plan.steps[1].skill_file
+    assert payload["steps"][1]["skill_file"] == Path(plan.steps[1].skill_file).as_posix()
 
 
 def test_manifest_body_uses_same_source_as_annotated_path(tmp_path):
@@ -188,8 +190,10 @@ def test_manifest_body_uses_same_source_as_annotated_path(tmp_path):
 
 
 def test_same_skill_id_keeps_each_steps_actual_source(tmp_path):
+    from pathlib import Path
+
     plan = make_plan(tmp_path)
-    original_paths = [step.skill_file for step in plan.steps]
+    original_paths = [Path(step.skill_file).as_posix() for step in plan.steps]
     plan.steps[1].skill_id = plan.steps[0].skill_id
     injector = SkillInjector(tmp_path)
     injector.annotate_plan_skill_files(plan)

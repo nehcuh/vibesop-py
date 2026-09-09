@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-**8.3.0 的实现、审阅、版本同步及本机/锁定依赖 Docker 验收已完成**。四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
+**8.3.0 候选的本机/锁定依赖 Docker 验收已完成；真实 Windows 验收发现跨平台问题，现重新进入修复。**四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
 
 已验收代码为 `b5057d6`；本记录后续仅作验收文档整理，应用与测试输入由下方 SHA256 清单固定。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；[代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34344829654) 提供各平台 job 的实时结果。
 
@@ -92,3 +92,13 @@ Docker 环境失败也保留：v1 缺 `.venv` 映射导致类型配置被拒；v
 - 本轮代码按节点持续推送到 `codex/verification-contract-20260909`，最终文档提交只补验收事实，不改变上述代码 / 测试输入。PR 的检查页是远程状态的实时来源，PR 描述在矩阵结束后更新最终结果，避免为抄录每次 CI 状态反复制造新一轮相同代码的检查。
 - 未创建 release tag、未发布 PyPI、未合并 main。后续发布可复用本次 spec、机器凭据与独立评审，但须针对实际发布提交执行发布流程。
 - 剩余范围明确：固定题集的 4 个既有无匹配案例另设改进实验；历史 Windows 报告及两个 benchmark fixture 的版本号保留，文档版本扫描的这 3 个原有提示不当成本轮失败或强行改写。发布脚本的 post/local 版本支持与临时目录并发隔离是已有低优先级维护项。未将本轮结果当作多代理优于单代理的实验结论。
+
+### Windows 门禁失败与重新分工
+
+代码 CI Windows 3.12 最终为 **41 failed / 6950 passed / 32 skipped / 17 deselected / 82 rerun**（1193.20s）。与此前的单机通过不矛盾：CRLF、Windows ESM 路径/实际可执行文件、序列化路径断言、WSL 启动器误识别在 Windows 才触发。已按[四路 Windows spec](../specs/2026-09-09-windows-verification.md)分别交 Claude、Pi、Kimi、Grok 修复，保留所有原语义断言及 Windows 必需检查。PR 继续为草稿；先前本机/容器通过不宣称整个项目已经完成跨平台交付。
+
+Windows 3.13 同样 41 failed / 6950 passed / 32 skipped / 82 rerun（1259.20s），七个失败文件与 3.12 完全相同：Kimi 配置 19、Pi 扩展 3、进程边界 8、计划可用性 3、正文安全 2、conformance 1、Bash 发布测试 5。已启动四个真实 CLI；额外 Claude 会话只在 Windows 完整回归前增加边界测试步骤，完整矩阵不变。取消代码完全相同的文档提交重复 CI，避免再次消耗同一组已知失败的运行。
+
+W3 路径合同已由 Kimi 实现，主控读 diff：保留完整权威路径比较，unsafe 来源断言从尾部匹配加强为完整 Path 相等，未删业务断言；本机 57 passed。W5 CI 配置由额外 Claude 完成，主控解析 YAML 亲证仅插入边界测试步骤，移除该新增步骤后配置与原 CI 完全相同。
+
+W1 初稿被主控退回：仅 rstrip 块尾 CR 虽能解析，但生产 `write_file_atomic` 使用 `write_text`，Windows 会把保留的 CRLF 再写成 CRCRLF。主控用 `write_text(newline="\r\n")` 亲证二次合并失败（`windows-crlf-review-roundtrip.json`）；要求实现者修完整文本往返，不用 `write_bytes` 测试绕开生产写入。Pi 的全盘 find 卡住 4 分钟已停止，指定现有 distlib 包的准确资源路径继续，不需新依赖。

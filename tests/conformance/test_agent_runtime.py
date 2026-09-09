@@ -191,7 +191,7 @@ class TestAgentRuntimeHookResponse:
         assert "multiple intents" in data["systemMessage"].lower()
         assert "hookSpecificOutput" in data
         assert "Execution Plan" in data["hookSpecificOutput"]["additionalContext"]
-        assert str(skill_file) in data["hookSpecificOutput"]["additionalContext"]
+        assert skill_file.as_posix() in data["hookSpecificOutput"]["additionalContext"]
         assert result.has_match is True
         assert result.plan["metadata"]["execution_ready"] is True
 

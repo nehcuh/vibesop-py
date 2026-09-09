@@ -77,7 +77,7 @@ def test_unsafe_body_blocks_every_delivery_exit(tmp_path, monkeypatch, attacked_
     note = fresh["steps"][attacked_step].get("skill_file_note", "")
     assert "unsafe content" in note
     sources = plan.metadata["skill_sources"]
-    assert sources[attacked.step_id].endswith(f"{attacked.skill_id}/SKILL.md")
+    assert Path(sources[attacked.step_id]) == tmp_path / attacked.skill_id / "SKILL.md"
 
     # Guide: no completion markers, no attack body.
     guide = PlanExecutor(tmp_path).build_guide(plan)

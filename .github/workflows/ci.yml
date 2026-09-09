@@ -139,6 +139,22 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Run Windows boundary check (fast feedback)
+        # The 2026-09-09 Windows run had 41 failures concentrated in these
+        # boundary files; running them first surfaces concrete errors before
+        # the full regression completes. Same rerun
+        # posture as the full Run tests step below.
+        run: >-
+          uv run pytest -q --reruns 2 --reruns-delay 1
+          tests/adapters/test_kimi_config_merge.py
+          tests/adapters/test_pi_route_extension.py
+          tests/adapters/test_route_process_boundary.py
+          tests/agent/runtime/test_plan_availability_handoff.py
+          tests/agent/runtime/test_plan_content_safety.py
+          tests/conformance/test_agent_runtime.py
+          tests/scripts/test_release_checks.py
+          tests/scripts/test_typecheck_gate.py
+
       - name: Run tests
         # Same marker filter as the ubuntu job. --reruns 2 absorbs Windows
         # flakes (Defender scans, transient file-lock races);
