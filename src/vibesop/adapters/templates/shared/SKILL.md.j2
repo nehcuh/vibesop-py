@@ -2,6 +2,9 @@
 id: {{ skill.id }}
 name: {{ skill.name }}
 description: {{ skill.description | replace('\n', ' ') | trim }}
+{% if skill.disable_model_invocation %}
+disable-model-invocation: true
+{% endif %}
 {% if skill.tags %}
 tags: [{{ skill.tags | join(', ') }}]
 {% endif %}

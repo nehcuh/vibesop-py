@@ -3,6 +3,8 @@
 Covers: FeedbackCollector, ExecutionFeedbackCollector, FeedbackRecord, SkillExecutionFeedback.
 """
 
+import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -49,6 +51,30 @@ class TestFeedbackRecord:
         assert record.was_correct is False
         assert record.actual_skill == "builtin/other"
 
+    def test_from_dict_missing_was_correct_rejected(self) -> None:
+        """Strict input semantics (health-20260909 claude F2 revised): a real
+        payload with ``was_correct`` removed must be rejected, never defaulted
+        to True or False — unknown is not evidence in either direction."""
+        payload = FeedbackRecord(
+            query="legacy", routed_skill="builtin/x", was_correct=True
+        ).to_dict()
+        payload.pop("was_correct")
+
+        with pytest.raises(ValueError, match="was_correct"):
+            FeedbackRecord.from_dict(payload)
+
+    def test_from_dict_non_bool_was_correct_rejected(self) -> None:
+        """Only a JSON boolean is a confirmed outcome; strings, numbers and
+        null are unconfirmed input and must be rejected."""
+        payload = FeedbackRecord(
+            query="legacy", routed_skill="builtin/x", was_correct=True
+        ).to_dict()
+
+        for bad in ("yes", 1, None):
+            payload["was_correct"] = bad
+            with pytest.raises(ValueError, match="was_correct"):
+                FeedbackRecord.from_dict(payload)
+
 
 class TestFeedbackCollector:
     """Test FeedbackCollector."""
@@ -76,6 +102,32 @@ class TestFeedbackCollector:
         report = collector.generate_report()
         assert report.total_records == 0
         assert report.accuracy_rate == 0.0
+
+    def test_load_skips_unconfirmed_lines(self, tmp_path: Path, caplog) -> None:
+        """Lines missing or carrying a non-bool ``was_correct`` are skipped
+        with a warning and enter no statistics (health-20260909 claude F2
+        revised): unknown is neither correct nor incorrect."""
+        valid = FeedbackRecord(query="ok", routed_skill="s1", was_correct=True).to_dict()
+        missing = dict(valid)
+        missing.pop("was_correct")
+        bad_bool = dict(valid)
+        bad_bool["was_correct"] = "yes"
+
+        storage = tmp_path / "feedback.json"
+        storage.with_suffix(".jsonl").write_text(
+            "\n".join(json.dumps(r) for r in (valid, missing, bad_bool)) + "\n",
+            encoding="utf-8",
+        )
+        with caplog.at_level(logging.WARNING, logger="vibesop.core.feedback"):
+            collector = FeedbackCollector(storage_path=str(storage))
+
+        assert sum("Skipping unconfirmed feedback line" in r.message for r in caplog.records) == 2
+
+        report = collector.generate_report()
+        assert report.total_records == 1
+        assert report.correct_count == 1
+        assert report.incorrect_count == 0
+        assert report.accuracy_rate == 1.0
 
     def test_persistence(self, tmp_path: Path) -> None:
         storage = tmp_path / "feedback.json"
@@ -105,6 +157,73 @@ class TestFeedbackCollector:
         imported = collector.import_records(str(export_path))
         assert imported == 1
         assert len(collector.get_records()) == 1
+
+    def test_import_multiple_records_persists_whole_batch(self, tmp_path: Path) -> None:
+        """Regression (health-20260909 claude F2 revised): import_records used
+        to persist only the last line because _save_records wrote just
+        _records[-1]; a reload must see every imported record."""
+        storage = tmp_path / "feedback.json"
+        collector = FeedbackCollector(storage_path=str(storage))
+
+        payloads = [
+            FeedbackRecord(query=f"q{i}", routed_skill=f"s{i}", was_correct=(i % 2 == 0)).to_dict()
+            for i in range(3)
+        ]
+        import_path = tmp_path / "import.json"
+        import_path.write_text(json.dumps(payloads), encoding="utf-8")
+
+        imported = collector.import_records(str(import_path))
+        assert imported == 3
+
+        reloaded = FeedbackCollector(storage_path=str(storage))
+        assert [r.query for r in reloaded.get_records()] == ["q0", "q1", "q2"]
+
+        report = reloaded.generate_report()
+        assert report.total_records == 3
+        assert report.correct_count == 2
+        assert report.incorrect_count == 1
+
+    @pytest.mark.parametrize(
+        "mode",
+        [
+            pytest.param("missing", id="missing-was-correct"),
+            pytest.param("bad-bool", id="non-bool-was-correct"),
+        ],
+    )
+    def test_import_invalid_rejects_atomically(self, tmp_path: Path, mode: str) -> None:
+        """An invalid entry aborts the whole import: nothing is appended in
+        memory and nothing is persisted (health-20260909 claude F2 revised)."""
+        storage = tmp_path / "feedback.json"
+        collector = FeedbackCollector(storage_path=str(storage))
+        collector.collect_feedback(query="existing", routed_skill="s0", was_correct=True)
+
+        valid = FeedbackRecord(query="ok", routed_skill="s1", was_correct=True).to_dict()
+        invalid = dict(valid)
+        if mode == "missing":
+            invalid.pop("was_correct")
+        else:
+            invalid["was_correct"] = "yes"
+        import_path = tmp_path / "import.json"
+        import_path.write_text(
+            json.dumps([valid, invalid, dict(valid, query="after")]), encoding="utf-8"
+        )
+
+        with pytest.raises(ValueError, match="index 1"):
+            collector.import_records(str(import_path))
+
+        assert [r.query for r in collector.get_records()] == ["existing"]
+        reloaded = FeedbackCollector(storage_path=str(storage))
+        assert [r.query for r in reloaded.get_records()] == ["existing"]
+
+    def test_import_non_list_rejected(self, tmp_path: Path) -> None:
+        storage = tmp_path / "feedback.json"
+        collector = FeedbackCollector(storage_path=str(storage))
+        import_path = tmp_path / "import.json"
+        import_path.write_text('{"query": "x"}', encoding="utf-8")
+
+        with pytest.raises(ValueError, match="JSON array"):
+            collector.import_records(str(import_path))
+        assert collector.get_records() == []
 
     def test_collect_from_routing_result(self, tmp_path: Path) -> None:
         storage = tmp_path / "feedback.json"

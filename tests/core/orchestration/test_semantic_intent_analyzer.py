@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from unittest.mock import Mock
 
-import pytest
-
 from vibesop.core.exceptions import LLMError
 from vibesop.core.orchestration.semantic_intent_analyzer import SemanticIntentAnalyzer
 

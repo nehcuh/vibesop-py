@@ -139,6 +139,29 @@ def _entries_wellformed(entries: Any) -> bool:
     )
 
 
+def _known_fail_class(entry: dict[str, Any]) -> str:
+    """Injection class of a failing (ok1 false) entry for the gate.
+
+    - ``"no_match"`` — nothing was injected: ``primary`` is None or the
+      ``fallback-llm`` sentinel (or the layer is ``fallback_llm``).
+    - ``"wrong"``    — a REAL skill was routed that is not the gold: an
+      active misroute whose content would be injected.
+    - ``"unknown"``  — entry carries no usable primary/layer (pre-schema
+      baseline rows); treated conservatively (never triggers the
+      no_match→wrong new-fail path, since the old class is unknown).
+    """
+    if "primary" not in entry:
+        return "unknown"
+    primary = entry.get("primary")
+    if primary is None or primary == "fallback-llm":
+        return "no_match"
+    if entry.get("layer") == "fallback_llm":
+        return "no_match"
+    if not isinstance(primary, str) or not primary:
+        return "unknown"
+    return "wrong"
+
+
 def compare_entries(
     baseline_entries: list[dict[str, Any]],
     current_entries: list[dict[str, Any]],
@@ -153,6 +176,17 @@ def compare_entries(
     - ok1 true→false  — new fail (exit 1)
     - ok1 false→true  — new pass (exit 0, refresh recommended)
     - pass→pass with primary/layer change — drift warning only
+    - known fail → known fail — usually silent (documented contract), with
+      two observability exceptions keyed on the failure CLASS (gate-health
+      finding 2026-09: the ok1 boolean cannot tell a benign no-match from an
+      active wrong-skill injection, so a router that starts *injecting a real
+      wrong skill* on a query that used to fall back would pass the gate
+      silently while degrading the must-not-guess invariant):
+        * no-match/fallback class → active-misroute class is a NEW fail
+          (exit 1) — content starts being injected where nothing was;
+        * active misroute → different active misroute is a drift warning;
+        * active misroute → no-match/fallback is a drift warning
+          (improved; refresh recommended).
     - current query absent from baseline — only reachable when the dataset
       changed (fingerprint already exited 3); a failing one is still
       reported as a new fail rather than swallowed.
@@ -218,7 +252,39 @@ def compare_entries(
                     f"{c.get('primary')}/{c.get('layer')}"
                 )
         else:
+            # Both failing (a known fail). The ok1 boolean alone cannot
+            # distinguish "router honestly found nothing" from "router
+            # actively routed a real wrong skill" — see the class-keyed
+            # observability notes in the docstring above.
             known_fails += 1
+            b_cls = _known_fail_class(b)
+            c_cls = _known_fail_class(c)
+            if c_cls == "wrong" and b_cls == "no_match":
+                # Degrade into the injection class: content starts being
+                # routed on a query that used to fall back honestly.
+                known_fails -= 1
+                new_fails.append(
+                    {
+                        "query": query,
+                        "expect": c.get("expect") or b.get("expect", []),
+                        "baseline": f"{b.get('primary')} ({b.get('layer')}) [no-match/fallback]",
+                        "current": f"{c.get('primary')} ({c.get('layer')}) [active wrong-skill match]",
+                        "kind_degraded": True,
+                    }
+                )
+            elif (
+                c_cls == "wrong"
+                and b_cls == "wrong"
+                and (b.get("primary"), b.get("layer")) != (c.get("primary"), c.get("layer"))
+            ):
+                drift_warnings.append(
+                    f"{query}: known-fail misroute {b.get('primary')}/{b.get('layer')} -> "
+                    f"{c.get('primary')}/{c.get('layer')}"
+                )
+            elif b_cls == "wrong" and c_cls == "no_match":
+                drift_warnings.append(
+                    f"{query}: known-fail improved to no-match/fallback (refresh recommended)"
+                )
 
     for query in base:
         if query not in cur:

@@ -10,7 +10,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 interface RouteResult {
   has_match: boolean;
@@ -37,15 +37,9 @@ function skillName(skillId: string): string {
 
 function runVibeRoute(prompt: string, cwd: string): RouteResult | null {
   try {
-    // Escape double quotes and newlines for shell safety
-    const escaped = prompt
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, " ")
-      .replace(/\\/g, "\\\\")
-      .replace(/\$/g, "\\$")
-      .replace(/`/g, "\\`");
-    const output = execSync(
-      `vibe route --json --yes "${escaped}"`,
+    // Pass input as one argument; shell escaping cannot safely preserve it.
+    const output = execFileSync(
+      "vibe", ["route", "--json", "--yes", prompt],
       {
         cwd,
         encoding: "utf-8",
@@ -54,7 +48,22 @@ function runVibeRoute(prompt: string, cwd: string): RouteResult | null {
       }
     );
 
-    return JSON.parse(output.trim()) as RouteResult;
+    const parsed = JSON.parse(output.trim());
+    if (!parsed || typeof parsed !== "object" || typeof parsed.has_match !== "boolean") {
+      return null;
+    }
+    // A valid no-match is distinct from malformed output or a failed command.
+    if (!parsed.has_match) return { has_match: false };
+    const validSkill = (skill: any): boolean =>
+      !!skill && typeof skill.skill_id === "string" && !!skill.skill_id.trim() &&
+      typeof skill.confidence === "number" && Number.isFinite(skill.confidence);
+    if (!validSkill(parsed.primary) ||
+        (parsed.skill_file != null && typeof parsed.skill_file !== "string") ||
+        (parsed.alternatives != null &&
+          (!Array.isArray(parsed.alternatives) || !parsed.alternatives.every(validSkill)))) {
+      return null;
+    }
+    return parsed as RouteResult;
   } catch (error) {
     // vibe route failed (timeout, parse error, etc.) — pass through normally
     return null;
@@ -112,14 +121,29 @@ export default function (pi: ExtensionAPI) {
     // Run VibeSOP routing
     const routeResult = runVibeRoute(event.text, cwd);
 
-    // If routing failed or no match, let the prompt pass through normally
+    // Routing FAILED (timeout, parse error, vibe missing) — pass through
+    // silently. Keep this DISTINCT from a clean no-match: per AGENTS.md the
+    // agent falls back to a manual `vibe route` when no injection is
+    // present, which is the right degraded behavior for a broken hook.
+    if (!routeResult) {
+      return { action: "continue" };
+    }
+
+    // Clean NO-MATCH — say so. Without this fingerprint the agent cannot
+    // tell "routing ran, nothing matched" apart from "hook never ran", and
+    // its AGENTS.md protocol makes it pay a second `vibe route` on every
+    // miss. Parity with the claude/kimi/grok no-match message.
     if (
-      !routeResult ||
       !routeResult.has_match ||
       !routeResult.primary ||
       routeResult.primary.skill_id === "fallback-llm"
     ) {
-      return { action: "continue" };
+      const noMatchNote =
+        "\n\n## VibeSOP Routing Result\n\n" +
+        "VibeSOP: No matching skill found. Proceed in normal mode — " +
+        "routing has already run for this prompt; do NOT re-run `vibe route`.\n\n" +
+        "---\n\nUser request: ";
+      return { action: "transform", text: `${noMatchNote}${event.text}` };
     }
 
     // Build skill instruction for injection

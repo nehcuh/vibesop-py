@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from vibesop.core.models import RoutingResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,10 +40,20 @@ class FeedbackRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FeedbackRecord:
+        # Strict input semantics: only a JSON boolean counts as a confirmed
+        # outcome. Missing or non-bool values are never defaulted to True or
+        # False — callers must handle rejection explicitly (load skips with a
+        # log, import aborts) so unknown evidence cannot skew routing stats.
+        was_correct = data.get("was_correct")
+        if not isinstance(was_correct, bool):
+            raise ValueError(
+                "was_correct must be a JSON boolean; "
+                f"got {was_correct!r} of type {type(was_correct).__name__}"
+            )
         return cls(
             query=data.get("query", ""),
             routed_skill=data.get("routed_skill", ""),
-            was_correct=data.get("was_correct", True),
+            was_correct=was_correct,
             actual_skill=data.get("actual_skill"),
             confidence=data.get("confidence", 0.0),
             timestamp=data.get("timestamp", datetime.now().isoformat()),
@@ -79,7 +92,9 @@ class FeedbackCollector:
         storage = Path(storage_path).expanduser()
         self._storage_path = storage.with_suffix(".jsonl")  # Use JSONL for append performance
         self._records: list[FeedbackRecord] = []
+        self._persisted_count = 0
         self._load_records()
+        self._persisted_count = len(self._records)
 
     def collect_feedback(
         self,
@@ -231,6 +246,7 @@ class FeedbackCollector:
 
     def clear_records(self) -> None:
         self._records = []
+        self._persisted_count = 0
         # _save_records() no-ops on an empty list, so unlink the file to
         # actually remove persisted records (F-08 — otherwise purge is a no-op).
         if self._storage_path.exists():
@@ -244,42 +260,73 @@ class FeedbackCollector:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def import_records(self, input_path: str | Path) -> int:
+        """Import a JSON array of feedback records, all-or-nothing.
+
+        Every entry must be an object with a boolean ``was_correct``.
+        Validation runs before any mutation: an invalid file raises
+        ValueError without appending or persisting anything, and a valid
+        file is persisted as one whole batch.
+        """
         input_path = Path(input_path).expanduser()
 
         with input_path.open(encoding="utf-8") as f:
             data = json.load(f)
 
-        for record_data in data:
-            record = FeedbackRecord.from_dict(record_data)
-            self._records.append(record)
+        if not isinstance(data, list):
+            raise ValueError("feedback import must be a JSON array of record objects")
 
+        records: list[FeedbackRecord] = []
+        for index, record_data in enumerate(data):
+            if not isinstance(record_data, dict):
+                raise ValueError(f"import record at index {index} is not a JSON object")
+            try:
+                record = FeedbackRecord.from_dict(record_data)
+            except ValueError as exc:
+                raise ValueError(f"import record at index {index} is invalid: {exc}") from exc
+            records.append(record)
+
+        self._records.extend(records)
         self._save_records()
-        return len(data)
+        return len(records)
 
     def _load_records(self) -> None:
-        if self._storage_path.exists():
-            try:
-                self._records = []
-                with self._storage_path.open(encoding="utf-8") as f:
-                    for raw_line in f:
-                        stripped = raw_line.strip()
-                        if not stripped:
-                            continue
-                        try:
-                            data = json.loads(stripped)
-                            self._records.append(FeedbackRecord.from_dict(data))
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-            except (json.JSONDecodeError, OSError, KeyError, UnicodeDecodeError):
-                self._records = []
+        if not self._storage_path.exists():
+            return
+        try:
+            self._records = []
+            with self._storage_path.open(encoding="utf-8") as f:
+                for line_number, raw_line in enumerate(f, start=1):
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        data = json.loads(stripped)
+                        if not isinstance(data, dict):
+                            raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+                        self._records.append(FeedbackRecord.from_dict(data))
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        # Unconfirmed lines are skipped, never counted: no
+                        # record enters statistics without a strict boolean.
+                        logger.warning(
+                            "Skipping unconfirmed feedback line %d in %s: %s",
+                            line_number,
+                            self._storage_path,
+                            exc,
+                        )
+        except (OSError, UnicodeDecodeError):
+            logger.warning("Failed to read feedback store %s; starting empty", self._storage_path)
+            self._records = []
 
     def _save_records(self) -> None:
-        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self._records:
+        if self._persisted_count >= len(self._records):
             return
-        record = self._records[-1]
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        # Append every record not yet persisted — writing only _records[-1]
+        # here made import_records persist just its last line.
         with self._storage_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
+            for record in self._records[self._persisted_count :]:
+                f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
+        self._persisted_count = len(self._records)
 
 
 # Convenience function for quick feedback collection

@@ -44,7 +44,12 @@ flip is justified in the PR.
 
 Baseline gate exit codes (--hermetic --check):
     0 — no new top-1 fails (primary/layer drift on passing entries warns)
-    1 — new top-1 fail(s): an entry that passed in the baseline now fails
+    1 — new top-1 fail(s): an entry that passed in the baseline now fails,
+        OR a known-fail entry degraded from the no-match/fallback class into
+        an active wrong-skill match (ok1 stays false both ways; the gate
+        keys the degradation on the recorded primary/layer so a router that
+        starts injecting a real wrong skill where it used to fall back
+        honestly does not pass silently)
     3 — stale baseline: missing/unreadable/schema-version mismatch, or the
         content fingerprint changed (registry/skills/dataset/posture) —
         refresh with --update-baseline instead of comparing across universes
