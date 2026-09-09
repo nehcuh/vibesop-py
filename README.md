@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.3.0.dev1-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.3.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -53,7 +53,7 @@ routing path (keyword/scenario matching). LLM-enhanced routing is covered in
 
 - **Discovery & Installation** — one-click install, auto security audit, zero config
 
-- **Intelligent Routing** — understand intent, match the best skill from 18 built-in
+- **Intelligent Routing** — understand intent, match the best skill from 19 built-in
   workflow skills plus installable skill packs (superpowers, omx, gstack, ...)
 
 - **Task Orchestration** — decompose complex requests, generate serial/grouped execution plans
@@ -120,7 +120,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 vibe route "help me debug this code"
 ```
 
-✅ **Done!** VibeSOP is now globally available with 18 built-in workflow skills,
+✅ **Done!** VibeSOP is now globally available with 19 built-in workflow skills,
 extensible via skill packs (`vibe install mattpocock`, `vibe install gstack`, ...).
 
 ---
@@ -303,7 +303,7 @@ same routing pool — one syntax, every source.
 
 VibeSOP:
 1. **Understands your intent** (natural language, English + Chinese)
-2. **Finds the right skill** (from 18 built-in skills plus installable skill packs)
+2. **Finds the right skill** (from 19 built-in skills plus installable skill packs)
 3. **Learns your preferences** (gets better over time)
 4. **Works across AI coding agents** (hook injection on Claude Code / Grok Build;
    config generation for OpenCode, Cursor, Kimi CLI, Pi)
@@ -931,7 +931,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 ### User Guides
 
 - **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - Complete skills ecosystem guide
-  - 18 built-in + community pack skills explained (superpowers, omx, gstack)
+  - 19 built-in + community pack skills explained (superpowers, omx, gstack)
   - 4-stage routing cascade
   - Priority decision mechanism
   - How to switch skills
@@ -990,7 +990,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 | **Routing** | 4-stage cascade routing | Built-in commands | Extension-based | CLI flags |
 | **Orchestration** | Multi-skill composition | No | No | No |
 | **Lifecycle Mgmt** | Enable/disable, scope, evaluate | No | No | No |
-| **Skills** | 18 built-in + community skill packs | Built-in features | Community extensions | Built-in workflows |
+| **Skills** | 19 built-in + community skill packs | Built-in features | Community extensions | Built-in workflows |
 | **Learning** | Preference learning | Fixed | No | No |
 | **Cross-Platform** | ✅ Per-agent config generation | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
 | **Open Ecosystem** | ✅ Any SKILL.md | ❌ Closed | ⚠️ Extension API | ❌ Closed |

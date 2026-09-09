@@ -2,7 +2,7 @@
 
 ## Overview
 
-VibeSOP-Py introduced true semantic understanding capabilities in v2.1 (now at 8.3.0.dev1), moving beyond TF-IDF keyword matching to actual comprehension of meaning.
+VibeSOP-Py introduced true semantic understanding capabilities in v2.1 (now at 8.3.0), moving beyond TF-IDF keyword matching to actual comprehension of meaning.
 
 ### What is Semantic Matching?
 

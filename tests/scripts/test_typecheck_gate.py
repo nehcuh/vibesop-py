@@ -8,13 +8,9 @@ basedpyright 1.39.9, plain-text exit codes are
 - 3 = configuration error (unrecognized setting, missing stubPath dir, ...)
 
 The old gate ``uv run basedpyright || [ $? -eq 3 ]`` treated exit 3 as "warnings
-only" and green-lit runs that also reported type errors. Worse, in ``--outputjson``
-mode a config error exits 1 (not 3), so a JSON-based test would silently conflate
-config errors with type errors — the gate tests here must therefore drive the same
-plain-text command CI uses.
-
-These tests run the real pinned basedpyright binary in throwaway projects (no fake
-return codes, no network) and pin the CI command's full shape so the old acceptance
+only" and green-lit runs that also reported type errors. These tests therefore
+run the real pinned basedpyright binary in throwaway projects (no fake return
+codes, no network) and pin the CI command's full shape so the old acceptance
 cannot be reintroduced unnoticed.
 """
 
@@ -121,19 +117,6 @@ def test_invalid_config_is_rejected_as_config_error() -> None:
         result = _run_gate(project)
         assert result.returncode == 3, result.stdout + result.stderr
         assert "unrecognized setting" in result.stderr
-
-        # Contrast: in --outputjson mode the same config error exits 1, not 3 —
-        # a JSON-based gate test would confuse config errors with type errors.
-        json_result = subprocess.run(
-            [str(BP_BIN), "--outputjson", "."],
-            cwd=project,
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        assert json_result.returncode != 3
-        assert "unrecognized setting" in json_result.stderr
 
 
 def test_warnings_only_is_allowed_under_level_error() -> None:

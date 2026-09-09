@@ -1,6 +1,6 @@
 # VibeSOP
 
-> **Version**: 8.3.0.dev1
+> **Version**: 8.3.0
 > **同步说明**：README.md 为英文主线（面向英文社区），本文件为中文完整版。两份内容结构对齐；如有出入，以仓库实际代码为准，并请在修改时同步两份。
 > 📖 [English docs](README.md)
 
@@ -13,7 +13,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.3.0.dev1-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.3.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -60,7 +60,7 @@ VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周
 
 - **发现与安装**：一键安装技能，自动安全审计，零配置
 
-- **智能路由**：理解意图，从 18 个内置工作流技能 + 可安装技能包（superpowers、omx、gstack 等）中匹配最佳
+- **智能路由**：理解意图，从 19 个内置工作流技能 + 可安装技能包（superpowers、omx、gstack 等）中匹配最佳
 
 - **任务编排**：复杂请求自动分解，生成串行/分组执行计划
 
@@ -125,7 +125,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 vibe route "帮我调试代码"
 ```
 
-✅ **完成！** VibeSOP 现在已全局可用：18 个内置工作流技能，可通过技能包扩展（`vibe install mattpocock`、`vibe install gstack` 等）。
+✅ **完成！** VibeSOP 现在已全局可用：19 个内置工作流技能，可通过技能包扩展（`vibe install mattpocock`、`vibe install gstack` 等）。
 
 ---
 
@@ -302,7 +302,7 @@ vibe route "wrap up the session"
 
 VibeSOP:
 1. **理解你的意图** (自然语言，支持中英文)
-2. **找到正确的技能** (从 18 个内置技能 + 可安装技能包中选择)
+2. **找到正确的技能** (从 19 个内置技能 + 可安装技能包中选择)
 3. **学习你的偏好** (越用越准确)
 4. **跨 AI coding agents 通用** (Claude Code / Grok Build 走 hook 注入；
    OpenCode、Cursor、Kimi CLI、Pi 走配置生成)
@@ -923,7 +923,7 @@ VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic 
 ### 用户指南
 
 - **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南
-  - 18 个内置技能 + 社区技能包详解（superpowers、omx、gstack）
+  - 19 个内置技能 + 社区技能包详解（superpowers、omx、gstack）
   - 4 阶段路由级联
   - 优先级决策机制
   - 手动切换技能

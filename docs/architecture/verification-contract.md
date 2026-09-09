@@ -1,8 +1,8 @@
 # 验证器与计划交付合同（Verification & Plan-Delivery Contract）
 
-> **文档版本**：2026-09-09（对齐 8.3.0.dev1）
-> **状态**：合同已定稿；A（计划生成）/B（内置验收技能）/C（正文拒绝统一）/D（版本与集成）
-> 四路并行实现中。本文描述合同目标语义；实现落地前用户可见行为以各路由合流后的 8.3.0 为准。
+> **文档版本**：2026-09-09（对齐 8.3.0）
+> **状态**：已在 8.3.0 实现并通过集成合同测试。完整验收与远程结果见
+> [验证器优化进度](../decisions/2026-09-09-verification-progress.md)。
 > 上游：`docs/specs/2026-09-09-verification-contract.md`（主控维护）。
 
 ## 1. 背景与范围
@@ -31,8 +31,10 @@ PlanBuilder.build_plan(
 - 显式指定**非空**技能 ID 时使用指定值（例如用户/编排点名的其他验收技能）。
 - 空白、非字符串、`fallback-llm` 一律拒绝，不能静默回退默认。
 - 不增加模型调用，不读取环境变量决定验证器，不增加全局自动注入。
-- 参数只作用于 `ADVERSARIAL`；其他工作流（SEQUENTIAL / FAN_OUT / TOURNAMENT /
-  LOOP_UNTIL_DRY / 小队类）行为不变。
+- 参数只作用于 `ADVERSARIAL`：非 `ADVERSARIAL` 工作流（SEQUENTIAL / FAN_OUT /
+  TOURNAMENT / LOOP_UNTIL_DRY / 小队类）**忽略该参数**，不校验也不使用。
+- 上述显式值校验（空白/非字符串/`fallback-llm` 拒绝）只在 `ADVERSARIAL` 下发生：
+  `ADVERSARIAL` 必须有一个可用的验证器；其他 pattern 没有验证器，不存在回退。
 
 内置技能 `builtin/verify-result` 仅在显式选择或编排选择时被使用；`disable-model-invocation:
 true`，无宽泛自然语言触发器（避免被路由误自动拉起）。
@@ -66,13 +68,15 @@ ADVERSARIAL 计划末尾追加的验证步骤必须：
 
 ## 6. 缺失与 unsafe 阻断
 
-- 步骤技能文件缺失、正文为空，或正文被运行时扫描器判不安全（含扫描器自身失败，fail-closed），
-  均视为该步骤不可交付。
+- 步骤技能文件缺失、正文为空，或正文被运行时扫描器判不安全（含扫描器自身失败，
+  fail-closed），均视为该步骤不可交付。
 - 任一步骤不可交付 → 整份计划不可执行：`metadata.execution_ready=False`；
-  `blocked_steps` 给出阻断原因。可用性类原因沿用现状、不细分：技能缺失与正文为空
-  共用 `not found or empty`，fallback/无技能为 `unresolved skill`；**unsafe** 是独立
-  原因，必须能与可用性原因区分，但不能声称缺技能/空内容已各自细分。同时保留全部
-  原步骤、验证标志与来源（供诊断，不当作可执行内容）。
+  `blocked_steps` 给出阻断原因。原因按实现现状只分两类口径，不夸大细分：
+  - 可用性类——技能缺失与正文为空**共用** `not found or empty`，fallback/无技能为
+    `unresolved skill`；缺技能与空正文不做进一步区分。
+  - 安全类——扫描器判不安全与扫描器自身异常（fail-closed）**共用**同一个
+    `unsafe content` 原因，只要求能与可用性原因区分，不把扫描器异常单列。
+  同时保留全部原步骤、验证标志与来源（供诊断，不当作可执行内容）。
 - 各交付入口一致阻断：
   - guide 只输出阻断说明、**无完成标记**（guide 没有 `has_match` 字段）；
     hook / CLI 为 notice-only 且 `has_match=false`；
@@ -89,4 +93,4 @@ ADVERSARIAL 计划末尾追加的验证步骤必须：
 2. 显式指定缺失验证器 → 阻断（不能静默回退默认）；
 3. 安全正文被改成不安全正文 → 拒绝（`execution_ready=False`，原因含 unsafe，manifest 抛异常）。
 
-A/B/C 未集成前本测试按合同预期失败并保留结果，等待各路合流后转绿。
+实现合流后以上三个场景均通过；开发过程中的失败记录保留在验收凭据中。

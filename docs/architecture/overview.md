@@ -1,6 +1,6 @@
 # VibeSOP Architecture Overview
 
-> **Version**: 8.3.0.dev1
+> **Version**: 8.3.0
 > **Last Updated**: 2026-06-05
 
 ## System Purpose

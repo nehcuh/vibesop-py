@@ -1,6 +1,6 @@
 # 验证器与计划交付合同
 
-状态：SPEC 已定稿，进入四路实现。基线：`efa616a`。主控维护本文件及进度日志；各执行代理只修改各自范围。
+状态：四路及 E/F/G 已实现，进入最终验收；执行记录见进度日志。基线：`efa616a`。主控维护本文件及进度日志；各执行代理只修改各自范围。
 
 ## 用户可见结果
 
@@ -58,3 +58,7 @@ Pi 在 D 完成后串行移除无效配置键及不存在的 stubPath；不放�
 ## G：相邻本地验收入口（Grok 第二批）
 
 主控同类检查发现 Makefile 的 type-check 和 scripts/verify-release.sh 也放行退出 3；发布检查还用 `pytest ... | grep -q passed` 判断通过，在没有 pipefail 时会把含 passed 字样的失败测试判绿。Grok 只修 Makefile、scripts/verify-release.sh 及新增 tests/scripts/test_release_checks.py：与 CI 一致采用基于实际退出状态的判断，类型错误/配置错误拒绝，pytest 混合通过与失败时必须拒绝。测试执行真实 pytest/锁定类型检查器，不能只断言脚本文本。Pi 已负责 scripts/verify-type-checking.sh，禁止两路同时改它。此批完成后不再扩大扫描范围。
+
+## B 补充：清单一致性
+
+完整回归发现内置文件新增但 registry 未登记，使真实 RegistrySync 报告待新增技能。授权 Grok 补齐 `core/registry.yaml` 的人工/编排专用登记，保留现有清单一致性测试断言；不添加自动触发或重写原有技能意图。路由指纹如受影响，只刷新输入指纹，39 道题的预期与结果必须逐项保持不变。
