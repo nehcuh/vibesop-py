@@ -17,8 +17,8 @@ lint: ## Run linting (check + format check, same as CI)
 format: ## Format code
 	uv run ruff format .
 
-type-check: ## Run type checking
-	uv run basedpyright; exit_code=$$?; if [ $$exit_code -eq 0 ] || [ $$exit_code -eq 3 ]; then exit 0; else exit $$exit_code; fi
+type-check: ## Run type checking (basedpyright --level error; only exit 0)
+	uv run basedpyright --level error
 
 test: clean-cov ## Run tests (skip slow/benchmark for reasonable speed)
 	uv run pytest -m "not benchmark and not slow"

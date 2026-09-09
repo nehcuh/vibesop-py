@@ -3,8 +3,13 @@
 #
 # This script verifies that the package is ready for PyPI release.
 # Toolchain: uv + ruff + basedpyright (same as CI). Run via: bash scripts/verify-release.sh
+#
+# Type gate matches CI: `uv run basedpyright --level error`. basedpyright 1.39.9
+# plain-text exit codes are 0 = success, 1 = type errors, 3 = configuration
+# error (not "warnings only"). Only exit 0 is a pass. Pytest is judged by its
+# real exit code — never by grepping "passed" out of a mixed summary.
 
-set -e
+set -euo pipefail
 
 # Colors
 GREEN='\033[0;32m'
@@ -40,24 +45,23 @@ else
     exit 1
 fi
 
-# Run tests
+# Run tests (pytest's own exit code; a mixed "1 failed, 1 passed" must fail)
 echo ""
 echo "3. Running tests..."
-if uv run pytest -m "not benchmark and not slow" -q 2>&1 | grep -q "passed"; then
+if uv run pytest -m "not benchmark and not slow" -q; then
     echo -e "${GREEN}✅ Tests passing${NC}"
 else
     echo -e "${RED}❌ Tests failing${NC}"
     exit 1
 fi
 
-# Check type hints
+# Check type hints (same shape as CI: only exit 0; --level error keeps warnings advisory)
 echo ""
-echo "4. Checking type hints (basedpyright, exit 0/3 accepted — same as CI)..."
-uv run basedpyright || TYPE_EXIT=$?
-if [ "${TYPE_EXIT:-0}" -eq 0 ] || [ "${TYPE_EXIT:-0}" -eq 3 ]; then
-    echo -e "${GREEN}✅ Type checking passed (0 errors)${NC}"
+echo "4. Checking type hints (basedpyright --level error; only exit 0 accepted)..."
+if uv run basedpyright --level error; then
+    echo -e "${GREEN}✅ Type checking passed${NC}"
 else
-    echo -e "${RED}❌ Type checking failed with errors${NC}"
+    echo -e "${RED}❌ Type checking failed (1=type errors, 3=config error)${NC}"
     exit 1
 fi
 
@@ -99,7 +103,7 @@ fi
 # Check version in pyproject.toml (PEP 440 incl. dev/a/b/rc pre-releases)
 echo ""
 echo "7. Checking version..."
-VERSION=$(grep "^version = " pyproject.toml | head -1 | cut -d'"' -f2)
+VERSION=$(awk -F'"' '/^version = / {print $2; exit}' pyproject.toml)
 echo "Version: $VERSION"
 
 if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+((\.dev|a|b|rc)[0-9]+)?$ ]]; then
