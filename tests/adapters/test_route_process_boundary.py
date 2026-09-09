@@ -7,13 +7,14 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from vibesop.adapters.pi_coding_agent import PiCodingAgentAdapter
 from vibesop.core.models import RoutingResult
+
+from ._vibe_fake_cli import install_fake_vibe
 
 
 @pytest.fixture
@@ -25,21 +26,29 @@ def route_runtime(tmp_path: Path):
     major, minor = (int(n) for n in version.lstrip("v").split(".")[:2])
     if (major, minor) < (22, 6):
         pytest.skip("Node >= 22.6 required for actual TypeScript execution")
-    binary = tmp_path / "vibe"
-    binary.write_text(
-        f"#!{sys.executable}\n"
-        "import json, os, pathlib, sys\n"
-        "pathlib.Path('argv.json').write_text(json.dumps(sys.argv[1:]))\n"
-        "print(os.environ['ROUTE_RESPONSE'])\n",
-        encoding="utf-8",
-    )
-    binary.chmod(0o755)
+    # Native executable stand-in for the real `vibe` CLI: a POSIX shebang
+    # script, or a real .exe launcher on Windows (distlib ScriptMaker) so
+    # Node's execFile/spawn can really run it and we keep a true child
+    # process with argv capture and side-effect checks.
+    install_fake_vibe(tmp_path)
 
     def run(source: str, driver: str, payload: object, prompt: str = "review this task"):
         (tmp_path / "route.ts").write_text(source, encoding="utf-8")
         (tmp_path / "driver.mjs").write_text(driver, encoding="utf-8")
         env = dict(os.environ, PATH=f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
-        env.update(ROUTE_RESPONSE=json.dumps(payload), TEST_PROMPT=prompt)
+        env.update(
+            ROUTE_RESPONSE=json.dumps(payload),
+            TEST_PROMPT=prompt,
+            FAKE_VIBE_CAPTURE_ARGV="1",
+        )
+        # Fail fast if the actual child PATH resolves anything but the fixture
+        # fake (e.g. a real installed `vibe`) — never silently hit the real CLI.
+        fake_vibe = tmp_path / ("vibe.exe" if os.name == "nt" else "vibe")
+        resolved = shutil.which("vibe", path=env["PATH"])
+        assert resolved is not None, "fake vibe CLI is not resolvable on PATH"
+        assert os.path.normcase(Path(resolved)) == os.path.normcase(fake_vibe), (
+            f"PATH resolves {resolved!r}; expected fixture fake {fake_vibe!r}"
+        )
         result = subprocess.run(
             [node, "--experimental-strip-types", "driver.mjs"],
             cwd=tmp_path,

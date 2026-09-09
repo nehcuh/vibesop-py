@@ -28,26 +28,23 @@ from vibesop.adapters.models import Manifest, ManifestMetadata
 from vibesop.adapters.pi_coding_agent import PiCodingAgentAdapter
 from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 
+from ._vibe_fake_cli import install_fake_vibe
+
 node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
 _DRIVER = """\
 const handlers = {};
 const pi = { on: (event, cb) => { handlers[event] = cb; } };
-const mod = await import(process.argv[2]);
+// Node accepts only file:// URLs for absolute import paths on Windows;
+// a bare drive path (e.g. C:/...) is parsed as the 'c:' URL scheme.
+const { pathToFileURL } = await import("node:url");
+const mod = await import(pathToFileURL(process.argv[2]));
 mod.default(pi);
 const result = await handlers["input"](
   { text: "please review my code carefully", source: "user" },
   { ui: { notify: () => {} } }
 );
 console.log(JSON.stringify(result));
-"""
-
-_FAKE_VIBE = """\
-#!/bin/bash
-case "$FAKE_VIBE_MODE" in
-  match|nomatch) printf '%s\n' "$FAKE_VIBE_RESPONSE" ;;
-  fail) echo "boom" >&2; exit 1 ;;
-esac
 """
 
 
@@ -64,10 +61,10 @@ def rendered_extension(tmp_path: Path) -> Path:
     ext_path.write_text(ts, encoding="utf-8")
 
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_vibe = bin_dir / "vibe"
-    fake_vibe.write_text(_FAKE_VIBE, encoding="utf-8")
-    fake_vibe.chmod(0o755)
+    # Native executable stand-in for the real `vibe` CLI: POSIX shebang
+    # script, or a real .exe launcher on Windows so Node's execFileSync can
+    # actually spawn it. Behaviour is env-driven (FAKE_VIBE_MODE/RESPONSE).
+    install_fake_vibe(bin_dir)
 
     driver = tmp_path / "driver.mjs"
     driver.write_text(_DRIVER, encoding="utf-8")
@@ -87,6 +84,14 @@ def _run_input_event(ext_path: Path, mode: str) -> dict[str, str]:
     payload["skill_file"] = "/tmp/x/SKILL.md" if primary else ""
     env["FAKE_VIBE_RESPONSE"] = json.dumps(payload)
     env["PATH"] = f"{ext_path.parent / 'bin'}{os.pathsep}{env['PATH']}"
+    # Fail fast if the actual child PATH resolves anything but the fixture
+    # fake (e.g. a real installed `vibe`) — never silently hit the real CLI.
+    fake_vibe = ext_path.parent / "bin" / ("vibe.exe" if os.name == "nt" else "vibe")
+    resolved = shutil.which("vibe", path=env["PATH"])
+    assert resolved is not None, "fake vibe CLI is not resolvable on PATH"
+    assert os.path.normcase(Path(resolved)) == os.path.normcase(fake_vibe), (
+        f"PATH resolves {resolved!r}; expected fixture fake {fake_vibe!r}"
+    )
     proc = subprocess.run(
         ["node", "--experimental-strip-types", str(ext_path.parent / "driver.mjs"), str(ext_path)],
         capture_output=True,

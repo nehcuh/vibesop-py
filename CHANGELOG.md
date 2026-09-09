@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Windows 兼容**：Kimi 配置合并正规化 CRLF，避免文本写回后二次合并失败；Node 路由测试使用 file URL 与原生 CLI 启动器，路径断言按实际序列化合同比较；发布检查测试验证可用 Git Bash，避免误用未安装发行版的 WSL 启动器。Windows 完整回归前新增边界检查，保留原有必需矩阵。
+
 - **本地验收门禁**：Makefile 与发布检查只接受类型检查的成功退出码；发布检查直接读取 pytest 退出状态，修复含有 `passed` 的失败摘要被误判通过。新增测试执行生产脚本的真实阶段。
 - **内置清单一致性**：登记人工/编排专用的 `verify-result`，保持原有路由题集结果不变。
 

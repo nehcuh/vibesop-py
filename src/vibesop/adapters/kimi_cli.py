@@ -278,7 +278,10 @@ class KimiCliAdapter(FileBasedAdapter):
         current_header: tuple[list[str], bool] | None = None
         in_string: str | None = None
         trailing_comments = 0
-        for line in text.split("\n"):
+        # Normalize only real CRLF pairs so blocks carry bare-LF lines; the
+        # merged text is later written by text-mode write_text, which would
+        # re-translate LF to CRLF on Windows (CRCRLF if CR survived here).
+        for line in text.replace("\r\n", "\n").split("\n"):
             full_line_comment = in_string is None and line.lstrip().startswith("#")
             header = None if in_string else self._header_key_path(line)
             if header is not None:

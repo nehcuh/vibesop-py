@@ -102,3 +102,14 @@ Windows 3.13 同样 41 failed / 6950 passed / 32 skipped / 82 rerun（1259.20s�
 W3 路径合同已由 Kimi 实现，主控读 diff：保留完整权威路径比较，unsafe 来源断言从尾部匹配加强为完整 Path 相等，未删业务断言；本机 57 passed。W5 CI 配置由额外 Claude 完成，主控解析 YAML 亲证仅插入边界测试步骤，移除该新增步骤后配置与原 CI 完全相同。
 
 W1 初稿被主控退回：仅 rstrip 块尾 CR 虽能解析，但生产 `write_file_atomic` 使用 `write_text`，Windows 会把保留的 CRLF 再写成 CRCRLF。主控用 `write_text(newline="\r\n")` 亲证二次合并失败（`windows-crlf-review-roundtrip.json`）；要求实现者修完整文本往返，不用 `write_bytes` 测试绕开生产写入。Pi 的全盘 find 卡住 4 分钟已停止，指定现有 distlib 包的准确资源路径继续，不需新依赖。
+
+### Windows 第二轮集成检查
+
+- `a3fc2ed` 已推送 W3 路径合同与 W5 提前检查；W3 主控复跑 57 passed。
+- Claude 修订 W1：仅正规化实际 CRLF 对，主控亲跑写入—合并—Windows 文本写回—再合并通过，同时验证 U+0085/U+2028 字符保留；凭据 `windows-crlf-review-roundtrip-v2.json`。两份 Kimi adapter 测试 56 passed，独立 Kimi 复核进行中。
+- Grok W4 实现可执行探针，优先查 Git Bash，主控本机 7 passed；Windows 原生执行尚待 CI。
+- Pi W2 原生 launcher 与 file URL 改动已审阅，补了防止 PATH 命中真实 CLI 的断言。主控集成的实际 `uv run pytest` 因 helper 导入报 collection error；其 `python -m pytest` 的工作树通过不能代表 CI，通过证据暂不接受，已退回修复导入并用同款入口验证。
+
+W1 独立 Kimi 审阅 **APPROVE**，31 项配置合并测试通过；Unicode 专项测试属非阻塞建议，主控已有真实 U+0085/U+2028 往返凭据。Pi W2 修正为已有 adapters 包内相对导入，在原样 `GITHUB_ACTIONS=true uv run pytest` 下 14 passed；没有增加全局 PYTHONPATH 或修改 pytest 配置。
+
+主控合流验收：CI 同款 8 个 Windows 边界文件在 `GITHUB_ACTIONS=true` 下 **119 passed**（12.16s）；ruff 全仓检查与 771 文件格式检查通过，实际类型脚本 **0 errors**。这是本机结果，仍需新提交 Windows 实跑和 Docker 最终凭据，未将该结果记作跨平台完成。

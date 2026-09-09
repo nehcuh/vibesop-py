@@ -55,6 +55,22 @@ def _merge(tmp_path: Path, existing: str, new_config: str = NEW_CONFIG) -> str:
     return adapter._merge_config_with_existing(config_path, new_config)
 
 
+def _write_crlf(path: Path, text: str, *, trailing_newline: bool = True) -> bytes:
+    raw = text.replace("\n", "\r\n")
+    if not trailing_newline and raw.endswith("\r\n"):
+        raw = raw[:-2]
+    data = raw.encode("utf-8")
+    path.write_bytes(data)
+    return data
+
+
+def _merge_crlf(tmp_path: Path, existing: str, *, trailing_newline: bool = True) -> str:
+    config_path = tmp_path / "config.toml"
+    _write_crlf(config_path, existing, trailing_newline=trailing_newline)
+    adapter = KimiCliAdapter()
+    return adapter._merge_config_with_existing(config_path, NEW_CONFIG)
+
+
 def _hooks(parsed: dict) -> list[dict]:
     return parsed.get("hooks", [])
 
@@ -339,3 +355,71 @@ class TestMergeSemanticPreservation:
 
         parsed = tomllib.loads(_merge(tmp_path, "score = nan\n" + USER_HOOK))
         assert math.isnan(parsed["score"])
+
+
+class TestWindowsCrlfFiles:
+    """Merge must work on real CRLF bytes (Windows default write_text)."""
+
+    def test_crlf_user_hook_survives_alongside_builtin_hooks(self, tmp_path: Path) -> None:
+        existing = (
+            "# my personal config\n"
+            'default_model = "kimi-for-coding"\n\n' + USER_HOOK + "\n" + VIBESOP_HOOKS
+        )
+        merged = _merge_crlf(tmp_path, existing)
+        parsed = tomllib.loads(merged)
+
+        hooks = _hooks(parsed)
+        assert len(hooks) == 3
+        assert hooks[0]["command"] == "bash ~/.kimi-code/hooks/my-backup.sh"
+        commands = [h["command"] for h in hooks]
+        assert "bash ~/.kimi-code/hooks/vibesop-route.sh" in commands
+        assert "bash ~/.kimi-code/hooks/vibesop-tool-seq.sh" in commands
+        assert parsed["default_model"] == "kimi-for-coding"
+        assert "# my personal config" in merged
+
+    def test_crlf_without_trailing_newline(self, tmp_path: Path) -> None:
+        existing = (
+            "# my personal config\n"
+            'default_model = "kimi-for-coding"\n\n' + USER_HOOK + "\n" + VIBESOP_HOOKS
+        )
+        merged = _merge_crlf(tmp_path, existing, trailing_newline=False)
+        parsed = tomllib.loads(merged)
+
+        assert len(_hooks(parsed)) == 3
+        assert parsed["default_model"] == "kimi-for-coding"
+
+    def test_crlf_merge_is_idempotent(self, tmp_path: Path) -> None:
+        existing = USER_HOOK + "\n" + VIBESOP_HOOKS
+        first = _merge_crlf(tmp_path, existing)
+        config_path = tmp_path / "config.toml"
+        # Simulate the production writer (write_file_atomic uses text-mode
+        # write_text): on Windows every LF is re-translated to CRLF, so the
+        # merged text must be bare-LF for the roundtrip to stay valid.
+        config_path.write_text(first, encoding="utf-8", newline="\r\n")
+        adapter = KimiCliAdapter()
+        second = adapter._merge_config_with_existing(config_path, NEW_CONFIG)
+
+        assert len(_hooks(tomllib.loads(second))) == 3
+        assert tomllib.loads(second) == tomllib.loads(first)
+
+    def test_crlf_nested_subtable_comments_and_multiline_string(self, tmp_path: Path) -> None:
+        existing = (
+            "# user comment\n" + USER_HOOK + '\n[hooks.env]\nFOO = "bar"\n'
+            '\nmatcher = """begin\nend"""\n' + VIBESOP_HOOKS
+        )
+        merged = _merge_crlf(tmp_path, existing)
+        parsed = tomllib.loads(merged)
+
+        # matcher follows [hooks.env], so TOML attaches it to that subtable;
+        # the CRLF inside the multiline string normalizes to LF on parse.
+        assert parsed["hooks"][0]["env"] == {"FOO": "bar", "matcher": "begin\nend"}
+        assert "# user comment" in merged
+        assert len(parsed["hooks"]) == 3
+
+    def test_crlf_invalid_toml_fails_closed_without_writing(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "config.toml"
+        before = _write_crlf(config_path, 'default_model = "unclosed\n[[hooks]]\nevent = "x"\n')
+        adapter = KimiCliAdapter()
+        with pytest.raises(ValueError, match=r"[Cc]annot"):
+            adapter._merge_config_with_existing(config_path, NEW_CONFIG)
+        assert config_path.read_bytes() == before
