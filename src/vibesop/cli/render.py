@@ -64,7 +64,8 @@ def attach_skill_file_payload(
     source_lookup: Any = None,
 ) -> None:
     """Add ``skill_file`` so CLI consumers do not guess ``core/skills/<id>``."""
-    if not isinstance(payload, dict):
+    # Public export: silently ignore non-dict payloads (callers may pass Any).
+    if not isinstance(payload, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
         return
     sid = str(payload.get("skill_id") or "")
     if not sid:

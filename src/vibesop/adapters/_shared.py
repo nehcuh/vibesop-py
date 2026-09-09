@@ -9,8 +9,8 @@
 """
 
 from vibesop.adapters._content import (  # noqa: F401
-    _yaml_dquote,
-    detect_tool_environment,
+    _yaml_dquote,  # pyright: ignore[reportUnusedImport]  # compat re-export (skills_commands._discovery)
+    detect_tool_environment,  # pyright: ignore[reportUnusedImport]  # compat re-export (base.py)
     find_skill_content,
     generate_fallback_skill_content,
     is_pack_installed,

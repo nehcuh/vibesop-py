@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
@@ -26,7 +26,7 @@ def _lock_path_for(plans_path: Path) -> Path:
 
 
 @contextmanager
-def _read_lock(plans_path: Path) -> Iterator[None]:
+def _read_lock(plans_path: Path) -> Generator[None, None, None]:
     """Read-only mounts cannot create a lock; retain best-effort reads there.
 
     Only lock acquisition can fall back. Writers always require the lock.

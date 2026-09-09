@@ -83,7 +83,9 @@ def _rewrite_legacy_hook_entry(entry: Any, config_dir: Path | None = None) -> An
             # without it there is no correct rewrite (``bash hooks/x.sh``
             # would still resolve against the session CWD) — leave as-is.
             if norm is not None and not (norm.startswith("hooks/") and config_dir is None):
-                if norm.startswith("hooks/"):
+                # ``config_dir is not None`` is implied by the guard above;
+                # stated explicitly so pyright can narrow the type.
+                if norm.startswith("hooks/") and config_dir is not None:
                     norm = (config_dir / norm).as_posix()
                 new_cmd = format_bash_hook_command(norm)
                 if new_cmd != cmd and _legacy_rewrite_signal(cmd, norm):

@@ -378,7 +378,9 @@ def _is_agent_prompt_shape(query: str) -> bool:
     return q.startswith(_AGENT_PROMPT_PREFIXES)
 
 
-def _has_agent_prompt_prefix(query: str) -> bool:
+def _has_agent_prompt_prefix(  # pyright: ignore[reportUnusedFunction]  # used by discovery.py/promote_verifier.py
+    query: str,
+) -> bool:
     """gate35 D2 (修订 C): display-layer echo tag — prefix blacklist ONLY.
 
     Same normalization and ``_AGENT_PROMPT_PREFIXES`` as the frozen
@@ -496,7 +498,9 @@ class ClusterCandidate:
         # 显式排除。
         if self.behavior_score is not None and (
             isinstance(self.behavior_score, bool)
-            or not isinstance(self.behavior_score, int | float)
+            # Defensive runtime validation (gate24 pi#6): reject annotation-
+            # violating values with ValueError instead of a TypeError below.
+            or not isinstance(self.behavior_score, int | float)  # pyright: ignore[reportUnnecessaryIsInstance]
             or not (0.0 <= self.behavior_score <= 1.0)
         ):
             msg = f"behavior_score={self.behavior_score!r} is not a number in [0.0, 1.0]"
