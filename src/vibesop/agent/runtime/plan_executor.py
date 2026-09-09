@@ -109,6 +109,14 @@ class PlanExecutor:
             ExecutionGuide with prompt and markers
         """
         self._annotate_skill_files(plan)
+        if not plan.metadata.get("execution_ready", False):
+            from vibesop.agent.runtime.skill_injector import SkillInjector
+
+            return ExecutionGuide(
+                prompt=SkillInjector.blocked_plan_notice(plan.to_dict()),
+                step_markers=[],
+                completion_check="Plan blocked; completion cannot be verified.",
+            )
         prompt = self._build_prompt(plan)
         markers = self._extract_step_markers(plan)
         completion = self._build_completion_check(plan)
@@ -136,11 +144,18 @@ class PlanExecutor:
         from vibesop.core.skills import SkillLoader
 
         self._annotate_skill_files(plan)
+        if not plan.metadata.get("execution_ready", False):
+            from vibesop.agent.runtime.skill_injector import SkillInjector
+
+            raise ValueError(SkillInjector.blocked_plan_notice(plan.to_dict()))
         loader = SkillLoader(project_root=self._project_root)
         steps: list[StepManifest] = []
 
         for step in plan.steps:
-            skill_content = loader.read_skill_content(step.skill_id)
+            try:
+                skill_content = Path(step.skill_file).read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise ValueError(f"Plan blocked: cannot read skill {step.skill_id}") from exc
             # Content gates (parallel to SkillInjector.inject_single_skill):
             # 1. Empty gate — a missing file is a data problem: surface a
             #    notice instead of silently embedding an empty step body.
@@ -148,18 +163,21 @@ class PlanExecutor:
             #    other check, so post-install tampering of SKILL.md would
             #    otherwise reach the agent prompt verbatim via the manifest.
             #    Refuse (embed a notice) if unsafe.
+            from vibesop.agent.runtime.skill_injector import SkillInjector
             from vibesop.security.runtime_scan import (
                 empty_content_notice,
                 is_skill_content_safe,
                 unsafe_replacement_notice,
             )
 
-            if not skill_content.strip():
+            if not skill_content.strip() or SkillInjector._is_placeholder_content(
+                step.skill_id, skill_content
+            ):
                 logger.warning(
                     "Skill '%s' resolved to no injectable content for manifest step.",
                     step.skill_id,
                 )
-                skill_content = empty_content_notice(step.skill_id)
+                raise ValueError(empty_content_notice(step.skill_id))
             elif not is_skill_content_safe(skill_content):
                 logger.warning(
                     "Refusing to embed skill '%s' in execution manifest: "

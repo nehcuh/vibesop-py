@@ -214,6 +214,13 @@ class SkillInjector:
             InjectionResult with platform-specific payload
         """
         self.annotate_plan_skill_files(plan)
+        if not plan.metadata.get("execution_ready", False):
+            return InjectionResult(
+                method=InjectionMethod.TEXT,
+                payload=self.blocked_plan_notice(plan.to_dict()),
+                skill_id="multi-step-plan",
+                content_missing=True,
+            )
         plan_content = self._format_execution_plan(plan)
 
         if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
@@ -596,57 +603,104 @@ You MUST follow this skill's workflow. Do not skip steps.
                 it is tried before this injector's own resolution — the same
                 file the router indexed is the authoritative answer.
         """
-        for step in plan.steps:
-            sid = step.skill_id
-            if not sid or sid == "fallback-llm":
-                step.skill_file = ""
-                continue
-            if step.skill_file:
-                continue
-            step.skill_file = self._resolve_step_source(sid, source_lookup)
+        payload = plan.to_dict()
+        self.annotate_plan_dict(payload, source_lookup=source_lookup)
+        for step, annotated in zip(plan.steps, payload["steps"], strict=True):
+            step.skill_file = annotated["skill_file"]
+        plan.metadata.update(payload["metadata"])
 
     def annotate_plan_dict(
         self,
         plan: dict[str, Any],
         source_lookup: Callable[[str], str | None] | None = None,
     ) -> None:
-        """Same as ``annotate_plan_skill_files`` for a serialized plan dict."""
-        steps = plan.get("steps")
-        if not isinstance(steps, list):
+        """Revalidate files at handoff; retain unavailable steps as diagnostics."""
+        if not plan:
             return
-        for step in steps:
+        steps = plan.get("steps")
+        metadata = plan.get("metadata")
+        blocked = []
+        if metadata is not None and not isinstance(metadata, dict):
+            blocked.append({"reason": "invalid plan metadata"})
+        if not isinstance(metadata, dict):
+            metadata = plan["metadata"] = {}
+        metadata["execution_ready"] = False
+        if not isinstance(steps, list):
+            metadata["blocked_steps"] = [{"reason": "invalid plan steps"}]
+            return
+        sources = metadata.setdefault("skill_sources", {})
+        if not isinstance(sources, dict):
+            sources = metadata["skill_sources"] = {}
+            blocked.append({"reason": "invalid skill source metadata"})
+        for index, step in enumerate(steps, 1):
             if not isinstance(step, dict):
+                blocked.append({"step_number": index, "reason": "invalid step"})
                 continue
             sid = str(step.get("skill_id") or "")
-            if not sid or sid == "fallback-llm":
-                step["skill_file"] = ""
-                continue
-            if step.get("skill_file"):
-                continue
-            step["skill_file"] = self._resolve_step_source(sid, source_lookup)
+            source_key = str(step.get("step_id") or step.get("step_number") or index)
+            source = (
+                (source_lookup(sid) if source_lookup is not None else None)
+                or str(step.get("skill_file") or "")
+                or sources.get(source_key)
+            )
+            if source:
+                sources[source_key] = source
+            step["skill_file"] = self._resolve_step_source(sid, None, source)
+            if step["skill_file"]:
+                sources[source_key] = step["skill_file"]
             if not step["skill_file"]:
-                # Raw-JSON plan consumers (hook orchestrate branch) see no
-                # formatted envelope — without this note an empty skill_file
-                # is indistinguishable from the fallback-llm sentinel.
+                reason = "unresolved skill" if sid in ("", "fallback-llm") else "not found or empty"
                 step["skill_file_note"] = (
-                    "not found — do not guess skills/<id>/SKILL.md "
-                    f"(run `vibe skills info {sid}` to locate)"
+                    f"{reason} — do not guess skills/<id>/SKILL.md; "
+                    "restore the skill and rebuild this plan before execution"
                 )
+                blocked.append(
+                    {
+                        "step_number": step.get("step_number", index),
+                        "skill_id": sid,
+                        "reason": reason,
+                    }
+                )
+            else:
+                step.pop("skill_file_note", None)
+        metadata["execution_ready"] = bool(steps) and not blocked
+        metadata["blocked_steps"] = blocked
 
     def _resolve_step_source(
         self,
         skill_id: str,
         source_lookup: Callable[[str], str | None] | None,
+        existing: str = "",
     ) -> str:
-        """Resolve one step's SKILL.md: hinted source_file first, then inject."""
-        if source_lookup is not None:
-            hinted = source_lookup(skill_id)
-            if hinted:
-                hit = self._if_file(Path(hinted))
-                if hit is not None:
-                    return hit.as_posix()
-        path = self.resolve_skill_md(skill_id)
-        return path.as_posix() if path is not None else ""
+        """Check the authoritative file's body, including previously filled paths."""
+        if skill_id in ("", "fallback-llm"):
+            return ""
+        hinted = source_lookup(skill_id) if source_lookup is not None else None
+        source = hinted or existing
+        path = Path(source) if source else self.resolve_skill_md(skill_id)
+        if path is None:
+            return ""
+        try:
+            if not path.is_file():
+                return ""
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            return ""
+        if not content.strip() or self._is_placeholder_content(skill_id, content):
+            return ""
+        return path.resolve().as_posix()
+
+    @staticmethod
+    def blocked_plan_notice(plan: dict[str, Any]) -> str:
+        """A diagnostic notice, never a replacement execution instruction."""
+        import json
+
+        return (
+            "[VibeSOP] Execution plan blocked: one or more required skills are unavailable. "
+            "Do not execute this plan or report its steps as completed. "
+            "Keep all required steps, including verification; restore the skills and rebuild "
+            "the plan.\nDiagnostic plan:\n" + json.dumps(plan, ensure_ascii=False, indent=2)
+        )
 
     @staticmethod
     def _skill_md_bullet(skill_id: str, skill_file: str) -> str:

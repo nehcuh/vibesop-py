@@ -163,11 +163,24 @@ class TestAgentRuntimeHookResponse:
         resp = result.to_hook_response(no_match_message=False)
         assert resp == "{}"
 
-    def test_orchestration_response(self):
+    def test_orchestration_response(self, tmp_path):
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text("# Workflow\nInspect inputs and verify results.\n", encoding="utf-8")
+        plan = ExecutionPlan(
+            plan_id="plan-1",
+            steps=[
+                ExecutionStep(
+                    step_id="s1", step_number=1, skill_id="test/a", skill_file=str(skill_file)
+                )
+            ],
+        )
         result = AgentRuntimeResult(
             intercepted=True,
             mode="orchestrate",
-            plan={"plan_id": "plan-1", "steps": [{"step_number": 1, "skill_id": "test/a"}]},
+            plan=plan.to_dict(),
+            project_root=tmp_path,
         )
         resp = result.to_hook_response(
             platform="claude-code",
@@ -178,6 +191,9 @@ class TestAgentRuntimeHookResponse:
         assert "multiple intents" in data["systemMessage"].lower()
         assert "hookSpecificOutput" in data
         assert "Execution Plan" in data["hookSpecificOutput"]["additionalContext"]
+        assert str(skill_file) in data["hookSpecificOutput"]["additionalContext"]
+        assert result.has_match is True
+        assert result.plan["metadata"]["execution_ready"] is True
 
     def test_alternatives_in_system_message(self):
         result = AgentRuntimeResult(

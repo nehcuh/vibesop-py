@@ -488,12 +488,22 @@ class TestRouterMatchedSpanVerdict:
         assert metadata.get("layer") == "keyword"
 
     def test_orchestrate_multi_intent_plan_is_a_match(self, fresh_tracer, tmp_path) -> None:
-        """Multi-intent: a non-empty step list is the match verdict."""
+        """A complete plan with a readable source remains a match."""
+        source = tmp_path / "SKILL.md"
+        source.write_text("# Workflow\nInspect inputs and verify outputs.\n")
         runtime = self._orchestrate_runtime(
             tmp_path,
             {
                 "is_multi_intent": True,
-                "plan": {"steps": [{"skill_id": "step-skill", "intent": "do the thing"}]},
+                "plan": {
+                    "steps": [
+                        {
+                            "skill_id": "step-skill",
+                            "skill_file": str(source),
+                            "intent": "do the thing",
+                        }
+                    ]
+                },
             },
         )
         runtime.handle_query("orchestrate this")
@@ -650,11 +660,8 @@ class TestRouterMatchedSpanVerdict:
         assert metadata.get("skill_id") == ""
         assert "top_skills" not in metadata
 
-    def test_orchestrate_mixed_plan_is_match(self, fresh_tracer, tmp_path) -> None:
-        """A plan with at least one REAL skill step is a match even if
-        other steps fell back. gate40 项4: the span attributes the FIRST
-        REAL step — skill_id=次步, top_skills[0]=次步 (the result object
-        still carries steps[0], the fallback sentinel)."""
+    def test_orchestrate_mixed_plan_is_blocked(self, fresh_tracer, tmp_path) -> None:
+        """A real step cannot make unresolved required steps executable."""
         runtime = self._orchestrate_runtime(
             tmp_path,
             {
@@ -670,9 +677,11 @@ class TestRouterMatchedSpanVerdict:
         result = runtime.handle_query("orchestrate this")
 
         metadata = self._metadata(self._route_span(fresh_tracer))
-        assert metadata.get("has_match") is True
+        assert metadata.get("has_match") is False
         assert metadata.get("skill_id") == "real-skill"
-        assert metadata["top_skills"] == ["real-skill"]
+        assert "top_skills" not in metadata
+        assert result.notice_only is True
+        assert len(result.plan["steps"]) == 2
         # Result contract pin: steps[0] still flows into result.skill_id.
         assert result.skill_id == "fallback-llm"
 
@@ -697,9 +706,9 @@ class TestRouterMatchedSpanVerdict:
         runtime.handle_query("orchestrate this")
 
         metadata = self._metadata(self._route_span(fresh_tracer))
-        assert metadata.get("has_match") is True
+        assert metadata.get("has_match") is False
         assert metadata.get("skill_id") == "late-real-skill"
-        assert metadata["top_skills"] == ["late-real-skill"]
+        assert "top_skills" not in metadata
 
     def test_routing_exception_span_is_unknown_not_miss(self, fresh_tracer, tmp_path) -> None:
         """gate20 pi NIT-2: routing raises → early return BEFORE the

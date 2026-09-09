@@ -127,36 +127,38 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
     """
     plans_path = vibe_dir / "execution_plans.jsonl"
     if plans_path.exists():
-        with plans_path.open("r", encoding="utf-8") as f:
+        with plans_path.open("rb") as f:
             for raw in f:
                 line = raw.strip()
                 if not line:
                     continue
                 try:
                     record = json.loads(line)
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(record, dict):
                     continue
                 meta = record.get("metadata") or {}
                 if isinstance(meta, str):
                     try:
                         meta = json.loads(meta)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
                         meta = {}
-                if meta.get("trace_id") == trace_id:
+                if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
                     return True
 
     spans_path = _spans_path(vibe_dir)
     if spans_path.exists():
-        with spans_path.open("r", encoding="utf-8") as f:
+        with spans_path.open("rb") as f:
             for raw in f:
                 line = raw.strip()
                 if not line:
                     continue
                 try:
                     record = json.loads(line)
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     continue
-                if record.get("trace_id") == trace_id:
+                if isinstance(record, dict) and record.get("trace_id") == trace_id:
                     return True
 
     return False

@@ -282,6 +282,11 @@ class TestSkillInjector:
             execution_mode=ExecutionMode.SEQUENTIAL,
         )
 
+        for step in plan.steps:
+            path = tmp_path / step.skill_id / "SKILL.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# Workflow\nInspect, implement, verify.\n")
+            step.skill_file = str(path)
         result = injector.inject_execution_plan(plan, platform)
 
         assert result.method == InjectionMethod.ADDITIONAL_CONTEXT
@@ -307,6 +312,9 @@ class TestSkillInjector:
             execution_mode=ExecutionMode.SEQUENTIAL,
         )
 
+        path = tmp_path / "SKILL.md"
+        path.write_text("# Workflow\nInspect and verify.\n")
+        plan.steps[0].skill_file = str(path)
         result = injector.inject_execution_plan(plan, PlatformType.KIMI_CLI)
 
         assert result.method == InjectionMethod.INSTRUCTION
@@ -357,9 +365,8 @@ class TestSkillInjector:
         injector.annotate_plan_dict(plan)
         assert plan["steps"][0]["skill_file"] == ""
         assert "do not guess" in plan["steps"][0]["skill_file_note"]
-        assert "vibe skills info ghost-skill" in plan["steps"][0]["skill_file_note"]
-        # Sentinel gets no note — it is intentionally not-a-skill.
-        assert "skill_file_note" not in plan["steps"][1]
+        assert "unresolved skill" in plan["steps"][1]["skill_file_note"]
+        assert plan["metadata"]["execution_ready"] is False
 
     def test_load_skill_from_core_skills(self, tmp_path) -> None:
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
