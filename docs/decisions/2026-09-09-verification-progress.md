@@ -2,7 +2,9 @@
 
 ## 当前状态
 
-四路主体已集成，当前版本候选 **`8.3.0`**，正在收口登记一致性与最终验收。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 为草稿，随节点推送检查。主控负责 spec、跟踪、审阅、集成和远程同步，具体实现交给真实 Grok / Kimi / Claude / Pi CLI。
+**8.3.0 的实现、审阅、版本同步及本机/锁定依赖 Docker 验收已完成**。四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
+
+已验收代码为 `b5057d6`；本记录后续仅作验收文档整理，应用与测试输入由下方 SHA256 清单固定。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；[代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34344829654) 提供各平台 job 的实时结果。
 
 ## 节点日志
 
@@ -10,10 +12,10 @@
 |---|---|---|
 | M0：上一轮远程基线 | 完成 | `codex/practice-next-20260909` 已推送；基线 `efa616a` |
 | M1：明确 spec | 完成 | [验证合同](../specs/2026-09-09-verification-contract.md)，固定文件归属与验收 |
-| M2：四路实现 | 主体完成 | Claude 计划生成；Grok 内置技能；Kimi 正文拒绝；Pi 版本/文档/集成合同；均从 `99185be` 的独立工作树启动 |
-| M3：审阅及分批集成 | 进行中 | Grok B、Claude A/E、Pi F 均获独立 Kimi APPROVE；C 修正实读后状态后获 APPROVE；G 本地门禁待终审 |
-| M4：整体验收 | 进行中 | 主体开发版本已启动主机常规回归；最终版本与 G 合流后冻结输入做最终验证 |
-| M5：版本与远程收口 | 进行中 | 版本一致、PR/CI、最终提交 |
+| M2：四路实现 | 完成 | Claude 计划生成；Grok 内置技能；Kimi 正文拒绝；Pi 版本/文档/集成合同；均从 `99185be` 的独立工作树启动 |
+| M3：审阅及分批集成 | 完成 | B、A/E、C、F/G 及 GitHub 输出修正均获独立 Kimi APPROVE；退回项已修 |
+| M4：整体验收 | 本机 / 容器通过 | 主机 7008 passed；锁定依赖离线 Linux 6998 passed；远程平台结果见 PR 检查页 |
+| M5：版本与远程收口 | 已推送 | 8.3.0 包元数据 / CLI / 当前文档一致，PR #119；不打发布标签 |
 
 本机过程材料：`.omx/artifacts/verification-20260909/`。失败与未完成结果保留，不以代理自述作为验收通过。
 
@@ -67,3 +69,26 @@ G 初稿测试被主控退回：手写第二套 pytest 验收 if 不能证明生
 - `1267f3d` 主机完整常规回归 **7003 passed / 15 skipped / 17 deselected**（143.89s），凭据 `host-final/acceptance.json` 为 passed。后续变化仅 F/G 工具入口与门禁测试，应用源码保持不变；原有输入清单与失败凭据保留，下一轮使用独立 v2 验证材料。
 
 - Pi 已统一 CI、Makefile、两份脚本的普通文本输出设置；主控退回并修正 warning 断言过宽、普通环境继承 GitHub 标记两处测试问题。独立 Kimi 对当前文件 **APPROVE**，亲跑 **16 passed**；主控在 `GITHUB_ACTIONS=true` 下 **16 passed**，真实类型脚本 **0 errors**。新旧输入比较确认仅 5 个工具/测试文件变化，应用源码与待测 wheel 不变。
+
+### 8.3.0 最终机器验收（代码 `b5057d6`）
+
+| 环境 / 检查 | 结果 | 证据 |
+|---|---|---|
+| 主机 macOS / Python 3.12，`GITHUB_ACTIONS=true` | **7008 passed / 15 skipped / 17 deselected**；150.89s | `host-final-v2/acceptance.json`，passed，运行前工作树干净 |
+| 离线 Linux ARM64 / Python 3.12，锁定依赖、`GITHUB_ACTIONS=true` | **6998 passed / 25 skipped / 17 deselected**；87.50s；后续实际类型脚本与路由检查通过 | `linux-final-locked/acceptance.json`，passed，运行前工作树干净 |
+| wheel 独立安装 | 8.3.0；内置验收技能与 registry 在 site-packages 中存在 | 容器在 `/tmp`、无源码导入路径时检查 |
+| Docker 依赖 | 69 个适用依赖逐项符合 `uv.lock` 导出版本；NumPy 2.5.2 | `docker-locked-requirements.txt`；镜像 `vibesop-verify-830:locked` |
+| 类型 / 格式 | 错误级诊断 **0 errors**；ruff check / 770 文件 format 检查通过 | 警告仍按既有规则非阻断，不声称清除了所有 warning |
+| 固定路由 | 39 条与基线匹配；0 新失败 / 0 漂移 | 35/39 正确，4 个已知失败、2 个环境跳过，未改答案 |
+| 远程 Ubuntu Python 3.12 / 3.13 | 各 **7008 passed / 15 skipped / 17 deselected**；覆盖率均 **80.00%** | [代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34344829654) |
+| 远程 Quickstart | Ubuntu / Windows 均 success | [Quickstart E2E](https://github.com/nehcuh/vibesop-py/actions/runs/34344829709) |
+
+输入清单 `final-inputs-v2.json`（SHA256 `0a7556764907f03a48d20d9b7477b747c425d5a53f54f4a700810e33da4ad71e`）覆盖 1426 个文件，验收后复核无漂移。测试过滤器与 CI 相同：`not benchmark and not slow`；性能和路由基准另由远程 job 检查。
+
+Docker 环境失败也保留：v1 缺 `.venv` 映射导致类型配置被拒；v2 类型脚本自动同步时试图下载锁定 NumPy，禁网导致失败（`docker-sync-probe.log` 亲证）。补齐映射、明确 `UV_NO_SYNC=1` 与离线运行后，兼容快照 v3 通过；随后构建阶段按锁文件准备依赖，最终锁定镜像也通过。未把这些失败凭据覆盖或改写成通过。
+
+### 交付边界与后续
+
+- 本轮代码按节点持续推送到 `codex/verification-contract-20260909`，最终文档提交只补验收事实，不改变上述代码 / 测试输入。PR 的检查页是远程状态的实时来源，PR 描述在矩阵结束后更新最终结果，避免为抄录每次 CI 状态反复制造新一轮相同代码的检查。
+- 未创建 release tag、未发布 PyPI、未合并 main。后续发布可复用本次 spec、机器凭据与独立评审，但须针对实际发布提交执行发布流程。
+- 剩余范围明确：固定题集的 4 个既有无匹配案例另设改进实验；历史 Windows 报告及两个 benchmark fixture 的版本号保留，文档版本扫描的这 3 个原有提示不当成本轮失败或强行改写。发布脚本的 post/local 版本支持与临时目录并发隔离是已有低优先级维护项。未将本轮结果当作多代理优于单代理的实验结论。
