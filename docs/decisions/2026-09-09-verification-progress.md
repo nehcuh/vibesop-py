@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-**8.3.0 候选的 Windows 修复已合流并推送，119 项边界用例本机通过，正在进行最终跨平台验收。**四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
+**8.3.0 候选的代码与测试修复已完成并推送；本机及离线锁定 Docker 验收通过，最终远程矩阵状态统一记录在 PR。**四个真实 Grok / Kimi / Claude / Pi CLI 按 spec 执行，主控负责跟踪、审阅、集成、验收与推送。
 
-当前代码为 `10e33d6`；本轮修复以 `final-inputs-windows.json` 固定输入，下方旧检查点的通过与失败记录均保留。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；[当前代码 CI](https://github.com/nehcuh/vibesop-py/actions/runs/34348044015) 提供各平台 job 的实时结果。
+生产源码最后修改于 `10e33d6`；最后的测试补丁为 `6e1ba84`。分别以 `final-inputs-windows.json` / `final-inputs-windows-v2.json` 固定输入，下方旧检查点的通过与失败记录均保留。[PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 汇总最终交付与[最新远程检查](https://github.com/nehcuh/vibesop-py/pull/119/checks)；每次重新运行的结果均以其实际提交为准。
 
 ## 节点日志
 
@@ -14,7 +14,7 @@
 | M1：明确 spec | 完成 | [验证合同](../specs/2026-09-09-verification-contract.md)，固定文件归属与验收 |
 | M2：四路实现 | 完成 | Claude 计划生成；Grok 内置技能；Kimi 正文拒绝；Pi 版本/文档/集成合同；均从 `99185be` 的独立工作树启动 |
 | M3：审阅及分批集成 | 完成 | B、A/E、C、F/G 及 GitHub 输出修正均获独立 Kimi APPROVE；退回项已修 |
-| M4：整体验收 | 修复后重验中 | 旧检查点本机 / 容器通过，Windows 失败已修；新检查点 119 项本机边界通过，完整结果见下文与 PR |
+| M4：整体验收 | 本机 / 容器通过；远程见 PR | 完整回归主机 7014 / Docker 7004 passed；最后纯测试补丁主机 / Docker 各 58 passed，最终 Windows 必需矩阵见 PR |
 | M5：版本与远程收口 | 已推送 | 8.3.0 包元数据 / CLI / 当前文档一致，PR #119；不打发布标签 |
 
 本机过程材料：`.omx/artifacts/verification-20260909/`。失败与未完成结果保留，不以代理自述作为验收通过。
@@ -129,3 +129,9 @@ W1 独立 Kimi 审阅 **APPROVE**，31 项配置合并测试通过；Unicode 专
 - Windows 两个版本边界均仍有上述测试注入缺口，待仅测试补丁；以上结果不替代 Windows 完整验收。
 
 Claude 已补齐最后两个用例：用实际存储文本定位注入，显式断言注入发生；LF 分支强制 LF、CRLF 分支写真实字节并检查，避免 Windows 两个参数实际都跑 CRLF。复杂字符串测试增加 U+0085/U+2028 保留断言。主控复跑 **58 passed**，ruff 通过。相对 `10e33d6` 的完整验收输入，仅该测试文件与验收经验文档变化，生产源码 / wheel / 依赖不变；差异记录 `windows-final-test-delta.json`。新提交将执行 Windows 完整矩阵，最终结论以 PR 检查页及 PR 验收记录为准。
+
+### 最后测试补丁与远程收口
+
+`6e1ba84` 已推送，生产代码和 wheel 保持 `10e33d6` 内容不变。最后的 LF/CRLF 测试补丁由主控在本机 **58 passed**，在锁定依赖、禁网 Docker 中同样 **58 passed**（0.33s），新凭据 `linux-windows-test-delta/acceptance.json` 为 passed，运行前工作树干净。旧完整凭据不覆盖，不将该定向结果冒充新提交的完整回归。
+
+本记录将上述机器结果、失败返工、spec 和方法文档一次推送；此后仅通过 [PR #119](https://github.com/nehcuh/vibesop-py/pull/119) 的验收栏记录最终 Windows / Ubuntu / Quickstart 结果，避免抄写检查状态产生相同源码的无限 CI 循环。远程完整矩阵未通过前 PR 保持草稿；全部通过后再改为待审阅。被新提交替代的旧运行取消不算通过。
