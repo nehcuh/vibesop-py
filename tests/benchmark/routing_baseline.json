@@ -2,9 +2,9 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "350a173e57e34dcd712a08743fb584663bbfa81ad934a56673ddad70e0df9fc6",
+    "sha": "48164f2741909087c24197567b30157dabbd42cdaff34f8213fdefdc18632109",
     "inputs": {
-      "registry.yaml": "f997c3baa48c35098d05b6509230da865ffad068d964cf683eaca864948e56fa",
+      "registry.yaml": "bde7a29834df518fe11db97cdf32efd837a43d7f9a132670dd39f6287afa1278",
       "dataset": "8c8323e5d7fdb5e952f02841e0e254537a2d07ac6345e6e42ca79c36edec7444",
       "posture": {
         "enable_embedding": false,

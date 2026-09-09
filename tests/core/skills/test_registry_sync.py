@@ -182,7 +182,7 @@ class TestSync:
 
     def test_sync_leaves_committed_registry_intents_untouched(self, tmp_path: Path):
         """Pin against the real committed registry: a sync run must report
-        zero intent updates (all 18 builtins carry curated sentences; a
+        zero intent updates (all 19 builtins carry curated sentences; a
         full-registry rewrite would also flip the routing-baseline
         fingerprint)."""
         import shutil
