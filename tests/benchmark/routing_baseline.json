@@ -2,7 +2,7 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "87eea499f27c1115cb494aaa392a7badbdf120644221e44503fab91172c5f920",
+    "sha": "350a173e57e34dcd712a08743fb584663bbfa81ad934a56673ddad70e0df9fc6",
     "inputs": {
       "registry.yaml": "f997c3baa48c35098d05b6509230da865ffad068d964cf683eaca864948e56fa",
       "dataset": "8c8323e5d7fdb5e952f02841e0e254537a2d07ac6345e6e42ca79c36edec7444",
@@ -35,7 +35,8 @@
         "slash-orchestrate/SKILL.md": "3a42b575cc20a09e75499f86cb747d29c5b82ea1fe4c3e59e5c759956ac585cf",
         "slash-route/SKILL.md": "d1fed7e4dc165ecf54a9cf60ad4901f63b53f21c5e40c608ebc253aa5bc20d55",
         "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
-        "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279"
+        "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279",
+        "verify-result/SKILL.md": "d05ffc4c5864c84be2c5ff74cf4e98a062f1b6ab3afb7c9e8b74346dd8e91b36"
       },
       "skills:benchmark-pack": {
         "quokka-todo/SKILL.md": "e4626d7cda6ee9f13754e7e2a1acc1a5992dbe5149a0cadfc3ef7c2277486843",
