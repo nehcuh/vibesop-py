@@ -89,7 +89,19 @@ def attach_skill_file_payload(
             hinted = source_lookup(sid)
         resolved = resolve_routed_skill_md(sid, source_file=hinted)
         payload["skill_file"] = resolved.as_posix() if resolved is not None else ""
-        if resolved is None and payload.get("mode") in (None, "", "single"):
+        unsafe = False
+        if resolved is not None:
+            from vibesop.security.runtime_scan import is_skill_content_safe
+
+            try:
+                body = resolved.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                body = ""
+            if body and not is_skill_content_safe(body):
+                unsafe = True
+                payload["skill_file"] = ""
+                payload["notice_only"] = True
+        if (resolved is None or unsafe) and payload.get("mode") in (None, "", "single"):
             # Single-mode demote (mirror handle_query): a matched id whose
             # SKILL.md cannot be resolved is not a match. Orchestrated
             # payloads are exempt — the plan is the payload, and steps

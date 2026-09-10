@@ -51,6 +51,30 @@ def filter_invocation_disabled_candidates(
     return [c for c in candidates if not c.get("disable_model_invocation")]
 
 
+def invocation_disabled_skill_ids(router: Any) -> set[str]:
+    """Ids stamped disable-model-invocation on the router candidate pool.
+
+    Unwraps ``AgentRouter._router`` so hook-path production sees the same
+    catalog UnifiedRouter indexes. Missing catalog → empty set (tests that
+    stub a router without a candidate manager keep pre-assign behavior).
+    """
+    inner = getattr(router, "_router", router)
+    manager = getattr(inner, "_candidate_manager", None)
+    try:
+        if manager is not None:
+            candidates = list(manager.get_cached_candidates())
+        else:
+            getter = getattr(inner, "_get_cached_candidates", None)
+            if not callable(getter):
+                return set()
+            candidates = list(getter())
+    except Exception:
+        return set()
+    return {
+        str(c.get("id")) for c in candidates if c.get("disable_model_invocation") and c.get("id")
+    }
+
+
 def filter_management_candidates(
     query: str,
     candidates: list[dict[str, Any]],

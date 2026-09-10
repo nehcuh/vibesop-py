@@ -44,6 +44,8 @@ function writeState(state: VibeSOPState): void {
 interface RouteResult {
   mode?: string;
   skill_file?: string;
+  has_match?: boolean;
+  notice_only?: boolean;
   primary?: { skill_id?: string; confidence?: number };
   execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; skill_file?: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
   message?: string;
@@ -99,6 +101,7 @@ export default {
     const result = await routeWithVibeSOP(query, input.sessionID);
 
     if (!result) return;
+    if (result.notice_only || result.has_match === false) return;
 
     if (result.mode === "orchestrated" || result.mode === "orchestrate") {
       // Multi-intent: inject execution plan
@@ -160,10 +163,24 @@ async function getActiveSkillFile(sessionId: string): Promise<string | undefined
   return state.activeSkillFile?.[sessionId];
 }
 
+function isSkillPathAllowed(p: string, skillId: string): boolean {
+  if (!p || skillId.includes("..") || skillId.includes("\\")) return false;
+  return path.basename(path.resolve(p)) === "SKILL.md";
+}
+
+function isSkillContentSafe(content: string): boolean {
+  const lower = content.toLowerCase();
+  return (
+    !lower.includes("ignore all previous instructions") &&
+    !lower.includes("ignore previous instructions")
+  );
+}
+
 async function loadSkillContent(
   skillId: string,
   skillFile?: string,
 ): Promise<string | null> {
+  if (skillId.includes("..")) return null;
   const skillPaths = [
     ...(skillFile ? [skillFile] : []),
     path.join(OPCODE_DIR, "skills", skillId, "SKILL.md"),
@@ -171,8 +188,11 @@ async function loadSkillContent(
   ];
   for (const p of skillPaths) {
     try {
+      if (!isSkillPathAllowed(p, skillId)) continue;
       if (fs.existsSync(p)) {
-        return fs.readFileSync(p, "utf-8").slice(0, 3000);
+        const content = fs.readFileSync(p, "utf-8").slice(0, 3000);
+        if (!isSkillContentSafe(content)) return null;
+        return content;
       }
     } catch {}
   }

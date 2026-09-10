@@ -334,6 +334,10 @@ class SkillInjector:
     @staticmethod
     def _if_file(path: Path) -> Path | None:
         try:
+            if path.name != "SKILL.md":
+                return None
+            if path.is_symlink():
+                return None
             if path.is_file():
                 return path
         except OSError:
@@ -387,6 +391,9 @@ class SkillInjector:
 
     def _find_skill_md_path(self, skill_id: str) -> Path | None:
         """Walk install layouts; return the first existing SKILL.md."""
+        parts = Path(skill_id.replace("\\", "/")).parts
+        if not skill_id or ".." in parts:
+            return None
         flat_id = skill_id.replace("/", "-")
         home = Path.home()
 
@@ -690,11 +697,16 @@ You MUST follow this skill's workflow. Do not skip steps.
             return "", "unresolved skill"
         hinted = source_lookup(skill_id) if source_lookup is not None else None
         source = hinted or existing
-        path = Path(source) if source else self.resolve_skill_md(skill_id)
+        if source:
+            path = self._if_file(Path(source))
+            if path is None:
+                return "", "not found or empty"
+        else:
+            path = self.resolve_skill_md(skill_id)
         if path is None:
             return "", "not found or empty"
         try:
-            if not path.is_file():
+            if self._if_file(path) is None:
                 return "", "not found or empty"
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError):

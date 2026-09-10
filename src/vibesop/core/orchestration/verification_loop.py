@@ -24,6 +24,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ACCEPTANCE_FAILURE_STATUSES = frozenset({"blocked", "failed", "error"})
+
+
+def is_acceptance_failure(output: Any) -> bool:
+    """True when an executor/verifier output is blocked or failed, not success.
+
+    Strings ``blocked`` / ``failed`` (and ``blocked: …`` prefixes) and dicts
+    with an ``error`` key or ``status`` in {blocked, failed, error} must not
+    be treated as a completed step.
+    """
+    if isinstance(output, dict):
+        if "error" in output:
+            return True
+        status = str(output.get("status", "")).strip().lower()
+        return status in _ACCEPTANCE_FAILURE_STATUSES
+    if output is None:
+        return False
+    text = str(output).strip().lower()
+    return text.startswith(("blocked", "failed"))
+
 
 class VerificationLoopAction(StrEnum):
     """Action to take after verification."""
@@ -255,6 +275,8 @@ class VerificationLoop:
     def _verify_quarantine(self, step: ExecutionStep, output: Any) -> bool:
         """Default verification for quarantine-mode steps."""
         _ = step
+        if is_acceptance_failure(output):
+            return False
         output_text = str(output) if output is not None else ""
         return bool(output_text.strip())
 
@@ -306,8 +328,18 @@ def execute_plan_with_verification(
     for step_number in execution_order:
         step = next(s for s in plan.steps if s.step_number == step_number)
 
-        # Skip verification-only steps (they're handled separately)
+        # Verification-only steps still run so blocked/failed is recorded.
         if not loop.should_execute_step(step):
+            try:
+                result = executor(step)
+            except Exception as e:
+                logger.error("Verification step %s execution failed: %s", step.step_id, e)
+                results[step.step_id] = {"error": str(e)}
+                break
+            if is_acceptance_failure(result):
+                results[step.step_id] = {"error": str(result)}
+                break
+            results[step.step_id] = result
             continue
 
         # Execute the step

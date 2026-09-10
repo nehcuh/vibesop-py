@@ -29,8 +29,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from vibesop.core.skills.pack_lock import PackLockStore
-from vibesop.installer.analyzer import parse_github_url
-from vibesop.utils.atomic_writer import write_text
+from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
+from vibesop.utils.atomic_writer import AtomicWriteError, write_text
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +82,24 @@ def remote_head_sha(source_url: str, timeout: int = LS_REMOTE_TIMEOUT) -> str:
     already validated by the install-time trust/lock chain.
     """
     clone_url, _ = parse_github_url(source_url)
+    if not RepoAnalyzer._is_safe_git_url(clone_url) or clone_url.startswith("-"):
+        return ""
     try:
-        # Fixed argv, no shell — the URL never reaches a shell parser.
+        # Same fail-closed argv as clone: allowlist already applied, plus
+        # protocol.ext/file never and `--` so a leading-dash URL cannot
+        # become an ls-remote option.
         result = subprocess.run(
-            ["git", "ls-remote", clone_url, "HEAD"],
+            [
+                "git",
+                "-c",
+                "protocol.ext.allow=never",
+                "-c",
+                "protocol.file.allow=never",
+                "ls-remote",
+                "--",
+                clone_url,
+                "HEAD",
+            ],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -183,7 +197,7 @@ def check_pack_updates(
             indent=2,
         )
         write_text(store.directory / CACHE_FILENAME, payload)
-    except OSError as e:
+    except (OSError, AtomicWriteError) as e:
         logger.debug("Could not write pack update cache: %s", e)
 
     return results

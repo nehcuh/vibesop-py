@@ -321,3 +321,31 @@ def test_read_only_store_can_be_read_but_updates_require_lock(tmp_path, monkeypa
     with pytest.raises(PermissionError):
         tracker.update_step_status(plan.plan_id, "s1", StepStatus.COMPLETED)
     assert tracker.storage_path.read_bytes() == original
+
+
+def test_read_lock_does_not_swallow_contention_timeout(tmp_path, monkeypatch):
+    """Windows lock spin timeout is contention, not a read-only mount."""
+    import vibesop.core.orchestration.plan_tracker as storage
+    from vibesop.utils.file_lock import CouldNotLock
+
+    tracker = PlanTracker(tmp_path)
+    plan = ExecutionPlan(
+        plan_id="contended",
+        original_query="test",
+        steps=[ExecutionStep(step_id="s1", step_number=1, skill_id="test/skill")],
+    )
+    tracker.create_plan(plan)
+
+    def timeout_lock(*args, **kwargs):
+        raise OSError("timed out acquiring Windows lock after 200 attempts")
+
+    monkeypatch.setattr(storage, "cross_process_lock", timeout_lock)
+    with pytest.raises(OSError, match="timed out acquiring Windows lock"):
+        tracker.get_plan(plan.plan_id)
+
+    def could_not(*args, **kwargs):
+        raise CouldNotLock("held")
+
+    monkeypatch.setattr(storage, "cross_process_lock", could_not)
+    with pytest.raises(CouldNotLock):
+        tracker.get_plan(plan.plan_id)

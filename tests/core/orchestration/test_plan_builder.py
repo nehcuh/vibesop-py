@@ -492,6 +492,31 @@ class TestPreAssignedSkillIdPropagation:
         # Exactly one routing call (for the unset sub-task).
         assert len(router._calls) == 1
 
+    def test_pre_assigned_disable_model_invocation_rejected(self) -> None:
+        """Decomposer must not smuggle disable-model-invocation ids into steps."""
+        router = FakeRouter(default=self._route("open-skill"))
+        router._candidate_manager = type(
+            "CM",
+            (),
+            {
+                "get_cached_candidates": staticmethod(
+                    lambda: [
+                        {"id": "grill-me", "disable_model_invocation": True},
+                        {"id": "builtin/verify-result", "disable_model_invocation": True},
+                        {"id": "open-skill", "disable_model_invocation": False},
+                    ]
+                )
+            },
+        )()
+        builder = PlanBuilder(router)
+        plan = builder.build_plan(
+            "review code",
+            [SubTask(intent="review", query="review code", skill_id="grill-me")],
+        )
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "open-skill"
+        assert len(router._calls) == 1
+
 
 class TestPlanBuilderSquadIntegration:
     """PlanBuilder integration with AgentSquadComposer and SkillComposer."""

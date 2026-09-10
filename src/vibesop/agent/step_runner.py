@@ -386,6 +386,21 @@ class StepRunner:
                 ctx = self.get_context(step)
                 try:
                     output = step_executor(step, ctx)
+                    from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
+                    if is_acceptance_failure(output):
+                        self.mark_failed(step, str(output))
+                        results.append(
+                            {
+                                "step_id": step.step_id,
+                                "output": None,
+                                "error": str(output),
+                                "status": "failed",
+                            }
+                        )
+                        if fail_fast:
+                            break
+                        continue
                     self.mark_completed(step, output)
                     if on_step_complete:
                         on_step_complete(step, output)

@@ -40,9 +40,36 @@ def test_implement_review_hook_has_no_execution_plan() -> None:
 
 
 def test_orchestrate_empty_plan_is_no_match_envelope() -> None:
-    result = AgentRuntimeResult(mode="orchestrate", plan={"steps": []}, skill_id="")
+    result = AgentRuntimeResult(
+        intercepted=True,
+        mode="orchestrate",
+        plan={"steps": []},
+        skill_id="",
+    )
     payload = result.to_hook_response()
-    # Empty plan dict is truthy; runtime must clear mode before serialize.
-    # This pins the serializer: orchestrate+empty steps still emits a plan
-    # envelope if callers forget to demote — demote is tested via handle_query.
-    assert isinstance(payload, str)
+    assert "Execution plan injected" not in payload
+    assert "[VibeSOP Execution Plan]" not in payload
+    assert "No matching skill found" in payload
+
+
+def test_disabled_skill_ids_unwraps_agent_router() -> None:
+    ids = AgentRuntime()._disabled_skill_ids()
+    assert "builtin/verify-result" in ids
+
+
+def test_strip_keeps_verification_step_drops_named_cards() -> None:
+    runtime = AgentRuntime()
+    runtime._disabled_skill_ids = lambda: {"grill-me", "builtin/verify-result"}  # type: ignore[method-assign]
+    stripped = runtime._strip_disabled_skill_ids_from_plan(
+        {
+            "steps": [
+                {"skill_id": "code-review"},
+                {"skill_id": "grill-me"},
+                {"skill_id": "builtin/verify-result", "is_verification_step": True},
+            ]
+        }
+    )
+    assert [s["skill_id"] for s in stripped["steps"]] == [
+        "code-review",
+        "builtin/verify-result",
+    ]

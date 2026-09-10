@@ -191,9 +191,11 @@ class WorkflowEngine:
         'failed' if every recorded result is an error; 'partial' if some errored
         and some succeeded; 'completed' if no errors (or no results recorded).
         """
+        from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
         values = list(results.values())
-        has_error = any(isinstance(v, dict) and "error" in v for v in values)
-        has_success = any(not (isinstance(v, dict) and "error" in v) for v in values)
+        has_error = any(is_acceptance_failure(v) for v in values)
+        has_success = any(not is_acceptance_failure(v) for v in values)
         if has_error and not has_success:
             return "failed"
         if has_error:
@@ -829,6 +831,13 @@ class WorkflowEngine:
             self._emit_step_transition(plan.plan_id, step)
             try:
                 output = executor(step)
+                from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
+                if is_acceptance_failure(output):
+                    step.status = StepStatus.FAILED
+                    results[step.step_id] = {"error": str(output)}
+                    self._emit_step_transition(plan.plan_id, step, error=str(output))
+                    break
                 step.status = StepStatus.COMPLETED
                 results[step.step_id] = output
                 self._emit_step_transition(plan.plan_id, step)

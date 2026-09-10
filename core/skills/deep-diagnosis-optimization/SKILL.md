@@ -183,14 +183,17 @@ run: uv run pytest -m "not benchmark and not slow" --cov=src/vibesop --cov-branc
 CI test command: `-m "not benchmark and not slow"` (matches Makefile).
 Mark perf tests: `pytestmark = pytest.mark.slow` at module level.
 
-### basedpyright exit-code fix
+### basedpyright type gate
 
-basedpyright exits 3 for warnings-only (unlike pyright which exits 0).
-The project sets many rules to "warning" (advisory). Accept exit 3:
+basedpyright 1.39.9: exit 0 passes; 1 = type errors; 3 = configuration errors.
+Both 1 and 3 fail the gate. Do not treat exit 3 as "warnings only".
 
 ```yaml
-run: uv run basedpyright || [ $? -eq 3 ]  # accept 0 (clean) or 3 (warnings)
+run: uv run basedpyright --level error
 ```
+
+Set `PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT=1` so GitHub output mode does not
+flip warning-only runs to exit 1.
 
 ### ruff lint sweep
 

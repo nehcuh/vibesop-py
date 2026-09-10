@@ -124,6 +124,20 @@ class AgentRuntimeResult:
     def success(self) -> bool:
         return len(self.errors) == 0
 
+    def _demote_empty_orchestrate_plan(self) -> None:
+        """Empty orchestrate/squad plans serialize as no-match, not a plan envelope."""
+        if self.mode not in ("orchestrate", "multi_agent_squad"):
+            return
+        steps = self.plan.get("steps") if isinstance(self.plan, dict) else None
+        if not isinstance(steps, list) or steps:
+            return
+        self.mode = "single"
+        self.plan = {}
+        self.skill_id = ""
+        self.skill_name = ""
+        self.router_matched = False
+        self.notice_only = False
+
     def _validate_plan_handoff(self) -> None:
         if self.mode not in ("orchestrate", "multi_agent_squad") or not isinstance(self.plan, dict):
             return
@@ -148,6 +162,7 @@ class AgentRuntimeResult:
         output and translates it into the platform-specific hook
         response format.
         """
+        self._demote_empty_orchestrate_plan()
         self._validate_plan_handoff()
         return json.dumps(
             {
@@ -194,6 +209,8 @@ class AgentRuntimeResult:
         # Not intercepted — empty response
         if not self.intercepted:
             return "{}"
+
+        self._demote_empty_orchestrate_plan()
 
         # Slash command result
         if self.mode == "slash_command" and self.slash_result:
@@ -1027,24 +1044,18 @@ class AgentRuntime:
         )
 
     def _disabled_skill_ids(self) -> set[str]:
-        try:
-            manager = getattr(self.router, "_candidate_manager", None)
-            if manager is None:
-                return set()
-            return {
-                str(c.get("id"))
-                for c in manager.get_cached_candidates()
-                if c.get("disable_model_invocation")
-            }
-        except Exception:
-            return set()
+        from vibesop.core.routing.matcher_pipeline import invocation_disabled_skill_ids
+
+        return invocation_disabled_skill_ids(self.router)
 
     def _strip_disabled_skill_ids_from_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
         disabled = self._disabled_skill_ids()
         if not disabled:
             return plan
         steps = [s for s in (plan.get("steps") or []) if isinstance(s, dict)]
-        kept = [s for s in steps if s.get("skill_id") not in disabled]
+        kept = [
+            s for s in steps if s.get("skill_id") not in disabled or s.get("is_verification_step")
+        ]
         stripped = dict(plan)
         stripped["steps"] = kept
         return stripped

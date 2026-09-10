@@ -429,7 +429,9 @@ class UnifiedRouter(
         generic skills from crowding out specialized ones when the catalog is
         large.
         """
-        skill_candidates = candidates or self._get_cached_candidates()
+        skill_candidates = filter_invocation_disabled_candidates(
+            list(candidates or self._get_cached_candidates())
+        )
 
         if query:
             query_lower = query.lower()

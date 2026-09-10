@@ -5,6 +5,7 @@ Stores plans as JSONL in `.vibe/execution_plans.jsonl` for durability.
 
 from __future__ import annotations
 
+import errno
 import json
 import logging
 from collections.abc import Generator, Iterator
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from vibesop.core.models import ExecutionPlan, PlanStatus, StepStatus
-from vibesop.utils.file_lock import cross_process_lock
+from vibesop.utils.file_lock import CouldNotLock, cross_process_lock
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,15 @@ def _read_lock(plans_path: Path) -> Generator[None, None, None]:
     with ExitStack() as stack:
         try:
             stack.enter_context(cross_process_lock(_lock_path_for(plans_path), shared=True))
-        except OSError as exc:
+        except PermissionError as exc:
             logger.warning("Cannot lock plan store for reading %s: %s", plans_path, exc)
+        except CouldNotLock:
+            raise
+        except OSError as exc:
+            if getattr(exc, "errno", None) in (errno.EROFS, errno.EACCES, errno.EPERM):
+                logger.warning("Cannot lock plan store for reading %s: %s", plans_path, exc)
+            else:
+                raise
         yield
 
 

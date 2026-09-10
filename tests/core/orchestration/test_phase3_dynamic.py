@@ -783,6 +783,37 @@ def test_compute_final_status_derives_from_results() -> None:
     assert (
         WorkflowEngine._compute_final_status({"a": {"error": "x"}, "b": {"error": "y"}}) == "failed"
     )
+    assert WorkflowEngine._compute_final_status({"verify": "blocked"}) == "failed"
+    assert WorkflowEngine._compute_final_status({"verify": "failed"}) == "failed"
+    assert WorkflowEngine._compute_final_status({"verify": {"status": "failed"}}) == "failed"
+    assert WorkflowEngine._compute_final_status({"a": "ok", "verify": "blocked"}) == "partial"
+
+
+def test_sequential_blocked_output_does_not_complete_plan() -> None:
+    plan = ExecutionPlan(
+        plan_id="blocked-seq",
+        workflow_pattern=WorkflowPattern.ADVERSARIAL,
+        steps=[
+            ExecutionStep(step_id="build", step_number=1, skill_id="build"),
+            ExecutionStep(
+                step_id="verify",
+                step_number=2,
+                skill_id="builtin/verify-result",
+                is_verification_step=True,
+            ),
+        ],
+    )
+    engine = WorkflowEngine()
+
+    def executor(step: ExecutionStep) -> str:
+        if step.step_id == "verify":
+            return "blocked: missing test evidence"
+        return "ok"
+
+    result = engine._run_sequential(plan, executor)
+    assert result.final_status != "completed"
+    assert plan.status != PlanStatus.COMPLETED
+    assert plan.steps[1].status == StepStatus.FAILED
 
 
 def test_tournament_all_contestants_fail_final_status_failed() -> None:

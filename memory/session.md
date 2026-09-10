@@ -1,6 +1,75 @@
 
 ## Current Session
 
+### S82 (2026-09-10) [vibesop-py] 提交 C1–C12 定点修并 babysit 到 main CI 绿
+
+- 用户：提交 + babysit 到合并主分支。已在 main。不走 PR babysit（skill 禁止自动 merge）；直接 commit + push origin/main，盯 job 级 CI。
+- 不入库 `.omx/`、`.grok/workflows/`、`examples/datasets/`。
+- Recorded: no
+
+### S81 (2026-09-10) [vibesop-py] Claude 复审 C1–C8 delta + 修 C9–C12
+
+- 用户点名 Claude 复审并修 MEDIUM C9–C12。路由 kimi-gated-fix 88%。Override：用户点名 Claude 不是 kimi；S78 kimi -p 带工具挂死。形态仍是定点 TDD，主会话控编辑。
+- Claude：packet + 工作区。`--allowedTools Read,Grep,Glob` 挂死 600s（WinError 206 先因 prompt 过长）；短 prompt 仍无输出。`--tools ""` 14s 出稿但无文件取证、无 APPROVE/REQUEST CHANGES，标不可靠：`.omx/artifacts/ask-claude-pull-20260910-c1c8-fix.md`
+- C9–C12 已落地 [executed]：OpenCode 内容/路径闸 + JSON `skill_file` 扫描；只读锁不吞争用超时；缓存写接住 AtomicWriteError + 唯一 tmp；README `--level error`。
+- 验证：C9–C12 相关 **95 passed / 9 skipped**；C1–C8 波及 **271 passed**；ruff 干净。
+- Recorded: no
+
+### S80 (2026-09-10) [vibesop-py] v8.3.0 对抗 HIGH 定点修（C1–C8）
+
+- 用户点名「修」。路由「修」过短走 fallback。合适流程 = kimi-gated-fix 形态（已定位 file:line），主会话控编辑；注册 workflow `fix-from-review.rhai` 仍钉 8.2.0 修计划与旧 verify 命令，不跑。
+- 范围：确认 HIGH C1–C8。MEDIUM 仅当同文件同根才顺手（本轮不扩 C9–C12）。
+- 簇：W1/D1（C1+C2+C6+C7）/ 验收 blocked≠完成（C3）/ ls-remote URL 闸（C4）/ skill 根路径（C5）/ 诊断技能 type-gate 文案（C8）。
+- C1 锁：unwrap AgentRouter._router；strip 豁免 is_verification_step（否则删掉 verify-result）。
+- 不 commit / 不 push。stash S67 不动。
+- 已落地 C1–C8 [executed]：定向+波及 **666 passed / 2 skipped**；ruff 改动文件干净。MEDIUM C9–C12 未做。
+- 产物：`.omx/artifacts/pull-20260910-fix-claude-packet.md`
+- Recorded: no
+
+### S79 (2026-09-10) [vibesop-py] 中断后续：进度核对
+
+- 用户问昨晚是否意外中断。核对：HEAD 仍 `2329b013` (v8.3.0) 与 origin/main 同步；src/ 干净；未启动 `fix-from-review`。
+- S76–S78 产物都在：对抗报告 + 双路合成均为 **REQUEST CHANGES**。stash `S67 uncommitted fail-closed HIGH fixes before 8.3.0 pull` 仍未 pop。
+- Docker Desktop 引擎当前未连上（`dockerDesktopLinuxEngine` pipe 不存在）。S77 装完时 Hyper-V 标 reboot-pending、当时为评审未重启；本机重启或休眠后 daemon 没起来。
+- Next: 用户点名再开 `fix-from-review`（C1–C8 HIGH）；容器 e2e 需先把 Docker Desktop 拉起来。
+- Recorded: no
+
+### S78 (2026-09-09) [vibesop-py] v8.3.0 对抗结论 → Kimi+Claude 双路复审
+
+- Routing selected kimi-gated-fix (88%). Override: 用户点名双路复审，不是 Design→Apply 定点修。走确认轮：同一冻结包、两路互不见面。
+- Packet: `.omx/artifacts/pull-20260909-dual-review-prompt.md`（HEAD `2329b013`，C1–C8 驳倒优先）
+- Kimi: `kimi -p` text；Claude: `--bare --permission-mode dontAsk --allowedTools Read,Grep,Glob`（避开 `--tools ""` 编造 API）
+- Claude [executed] REQUEST CHANGES，C1–C8 全 CONFIRMED（[inspected]）。产物 `.omx/artifacts/ask-claude-pull-20260909.md`
+- Kimi 带工具挂死 720s（`-p` 不能配 `--auto`）；无工具重跑 COMMENT/全部 WEAK（弃权不是驳回）。产物 `.omx/artifacts/ask-kimi-pull-20260909.md`
+- 合成 `.omx/artifacts/pull-20260909-dual-review-synthesis.md`：双路终裁仍 **REQUEST CHANGES**
+- 不改 src/
+- Recorded: no
+
+### S77 (2026-09-09) [vibesop-py] Windows 容器 e2e：装 Docker Desktop（WSL2）
+
+- 用户：Docker Desktop 或 WSL+Engine 都可以，按最建议的来
+- 建议 Docker Desktop + WSL2：本机 `vibe.exe` 在 Windows PATH 上探测 `docker`；validator 用 Windows 路径挂载 `C:\...:/app`，Desktop 会做路径转换，裸 WSL docker 不会
+- 本机：未提权、无发行版、无 docker；HyperVisorPresent=True（可跑 WSL2）
+- CPU 是 Intel amd64，仓库 val-base 钉 `linux/arm64`，构建时用 amd64，评审期间不改仓库 Dockerfile
+- [executed] Docker Desktop 4.90.0 + Ubuntu WSL2。引擎 `29.7.2 linux/amd64`（约 7 分钟首次启动）。Hyper-V 功能仍标 reboot-pending，但 WSL2 引擎已可用，未重启（对抗评审还在跑）。
+- 仓库 Dockerfile 仍钉 arm64；用临时 amd64 Dockerfile 构建 `vibesop-val-base:py3.12`（2.5GB），未改仓库。
+- 容器冒烟 [executed]：`docker run --rm -v ${PWD}:/repo vibesop-val-base:py3.12` → x86_64 / Python 3.12.14 / `tests/scripts/test_typecheck_gate.py` + `test_release_checks.py` **17 passed**。
+- Recorded: no
+
+### S76 (2026-09-09) [vibesop-py] pull 8.3.0 + grok-build 应用 + 多路独立对抗评审
+
+- Routing selected builtin/deep-diagnosis-optimization (88%). Override: 用户点名「拉取 + 配置应用 + 多路独立对抗评审」，不是全仓深诊-修批-合入。走已注册 workflow `adversarial-review`（5 finder + refute-first verifier）。
+- 本地 S67 未提交 fail-closed HIGH 修复与即将拉取的 8.3.0 文件重叠，已 stash：`S67 uncommitted fail-closed HIGH fixes before 8.3.0 pull`（未 pop）。
+- Pull: `1435d57d` → `2329b013` (v8.3.0, Merge PR #119)，ff-only。183 files +9945/−1128。
+- 配置应用 [executed]：`uv sync --extra dev`（8.2.0→8.3.0）；`uv run vibe build grok-build --output ~/.grok`（routing.md + 两个 hook）；`uv tool install . --force`（全局 vibe 8.1.4→8.3.0）。
+- Frozen: `.omx/artifacts/review-diff-1435d57d-2329b013.patch`
+- Instructions: `.omx/artifacts/pull-20260909-review-instructions.md`
+- Theme: verification contract / Windows / type-gate / W1 librarian / CLI help-man / skills outdated
+- Workflow launched: `/workflow` handle `adversarial-review` (5 finder + verify + synthesize). 评审期间不改 src/
+- 完成 [executed]：finders 5/5，27→12 确认 / 15 驳回 / 0 未核实，**REQUEST CHANGES**（HIGH 8 + MEDIUM 4）。报告 `.omx/artifacts/adversarial-review-1435d57d-2329b013.md`
+- 未启动 `fix-from-review`（等用户点名）。stash 仍在：`S67 uncommitted fail-closed HIGH fixes before 8.3.0 pull`
+- Recorded: no
+
 ### S75 (2026-09-07) [vibesop-py] 喷气机 R5/R6 预览恢复 → 停服务 → 起停备忘
 
 - 用户要看 grok 双臂网页截图：主机 `/tmp/ab-jet-out` 已无；从 `vibesop-ab-treat/ctrl` 的 grok `after_snapshots` 还原 R5（8/1987 与 9/2491 行对上报告），R6 仍在 treat `/work`

@@ -1008,8 +1008,8 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 ## Development
 
 ```bash
-# Type checking
-uv run basedpyright
+# Type checking (exit 0 only; 1=type errors, 3=config errors)
+uv run basedpyright --level error
 
 # Linting
 uv run ruff check

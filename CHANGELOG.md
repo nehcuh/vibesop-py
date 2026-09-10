@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **W1 生产剥离**：hook 解开 `AgentRouter._router` 后再剥 `disable-model-invocation`；验证步骤豁免。分解器目录与 PlanBuilder 预分配不再编入该旗。空计划 hook 信封走 no-match。
+- **验收失败不得标完成**：`blocked` / `failed` 文本与 `{status: failed}` 使顺序/对抗辅助路径失败，而不是 completed。
+- **`vibe skills outdated`**：lock URL 走 clone 同款 allowlist + `protocol.ext.allow=never` + `--`。
+- **计划交付路径**：只注入名为 `SKILL.md` 的文件；`skill_id` 含 `..` 拒绝。
+- **deep-diagnosis-optimization**：类型门禁文案与 CI 同构，不再教 `|| [ $? -eq 3 ]`。
+- **OpenCode 插件**：注入 SKILL.md 前做路径闸与 prompt-injection 扫描；`notice_only` / `has_match=false` 不注入。`vibe route --json` 对不安全正文不附 `skill_file`。
+- **计划只读锁**：争用超时 / `CouldNotLock` 不再当成只读挂载而无锁继续读。
+- **`vibe skills outdated` 缓存**：写失败接住 `AtomicWriteError`；原子写临时文件带 pid 唯一名。
+- **README 类型检查**：与 CI 同为 `uv run basedpyright --level error`。
+
 ## [8.3.0] — 2026-09-09
 
 ### Fixed

@@ -90,3 +90,44 @@ def test_explicit_pass_continues_to_dependent_step():
     result = execute_plan_with_verification(_plan(), executor, verifier)
     assert [call.args[0].step_id for call in executor.call_args_list] == ["build", "deliver"]
     assert result["results"] == {"build": "artifact", "deliver": "artifact"}
+
+
+def test_quarantine_blocked_or_failed_is_not_pass() -> None:
+    from vibesop.core.models import TrustLevel
+
+    loop = VerificationLoop()
+    step = ExecutionStep(
+        step_id="verify",
+        step_number=2,
+        skill_id="builtin/verify-result",
+        trust_level=TrustLevel.QUARANTINE,
+        is_verification_step=True,
+    )
+    assert loop.verify_step(step, "blocked") is False
+    assert loop.verify_step(step, "failed") is False
+    assert loop.verify_step(step, "blocked: missing test evidence") is False
+    assert loop.verify_step(step, "ok evidence") is True
+
+
+def test_verification_step_is_executed() -> None:
+    plan = ExecutionPlan(
+        plan_id="with-verify",
+        workflow_pattern=WorkflowPattern.ADVERSARIAL,
+        steps=[
+            ExecutionStep(step_id="build", step_number=1, skill_id="build"),
+            ExecutionStep(
+                step_id="verify",
+                step_number=2,
+                skill_id="builtin/verify-result",
+                dependencies=["build"],
+                is_verification_step=True,
+            ),
+        ],
+    )
+    executor = Mock(return_value="passed")
+    verifier = SimpleNamespace(
+        verify=Mock(return_value=VerificationResult(status=VerificationStatus.PASSED))
+    )
+    result = execute_plan_with_verification(plan, executor, verifier)
+    assert [call.args[0].step_id for call in executor.call_args_list] == ["build", "verify"]
+    assert "verify" in result["results"]

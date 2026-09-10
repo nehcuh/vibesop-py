@@ -74,6 +74,26 @@ class TestRemoteHeadSha:
         assert isinstance(cmd, list)
         assert "https://github.com/u/p.git" in cmd
         assert seen["shell"] is False  # argv form — no shell injection surface
+        assert "protocol.ext.allow=never" in cmd
+        assert "--" in cmd
+        assert cmd[cmd.index("--") + 1] == "https://github.com/u/p.git"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "ext::sh -c id",
+            "--upload-pack=nonexistent-upload-pack-xyz",
+            "file:///etc/passwd",
+        ],
+    )
+    def test_unsafe_lock_url_never_spawns_git(
+        self, monkeypatch: pytest.MonkeyPatch, url: str
+    ) -> None:
+        def boom(*a: object, **k: object) -> None:
+            raise AssertionError(f"git must not run for {url!r}: {a}")
+
+        monkeypatch.setattr(subprocess, "run", boom)
+        assert remote_head_sha(url) == ""
 
     @pytest.mark.parametrize(
         "exc",
@@ -217,6 +237,21 @@ class TestCheckPackUpdates:
         monkeypatch.setattr(update_checker, "remote_head_sha", boom)
         result = check_pack_updates(store=store)
         assert result[0].state == "unknown"
+
+    def test_atomic_write_error_does_not_crash_outdated(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from vibesop.utils.atomic_writer import AtomicWriteError
+
+        store = _make_store(tmp_path, _lock("demo"))
+        monkeypatch.setattr(update_checker, "remote_head_sha", lambda url, timeout=8: SHA_A)
+
+        def boom(*a: object, **k: object) -> None:
+            raise AtomicWriteError("replace conflict")
+
+        monkeypatch.setattr(update_checker, "write_text", boom)
+        result = check_pack_updates(store=store, refresh=True)
+        assert result[0].state == "up_to_date"
 
 
 class TestCachedPackUpdates:

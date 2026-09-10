@@ -368,6 +368,41 @@ class TestSkillInjector:
         assert "unresolved skill" in plan["steps"][1]["skill_file_note"]
         assert plan["metadata"]["execution_ready"] is False
 
+    def test_non_skill_md_source_file_is_not_injected(self, tmp_path: Path) -> None:
+        secrets = tmp_path / "secrets.env"
+        secrets.write_text("OPENAI_API_KEY=sk-live-SUPERSECRET\n", encoding="utf-8")
+        injector = SkillInjector(project_root=tmp_path)
+        result = injector.inject_single_skill("leaked", PlatformType.GENERIC, source_file=secrets)
+        assert "SUPERSECRET" not in str(result.payload)
+        assert result.has_content is False
+
+    def test_skill_id_dotdot_does_not_escape_search_roots(self, tmp_path: Path) -> None:
+        escaped = tmp_path / "escaped2"
+        escaped.mkdir()
+        (escaped / "SKILL.md").write_text("SECRET_OUTSIDE_ROOT\n", encoding="utf-8")
+        (tmp_path / ".vibe" / "skills").mkdir(parents=True)
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("../../escaped2")
+        assert "SECRET_OUTSIDE_ROOT" not in content
+        assert CONTENT_NOT_FOUND_MARKER in content
+
+    def test_annotate_plan_dict_rejects_non_skill_md_path(self, tmp_path: Path) -> None:
+        secrets = tmp_path / "secrets.env"
+        secrets.write_text("OPENAI_API_KEY=sk-live-SUPERSECRET\n", encoding="utf-8")
+        injector = SkillInjector(project_root=tmp_path)
+        plan = {
+            "steps": [
+                {
+                    "step_number": 1,
+                    "skill_id": "leaked",
+                    "skill_file": str(secrets),
+                }
+            ]
+        }
+        injector.annotate_plan_dict(plan)
+        assert plan["metadata"]["execution_ready"] is False
+        assert "SUPERSECRET" not in str(plan)
+
     def test_load_skill_from_core_skills(self, tmp_path) -> None:
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
         injector = SkillInjector(project_root=tmp_path)

@@ -318,6 +318,10 @@ class PlanBuilder:
         # to keep the router thread-safe and avoid N serial LLM calls.
         sub_context = RoutingContext(skip_ai_triage=True)
 
+        from vibesop.core.routing.matcher_pipeline import invocation_disabled_skill_ids
+
+        disabled_ids = invocation_disabled_skill_ids(self._router)
+
         last_step_id: str | None = None
         for i, sub_task in enumerate(sub_tasks, 1):
             # Build contextualized query for this step
@@ -330,6 +334,7 @@ class PlanBuilder:
                 pre_assigned
                 and pre_assigned != "null"
                 and pre_assigned not in _MANAGEMENT_SKILL_IDS
+                and pre_assigned not in disabled_ids
             ):
                 skill_id = pre_assigned
                 confidence = 0.99

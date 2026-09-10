@@ -211,7 +211,7 @@ def _acquire_msvcrt(
             if e.errno not in (errno.EACCES, errno.EDEADLK):
                 raise
             time.sleep(spin_interval_s)
-    raise OSError(
+    raise CouldNotLock(
         f"timed out acquiring Windows lock after {max_spin_attempts} attempts: {last_err}"
     )
 

@@ -11,6 +11,7 @@ This is critical for configuration files to prevent
 corruption if the process is interrupted.
 """
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -168,14 +169,15 @@ class AtomicWriter:
         Returns:
             Path to temporary file
         """
+        token = f"{os.getpid()}.{os.urandom(4).hex()}"
+        tmp_name = f"{target_path.name}.{token}.tmp"
         if self._temp_dir:
             self._temp_dir.mkdir(parents=True, exist_ok=True)
-            # Use target filename in temp dir
-            return self._temp_dir / f"{target_path.name}.tmp"
+            return self._temp_dir / tmp_name
 
-        # Use same directory as target for atomic rename
+        # Same directory as target so replace stays on one filesystem.
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        return target_path.with_suffix(target_path.suffix + ".tmp")
+        return target_path.with_name(tmp_name)
 
     def _atomic_replace(self, src: Path, dst: Path) -> None:
         """Atomically replace destination with source.

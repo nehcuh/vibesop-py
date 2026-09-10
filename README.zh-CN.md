@@ -1000,8 +1000,8 @@ VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic 
 ## 开发
 
 ```bash
-# Type checking
-uv run basedpyright
+# 类型检查（只接受退出码 0；1=类型错误，3=配置错误）
+uv run basedpyright --level error
 
 # Linting
 uv run ruff check
