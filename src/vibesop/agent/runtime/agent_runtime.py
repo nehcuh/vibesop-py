@@ -1090,9 +1090,9 @@ class AgentRuntime:
             surviving = [dep for dep in deps if dep in kept_ids]
             if not surviving:
                 continue
-            s = dict(s)
-            s["dependencies"] = surviving
-            filtered.append(s)
+            filtered_step = dict(s)
+            filtered_step["dependencies"] = surviving
+            filtered.append(filtered_step)
         kept = filtered
         stripped = dict(plan)
         stripped["steps"] = kept

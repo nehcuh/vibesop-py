@@ -131,26 +131,25 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
         # concurrent writer's torn tail cannot hide a trace match.
         from vibesop.core.orchestration.plan_tracker import _read_lock
 
-        with _read_lock(plans_path):
-            with plans_path.open("rb") as f:
-                for raw in f:
-                    line = raw.strip()
-                    if not line:
-                        continue
+        with _read_lock(plans_path), plans_path.open("rb") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                meta = record.get("metadata") or {}
+                if isinstance(meta, str):
                     try:
-                        record = json.loads(line)
+                        meta = json.loads(meta)
                     except (json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-                    if not isinstance(record, dict):
-                        continue
-                    meta = record.get("metadata") or {}
-                    if isinstance(meta, str):
-                        try:
-                            meta = json.loads(meta)
-                        except (json.JSONDecodeError, UnicodeDecodeError):
-                            meta = {}
-                    if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
-                        return True
+                        meta = {}
+                if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
+                    return True
 
     spans_path = _spans_path(vibe_dir)
     if spans_path.exists():

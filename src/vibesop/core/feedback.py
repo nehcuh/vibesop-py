@@ -328,18 +328,15 @@ class FeedbackCollector:
         from vibesop.utils.file_lock import cross_process_lock
 
         lock_path = self._storage_path.with_name(self._storage_path.name + ".lock")
-        with cross_process_lock(lock_path):
+        with cross_process_lock(lock_path), self._storage_path.open("a+b") as f:
             # Append every record not yet persisted — writing only
             # _records[-1] here made import_records persist just its last line.
-            with self._storage_path.open("a+b") as f:
-                if f.tell():
-                    f.seek(-1, 2)
-                    if f.read(1) != b"\n":
-                        f.write(b"\n")
-                for record in self._records[self._persisted_count :]:
-                    f.write(
-                        (json.dumps(record.to_dict(), ensure_ascii=False) + "\n").encode("utf-8")
-                    )
+            if f.tell():
+                f.seek(-1, 2)
+                if f.read(1) != b"\n":
+                    f.write(b"\n")
+            for record in self._records[self._persisted_count :]:
+                f.write((json.dumps(record.to_dict(), ensure_ascii=False) + "\n").encode("utf-8"))
         self._persisted_count = len(self._records)
 
 

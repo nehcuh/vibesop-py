@@ -32,9 +32,7 @@ class TestSkillInjector:
         link_in = tmp_path / "skills" / "linked-skill" / "SKILL.md"
         link_in.parent.mkdir()
         link_in.symlink_to(target)
-        monkeypatch.setattr(
-            "vibesop.core.skills.storage.SkillStorage.CENTRAL_SKILLS_DIR", central
-        )
+        monkeypatch.setattr("vibesop.core.skills.storage.SkillStorage.CENTRAL_SKILLS_DIR", central)
         resolved = SkillInjector._if_file(link_in)
         assert resolved is not None
         assert resolved == target.resolve()

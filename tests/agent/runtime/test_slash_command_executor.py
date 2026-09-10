@@ -89,9 +89,7 @@ class TestSlashCommandExecutor:
             original_query="do the thing",
             execution_plan=plan,
         )
-        handler._router = SimpleNamespace(
-            orchestrate=lambda query, context=None: blocked_result
-        )
+        handler._router = SimpleNamespace(orchestrate=lambda query, context=None: blocked_result)
 
         result = executor.execute_query("/vibe-orchestrate do the thing")
         assert result.success is False

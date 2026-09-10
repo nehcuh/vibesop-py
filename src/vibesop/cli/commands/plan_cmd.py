@@ -26,17 +26,15 @@ def _get_tracker() -> PlanTracker:
     return PlanTracker(storage_dir=Path.cwd() / ".vibe")
 
 
-def _safe_tracker_read(op: Any):
+def _safe_tracker_read(op: Any, *args: Any, **kwargs: Any):
     """Run a tracker read/update; lock contention is a clean CLI error (8.3.1 C-U1)."""
     from vibesop.utils.file_lock import CouldNotLock
 
     try:
-        return op()
+        return op(*args, **kwargs)
     except CouldNotLock:
-        console.print(
-            "[red]Plan store is locked by another process; try again shortly.[/red]"
-        )
-        raise typer.Exit(1)
+        console.print("[red]Plan store is locked by another process; try again shortly.[/red]")
+        raise typer.Exit(1) from None
 
 
 @app.command("list")
@@ -45,7 +43,7 @@ def plan_list(
 ) -> None:
     """List recent execution plans."""
     tracker = _get_tracker()
-    plans = _safe_tracker_read(lambda: tracker.list_plans(limit=limit))
+    plans = _safe_tracker_read(tracker.list_plans, limit=limit)
 
     if not plans:
         console.print("[dim]No execution plans found.[/dim]")
@@ -72,8 +70,7 @@ def plan_list(
         )
         if blocked:
             reasons = ", ".join(
-                str(b.get("reason", "?"))
-                for b in (plan.metadata.get("blocked_steps") or [])[:2]
+                str(b.get("reason", "?")) for b in (plan.metadata.get("blocked_steps") or [])[:2]
             )
             console.print(f"   [red]blocked: {reasons}[/red]")
         console.print(f"   [dim]{plan.original_query[:60]}...[/dim]\n")
@@ -91,7 +88,7 @@ def plan_show(
 ) -> None:
     """Show details of a specific execution plan."""
     tracker = _get_tracker()
-    plan = _safe_tracker_read(lambda: tracker.get_plan(plan_id))
+    plan = _safe_tracker_read(tracker.get_plan, plan_id)
 
     if plan is None:
         console.print(f"[red]Plan {plan_id} not found[/red]")
@@ -115,7 +112,7 @@ def plan_show(
 def plan_status() -> None:
     """Show status of the active execution plan."""
     tracker = _get_tracker()
-    plan = _safe_tracker_read(lambda: tracker.get_active_plan())
+    plan = _safe_tracker_read(tracker.get_active_plan)
 
     if plan is None:
         console.print("[dim]No active plan.[/dim]")
@@ -140,12 +137,12 @@ def plan_complete_step(
     tracker = _get_tracker()
 
     if plan_id is None:
-        plan = _safe_tracker_read(lambda: tracker.get_active_plan())
+        plan = _safe_tracker_read(tracker.get_active_plan)
         if plan is None:
             console.print("[red]No active plan. Use --plan to specify.[/red]")
             raise typer.Exit(1)
     else:
-        plan = _safe_tracker_read(lambda: tracker.get_plan(plan_id))
+        plan = _safe_tracker_read(tracker.get_plan, plan_id)
         if plan is None:
             console.print(f"[red]Plan {plan_id} not found[/red]")
             raise typer.Exit(1)
@@ -157,11 +154,10 @@ def plan_complete_step(
         raise typer.Exit(1)
 
     _safe_tracker_read(
-        lambda: tracker.update_step_status(
-            plan_id=plan.plan_id,
-            step_id=step_id,
-            status=StepStatus.COMPLETED,
-            result_summary=result,
-        )
+        tracker.update_step_status,
+        plan_id=plan.plan_id,
+        step_id=step_id,
+        status=StepStatus.COMPLETED,
+        result_summary=result,
     )
     console.print(f"[green]✅ Step {step_id} marked as completed[/green]")

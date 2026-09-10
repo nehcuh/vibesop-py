@@ -14,9 +14,7 @@ from vibesop.utils.bundled import resolve_builtin_skills_dir
 
 def test_disabled_skills_are_registered_manual() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    registry = yaml.safe_load(
-        (repo_root / "core" / "registry.yaml").read_text(encoding="utf-8")
-    )
+    registry = yaml.safe_load((repo_root / "core" / "registry.yaml").read_text(encoding="utf-8"))
     entries = {e.get("id"): e for e in registry.get("skills", [])}
     skills_dir = resolve_builtin_skills_dir()
 

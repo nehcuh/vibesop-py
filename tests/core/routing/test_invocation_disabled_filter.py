@@ -90,9 +90,7 @@ def test_triage_cannot_select_disabled_skill(tmp_path) -> None:
 
         def call(self, prompt: str, **kwargs):
             return SimpleNamespace(
-                content=json.dumps(
-                    {"skill_id": "builtin/verify-result", "confidence": 0.95}
-                )
+                content=json.dumps({"skill_id": "builtin/verify-result", "confidence": 0.95})
             )
 
     service = TriageService(

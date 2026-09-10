@@ -242,9 +242,7 @@ class TestOrchestrateCommand:
         assert result.exit_code == 1
         assert "Do not execute" in result.output
 
-    def test_orchestrate_blocked_json_still_demotes(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_orchestrate_blocked_json_still_demotes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--json keeps exit 0 + has_match=false demote for blocked plans."""
         from vibesop.core.models import ExecutionPlan, ExecutionStep
 

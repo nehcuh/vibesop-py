@@ -432,10 +432,13 @@ class SlashCommandHandler:
                 if not plan.metadata.get("execution_ready", False):
                     # Blocked plans must not be presented as an executable
                     # "Execution Plan" on this path either (K-10).
-                    reasons = "; ".join(
-                        f"step {b.get('step_number', '?')}: {b.get('reason', 'unknown')}"
-                        for b in plan.metadata.get("blocked_steps", [])
-                    ) or "unknown reason"
+                    reasons = (
+                        "; ".join(
+                            f"step {b.get('step_number', '?')}: {b.get('reason', 'unknown')}"
+                            for b in plan.metadata.get("blocked_steps", [])
+                        )
+                        or "unknown reason"
+                    )
                     return (
                         False,
                         f"Execution plan blocked: {reasons}. "

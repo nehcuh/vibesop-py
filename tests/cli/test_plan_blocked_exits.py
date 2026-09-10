@@ -44,7 +44,9 @@ def make_plan(tmp_path: Path, *, healthy: bool) -> ExecutionPlan:
         intent="Implement",
         input_query="Build the thing",
     )
-    return ExecutionPlan(plan_id="blocked-exit-plan", original_query="Build the thing", steps=[step])
+    return ExecutionPlan(
+        plan_id="blocked-exit-plan", original_query="Build the thing", steps=[step]
+    )
 
 
 def make_result(tmp_path: Path, *, healthy: bool) -> OrchestrationResult:
@@ -87,9 +89,7 @@ class TestHasMatchContract:
 
 
 class TestPostProcess:
-    def test_blocked_human_path_persists_truth_and_skips_plan_ready(
-        self, tmp_path, monkeypatch
-    ):
+    def test_blocked_human_path_persists_truth_and_skips_plan_ready(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         result = make_result(tmp_path, healthy=False)
         console = Console(file=io.StringIO(), force_terminal=False)
@@ -98,9 +98,9 @@ class TestPostProcess:
         assert "Plan ready" not in output
         assert "Do not execute" in output
 
-        lines = (tmp_path / ".vibe" / "execution_plans.jsonl").read_text(
-            encoding="utf-8"
-        ).splitlines()
+        lines = (
+            (tmp_path / ".vibe" / "execution_plans.jsonl").read_text(encoding="utf-8").splitlines()
+        )
         assert lines
         persisted = json.loads(lines[-1])
         assert persisted["metadata"]["execution_ready"] is False
@@ -174,9 +174,9 @@ class TestExecuteInteractiveGate:
         _execute_plan_interactive(result, console)
         assert "blocked notice text" in console.file.getvalue()
 
-        lines = (tmp_path / ".vibe" / "execution_plans.jsonl").read_text(
-            encoding="utf-8"
-        ).splitlines()
+        lines = (
+            (tmp_path / ".vibe" / "execution_plans.jsonl").read_text(encoding="utf-8").splitlines()
+        )
         assert lines
         persisted = json.loads(lines[-1])
         assert persisted["metadata"]["execution_ready"] is False
@@ -241,8 +241,9 @@ class TestPlanCommands:
         plan = make_plan(tmp_path, healthy=not blocked)
         plan.metadata["execution_ready"] = not blocked
         if blocked:
-            plan.metadata["blocked_steps"] = [{"step_number": 1, "skill_id": "impl-skill",
-                                               "reason": "not found or empty"}]
+            plan.metadata["blocked_steps"] = [
+                {"step_number": 1, "skill_id": "impl-skill", "reason": "not found or empty"}
+            ]
         PlanTracker(storage_dir=tmp_path / ".vibe").create_plan(plan)
         return plan
 

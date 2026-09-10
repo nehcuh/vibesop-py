@@ -136,9 +136,7 @@ def _read_cache(store: PackLockStore) -> tuple[datetime | None, dict[str, PackUp
         if not isinstance(packs_raw, dict):
             return None, {}
         packs = {
-            k: PackUpdateStatus.from_dict(v)
-            for k, v in packs_raw.items()
-            if isinstance(v, dict)
+            k: PackUpdateStatus.from_dict(v) for k, v in packs_raw.items() if isinstance(v, dict)
         }
         return checked_at, packs
     except (json.JSONDecodeError, TypeError, ValueError, OSError, AttributeError) as e:
@@ -232,9 +230,12 @@ def cached_pack_updates(
     "update available" hints after the user already upgraded.
     """
     checked_at, cached = _read_cache(store or PackLockStore())
-    if max_age_days is not None and checked_at is not None:
-        if (datetime.now(UTC) - checked_at).total_seconds() > max_age_days * 86400:
-            return []
+    if (
+        max_age_days is not None
+        and checked_at is not None
+        and (datetime.now(UTC) - checked_at).total_seconds() > max_age_days * 86400
+    ):
+        return []
     return list(cached.values())
 
 

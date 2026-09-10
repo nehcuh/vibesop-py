@@ -347,8 +347,7 @@ class SkillInjector:
                 target = path.resolve()
                 central_root = SkillStorage.CENTRAL_SKILLS_DIR.resolve()
                 if not (
-                    target.is_file()
-                    and target.as_posix().startswith(central_root.as_posix() + "/")
+                    target.is_file() and target.as_posix().startswith(central_root.as_posix() + "/")
                 ):
                     return None
                 return target
