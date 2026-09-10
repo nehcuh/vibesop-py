@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **计划拒绝态覆盖全部编排交接出口（8.3.1 行为变化）**：`OrchestrationResult.has_match` 对编排计划纳入 `execution_ready`（未就绪计划在任何出口都是 miss）；`vibe orchestrate` / `vibe route` 人机路径、prompt_chain、`--guided`、slash `/vibe-orchestrate` 对 blocked 计划打印阻断说明，不再渲染可执行计划或 "Plan ready"；`vibe plan list` 将未就绪计划标记为 blocked，`show` / `status` / `complete-step` 拒绝。所有落盘快照（orchestrator 主路径、CLI post-process、slash 路径）在首次持久化前完成标注，JSONL 始终携带真实 `execution_ready` / `blocked_steps`。迁移行为：≤8.3.0 落盘的 JSONL 快照无 `execution_ready` 字段，升级后 `vibe plan` 读取端按 blocked 处理——历史计划如需继续执行请重跑编排重建。
+- **计划拒绝态覆盖全部编排交接出口（8.3.1 行为变化）**：`OrchestrationResult.has_match` 对编排计划纳入 `execution_ready`（未就绪计划在任何出口都是 miss）；`vibe orchestrate` / `vibe route` 人机路径、prompt_chain、`--guided`、slash `/vibe-orchestrate` 对 blocked 计划打印阻断说明，不再渲染可执行计划或 "Plan ready"；`vibe plan list` 将未就绪计划标记为 blocked，`show` / `status` / `complete-step` 拒绝。所有落盘快照（orchestrator 主路径、CLI post-process、slash 路径）在首次持久化前完成标注，JSONL 始终携带真实 `execution_ready` / `blocked_steps`。minimal 通道同步收紧：`LightweightRouter._format_result`（`vibe route --json --minimal` 与 `AgentRuntime.route_step` 的消费源）对 blocked 计划直接输出 `no_match` + `notice_only`，不再输出带 steps 的可交接 dict。迁移行为：≤8.3.0 落盘的 JSONL 快照无 `execution_ready` 字段，升级后 `vibe plan` 读取端按 blocked 处理——历史计划如需继续执行请重跑编排重建。
 - **W1 图书管理员（next-opt v1）**: 角色词不再自动拉 `MULTI_AGENT_SQUAD`（撤回 v7 auto-trigger）。小队只在显式并行工人意图下进入；`disable-model-invocation` 成为一等 SkillSpec 字段（EXPLICIT 可点名，其余层剥离）；负例 `must_not_inject` 进 hermetic 闸；生成规则改口为 no-match 是正常输出。详见 `.omx/artifacts/next-opt-design-v1.md`。
 
 ### Added

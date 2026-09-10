@@ -435,7 +435,13 @@ class TestAttachSkillFilePayload:
         assert payload.get("has_match") is False
 
     def test_orchestrated_mode_unresolvable_blocks_plan(self, tmp_path, monkeypatch) -> None:
-        """An unavailable required verifier blocks the plan and stays in diagnostics."""
+        """An unavailable required verifier blocks the plan and stays in diagnostics.
+
+        8.3.1 (G-1/G-2): the formatter itself demotes an unannotated blocked
+        plan to no_match (no steps); with a ready flag it releases the
+        orchestrated shape and attach re-validates the missing file, demoting
+        with steps preserved.
+        """
         from vibesop.cli.render import attach_skill_file_payload
         from vibesop.core.models import (
             ExecutionPlan,
@@ -460,8 +466,20 @@ class TestAttachSkillFilePayload:
             ],
         )
         result = OrchestrationResult(mode=OrchestrationMode.ORCHESTRATED, execution_plan=plan)
-        payload = LightweightRouter._format_result(result)
 
+        # (a) unannotated blocked plan: the formatter itself demotes.
+        payload = LightweightRouter._format_result(result)
+        assert payload["mode"] == "no_match"
+        assert payload["skill_id"] == ""
+        assert payload["has_match"] is False
+        assert payload["notice_only"] is True
+        assert "steps" not in payload
+
+        # (b) ready-flagged plan: formatter releases orchestrated; attach
+        # re-validates and demotes with steps / diagnostics preserved.
+        plan.metadata["execution_ready"] = True
+        payload = LightweightRouter._format_result(result)
+        assert payload["mode"] == "orchestrated"
         attach_skill_file_payload(payload, result)
 
         assert payload["skill_file"] == ""
@@ -612,6 +630,11 @@ class TestAttachSkillFilePayload:
                 ExecutionStep(step_id="s1", step_number=1, skill_id="lite-skill", input_query="q")
             ],
         )
+        # 8.3.1 (G-1): the formatter gates on execution_ready — a healthy plan
+        # must be annotated first (production: the orchestrator annotates).
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        SkillInjector(tmp_path).annotate_plan_skill_files(plan)
         orchestrated = OrchestrationResult(
             mode=OrchestrationMode.ORCHESTRATED,
             execution_plan=plan,
