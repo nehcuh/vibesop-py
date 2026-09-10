@@ -9,6 +9,7 @@ vibe plan complete-step <step_id> [--result "summary"]
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -25,7 +26,7 @@ def _get_tracker() -> PlanTracker:
     return PlanTracker(storage_dir=Path.cwd() / ".vibe")
 
 
-def _safe_tracker_read(op):
+def _safe_tracker_read(op: Any):
     """Run a tracker read/update; lock contention is a clean CLI error (8.3.1 C-U1)."""
     from vibesop.utils.file_lock import CouldNotLock
 
@@ -78,7 +79,7 @@ def plan_list(
         console.print(f"   [dim]{plan.original_query[:60]}...[/dim]\n")
 
 
-def _blocked_notice(plan) -> str:
+def _blocked_notice(plan: Any) -> str:
     from vibesop.agent.runtime.skill_injector import SkillInjector
 
     return SkillInjector.blocked_plan_notice(plan.to_dict())

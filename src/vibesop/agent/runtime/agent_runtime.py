@@ -1077,7 +1077,7 @@ class AgentRuntime:
         # without explicit dependency metadata keep their implicit
         # "verify the whole plan" semantics and are retained; partial strips
         # filter the surviving dependencies (K-3).
-        kept_ids = {s.get("step_id") for s in kept if isinstance(s, dict)}
+        kept_ids = {s.get("step_id") for s in kept}
         filtered: list[dict[str, Any]] = []
         for s in kept:
             if not s.get("is_verification_step"):
