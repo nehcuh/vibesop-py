@@ -321,11 +321,25 @@ class FeedbackCollector:
         if self._persisted_count >= len(self._records):
             return
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        # Append every record not yet persisted — writing only _records[-1]
-        # here made import_records persist just its last line.
-        with self._storage_path.open("a", encoding="utf-8") as f:
-            for record in self._records[self._persisted_count :]:
-                f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
+        # 8.3.1 (A-6): same write discipline as the plan store — sibling
+        # cross-process lock (never the data file, gate44 contract) plus
+        # unterminated-tail separation so a crash cannot glue two records
+        # into one corrupt line.
+        from vibesop.utils.file_lock import cross_process_lock
+
+        lock_path = self._storage_path.with_name(self._storage_path.name + ".lock")
+        with cross_process_lock(lock_path):
+            # Append every record not yet persisted — writing only
+            # _records[-1] here made import_records persist just its last line.
+            with self._storage_path.open("a+b") as f:
+                if f.tell():
+                    f.seek(-1, 2)
+                    if f.read(1) != b"\n":
+                        f.write(b"\n")
+                for record in self._records[self._persisted_count :]:
+                    f.write(
+                        (json.dumps(record.to_dict(), ensure_ascii=False) + "\n").encode("utf-8")
+                    )
         self._persisted_count = len(self._records)
 
 

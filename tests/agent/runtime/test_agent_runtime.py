@@ -105,6 +105,38 @@ class TestAgentRuntimeBackwardCompat:
         assert isinstance(result, AgentRuntimeResult)
         assert isinstance(result.to_hook_json(), str)
 
+    def test_hook_json_has_match_uses_router_verdict(self) -> None:
+        """8.3.1 (C-1): the hook JSON key is the router's real verdict — an
+        intercepted single-mode miss serializes has_match=false, a real match
+        true."""
+        import json
+
+        from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
+
+        miss = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="",
+            router_matched=False,
+        )
+        assert json.loads(miss.to_hook_json())["has_match"] is False
+
+        fallback = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="fallback-llm",
+            router_matched=False,
+        )
+        assert json.loads(fallback.to_hook_json())["has_match"] is False
+
+        match = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="builtin/code-review",
+            router_matched=True,
+        )
+        assert json.loads(match.to_hook_json())["has_match"] is True
+
     def test_handle_query_short_query_not_intercepted(self) -> None:
         runtime = AgentRuntime()
         result = runtime.handle_query("hi")

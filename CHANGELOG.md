@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vibe skills outdated`**：lock URL 走 clone 同款 allowlist + `protocol.ext.allow=never` + `--`。
 - **计划交付路径**：只注入名为 `SKILL.md` 的文件；`skill_id` 含 `..` 拒绝。
 - **deep-diagnosis-optimization**：类型门禁文案与 CI 同构，不再教 `|| [ $? -eq 3 ]`。
-- **OpenCode 插件**：注入 SKILL.md 前做路径闸与 prompt-injection 扫描；`notice_only` / `has_match=false` 不注入。`vibe route --json` 对不安全正文不附 `skill_file`。
+- **OpenCode 插件**：注入 SKILL.md 前做路径闸（skillId 派生路径锁在 skills 根内）与最小注入嗅探（两条常见注入措辞黑名单，不替代 Python 侧 SecurityScanner）；`notice_only` / `has_match=false` 不注入。`vibe route --json` 对不安全正文不附 `skill_file`。
 - **计划只读锁**：争用超时 / `CouldNotLock` 不再当成只读挂载而无锁继续读。
 - **`vibe skills outdated` 缓存**：写失败接住 `AtomicWriteError`；原子写临时文件带 pid 唯一名。
 - **README 类型检查**：与 CI 同为 `uv run basedpyright --level error`。

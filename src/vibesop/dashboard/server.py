@@ -127,25 +127,30 @@ def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
     """
     plans_path = vibe_dir / "execution_plans.jsonl"
     if plans_path.exists():
-        with plans_path.open("rb") as f:
-            for raw in f:
-                line = raw.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    continue
-                if not isinstance(record, dict):
-                    continue
-                meta = record.get("metadata") or {}
-                if isinstance(meta, str):
+        # 8.3.1 (R-2): read under the same shared lock as PlanTracker so a
+        # concurrent writer's torn tail cannot hide a trace match.
+        from vibesop.core.orchestration.plan_tracker import _read_lock
+
+        with _read_lock(plans_path):
+            with plans_path.open("rb") as f:
+                for raw in f:
+                    line = raw.strip()
+                    if not line:
+                        continue
                     try:
-                        meta = json.loads(meta)
+                        record = json.loads(line)
                     except (json.JSONDecodeError, UnicodeDecodeError):
-                        meta = {}
-                if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
-                    return True
+                        continue
+                    if not isinstance(record, dict):
+                        continue
+                    meta = record.get("metadata") or {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta)
+                        except (json.JSONDecodeError, UnicodeDecodeError):
+                            meta = {}
+                    if isinstance(meta, dict) and meta.get("trace_id") == trace_id:
+                        return True
 
     spans_path = _spans_path(vibe_dir)
     if spans_path.exists():

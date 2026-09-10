@@ -114,16 +114,34 @@ def remote_head_sha(source_url: str, timeout: int = LS_REMOTE_TIMEOUT) -> str:
 
 
 def _read_cache(store: PackLockStore) -> tuple[datetime | None, dict[str, PackUpdateStatus]]:
-    """Load the update cache; corrupt/missing files degrade to (None, {})."""
+    """Load the update cache; corrupt/missing files degrade to (None, {}).
+
+    8.3.1 (A-3/C-4): the degrade contract now also covers shapes the old
+    catch-tuple missed — a non-object top level (``AttributeError``), a
+    non-dict ``packs`` value, per-entry non-dict values, and naive
+    ``checked_at`` timestamps (treated as UTC so the TTL subtraction in
+    ``check_pack_updates`` never raises outside this function).
+    """
     cache_file = store.directory / CACHE_FILENAME
     if not cache_file.exists():
         return None, {}
     try:
         raw = json.loads(cache_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None, {}
         checked_at = datetime.fromisoformat(raw.get("checked_at", ""))
-        packs = {k: PackUpdateStatus.from_dict(v) for k, v in raw.get("packs", {}).items()}
+        if checked_at.tzinfo is None:
+            checked_at = checked_at.replace(tzinfo=UTC)
+        packs_raw = raw.get("packs", {})
+        if not isinstance(packs_raw, dict):
+            return None, {}
+        packs = {
+            k: PackUpdateStatus.from_dict(v)
+            for k, v in packs_raw.items()
+            if isinstance(v, dict)
+        }
         return checked_at, packs
-    except (json.JSONDecodeError, TypeError, ValueError, OSError) as e:
+    except (json.JSONDecodeError, TypeError, ValueError, OSError, AttributeError) as e:
         logger.debug("Ignoring corrupt update cache %s: %s", cache_file, e)
         return None, {}
 
@@ -203,9 +221,20 @@ def check_pack_updates(
     return results
 
 
-def cached_pack_updates(store: PackLockStore | None = None) -> list[PackUpdateStatus]:
-    """Return only what the cache already knows — never touches the network."""
-    _, cached = _read_cache(store or PackLockStore())
+def cached_pack_updates(
+    store: PackLockStore | None = None,
+    max_age_days: float | None = None,
+) -> list[PackUpdateStatus]:
+    """Return only what the cache already knows — never touches the network.
+
+    ``max_age_days`` (8.3.1, B-7): drop verdicts older than the bound so
+    long-lived surfaces like ``vibe status`` stop presenting stale
+    "update available" hints after the user already upgraded.
+    """
+    checked_at, cached = _read_cache(store or PackLockStore())
+    if max_age_days is not None and checked_at is not None:
+        if (datetime.now(UTC) - checked_at).total_seconds() > max_age_days * 86400:
+            return []
     return list(cached.values())
 
 

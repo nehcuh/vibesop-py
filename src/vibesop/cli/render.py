@@ -97,7 +97,9 @@ def attach_skill_file_payload(
                 body = resolved.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 body = ""
-            if body and not is_skill_content_safe(body):
+            # 8.3.1 (A-7): an empty/unreadable body is not a match either —
+            # the hook path already demotes it; keep the CLI payload symmetric.
+            if not body or not is_skill_content_safe(body):
                 unsafe = True
                 payload["skill_file"] = ""
                 payload["notice_only"] = True

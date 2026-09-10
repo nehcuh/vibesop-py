@@ -16,6 +16,8 @@ interface RouteResult {
   has_match: boolean;
   mode?: string;
   skill_file?: string;
+  notice_only?: boolean;
+  notice?: string;
   primary?: {
     skill_id: string;
     confidence: number;
@@ -53,7 +55,15 @@ function runVibeRoute(prompt: string, cwd: string): RouteResult | null {
       return null;
     }
     // A valid no-match is distinct from malformed output or a failed command.
-    if (!parsed.has_match) return { has_match: false };
+    // 8.3.1 (B-4): a blocked plan carries its own notice — keep it distinct
+    // from a plain no-match so the diagnostic is not lost.
+    if (!parsed.has_match) {
+      return {
+        has_match: false,
+        notice_only: parsed.notice_only === true,
+        notice: typeof parsed.notice === "string" ? parsed.notice : undefined,
+      };
+    }
     const validSkill = (skill: any): boolean =>
       !!skill && typeof skill.skill_id === "string" && !!skill.skill_id.trim() &&
       typeof skill.confidence === "number" && Number.isFinite(skill.confidence);
@@ -133,6 +143,16 @@ export default function (pi: ExtensionAPI) {
     // tell "routing ran, nothing matched" apart from "hook never ran", and
     // its AGENTS.md protocol makes it pay a second `vibe route` on every
     // miss. Parity with the claude/kimi/grok no-match message.
+    if (routeResult.notice_only && routeResult.notice) {
+      // 8.3.1 (B-4): blocked-plan diagnostic must reach the agent instead of
+      // being replaced by the generic no-match fingerprint.
+      const blockedNote =
+        "\n\n## VibeSOP Routing Result\n\n" +
+        `${routeResult.notice}\n\n` +
+        "---\n\nUser request: ";
+      return { action: "transform", text: `${blockedNote}${event.text}` };
+    }
+
     if (
       !routeResult.has_match ||
       !routeResult.primary ||

@@ -337,7 +337,21 @@ class SkillInjector:
             if path.name != "SKILL.md":
                 return None
             if path.is_symlink():
-                return None
+                # 8.3.1 (B-2): `vibe skills link` materializes platform skills
+                # as symlinks into the central storage; those must keep
+                # resolving. Whitelist symlinks whose target is a real file
+                # under the central skills root — any other symlink stays
+                # refused (swap/tamper hardening unchanged).
+                from vibesop.core.skills.storage import SkillStorage
+
+                target = path.resolve()
+                central_root = SkillStorage.CENTRAL_SKILLS_DIR.resolve()
+                if not (
+                    target.is_file()
+                    and target.as_posix().startswith(central_root.as_posix() + "/")
+                ):
+                    return None
+                return target
             if path.is_file():
                 return path
         except OSError:

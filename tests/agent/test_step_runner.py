@@ -254,6 +254,52 @@ class TestExecuteAll:
             assert r["status"] == "completed"
             assert r["output"].startswith("Executed skill-")
 
+    def test_execute_all_parallel_acceptance_failure_marks_failed(self):
+        """8.3.1 (A-2): the parallel batch path applies the same
+        acceptance-failure predicate as the serial path — "blocked:" /
+        "failed" outputs must never be marked completed."""
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", None),
+            ]
+        )
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            if step.skill_id == "skill-b":
+                return "blocked: missing evidence"
+            return f"OK {step.skill_id}"
+
+        result = runner.execute_all(executor)
+        assert result["completed"] == 1
+        assert result["failed"] == 1
+        failed = [r for r in result["results"] if r["status"] == "failed"]
+        assert failed and "blocked" in failed[0]["error"]
+        assert not runner._states["step-2"].completed
+
+    def test_execute_all_parallel_dict_failure_detected(self):
+        """8.3.1 (A-2/K-1): dict-shaped failures are detected on the RAW
+        result before stringification — the parallel path must reach the
+        dict branch of the predicate."""
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", None),
+            ]
+        )
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+
+        def executor(step: ExecutionStep, ctx: StepRunContext):
+            if step.skill_id == "skill-b":
+                return {"status": "failed", "reason": "tests red"}
+            return f"OK {step.skill_id}"
+
+        result = runner.execute_all(executor)
+        assert result["completed"] == 1
+        assert result["failed"] == 1
+        assert not runner._states["step-2"].completed
+
     def test_execute_all_with_failure_non_fatal(self):
         plan = _make_plan(
             [

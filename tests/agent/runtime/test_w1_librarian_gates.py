@@ -73,3 +73,26 @@ def test_strip_keeps_verification_step_drops_named_cards() -> None:
         "code-review",
         "builtin/verify-result",
     ]
+
+
+def test_strip_drops_verification_step_when_all_deps_stripped() -> None:
+    """8.3.1 (B-5): an all-disabled adversarial plan must not degrade into a
+    verify-only shell with dangling dependencies — the verification step is
+    dropped with the implementation steps, leaving the empty-plan no-match
+    demote to fire."""
+    runtime = AgentRuntime()
+    runtime._disabled_skill_ids = lambda: {"grill-me"}  # type: ignore[method-assign]
+    stripped = runtime._strip_disabled_skill_ids_from_plan(
+        {
+            "steps": [
+                {"skill_id": "grill-me", "step_id": "s1"},
+                {
+                    "skill_id": "builtin/verify-result",
+                    "step_id": "v1",
+                    "is_verification_step": True,
+                    "dependencies": ["s1"],
+                },
+            ]
+        }
+    )
+    assert stripped["steps"] == []

@@ -499,18 +499,52 @@ class StepRunner:
                                     )
                             break
                     else:
-                        output = str(step_result) if step_result else ""
-                        self.mark_completed(step, output)
-                        if on_step_complete:
-                            on_step_complete(step, output)
-                        results.append(
-                            {
-                                "step_id": step.step_id,
-                                "output": output,
-                                "error": None,
-                                "status": "completed",
-                            }
+                        # 8.3.1 (A-2): run the acceptance-failure predicate on
+                        # the RAW result first (dict shapes like
+                        # {"status": "failed"} are unreachable once str()-ed);
+                        # only then stringify for storage. Mirror the serial
+                        # branch: no on_step_error callback (K-2 symmetry).
+                        from vibesop.core.orchestration.verification_loop import (
+                            is_acceptance_failure,
                         )
+
+                        if is_acceptance_failure(step_result):
+                            output = str(step_result)
+                            self.mark_failed(step, output)
+                            should_continue = not fail_fast
+                            results.append(
+                                {
+                                    "step_id": step.step_id,
+                                    "output": None,
+                                    "error": output,
+                                    "status": "failed",
+                                }
+                            )
+                            if not should_continue or fail_fast:
+                                for remaining_step in batch:
+                                    if (
+                                        remaining_step.step_id != step.step_id
+                                        and not self._states[remaining_step.step_id].completed
+                                        and not self._states[remaining_step.step_id].failed
+                                    ):
+                                        self.mark_skipped(
+                                            remaining_step,
+                                            "Batch aborted due to previous failure",
+                                        )
+                                break
+                        else:
+                            output = str(step_result) if step_result else ""
+                            self.mark_completed(step, output)
+                            if on_step_complete:
+                                on_step_complete(step, output)
+                            results.append(
+                                {
+                                    "step_id": step.step_id,
+                                    "output": output,
+                                    "error": None,
+                                    "status": "completed",
+                                }
+                            )
 
                 if not should_continue or fail_fast:
                     break

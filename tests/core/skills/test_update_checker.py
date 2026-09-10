@@ -123,6 +123,55 @@ class TestCheckPackUpdates:
     def test_no_locks_returns_empty(self, tmp_path: Path) -> None:
         assert check_pack_updates(store=PackLockStore(locks_dir=tmp_path)) == []
 
+    def test_cached_pack_updates_max_age_drops_stale(self, tmp_path: Path) -> None:
+        """8.3.1 (B-7): max_age_days drops stale verdicts so `vibe status`
+        stops presenting outdated hints after the user upgraded."""
+        store = PackLockStore(locks_dir=tmp_path)
+        stale = '{"checked_at": "2026-01-01T00:00:00+00:00", "packs": {"demo": {"pack_name": "demo", "state": "update_available"}}}'
+        (tmp_path / CACHE_FILENAME).write_text(stale, encoding="utf-8")
+        assert cached_pack_updates(store=store) != []
+        assert cached_pack_updates(store=store, max_age_days=30) == []
+
+        fresh = '{"checked_at": "2099-01-01T00:00:00+00:00", "packs": {"demo": {"pack_name": "demo", "state": "update_available"}}}'
+        (tmp_path / CACHE_FILENAME).write_text(fresh, encoding="utf-8")
+        assert cached_pack_updates(store=store, max_age_days=30) != []
+
+    def test_corrupt_cache_shapes_degrade(self, tmp_path: Path, monkeypatch) -> None:
+        """8.3.1 (A-3/C-4): corrupt-but-valid-JSON caches degrade instead of
+        crashing `vibe skills outdated`."""
+        store = _make_store(tmp_path, _lock("demo", sha=SHA_B))
+
+        def fake_remote(url: str, timeout: int = 8) -> str:
+            return SHA_A
+
+        monkeypatch.setattr(update_checker, "remote_head_sha", fake_remote)
+
+        # (a) packs as a list → old code raised AttributeError.
+        (tmp_path / CACHE_FILENAME).write_text(
+            '{"checked_at": "2026-09-07T10:00:00+00:00", "packs": []}', encoding="utf-8"
+        )
+        assert check_pack_updates(store=store)[0].state == "update_available"
+
+        # (b) top-level non-object → old code raised AttributeError.
+        (tmp_path / CACHE_FILENAME).write_text('["not", "a", "cache"]', encoding="utf-8")
+        assert check_pack_updates(store=store)[0].state == "update_available"
+
+        # (c) naive checked_at → old code raised TypeError on the TTL
+        # subtraction outside _read_cache.
+        (tmp_path / CACHE_FILENAME).write_text(
+            '{"checked_at": "2026-09-07T10:00:00", "packs": {"demo": {"pack_name": "demo", '
+            '"state": "update_available"}}}',
+            encoding="utf-8",
+        )
+        assert check_pack_updates(store=store)[0].state == "update_available"
+
+        # (d) per-entry non-dict values are skipped, not crashed on.
+        (tmp_path / CACHE_FILENAME).write_text(
+            '{"checked_at": "2026-09-07T10:00:00+00:00", "packs": {"demo": "junk"}}',
+            encoding="utf-8",
+        )
+        assert check_pack_updates(store=store)[0].state == "update_available"
+
     def test_three_verdict_states(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         store = _make_store(
             tmp_path,

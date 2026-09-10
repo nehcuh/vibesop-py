@@ -46,6 +46,7 @@ interface RouteResult {
   skill_file?: string;
   has_match?: boolean;
   notice_only?: boolean;
+  notice?: string;
   primary?: { skill_id?: string; confidence?: number };
   execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; skill_file?: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
   message?: string;
@@ -101,7 +102,20 @@ export default {
     const result = await routeWithVibeSOP(query, input.sessionID);
 
     if (!result) return;
-    if (result.notice_only || result.has_match === false) return;
+    if (result.notice_only) {
+      // 8.3.1 (B-4): a blocked plan must not vanish silently — surface the
+      // diagnostic to the user instead of dropping it.
+      const notice = typeof result.notice === "string" && result.notice
+        ? result.notice
+        : "Execution plan blocked: one or more required skills are unavailable.";
+      await output.client?.tui?.showToast?.({
+        title: "VibeSOP",
+        message: notice.slice(0, 300),
+        variant: "warning",
+      });
+      return;
+    }
+    if (result.has_match === false) return;
 
     if (result.mode === "orchestrated" || result.mode === "orchestrate") {
       // Multi-intent: inject execution plan
@@ -163,12 +177,24 @@ async function getActiveSkillFile(sessionId: string): Promise<string | undefined
   return state.activeSkillFile?.[sessionId];
 }
 
-function isSkillPathAllowed(p: string, skillId: string): boolean {
+function isSkillPathAllowed(p: string, skillId: string, derived: boolean): boolean {
+  // Derived (skillId-built) candidate paths must resolve inside the skills
+  // root — an absolute/traversal skillId must not escape it. CLI-provided
+  // skill_file paths only need the basename gate.
   if (!p || skillId.includes("..") || skillId.includes("\\")) return false;
-  return path.basename(path.resolve(p)) === "SKILL.md";
+  const resolved = path.resolve(p);
+  if (path.basename(resolved) !== "SKILL.md") return false;
+  if (derived) {
+    const skillsRoot = path.resolve(OPCODE_DIR, "skills");
+    if (!resolved.startsWith(skillsRoot + path.sep)) return false;
+  }
+  return true;
 }
 
 function isSkillContentSafe(content: string): boolean {
+  // Minimal injection sniff (NOT a replacement for the Python-side
+  // SecurityScanner): catches the two most common prompt-injection
+  // phrasings before body text reaches the system prompt.
   const lower = content.toLowerCase();
   return (
     !lower.includes("ignore all previous instructions") &&
@@ -180,15 +206,15 @@ async function loadSkillContent(
   skillId: string,
   skillFile?: string,
 ): Promise<string | null> {
-  if (skillId.includes("..")) return null;
-  const skillPaths = [
-    ...(skillFile ? [skillFile] : []),
+  if (skillId.includes("..") || skillId.includes("\\")) return null;
+  const derivedPaths = [
     path.join(OPCODE_DIR, "skills", skillId, "SKILL.md"),
     path.join(OPCODE_DIR, "skills", skillId.replace("/", "-"), "SKILL.md"),
   ];
+  const skillPaths = [...(skillFile ? [skillFile] : []), ...derivedPaths];
   for (const p of skillPaths) {
     try {
-      if (!isSkillPathAllowed(p, skillId)) continue;
+      if (!isSkillPathAllowed(p, skillId, derivedPaths.includes(p))) continue;
       if (fs.existsSync(p)) {
         const content = fs.readFileSync(p, "utf-8").slice(0, 3000);
         if (!isSkillContentSafe(content)) return null;

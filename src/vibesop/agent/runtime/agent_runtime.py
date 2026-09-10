@@ -161,12 +161,26 @@ class AgentRuntimeResult:
         shell wrapper (vibesop-route.sh). The shell hook reads this
         output and translates it into the platform-specific hook
         response format.
+
+        8.3.1 (B-10): single-consumption contract — serialization re-validates
+        plan handoff (file I/O + metadata mutation) and a blocked verdict is
+        never reset on later calls. Do not serialize the same result twice
+        (e.g. trace replay) expecting a restored ready state.
         """
         self._demote_empty_orchestrate_plan()
         self._validate_plan_handoff()
         return json.dumps(
             {
-                "has_match": self.has_match,
+                # 8.3.1 (C-1): the router's real verdict, not the mode-derived
+                # property (which stays True on any intercepted single-mode
+                # miss). A miss with an empty/fallback skill id must never
+                # serialize as a match; orchestrated plans keep their verdict
+                # even when the first step id is the fallback sentinel.
+                "has_match": self.router_matched
+                and (
+                    self.skill_id not in ("", "fallback-llm")
+                    or self.mode in ("orchestrate", "multi_agent_squad")
+                ),
                 "intercepted": self.intercepted,
                 "mode": self.mode,
                 "skillId": self.skill_id,
@@ -1056,6 +1070,30 @@ class AgentRuntime:
         kept = [
             s for s in steps if s.get("skill_id") not in disabled or s.get("is_verification_step")
         ]
+        # 8.3.1 (B-5): a verification step whose EXPLICIT dependencies were
+        # all stripped would be injected with dangling references — drop it
+        # too, so an all-disabled adversarial plan degrades to the existing
+        # empty-plan no-match demote instead of a verify-only shell. Steps
+        # without explicit dependency metadata keep their implicit
+        # "verify the whole plan" semantics and are retained; partial strips
+        # filter the surviving dependencies (K-3).
+        kept_ids = {s.get("step_id") for s in kept if isinstance(s, dict)}
+        filtered: list[dict[str, Any]] = []
+        for s in kept:
+            if not s.get("is_verification_step"):
+                filtered.append(s)
+                continue
+            deps = s.get("dependencies")
+            if not deps:
+                filtered.append(s)
+                continue
+            surviving = [dep for dep in deps if dep in kept_ids]
+            if not surviving:
+                continue
+            s = dict(s)
+            s["dependencies"] = surviving
+            filtered.append(s)
+        kept = filtered
         stripped = dict(plan)
         stripped["steps"] = kept
         return stripped

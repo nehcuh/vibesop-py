@@ -30,9 +30,14 @@ _ACCEPTANCE_FAILURE_STATUSES = frozenset({"blocked", "failed", "error"})
 def is_acceptance_failure(output: Any) -> bool:
     """True when an executor/verifier output is blocked or failed, not success.
 
-    Strings ``blocked`` / ``failed`` (and ``blocked: …`` prefixes) and dicts
+    Exact ``blocked`` / ``failed`` strings, ``blocked:`` / ``failed:`` prefixed
+    strings (the verify-result vocabulary: ``blocked: <缺什么>``), and dicts
     with an ``error`` key or ``status`` in {blocked, failed, error} must not
     be treated as a completed step.
+
+    8.3.1 (B-8): the previous ``startswith(("blocked", "failed"))`` prefix
+    heuristic misfired on prose outputs like "Failed to find X, skipping" or
+    "Blocked IPs table migrated" — sentinel-prefix matching only.
     """
     if isinstance(output, dict):
         if "error" in output:
@@ -42,7 +47,9 @@ def is_acceptance_failure(output: Any) -> bool:
     if output is None:
         return False
     text = str(output).strip().lower()
-    return text.startswith(("blocked", "failed"))
+    if text in ("blocked", "failed"):
+        return True
+    return text.startswith(("blocked:", "failed:"))
 
 
 class VerificationLoopAction(StrEnum):

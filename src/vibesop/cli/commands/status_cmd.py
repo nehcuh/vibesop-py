@@ -207,7 +207,7 @@ def _load_warnings(project_root: Path) -> Panel:
     try:
         from vibesop.core.skills.update_checker import cached_pack_updates, registry_age_days
 
-        for s in cached_pack_updates():
+        for s in cached_pack_updates(max_age_days=30):
             if s.state == "update_available":
                 warnings.append(
                     f"[yellow]{s.pack_name}[/yellow] — pack update available, "
@@ -287,8 +287,8 @@ def _load_welcome(is_first: bool) -> Panel | None:
     content = (
         "[bold]Welcome to VibeSOP![/bold]  Your AI-powered skill operating system.\n\n"
         "[dim]Getting started:[/dim]\n"
-        '  [cyan]vibe route "help me debug this"[/cyan]  [dim]— route a query to the best skill[/dim]\n'
-        "  [cyan]vibe skills list[/cyan]             [dim]— browse your 45+ available skills[/dim]\n"
+        '  [cyan]vibe route "help me debug this"[/cyan]  [dim]— look up whether a skill applies (no match is ok)[/dim]\n'
+        "  [cyan]vibe skills list[/cyan]             [dim]— browse your available skills[/dim]\n"
         "  [cyan]vibe status[/cyan]                   [dim]— return to this dashboard[/dim]\n\n"
         "[dim]VibeSOP manages your skills so your AI agent can focus on execution.[/dim]"
     )

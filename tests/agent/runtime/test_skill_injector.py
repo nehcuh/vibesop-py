@@ -19,6 +19,34 @@ from vibesop.core.models import ExecutionMode, ExecutionPlan, ExecutionStep
 class TestSkillInjector:
     """Test skill content injection across platforms."""
 
+    def test_if_file_whitelists_central_storage_symlinks(self, tmp_path, monkeypatch) -> None:
+        """8.3.1 (B-2): `vibe skills link` symlinks into the central storage
+        must keep resolving; symlinks pointing anywhere else stay refused."""
+        central = tmp_path / "central"
+        central.mkdir()
+        target = central / "linked-skill" / "SKILL.md"
+        target.parent.mkdir()
+        target.write_text("# Linked\n", encoding="utf-8")
+        (tmp_path / "skills").mkdir()
+
+        link_in = tmp_path / "skills" / "linked-skill" / "SKILL.md"
+        link_in.parent.mkdir()
+        link_in.symlink_to(target)
+        monkeypatch.setattr(
+            "vibesop.core.skills.storage.SkillStorage.CENTRAL_SKILLS_DIR", central
+        )
+        resolved = SkillInjector._if_file(link_in)
+        assert resolved is not None
+        assert resolved == target.resolve()
+
+        outside = tmp_path / "elsewhere" / "SKILL.md"
+        outside.parent.mkdir()
+        outside.write_text("# Outside\n", encoding="utf-8")
+        evil_link = tmp_path / "skills" / "evil" / "SKILL.md"
+        evil_link.parent.mkdir()
+        evil_link.symlink_to(outside)
+        assert SkillInjector._if_file(evil_link) is None
+
     def test_claude_code_injection(self, tmp_path) -> None:
         injector = SkillInjector(project_root=tmp_path)
 
