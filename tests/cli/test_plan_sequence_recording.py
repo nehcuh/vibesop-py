@@ -36,7 +36,10 @@ _QUERY = "refactor the auth module and add tests"
 
 
 def _plan(*skill_ids: str) -> Any:
-    return SimpleNamespace(steps=[SimpleNamespace(skill_id=s) for s in skill_ids])
+    return SimpleNamespace(
+        steps=[SimpleNamespace(skill_id=s) for s in skill_ids],
+        metadata={"execution_ready": True},
+    )
 
 
 def _result(plan: Any) -> Any:
@@ -123,7 +126,7 @@ class TestConfirmationFlowRecording:
             )
             for i, (skill, conf) in enumerate(zip(skills, confidences, strict=True))
         ]
-        return SimpleNamespace(steps=steps)
+        return SimpleNamespace(steps=steps, metadata={"execution_ready": True})
 
     def test_ambiguous_only_auto_proceed_records_nothing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -482,7 +485,7 @@ def _orchestrated_router() -> MagicMock:
     router = MagicMock()
     plan = SimpleNamespace(
         steps=[SimpleNamespace(skill_id=s) for s in ("a", "b", "c")],
-        metadata={},
+        metadata={"execution_ready": True},
         workflow_pattern=WorkflowPattern.SEQUENTIAL,
     )
     result = SimpleNamespace(

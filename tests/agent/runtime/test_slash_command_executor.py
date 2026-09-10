@@ -44,6 +44,60 @@ class TestSlashCommandExecutor:
         assert result.success is False
         assert "Unknown command" in result.message
 
+    def test_handler_router_has_plan_annotator(self) -> None:
+        """8.3.1 (K-10): the executor injects the plan annotator so
+        /vibe-orchestrate persists carry the truthful execution_ready
+        verdict in the first JSONL snapshot."""
+        executor = SlashCommandExecutor()
+        router = executor._handler.router
+        assert router.plan_annotator is not None
+
+    def test_orchestrate_blocked_plan_refused(self, tmp_path) -> None:
+        """8.3.1 (K-10): a blocked plan must not render as "Execution Plan"
+        on the slash path either."""
+        from types import SimpleNamespace
+
+        from vibesop.core.models import (
+            ExecutionPlan,
+            ExecutionStep,
+            OrchestrationMode,
+            OrchestrationResult,
+        )
+
+        executor = SlashCommandExecutor(project_root=tmp_path)
+        handler = executor._handler
+        plan = ExecutionPlan(
+            plan_id="slash-blocked",
+            original_query="do the thing",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="missing-skill",
+                    skill_file="/nonexistent/missing-skill/SKILL.md",
+                    intent="Implement",
+                    input_query="do the thing",
+                )
+            ],
+            metadata={
+                "execution_ready": False,
+                "blocked_steps": [{"step_number": 1, "reason": "not found or empty"}],
+            },
+        )
+        blocked_result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query="do the thing",
+            execution_plan=plan,
+        )
+        handler._router = SimpleNamespace(
+            orchestrate=lambda query, context=None: blocked_result
+        )
+
+        result = executor.execute_query("/vibe-orchestrate do the thing")
+        assert result.success is False
+        assert "blocked" in result.message
+        assert "Execution Plan" not in result.message
+
     def test_rejects_non_slash_decision(self) -> None:
         """Executor rejects non-SLASH_COMMAND decisions."""
         interceptor = IntentInterceptor()

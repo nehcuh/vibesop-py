@@ -941,15 +941,15 @@ def route(
         # Mirrors agent_runtime.handle_query lines 667-724. Defensive
         # getattr because some test fixtures use SimpleNamespace mocks.
         #
-        # gate40 项4: the span's match verdict now follows the hook-path
+        # gate40 项4: the span's match verdict follows the hook-path
         # predicate — primary real hit ∨ any plan step routed to a REAL
-        # skill (skill_id not in {"", "fallback-llm"}) — instead of the
-        # OrchestrationResult.has_match property, which stays True on
-        # all-fallback orchestrated plans (CLI orchestrated results always
-        # have primary=None). The property and the result object itself
-        # are the RESULT CONTRACT (JSON output / confirmation flow) and
-        # are deliberately UNTOUCHED. Miss rows always write skill_id=""
-        # (single-mode misses used to leak the fallback-llm sentinel here).
+        # skill (skill_id not in {"", "fallback-llm"}) — not the
+        # OrchestrationResult.has_match property (gate40-era property stayed
+        # True on all-fallback orchestrated plans). 8.3.1: the property now
+        # also requires execution_ready for orchestrated plans, so spans keep
+        # the step-based predicate to stay consistent with historical rows.
+        # Miss rows always write skill_id="" (single-mode misses used to leak
+        # the fallback-llm sentinel here).
         _primary = getattr(result, "primary", None)
         _primary_id = getattr(_primary, "skill_id", "") or "" if _primary else ""
         _plan = getattr(result, "execution_plan", None)
@@ -1020,7 +1020,9 @@ def route(
     # Phase 4: render Agent Squad summary when the plan contains a squad
     squad_already_rendered = False
     squad = _extract_squad_from_result(result)
-    if squad is not None and not json_output:
+    if squad is not None and not json_output and not _plan_blocked(result.execution_plan):
+        # A blocked squad plan must not print the squad summary either (K-9):
+        # the gate below prints the blocked notice instead.
         console.print(_format_squad_summary(squad, decision.analysis))
         squad_already_rendered = True
 
@@ -1047,6 +1049,14 @@ def route(
         # In JSON mode: exit 0 for successful routing (caller inspects has_match field).
         # A completed routing attempt is not an error even when no match found.
         raise typer.Exit(0)
+
+    if result.mode.value == "orchestrated" and _plan_blocked(result.execution_plan):
+        # Never render a blocked plan (transparency/compact both present it as
+        # an execution plan with a MANDATORY execute footer) — the blocked
+        # notice replaces all downstream rendering, confirmation, telemetry
+        # and "Plan ready" output (K-6).
+        _print_blocked_plan_notice(result.execution_plan, console)
+        return
 
     # Full transparency: show routing decision tree (default)
     already_rendered = squad_already_rendered
@@ -1213,6 +1223,10 @@ def orchestrate(
             prompt_builder=_build_prompt_builder(),
         )
 
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+
+    router.plan_annotator = SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files
+
     context = RoutingContext()
     if conversation_id:
         context.conversation_id = conversation_id
@@ -1229,16 +1243,30 @@ def orchestrate(
 
     result = router.orchestrate(query, context=context)
 
+    if not json_output and _plan_blocked(result.execution_plan):
+        # Human exits (verbose / compact) must not present a blocked plan as
+        # an execution plan; the verbose footer even says "Execute each skill
+        # workflow exactly as defined". --json keeps its demote contract
+        # (exit 0, has_match=false + notice in the payload).
+        _print_blocked_plan_notice(result.execution_plan, console)
+        raise typer.Exit(1)
+
     if json_output:
         import json
 
         from vibesop.agent.runtime.skill_injector import SkillInjector
+        from vibesop.cli.render import attach_skill_file_payload
 
         if result.execution_plan is not None:
             SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(
                 result.execution_plan, source_lookup=candidate_source_lookup(router)
             )
-        print(json.dumps(result.model_dump(mode="json"), indent=2, default=str, ensure_ascii=False))
+        # Same demote contract as `vibe route --json`: a blocked plan serializes
+        # with has_match=false + notice_only + blocked notice, never as a
+        # handoff-ready plan.
+        payload = result.to_dict()
+        attach_skill_file_payload(payload, result, source_lookup=candidate_source_lookup(router))
+        print(json.dumps(payload, indent=2, default=str, ensure_ascii=False))
     elif verbose:
         render_orchestration_result(result, console=console)
     else:
@@ -1320,6 +1348,35 @@ def decompose(
             console.print(f"  {i}. [cyan]{task.intent}[/cyan] — {task.query}{skill_hint}")
 
 
+def _print_blocked_plan_notice(plan: Any, console: Console) -> None:
+    """Print the blocked-plan diagnostic; used by every human handoff exit."""
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+
+    to_dict = getattr(plan, "to_dict", None)
+    if callable(to_dict):
+        payload = to_dict()
+    else:
+        # Exotic plan shapes (mocks, hand-built objects): keep the notice
+        # informative without crashing the CLI on missing serializers.
+        payload = {"plan_id": str(getattr(plan, "plan_id", "")), "steps": []}
+    console.print(f"[red]{SkillInjector.blocked_plan_notice(payload)}[/red]")
+
+
+def _plan_blocked(plan: Any) -> bool:
+    """True when the plan must not be handed off / executed / mutated.
+
+    Plans without execution-ready metadata (hand-built / mock plans) are
+    treated as blocked — fail-closed, same default as
+    ``OrchestrationResult.has_match``.
+    """
+    if plan is None:
+        return False
+    metadata = getattr(plan, "metadata", None)
+    if not isinstance(metadata, dict):
+        return True
+    return not bool(metadata.get("execution_ready", False))
+
+
 def _handle_prompt_chain_output(
     result: Any,
     json_output: bool,
@@ -1333,6 +1390,11 @@ def _handle_prompt_chain_output(
     plan = result.execution_plan
     if not plan:
         console.print("[yellow]No execution plan available for prompt chain generation.[/yellow]")
+        return
+
+    if _plan_blocked(plan):
+        # A blocked plan must not be written out as executable prompt files.
+        _print_blocked_plan_notice(plan, console)
         return
 
     # Override pattern if forced via --pattern flag
@@ -1448,6 +1510,13 @@ def _orchestration_confirmation_flow(
     """Interactive confirmation for orchestrated result."""
     plan = result.execution_plan
 
+    if _plan_blocked(plan):
+        # Never offer "Confirm execution plan" for a blocked plan, and never
+        # record success=True telemetry for a plan the downstream gates will
+        # refuse (K-2: confirmation-flow telemetry poisoning).
+        _print_blocked_plan_notice(plan, console)
+        return False
+
     if not _needs_confirmation(
         result, router, yes, json_output, validate=validate, is_orchestrated=True
     ):
@@ -1545,27 +1614,32 @@ def _orchestration_post_process(
 ) -> None:
     from pathlib import Path
 
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+    from vibesop.cli.render import attach_skill_file_payload, candidate_source_lookup
     from vibesop.core.orchestration import PlanTracker
 
     plan = result.execution_plan
     tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
-    if plan:
+    if plan is not None:
+        # Revalidate at handoff BEFORE the persist so this JSONL snapshot also
+        # carries the truthful execution_ready / blocked_steps verdict.
+        SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(
+            plan, source_lookup=candidate_source_lookup(router)
+        )
         tracker.create_plan(plan)
 
     if json_output:
         import json
 
-        from vibesop.agent.runtime.skill_injector import SkillInjector
-        from vibesop.cli.render import attach_skill_file_payload, candidate_source_lookup
-
-        if result.execution_plan is not None:
-            SkillInjector(project_root=Path.cwd()).annotate_plan_skill_files(
-                result.execution_plan, source_lookup=candidate_source_lookup(router)
-            )
         payload = result.to_dict()
         attach_skill_file_payload(payload, result, source_lookup=candidate_source_lookup(router))
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
+        if _plan_blocked(plan):
+            # Blocked plan: never present it as a handoff-ready execution plan.
+            _print_blocked_plan_notice(plan, console)
+            return
+
         render_orchestration_result(result, console=console)
         console.print(
             "\n[dim]Plan ready. Hand it off to your AI Agent (Claude Code / OpenCode) "
@@ -1602,8 +1676,23 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
     from vibesop.agent.runtime.context_injector import StepContextInjector
     from vibesop.agent.runtime.plan_executor import PlanExecutor
 
+    if _plan_blocked(plan):
+        _print_blocked_plan_notice(plan, console)
+        return
+
     executor = PlanExecutor(project_root=Path.cwd())
-    manifest = executor.build_manifest(plan)
+    try:
+        manifest = executor.build_manifest(plan)
+    except ValueError as exc:
+        # Post-gate file swap: the manifest re-read refused. Persist the
+        # freshly-recorded blocked state (block_plan_step already mutated the
+        # in-memory plan) so `vibe plan show/status` see the truth instead of
+        # the earlier ready snapshot (K-3).
+        from vibesop.core.orchestration import PlanTracker
+
+        PlanTracker(storage_dir=Path.cwd() / ".vibe").create_plan(plan)
+        console.print(f"[red]{exc}[/red]")
+        return
     injector = StepContextInjector(project_root=Path.cwd())
 
     # Save plan and generate sequence file

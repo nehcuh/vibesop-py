@@ -57,6 +57,17 @@ class AgentRouter:
             project_root=project_root,
             prompt_builder=prompt_builder,
         )
+        # Core cannot import the agent-layer SkillInjector (layering rule) —
+        # inject the plan annotator here so the orchestrator's FIRST JSONL
+        # persist already carries the truthful execution_ready verdict.
+        self._router.plan_annotator = self._plan_annotator(project_root)
+
+    @staticmethod
+    def _plan_annotator(project_root: str | Path):
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        injector = SkillInjector(project_root=project_root)
+        return injector.annotate_plan_skill_files
 
     @staticmethod
     def _build_prompt_builder() -> Any:

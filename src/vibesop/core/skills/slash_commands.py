@@ -138,6 +138,7 @@ class SlashCommandHandler:
         self.project_root = project_root or Path.cwd()
         self._registry = SlashCommandRegistry()
         self._router: UnifiedRouter | None = None
+        self._plan_annotator: Callable[..., None] | None = None
         # Optional injected renderer for `/vibe-route --explain`. core/ must not
         # import the cli layer, so the rich report is injected by an outer layer
         # when available; without it, --explain falls back to a text summary.
@@ -147,10 +148,21 @@ class SlashCommandHandler:
         self._routing_report_renderer = routing_report_renderer
         self._setup_handlers()
 
+    def set_plan_annotator(self, annotator: Callable[..., None]) -> None:
+        """Inject the plan annotator (agent layer) for orchestrator persists.
+
+        core/ must not import the agent-layer SkillInjector, so the executor
+        in the agent layer injects it here; the lazily-built router picks it
+        up on first use.
+        """
+        self._plan_annotator = annotator
+
     @property
     def router(self) -> UnifiedRouter:
         if self._router is None:
             self._router = UnifiedRouter(project_root=self.project_root)
+            if self._plan_annotator is not None:
+                self._router.plan_annotator = self._plan_annotator
         return self._router
 
     def _setup_handlers(self) -> None:
@@ -416,8 +428,21 @@ class SlashCommandHandler:
             result = self.router.orchestrate(query, context=context)
 
             if result.mode.value == "orchestrated" and result.execution_plan:
-                msg = f"Execution Plan ({result.execution_plan.mode}):\n"
-                for step in result.execution_plan.steps:
+                plan = result.execution_plan
+                if not plan.metadata.get("execution_ready", False):
+                    # Blocked plans must not be presented as an executable
+                    # "Execution Plan" on this path either (K-10).
+                    reasons = "; ".join(
+                        f"step {b.get('step_number', '?')}: {b.get('reason', 'unknown')}"
+                        for b in plan.metadata.get("blocked_steps", [])
+                    ) or "unknown reason"
+                    return (
+                        False,
+                        f"Execution plan blocked: {reasons}. "
+                        "Restore the required skills and rebuild the plan.",
+                    )
+                msg = f"Execution Plan ({plan.mode}):\n"
+                for step in plan.steps:
                     msg += f"  {step.step_number}. {step.skill_id} — {step.intent}\n"
                 return True, msg
             elif result.primary:

@@ -39,6 +39,7 @@ def plan_list(
 
     console.print(f"[bold]Recent Plans ({len(plans)}):[/bold]\n")
     for plan in plans:
+        blocked = not plan.metadata.get("execution_ready", False)
         status_icon = {
             "pending": "⏳",
             "active": "🔄",
@@ -47,12 +48,27 @@ def plan_list(
             "partial": "⚠️",
             "terminated_early": "🛑",
         }.get(plan.status.value, "❓")
+        if blocked:
+            status_icon = "🚫"
 
+        state_label = "blocked" if blocked else plan.status.value
         console.print(
             f"{status_icon} [bold]{plan.plan_id}[/bold] "
-            f"[dim]({len(plan.steps)} steps, {plan.status.value})[/dim]"
+            f"[dim]({len(plan.steps)} steps, {state_label})[/dim]"
         )
+        if blocked:
+            reasons = ", ".join(
+                str(b.get("reason", "?"))
+                for b in (plan.metadata.get("blocked_steps") or [])[:2]
+            )
+            console.print(f"   [red]blocked: {reasons}[/red]")
         console.print(f"   [dim]{plan.original_query[:60]}...[/dim]\n")
+
+
+def _blocked_notice(plan) -> str:
+    from vibesop.agent.runtime.skill_injector import SkillInjector
+
+    return SkillInjector.blocked_plan_notice(plan.to_dict())
 
 
 @app.command("show")
@@ -65,6 +81,10 @@ def plan_show(
 
     if plan is None:
         console.print(f"[red]Plan {plan_id} not found[/red]")
+        raise typer.Exit(1)
+
+    if not plan.metadata.get("execution_ready", False):
+        console.print(f"[red]{_blocked_notice(plan)}[/red]")
         raise typer.Exit(1)
 
     from vibesop.core.models import OrchestrationMode, OrchestrationResult
@@ -87,6 +107,10 @@ def plan_status() -> None:
         console.print("[dim]No active plan.[/dim]")
         raise typer.Exit(0)
 
+    if not plan.metadata.get("execution_ready", False):
+        console.print(f"[red]{_blocked_notice(plan)}[/red]")
+        raise typer.Exit(1)
+
     render_plan_status(plan, console=console)
 
 
@@ -106,10 +130,20 @@ def plan_complete_step(
         if plan is None:
             console.print("[red]No active plan. Use --plan to specify.[/red]")
             raise typer.Exit(1)
-        plan_id = plan.plan_id
+    else:
+        plan = tracker.get_plan(plan_id)
+        if plan is None:
+            console.print(f"[red]Plan {plan_id} not found[/red]")
+            raise typer.Exit(1)
+
+    if not plan.metadata.get("execution_ready", False):
+        # Blocked plans must not be mutated toward completion.
+        console.print(f"[red]Plan {plan.plan_id} is blocked:[/red]")
+        console.print(f"[red]{_blocked_notice(plan)}[/red]")
+        raise typer.Exit(1)
 
     tracker.update_step_status(
-        plan_id=plan_id,
+        plan_id=plan.plan_id,
         step_id=step_id,
         status=StepStatus.COMPLETED,
         result_summary=result,

@@ -30,6 +30,9 @@ def _make_chain_plan() -> ExecutionPlan:
         reasoning="test",
         status=PlanStatus.PENDING,
         workflow_pattern=WorkflowPattern.PROMPT_CHAIN,
+        # 8.3.1: prompt-chain output is gated on execution_ready (blocked plans
+        # must not be written out as executable prompt files).
+        metadata={"execution_ready": True},
     )
 
 

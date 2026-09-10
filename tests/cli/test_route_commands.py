@@ -100,7 +100,7 @@ def _squad_router() -> MagicMock:
         plan_id="plan-1",
         original_query="multi-agent query",
         workflow_pattern=WorkflowPattern.AGENT_SQUAD,
-        metadata={"agent_squad": squad.to_dict()},
+        metadata={"agent_squad": squad.to_dict(), "execution_ready": True},
     )
     result = OrchestrationResult(
         mode=OrchestrationMode.ORCHESTRATED,
@@ -208,6 +208,74 @@ class TestOrchestrateCommand:
         """Orchestrate may return orchestrated mode for complex queries."""
         result = runner.invoke(app, ["orchestrate", "分析架构然后写测试"])
         assert result.exit_code == 0
+
+    def test_orchestrate_blocked_plan_exits_1_with_notice(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """8.3.1: a blocked plan must not render as an execution plan."""
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+
+        def _blocked_orchestrate(self: Any, query: str, context: object = None):
+            plan = ExecutionPlan(
+                plan_id="blocked-orch",
+                original_query=query,
+                steps=[
+                    ExecutionStep(
+                        step_id="s1",
+                        step_number=1,
+                        skill_id="missing-skill",
+                        skill_file="/nonexistent/missing-skill/SKILL.md",
+                        intent="Implement",
+                        input_query="do it",
+                    )
+                ],
+                metadata={"execution_ready": False},
+            )
+            return OrchestrationResult(
+                mode=OrchestrationMode.ORCHESTRATED,
+                original_query=query,
+                execution_plan=plan,
+            )
+
+        monkeypatch.setattr(_FakeOrchestrateRouter, "orchestrate", _blocked_orchestrate)
+        result = runner.invoke(app, ["orchestrate", "blocked plan query"])
+        assert result.exit_code == 1
+        assert "Do not execute" in result.output
+
+    def test_orchestrate_blocked_json_still_demotes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--json keeps exit 0 + has_match=false demote for blocked plans."""
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+
+        def _blocked_orchestrate(self: Any, query: str, context: object = None):
+            plan = ExecutionPlan(
+                plan_id="blocked-orch-json",
+                original_query=query,
+                steps=[
+                    ExecutionStep(
+                        step_id="s1",
+                        step_number=1,
+                        skill_id="missing-skill",
+                        skill_file="/nonexistent/missing-skill/SKILL.md",
+                        intent="Implement",
+                        input_query="do it",
+                    )
+                ],
+                metadata={"execution_ready": False},
+            )
+            return OrchestrationResult(
+                mode=OrchestrationMode.ORCHESTRATED,
+                original_query=query,
+                execution_plan=plan,
+            )
+
+        monkeypatch.setattr(_FakeOrchestrateRouter, "orchestrate", _blocked_orchestrate)
+        result = runner.invoke(app, ["orchestrate", "blocked plan query", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["has_match"] is False
+        assert data["notice_only"] is True
 
 
 class TestDecomposeCommand:

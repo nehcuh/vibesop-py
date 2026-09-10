@@ -114,7 +114,10 @@ class StepRunner:
             )
             self._states[step.step_id] = st
 
-        if track_state:
+        if track_state and plan.metadata.get("execution_ready", False):
+            # Blocked plans are refused at handoff (PlanExecutor gates) — do not
+            # re-persist them here either, so the JSONL record never presents a
+            # blocked plan as an actively-tracked executable.
             from vibesop.core.orchestration.plan_tracker import PlanTracker
 
             self._tracker = PlanTracker(storage_dir=self._project_root / ".vibe")

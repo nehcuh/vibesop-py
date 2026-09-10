@@ -69,6 +69,13 @@ class SlashCommandExecutor:
             project_root: Project root for command context. Defaults to cwd.
         """
         self._handler = SlashCommandHandler(project_root=project_root or Path.cwd())
+        # core/ cannot import the agent-layer SkillInjector — inject the plan
+        # annotator here so /vibe-orchestrate persists carry the truthful
+        # execution_ready verdict in the first JSONL snapshot (K-10).
+        from vibesop.agent.runtime.skill_injector import SkillInjector
+
+        injector = SkillInjector(project_root=self._handler.project_root)
+        self._handler.set_plan_annotator(injector.annotate_plan_skill_files)
 
     def execute(self, decision: InterceptionDecision) -> SlashCommandResult:
         """Execute a slash command from an interception decision.

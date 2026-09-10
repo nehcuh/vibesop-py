@@ -221,6 +221,12 @@ class UnifiedRouter(
         ...     print(f"Matched: {result.primary.skill_id}")
     """
 
+    #: Optional plan annotator injected by the agent/CLI layers (core cannot
+    #: import the agent-layer SkillInjector — layering rule). The orchestrator
+    #: calls it before the FIRST JSONL persist so blocked plans are stored
+    #: with a truthful execution_ready / blocked_steps verdict.
+    plan_annotator: Any = None
+
     # NOTE: This priority list is used for DISPLAY/sorting and get_capabilities()
     # only — it does NOT drive execution order. The real pipeline is a 4-stage
     # branched cascade; see `_try_layers()`:

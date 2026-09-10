@@ -460,6 +460,15 @@ class Orchestrator:
                 plan.metadata["trace_id"] = trace_id
             plan.metadata["orchestration_id"] = plan.plan_id
             try:
+                # Annotate BEFORE the first persist so the JSONL snapshot always
+                # carries the truthful execution_ready / blocked_steps verdict;
+                # readers (vibe plan list/show/status/complete-step) gate on it.
+                # Core cannot import the agent-layer SkillInjector (layering
+                # rule, tests/architecture/test_layering.py) — the annotator is
+                # injected by the agent/CLI layers that construct the router.
+                annotator = getattr(self._router, "plan_annotator", None)
+                if annotator is not None:
+                    annotator(plan)
                 self._router._get_plan_tracker().create_plan(plan)
             except Exception as e:
                 logger.error(

@@ -374,6 +374,9 @@ class TestStatePersistence:
                 ("skill-b", "step 2", "do step 2", ["step-1"]),
             ]
         )
+        # 8.3.1: only execution-ready plans are persisted/tracked (blocked
+        # plans are refused at handoff before a StepRunner is constructed).
+        plan.metadata["execution_ready"] = True
         runner = StepRunner(plan, project_root=tmp_path, track_state=True)
 
         step1 = runner.pending_steps()[0]
@@ -385,6 +388,18 @@ class TestStatePersistence:
         assert len(pending) == 1
         assert pending[0].skill_id == "skill-b"
         assert runner2.completed_count == 1
+
+    def test_blocked_plan_is_not_persisted(self, tmp_path: Path):
+        # 8.3.1: an execution_ready=False plan must not enter the plan store.
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+            ]
+        )
+        plan.metadata["execution_ready"] = False
+        runner = StepRunner(plan, project_root=tmp_path, track_state=True)
+        assert runner._tracker is None
+        assert not (tmp_path / ".vibe" / "execution_plans.jsonl").exists()
 
     def test_resume_not_found(self):
         from vibesop.core.exceptions import PlanNotFoundError

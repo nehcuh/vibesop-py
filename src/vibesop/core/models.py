@@ -805,10 +805,20 @@ class OrchestrationResult(BaseModel):
 
     @property
     def has_match(self) -> bool:
-        """Whether any match was found (single or orchestrated), excluding fallback."""
-        return (self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM) or (
-            self.execution_plan is not None and len(self.execution_plan.steps) > 0
-        )
+        """Whether any match was found (single or orchestrated), excluding fallback.
+
+        Orchestrated results additionally require the plan to be execution-ready:
+        a blocked plan (missing / unavailable / unsafe skills) is a miss at
+        handoff, not an executable match. ``execution_ready`` is written by
+        ``SkillInjector.annotate_plan_dict`` before any exit serializes or
+        persists the plan (orchestrator + CLI post-process).
+        """
+        if self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM:
+            return True
+        if self.execution_plan is not None and len(self.execution_plan.steps) > 0:
+            metadata = self.execution_plan.metadata or {}
+            return bool(metadata.get("execution_ready", False))
+        return False
 
     def to_dict(self) -> dict[str, Any]:
         return {

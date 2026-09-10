@@ -440,9 +440,9 @@ class TestRouteCliFallbackSentinel:
         fresh_tracer: Path,
     ) -> None:
         """All-fallback plan → span has_match=False, skill_id="",
-        top_skills absent — while the RESULT property stays True
-        (property-unchanged pin: OrchestrationResult.has_match is the
-        untouched result contract)."""
+        top_skills absent — and since 8.3.1 the RESULT property also says
+        False: a blocked/all-fallback plan is a miss at every exit
+        (OrchestrationResult.has_match now requires execution_ready)."""
         mock_stdin.isatty.return_value = False
         orch_result = self._orchestrated_result(["fallback-llm", "fallback-llm"])
         mock_router.orchestrate.return_value = orch_result
@@ -461,9 +461,9 @@ class TestRouteCliFallbackSentinel:
         assert metadata.get("has_match") is False
         assert metadata.get("skill_id") == ""
         assert "top_skills" not in metadata
-        # Property pin: the result contract is deliberately unchanged —
-        # the mode-derived property still says True on all-fallback plans.
-        assert orch_result.has_match is True
+        # 8.3.1 contract: an all-fallback (blocked) plan is a miss on the
+        # result object too, not only on the span.
+        assert orch_result.has_match is False
 
     @patch("vibesop.agent.runtime.AgentRuntime")
     @patch("vibesop.agent.runtime.IntentInterceptor")
