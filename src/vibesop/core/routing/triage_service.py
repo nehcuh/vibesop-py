@@ -164,6 +164,17 @@ class TriageService:
         if not self._config.enable_ai_triage:
             return None
 
+        # Invocation-disabled skills (explicit-only) must never be offered to
+        # the triage LLM, replayed from cache, or resurrected via last-good.
+        # Filtering at this single funnel covers both callers (unified.py
+        # fallback cascade and _try_ai_triage) and all three inner paths:
+        # the LLM prompt is built from the filtered set, fresh-cache entries
+        # are keyed by the filtered hash, and _last_good_route re-validates
+        # membership against the filtered set (8.3.1: P1-2).
+        from vibesop.core.routing.matcher_pipeline import filter_invocation_disabled_candidates
+
+        candidates = filter_invocation_disabled_candidates(list(candidates))
+
         # Build augmented query with memory context (before the cache lookup
         # so the persisted key matches what would be sent to the LLM).
         augmented_query = query

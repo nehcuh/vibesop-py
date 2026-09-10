@@ -57,19 +57,20 @@ def invocation_disabled_skill_ids(router: Any) -> set[str]:
     Unwraps ``AgentRouter._router`` so hook-path production sees the same
     catalog UnifiedRouter indexes. Missing catalog → empty set (tests that
     stub a router without a candidate manager keep pre-assign behavior).
+
+    Fail-close (8.3.1, A-5): a broken catalog raises instead of returning an
+    empty set — silently re-admitting explicit-only skills into auto-routing
+    and plan pre-assignment would be exactly the invariant this set guards.
     """
     inner = getattr(router, "_router", router)
     manager = getattr(inner, "_candidate_manager", None)
-    try:
-        if manager is not None:
-            candidates = list(manager.get_cached_candidates())
-        else:
-            getter = getattr(inner, "_get_cached_candidates", None)
-            if not callable(getter):
-                return set()
-            candidates = list(getter())
-    except Exception:
-        return set()
+    if manager is not None:
+        candidates = list(manager.get_cached_candidates())
+    else:
+        getter = getattr(inner, "_get_cached_candidates", None)
+        if not callable(getter):
+            return set()
+        candidates = list(getter())
     return {
         str(c.get("id")) for c in candidates if c.get("disable_model_invocation") and c.get("id")
     }
