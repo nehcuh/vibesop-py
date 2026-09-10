@@ -445,6 +445,11 @@ single entry point for both the CLI (`vibe route`) and the hook path
 
 ### Squad Decision Tree
 
+> 8.3.0 (W1 D2): role words no longer trigger squads. The tree below is the
+> shipped behavior — `MULTI_AGENT_SQUAD` requires explicit parallel-worker
+> intent (`is_explicit_parallel_workers`, see
+> `core/orchestration/parallel_intent.py`), never role personas.
+
 ```
                    ┌─────────────────────────────────┐
                    │ IntentInterceptor.should_intercept │
@@ -457,34 +462,31 @@ single entry point for both the CLI (`vibe route`) and the hook path
        ▼                         ▼                          ▼
   SLASH_COMMAND      ┌────────────────────┐         no_route (passthrough)
                      │ 1. extract_explicit_skill (ASCII-only)
-                     │    + _detect_roles  │
+                     │ 2. is_explicit_parallel_workers     │
                      └────────┬───────────┘
                               │
               ┌───────────────┼───────────────┐
               │               │               │
-        ≥ 2 roles        1 role +        multi-intent
-        detected         multi_intent       markers only
-              │           marker            │
-              ▼               │             ▼
-       MULTI_AGENT_SQUAD      │        ORCHESTRATE
-                              ▼
-                          SINGLE_AGENT (if role ∈ {architect, red_team})
-                          or SINGLE
+        explicit            sequential       otherwise
+        parallel            multi-intent
+        workers             markers &
+                              │ roles < threshold
+              │               │               │
+              ▼               ▼               ▼
+       MULTI_AGENT_SQUAD  ORCHESTRATE       SINGLE (or
+                                            SINGLE_AGENT for a
+                                            single complex role)
 ```
 
-### Role Keyword Fast Path
+### Role Keyword Fast Path (removed in 8.3.0)
 
-`IntentInterceptor.ROLE_KEYWORDS` is a static dictionary mapping 6
-professional roles (architect / implementer / reviewer / tester /
-red_team / debater) to Chinese + English keyword tuples. ≥ 2 distinct
-roles in the query short-circuit to `MULTI_AGENT_SQUAD` without
-consulting the LLM. The fast path covers ≥ 80% of real squad-worthy
-queries observed in container e2e tests.
-
-When the fast path doesn't fire (single role or no role detected),
-queries longer than 50 chars fall through to
-`SemanticIntentAnalyzer.analyze()`, which uses an LLM when configured
-or a heuristic facet detector otherwise.
+`IntentInterceptor.ROLE_KEYWORDS` no longer drives interception: ≥ 2
+distinct role words used to short-circuit to `MULTI_AGENT_SQUAD`
+without consulting the LLM, but W1 D2 removed that path — role words
+are product vocabulary, not a squad request. The heuristic analyzer
+still detects facets/roles for display and `SINGLE_AGENT` context, and
+`SemanticIntentAnalyzer.analyze()` re-asserts
+`is_explicit_parallel_workers` over any LLM `squad_needed` verdict.
 
 ### Orchestrate → Squad Bridge
 

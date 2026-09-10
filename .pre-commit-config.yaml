@@ -17,10 +17,15 @@ repos:
     hooks:
       - id: basedpyright
         name: basedpyright
-        entry: uv run basedpyright
+        # 8.3.1 (B-3): same gate shape as CI — plain-text exit codes, only
+        # exit 0 passes (1=type errors, 3=config errors); warnings stay
+        # advisory via --level error.
+        entry: uv run basedpyright --level error
         language: system
         types: [python]
         pass_filenames: false
+        env:
+          PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT: "1"
       # Note: Pre-commit runs on every commit. Running 2,900+ tests here
       # makes commits unbearably slow and encourages --no-verify bypass.
       # Tests are enforced in CI and should be run locally via `make test`.

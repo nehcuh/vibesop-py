@@ -8,17 +8,17 @@
 
 ## Current direction (2026-09) — 图书管理员先可信
 
-方法论与八轮实验把产品命题改了口：技能图集是可点名方法卡，不是常驻专家编制；找不到匹配是成功。当前代码与此拧着（角色词自动小队、`disable-model-invocation` 未实现、负例几乎不进 CI）。下一阶段按 v1 锁执行，**不**再扩张编排/市场/专家团。
+方法论与八轮实验把产品命题改了口：技能图集是可点名方法卡，不是常驻专家编制；找不到匹配是成功。W1（D1–D5）已随 **8.3.0 交付**（`disable-model-invocation` 一等字段与全层剥离、角色词小队拆除、`must_not_inject` hermetic 闸、no-match 改口），8.3.1 修复轮补齐 triage 层过滤（P1-2）与编排出口 fail-close（P1-1）。剩余事项以 W2 实验与 8.3.1 修复轮清单为准，**不**再扩张编排/市场/专家团。
 
-### W1 — 产品停止自相矛盾（下一实现切片）
+### W1 — 产品停止自相矛盾（已交付于 8.3.0，归档）
 
 锁：D1–D5，详见 v1。摘要：
 
-- [ ] **D1** `disable-model-invocation` 一等字段；EXPLICIT 全量池、其后剥离（不得用 `filter_routable`）；orchestrate 剥计划步骤
-- [ ] **D2** 拆除角色词小队及同源编制（短查询 composite、heuristic `squad_needed`、LLM 角色表、默认长句开会）；保留 `--strategy parallel` 等显式入口
-- [ ] **D3** 负例 CI：`must_not_inject` 不得经 fallback / known-fail 过关；hook 探针打 Execution Plan 而非不存在的 `skill_content`
-- [ ] **D5** 生成规则改口：no-match 是正常输出；改模板源 + grep 验收
-- [ ] 文档：USE_CASES / architecture / GOALS 冻结项 / CHANGELOG 记 v7 squad auto-trigger 行为变更
+- [x] **D1** `disable-model-invocation` 一等字段；EXPLICIT 全量池、其后剥离（不得用 `filter_routable`）；orchestrate 剥计划步骤
+- [x] **D2** 拆除角色词小队及同源编制（短查询 composite、heuristic `squad_needed`、LLM 角色表、默认长句开会）；保留 `--strategy parallel` 等显式入口
+- [x] **D3** 负例 CI：`must_not_inject` 不得经 fallback / known-fail 过关；hook 探针打 Execution Plan 而非不存在的 `skill_content`
+- [x] **D5** 生成规则改口：no-match 是正常输出；改模板源 + grep 验收
+- [x] 文档：USE_CASES / architecture / GOALS 冻结项 / CHANGELOG 记 v7 squad auto-trigger 行为变更
 
 ### W2 — 实验（不阻塞 W1）
 

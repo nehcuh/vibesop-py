@@ -37,7 +37,7 @@
 ```
 VibeSOP 技能生态
 │
-├─ 📦 Builtin (18 个)    - 内置核心技能（meta/slash/workflow 类）
+├─ 📦 Builtin (19 个)    - 内置核心技能（meta/slash/workflow 类）
 ├─ 📦 Superpowers (7 个) - 基础开发工作流（默认安装）
 ├─ 📦 OMX (7 个)         - 高级工程方法论（默认安装）
 ├─ 📦 Project (自定义)   - 项目特定技能
@@ -319,7 +319,7 @@ Query: "debub"  # 拼写错误
 
 ## 所有技能列表
 
-### Builtin Skills (18 个)
+### Builtin Skills (19 个)
 
 #### P0 Mandatory Skills (强制触发)
 
@@ -341,6 +341,7 @@ Query: "debub"  # 拼写错误
 | `deep-diagnosis-optimization` | 多代理深度诊断编排 | 深度诊断任务 |
 | `autonomous-experiment` | 自主实验循环 | 优化和迭代任务 |
 | `skill-craft` | 自动检测模式生成技能 | 检测到重复模式 |
+| `verify-result` | 验收执行结果（按任务类型核验证据，passed/failed/blocked） | 仅显式点名或对抗计划编排选中（`disable-model-invocation`，不参与自然语言自动路由） |
 
 另有 7 个 `slash-*` 元命令技能（route/list/help/install/analyze/evaluate/orchestrate），由 `/vibe-*` 快捷命令触发。
 

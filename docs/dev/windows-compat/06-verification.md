@@ -20,7 +20,7 @@ Final (after):       0 failed, 4281 passed, 37 skipped, 15 deselected (164s)
 |------|--------|
 | `ruff check src tests` | All checks passed |
 | `ruff format --check` | Clean |
-| `basedpyright` | 0 errors, 45 warnings (exit 3 = pass per Makefile) |
+| `basedpyright --level error` | 0 errors, warnings advisory (only exit 0 passes; 1=type errors, 3=config errors) |
 
 ## Smoke Tests (real CLI, this machine)
 

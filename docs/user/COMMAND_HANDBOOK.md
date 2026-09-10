@@ -3,7 +3,7 @@
 > **这不是**把 `vibe --help` 再抄一遍。那张表已经有 50+ 条顶层命令，没有层次。
 > 本手册按**使用频率**分层：每天用的写全，少碰的只给一张索引，细节用 `vibe man <cmd>`。
 >
-> 录制环境（可复现）：Docker `vibesop-val-base:py3.12`，仓库挂到 `/repo`，VibeSOP **8.2.0**，日期 2026-09-07。
+> 录制环境（可复现）：Docker `vibesop-val-base:py3.12`，仓库挂到 `/repo`，VibeSOP **8.2.0**，日期 2026-09-07。当前发布为 8.3.x：本手册引用的命令 flag 面与 8.2.0 无漂移（8.3 新增 `vibe skills outdated` 见下方条目），版本戳差异不影响使用。
 > 重录：`bash scripts/record_cli_handbook.sh`。原始输出在 [`cli-recordings/`](cli-recordings/)。
 >
 > 完整 flag 清单仍在 [CLI_REFERENCE.md](CLI_REFERENCE.md)（偏百科，不分层）。
