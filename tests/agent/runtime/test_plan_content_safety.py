@@ -107,16 +107,16 @@ def test_unsafe_body_blocks_every_delivery_exit(tmp_path, monkeypatch, attacked_
     assert ATTACK_SENTINEL not in json.dumps(hook)
     assert json.loads(result.to_hook_json())["has_match"] is False
 
-    # CLI payload: notice-only / has_match=false, steps preserved.
+    # CLI minimal payload (8.3.1 G-1): the formatter itself demotes a blocked
+    # plan to no_match — steps are deliberately absent from the minimal shape.
     monkeypatch.chdir(tmp_path)
     routed = OrchestrationResult(mode=OrchestrationMode.ORCHESTRATED, execution_plan=plan)
     payload = LightweightRouter._format_result(routed)
     attach_skill_file_payload(payload, routed)
+    assert payload["mode"] == "no_match"
     assert payload["has_match"] is False
     assert payload["notice_only"] is True
-    assert len(payload["steps"]) == 2
-    assert payload["steps"][1]["is_verification_step"] is True
-    assert payload["metadata"]["execution_ready"] is False
+    assert "steps" not in payload
     assert ATTACK_SENTINEL not in json.dumps(payload)
 
 

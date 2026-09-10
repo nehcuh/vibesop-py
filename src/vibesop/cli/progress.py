@@ -117,9 +117,10 @@ class LiveOrchestrationCallbacks:
 
     def on_plan_ready(self, plan: ExecutionPlan) -> None:
         """Called when the execution plan is fully built."""
+        label = "Plan ready" if plan.metadata.get("execution_ready", False) else "Plan blocked"
         self._phases.append(
             (
                 OrchestrationPhase.PLAN_BUILDING,
-                f"Plan ready: {len(plan.steps)} steps ({plan.execution_mode.value})",
+                f"{label}: {len(plan.steps)} steps ({plan.execution_mode.value})",
             )
         )

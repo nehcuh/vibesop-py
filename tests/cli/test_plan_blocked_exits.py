@@ -182,6 +182,41 @@ class TestExecuteInteractiveGate:
         assert persisted["metadata"]["execution_ready"] is False
 
 
+class TestMinimalFormatGate:
+    def test_format_result_blocked_plan_is_no_match(self, tmp_path):
+        """8.3.1 (G-1): the minimal formatter itself gates on execution_ready —
+        LightweightRouter.route() consumers get no attach-based demote."""
+        from vibesop.core.routing.lightweight_api import LightweightRouter
+
+        plan = make_plan(tmp_path, healthy=False)
+        plan.metadata["execution_ready"] = False
+        result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query="Build the thing",
+            execution_plan=plan,
+        )
+        formatted = LightweightRouter._format_result(result)
+        assert formatted["mode"] == "no_match"
+        assert formatted["skill_id"] == ""
+        assert formatted["has_match"] is False
+        assert formatted["notice_only"] is True
+        assert "blocked" in formatted["notice"].lower()
+
+    def test_format_result_ready_plan_keeps_orchestrated_shape(self, tmp_path):
+        from vibesop.core.routing.lightweight_api import LightweightRouter
+
+        plan = make_plan(tmp_path, healthy=True)
+        plan.metadata["execution_ready"] = True
+        result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query="Build the thing",
+            execution_plan=plan,
+        )
+        formatted = LightweightRouter._format_result(result)
+        assert formatted["mode"] == "orchestrated"
+        assert "has_match" not in formatted or formatted.get("skill_id")
+
+
 class TestPromptChainExit:
     def test_blocked_plan_writes_no_prompt_files(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

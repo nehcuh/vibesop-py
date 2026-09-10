@@ -217,6 +217,9 @@ class UnifiedRouter(
     Example:
         >>> router = UnifiedRouter()
         >>> result = router.orchestrate("扫描安全漏洞")
+        >>> # Orchestrated plans additionally require execution_ready (8.3.1):
+        >>> # a blocked plan is a miss. The annotator is injected by the
+        >>> # agent/CLI layers via ``plan_annotator``.
         >>> if result.has_match:
         ...     print(f"Matched: {result.primary.skill_id}")
     """

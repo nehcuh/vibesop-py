@@ -111,6 +111,29 @@ class LightweightRouter:
         """Format orchestration result into a minimal dict."""
         if result.mode.value == "orchestrated" and result.execution_plan:
             plan = result.execution_plan
+            if not plan.metadata.get("execution_ready", False):
+                # 8.3.1 (G-1): a blocked plan must not be formatted as a
+                # handoffable orchestrated dict — LightweightRouter.route()
+                # and AgentRuntime.route_step() consume this without the
+                # CLI's attach-based demote. Same predicate as
+                # OrchestrationResult.has_match / _plan_blocked. Plain text
+                # notice only: core cannot import the agent-layer
+                # SkillInjector.blocked_plan_notice (layering rule).
+                return {
+                    "mode": "no_match",
+                    "skill_id": "",
+                    "confidence": 0.0,
+                    "reasoning": (
+                        "Execution plan blocked: one or more required skills are "
+                        "unavailable. Restore the skills and rebuild the plan."
+                    ),
+                    "has_match": False,
+                    "notice_only": True,
+                    "notice": (
+                        "Execution plan blocked: one or more required skills are "
+                        "unavailable. Restore the skills and rebuild the plan."
+                    ),
+                }
             steps = []
             for s in plan.steps:
                 steps.append(
