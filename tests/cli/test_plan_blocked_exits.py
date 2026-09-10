@@ -287,3 +287,89 @@ class TestPlanCommands:
             plan_cmd.plan_status()
         assert excinfo.value.exit_code == 1
         assert "Do not execute" in capsys.readouterr().out
+
+
+class TestMarkupSafeBlockedNotices:
+    """8.3.1-P1-2: a user query containing Rich markup must never crash a
+    blocked-plan exit with MarkupError — the notice embeds the raw query."""
+
+    MARKUP_QUERY = "fix the [/] broken [/red] tag [bold]in config[/bold]"
+
+    def _persist_markup_plan(self, tmp_path: Path) -> ExecutionPlan:
+        plan = make_plan(tmp_path, healthy=False)
+        plan.original_query = self.MARKUP_QUERY
+        plan.metadata["execution_ready"] = False
+        plan.metadata["blocked_steps"] = [
+            {"step_number": 1, "skill_id": "impl-skill", "reason": "not found or empty"}
+        ]
+        PlanTracker(storage_dir=tmp_path / ".vibe").create_plan(plan)
+        return plan
+
+    def test_show_blocked_with_markup_query(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        plan = self._persist_markup_plan(tmp_path)
+        with pytest.raises(typer.Exit) as excinfo:
+            plan_cmd.plan_show(plan_id=plan.plan_id)
+        assert excinfo.value.exit_code == 1
+        assert "Do not execute" in capsys.readouterr().out
+
+    def test_status_blocked_with_markup_query(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._persist_markup_plan(tmp_path)
+        with pytest.raises(typer.Exit) as excinfo:
+            plan_cmd.plan_status()
+        assert excinfo.value.exit_code == 1
+        assert "Do not execute" in capsys.readouterr().out
+
+    def test_complete_step_blocked_with_markup_query(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        plan = self._persist_markup_plan(tmp_path)
+        with pytest.raises(typer.Exit) as excinfo:
+            plan_cmd.plan_complete_step(step_id="s1", result=None, plan_id=plan.plan_id)
+        assert excinfo.value.exit_code == 1
+        assert "blocked" in capsys.readouterr().out
+
+    def test_list_with_markup_query(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._persist_markup_plan(tmp_path)
+        plan_cmd.plan_list(limit=10)
+        assert "blocked" in capsys.readouterr().out
+
+    def test_interactive_gate_with_markup_query(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        plan = self._persist_markup_plan(tmp_path)
+        result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query=self.MARKUP_QUERY,
+            execution_plan=plan,
+        )
+        console = Console(file=io.StringIO(), force_terminal=False)
+        _execute_plan_interactive(result, console)
+        assert "Do not execute" in console.file.getvalue()
+
+    def test_manifest_refusal_with_markup_in_error(self, tmp_path, monkeypatch):
+        """K-3 path: the manifest refusal text itself may carry markup."""
+        monkeypatch.chdir(tmp_path)
+        plan = make_plan(tmp_path, healthy=True)
+        plan.metadata["execution_ready"] = True
+        result = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query=self.MARKUP_QUERY,
+            execution_plan=plan,
+        )
+
+        class _RefusingExecutor:
+            def __init__(self, project_root):
+                pass
+
+            def build_manifest(self, plan):
+                plan.metadata["execution_ready"] = False
+                plan.metadata["blocked_steps"] = [
+                    {"step_number": 1, "skill_id": "impl-skill", "reason": "unsafe content"}
+                ]
+                raise ValueError("refused: query contained [/] markup")
+
+        monkeypatch.setattr("vibesop.agent.runtime.plan_executor.PlanExecutor", _RefusingExecutor)
+        console = Console(file=io.StringIO(), force_terminal=False)
+        _execute_plan_interactive(result, console)
+        assert "refused: query contained [/] markup" in console.file.getvalue()

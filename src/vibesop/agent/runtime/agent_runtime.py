@@ -1051,7 +1051,12 @@ class AgentRuntime:
         """
         from vibesop.core.routing.lightweight_api import LightweightRouter
 
-        lw = LightweightRouter(project_root=self.project_root)
+        # 8.3.1-P1-1: inject the annotator or every multi-intent plan built
+        # on this path is demoted to a false "plan blocked" no_match.
+        lw = LightweightRouter(
+            project_root=self.project_root,
+            plan_annotator=self.injector.annotate_plan_skill_files,
+        )
         return lw.route(
             step_query,
             context={"step": step_number, "phase": phase},
@@ -1076,24 +1081,32 @@ class AgentRuntime:
         # empty-plan no-match demote instead of a verify-only shell. Steps
         # without explicit dependency metadata keep their implicit
         # "verify the whole plan" semantics and are retained; partial strips
-        # filter the surviving dependencies (K-3).
-        kept_ids = {s.get("step_id") for s in kept}
-        filtered: list[dict[str, Any]] = []
-        for s in kept:
-            if not s.get("is_verification_step"):
-                filtered.append(s)
-                continue
-            deps = s.get("dependencies")
-            if not deps:
-                filtered.append(s)
-                continue
-            surviving = [dep for dep in deps if dep in kept_ids]
-            if not surviving:
-                continue
-            filtered_step = dict(s)
-            filtered_step["dependencies"] = surviving
-            filtered.append(filtered_step)
-        kept = filtered
+        # filter the surviving dependencies (K-3). Iterate to a fixpoint:
+        # dropping one verification step can orphan a LATER verification
+        # step that depended on it (chained verifiers), so kept_ids must be
+        # recomputed from the surviving set after every pass.
+        while True:
+            kept_ids = {s.get("step_id") for s in kept}
+            filtered: list[dict[str, Any]] = []
+            dropped = False
+            for s in kept:
+                if not s.get("is_verification_step"):
+                    filtered.append(s)
+                    continue
+                deps = s.get("dependencies")
+                if not deps:
+                    filtered.append(s)
+                    continue
+                surviving = [dep for dep in deps if dep in kept_ids]
+                if not surviving:
+                    dropped = True
+                    continue
+                filtered_step = dict(s)
+                filtered_step["dependencies"] = surviving
+                filtered.append(filtered_step)
+            kept = filtered
+            if not dropped:
+                break
         stripped = dict(plan)
         stripped["steps"] = kept
         return stripped

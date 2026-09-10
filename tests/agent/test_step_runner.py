@@ -662,3 +662,35 @@ class TestStepRunnerSquadMode:
         assert result["failed"] == 2
         assert all(r["status"] == "failed" for r in result["results"])
         assert all(s.status == StepStatus.FAILED for s in plan.steps)
+
+
+class TestTrackerGate:
+    """8.3.1-P1-3: state persistence is gated on the execution_ready verdict,
+    and a missing verdict (never annotated) must be loudly diagnosable."""
+
+    def test_ready_plan_creates_tracker(self, tmp_path):
+        plan = _make_plan([("a/b", "intent", "do it", None)])
+        plan.metadata["execution_ready"] = True
+        runner = StepRunner(plan, project_root=tmp_path)
+        assert runner._tracker is not None
+        assert (tmp_path / ".vibe" / "execution_plans.jsonl").exists()
+
+    def test_blocked_plan_skips_tracker(self, tmp_path, caplog):
+        import logging
+
+        plan = _make_plan([("a/b", "intent", "do it", None)])
+        plan.metadata["execution_ready"] = False
+        with caplog.at_level(logging.INFO, logger="vibesop.agent.step_runner"):
+            runner = StepRunner(plan, project_root=tmp_path)
+        assert runner._tracker is None
+        assert not (tmp_path / ".vibe" / "execution_plans.jsonl").exists()
+        assert any("blocked" in rec.message for rec in caplog.records)
+
+    def test_unannotated_plan_skips_tracker_with_warning(self, tmp_path, caplog):
+        import logging
+
+        plan = _make_plan([("a/b", "intent", "do it", None)])
+        with caplog.at_level(logging.WARNING, logger="vibesop.agent.step_runner"):
+            runner = StepRunner(plan, project_root=tmp_path)
+        assert runner._tracker is None
+        assert any("execution_ready" in rec.message for rec in caplog.records)

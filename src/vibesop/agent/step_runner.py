@@ -123,6 +123,22 @@ class StepRunner:
             self._tracker = PlanTracker(storage_dir=self._project_root / ".vibe")
             self._tracker.create_plan(plan)
         else:
+            if track_state and not plan.metadata.get("execution_ready", False):
+                # Distinguish "blocked, intentionally untracked" from "never
+                # annotated, wiring gap" (8.3.1-P1-3): both skip the tracker,
+                # but a missing key means the plan never got a verdict at all.
+                if "execution_ready" in plan.metadata:
+                    logger.info(
+                        "StepRunner: plan %s is blocked; state persistence skipped",
+                        plan.plan_id,
+                    )
+                else:
+                    logger.warning(
+                        "StepRunner: plan %s has no execution_ready annotation; "
+                        "state persistence disabled — inject the plan annotator "
+                        "at plan build time so the verdict is truthful",
+                        plan.plan_id,
+                    )
             self._tracker = None
 
     @classmethod

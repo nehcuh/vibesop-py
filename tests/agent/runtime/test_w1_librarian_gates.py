@@ -96,3 +96,61 @@ def test_strip_drops_verification_step_when_all_deps_stripped() -> None:
         }
     )
     assert stripped["steps"] == []
+
+
+def test_strip_chained_verification_steps_converges_to_fixpoint() -> None:
+    """8.3.1 (B-5 fixpoint): dropping verifier v1 must also drop verifier v2
+    that depended on v1 — a single-pass filter leaves v2 with a dangling
+    dependency that can never be satisfied."""
+    runtime = AgentRuntime()
+    runtime._disabled_skill_ids = lambda: {"grill-me"}  # type: ignore[method-assign]
+    stripped = runtime._strip_disabled_skill_ids_from_plan(
+        {
+            "steps": [
+                {"skill_id": "grill-me", "step_id": "s1"},
+                {
+                    "skill_id": "builtin/verify-result",
+                    "step_id": "v1",
+                    "is_verification_step": True,
+                    "dependencies": ["s1"],
+                },
+                {
+                    "skill_id": "builtin/verify-result",
+                    "step_id": "v2",
+                    "is_verification_step": True,
+                    "dependencies": ["v1"],
+                },
+            ]
+        }
+    )
+    assert stripped["steps"] == []
+
+
+def test_strip_chained_verification_keeps_step_with_surviving_dep() -> None:
+    """Fixpoint must not over-drop: v2 depends on v1, v1 depends on a LIVE
+    step — both survive, v2's dependency stays intact."""
+    runtime = AgentRuntime()
+    runtime._disabled_skill_ids = lambda: {"grill-me"}  # type: ignore[method-assign]
+    stripped = runtime._strip_disabled_skill_ids_from_plan(
+        {
+            "steps": [
+                {"skill_id": "code-review", "step_id": "s1"},
+                {"skill_id": "grill-me", "step_id": "s2"},
+                {
+                    "skill_id": "builtin/verify-result",
+                    "step_id": "v1",
+                    "is_verification_step": True,
+                    "dependencies": ["s1", "s2"],
+                },
+                {
+                    "skill_id": "builtin/verify-result",
+                    "step_id": "v2",
+                    "is_verification_step": True,
+                    "dependencies": ["v1"],
+                },
+            ]
+        }
+    )
+    assert [s["step_id"] for s in stripped["steps"]] == ["s1", "v1", "v2"]
+    assert stripped["steps"][1]["dependencies"] == ["s1"]
+    assert stripped["steps"][2]["dependencies"] == ["v1"]

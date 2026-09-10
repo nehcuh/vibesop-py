@@ -92,6 +92,8 @@ Pydantic: v2
 
 路由是图书管理员：查有没有该翻的卡。**找不到匹配是成功**，不是失败。
 
+> 退出码契约（8.3.1）：no-match / fallback 退出 0；**编排计划被阻断（blocked）时人机路径退出 1**（`vibe route` 与 `vibe orchestrate` 一致），`--json` 保持退出 0 + `has_match=false` + `notice_only`，由调用方检查字段。
+
 #### 场景 A — 闲聊 / 不该注入（负例）
 
 ```bash

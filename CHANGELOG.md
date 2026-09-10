@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **8.3.1 对抗复审 punch list（P1×3 + P2×4）**：
+  - `LightweightRouter` 支持 `plan_annotator` 注入（构造参数 + `set_plan_annotator`），`AgentRuntime.route_step` 与 quickstart 演示接线——此前该通道从未注入 annotator，所有多意图计划（含健康计划）被 G-1 误降级为 "plan blocked" no_match；未标注计划降级时记 warning 以便诊断。
+  - blocked notice 全部出口（`vibe route`/`orchestrate`/`plan show|status|complete-step`、K-3 manifest 拒绝、`plan list` 的 query/reasons）不再把用户原文当 Rich markup 解析——含 `[/]` 等字符的 query 曾使全出口 `MarkupError` 崩溃。
+  - `AgentRouter.build_plan` 构建后调用 annotator 并返回完整 `plan.to_dict()`——此前手写子集 dict 丢 `metadata`/`workflow_pattern`/`is_dynamic`/`execution_mode`，`create_runner` 路径上 StepRunner 状态持久化被静默关闭；tracker 跳过现在按"blocked / 从未标注"分级记日志。
+  - B-5 依赖剥离迭代至不动点：链式验证步骤不再残留指向已删步骤的悬空依赖。
+  - Windows symlink 测试补 `symlink_supported` 守卫。
+  - 单技能内容不安全/空 demote 现在携带准确 `notice`；OpenCode 插件无 `notice` 时按 `demoted_skill_id` 区分文案，不再误诊为 "plan blocked"。
+  - `vibe route` 人机路径 blocked 退出码统一为 1（与 `vibe orchestrate` 一致；`--json` 保持 0 + `has_match=false`），契约已钉入 COMMAND_HANDBOOK 与测试。
+  - `vibe plan` 读取端对 ≤8.3.0 旧快照提示重跑编排重建。
 - **W1 生产剥离**：hook 解开 `AgentRouter._router` 后再剥 `disable-model-invocation`；验证步骤豁免。分解器目录与 PlanBuilder 预分配不再编入该旗。空计划 hook 信封走 no-match。
 - **验收失败不得标完成**：`blocked` / `failed` 文本与 `{status: failed}` 使顺序/对抗辅助路径失败，而不是 completed。
 - **`vibe skills outdated`**：lock URL 走 clone 同款 allowlist + `protocol.ext.allow=never` + `--`。

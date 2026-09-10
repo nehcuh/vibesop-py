@@ -105,9 +105,16 @@ export default {
     if (result.notice_only) {
       // 8.3.1 (B-4): a blocked plan must not vanish silently — surface the
       // diagnostic to the user instead of dropping it.
+      // 8.3.1-P2-3: a single-skill demote carries demoted_skill_id, not a
+      // plan — never mislabel it as "plan blocked".
+      const demoted = typeof result.demoted_skill_id === "string" && result.demoted_skill_id
+        ? result.demoted_skill_id
+        : "";
       const notice = typeof result.notice === "string" && result.notice
         ? result.notice
-        : "Execution plan blocked: one or more required skills are unavailable.";
+        : demoted
+          ? `Skill '${demoted}' is unavailable or unsafe — audit or reinstall it before use.`
+          : "Execution plan blocked: one or more required skills are unavailable.";
       await output.client?.tui?.showToast?.({
         title: "VibeSOP",
         message: notice.slice(0, 300),

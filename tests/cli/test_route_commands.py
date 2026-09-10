@@ -182,6 +182,37 @@ class TestRouteCommand:
         result = runner.invoke(app, ["route", "xyzabc123"])
         assert result.exit_code == 0
 
+    def test_route_blocked_plan_exits_1_with_notice(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """8.3.1-P2-4: route shares orchestrate's blocked contract — the
+        human path prints the notice and exits 1; only --json keeps exit 0."""
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+
+        router = _single_no_match_router()
+        plan = ExecutionPlan(
+            plan_id="blocked-route",
+            original_query="blocked route query",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="missing-skill",
+                    intent="Implement",
+                    input_query="do it",
+                )
+            ],
+            metadata={"execution_ready": False},
+        )
+        router.orchestrate.return_value = OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query="blocked route query",
+            execution_plan=plan,
+            duration_ms=1.0,
+        )
+        _patch_route_runtime(monkeypatch, router, mode=InterceptionMode.ORCHESTRATE)
+        result = runner.invoke(app, ["route", "blocked route query"])
+        assert result.exit_code == 1
+        assert "Do not execute" in result.output
+
 
 class TestOrchestrateCommand:
     """Test `vibe orchestrate` command."""

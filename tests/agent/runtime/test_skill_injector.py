@@ -19,9 +19,13 @@ from vibesop.core.models import ExecutionMode, ExecutionPlan, ExecutionStep
 class TestSkillInjector:
     """Test skill content injection across platforms."""
 
-    def test_if_file_whitelists_central_storage_symlinks(self, tmp_path, monkeypatch) -> None:
+    def test_if_file_whitelists_central_storage_symlinks(
+        self, tmp_path, monkeypatch, symlink_supported
+    ) -> None:
         """8.3.1 (B-2): `vibe skills link` symlinks into the central storage
         must keep resolving; symlinks pointing anywhere else stay refused."""
+        if not symlink_supported:
+            pytest.skip("symlinks not supported on this host")
         central = tmp_path / "central"
         central.mkdir()
         target = central / "linked-skill" / "SKILL.md"

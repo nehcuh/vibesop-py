@@ -354,11 +354,19 @@ class QuickstartRunner:
         import contextlib
         import logging
 
+        from vibesop.agent.runtime.skill_injector import SkillInjector
         from vibesop.core.routing.lightweight_api import LightweightRouter
 
         console.print("[bold cyan]🧭 Routing demo (no API key required)[/bold cyan]")
         console.print("   Watch natural language match skills:\n")
-        router = LightweightRouter(project_root=config.project_path)
+        # 8.3.1-P1-1: inject the annotator so a multi-intent demo query is not
+        # demoted to a false "plan blocked" no_match.
+        router = LightweightRouter(
+            project_root=config.project_path,
+            plan_annotator=SkillInjector(
+                project_root=config.project_path
+            ).annotate_plan_skill_files,
+        )
         # The no-prompt_builder constructor warning targets LLM-triage callers;
         # this demo never reaches AI triage, so silence that one logger.
         unified_logger = logging.getLogger("vibesop.core.routing.unified")

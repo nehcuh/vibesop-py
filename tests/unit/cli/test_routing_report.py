@@ -433,6 +433,10 @@ class TestAttachSkillFilePayload:
         assert payload.get("skill_file") in ("", None)
         assert payload.get("notice_only") is True
         assert payload.get("has_match") is False
+        # 8.3.1-P2-3: the payload carries an accurate single-skill notice so
+        # consumers never fall back to a "plan blocked" misdiagnosis.
+        assert "evil" in payload.get("notice", "")
+        assert "plan" not in payload["notice"].lower()
 
     def test_orchestrated_mode_unresolvable_blocks_plan(self, tmp_path, monkeypatch) -> None:
         """An unavailable required verifier blocks the plan and stays in diagnostics.

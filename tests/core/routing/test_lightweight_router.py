@@ -42,10 +42,31 @@ class TestLightweightRouterFormatResult:
         assert result["confidence"] == 0.95
 
     def test_format_orchestrated_result(self):
-        result = LightweightRouter._format_result(_mock_orchestrated_result())
+        result = LightweightRouter._format_result(_real_orchestrated_result(execution_ready=True))
         assert result["mode"] == "orchestrated"
         assert "steps" in result
         assert len(result["steps"]) == 2
+
+    def test_format_orchestrated_blocked_plan_demotes(self):
+        """Explicit execution_ready=False must demote to a notice-only no_match."""
+        result = LightweightRouter._format_result(_real_orchestrated_result(execution_ready=False))
+        assert result["mode"] == "no_match"
+        assert result["has_match"] is False
+        assert result["notice_only"] is True
+
+    def test_format_orchestrated_unannotated_plan_demotes_with_warning(self, caplog):
+        """A plan that was never annotated (no plan_annotator injected) must
+        still demote fail-closed, and must log a warning so the wiring gap is
+        diagnosable (8.3.1-P1-1 regression pin)."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="vibesop.core.routing.lightweight_api"):
+            result = LightweightRouter._format_result(
+                _real_orchestrated_result(execution_ready=None)
+            )
+        assert result["mode"] == "no_match"
+        assert result["has_match"] is False
+        assert any("execution_ready" in rec.message for rec in caplog.records)
 
     def test_format_no_match_result(self):
         result = LightweightRouter._format_result(_mock_no_match_result())
@@ -86,6 +107,26 @@ class TestLightweightRouterJson:
         assert "skill_id" in parsed
 
 
+class TestLightweightRouterPlanAnnotator:
+    """8.3.1-P1-1: the annotator must reach the lazily built UnifiedRouter."""
+
+    def test_constructor_annotator_forwarded_to_router(self):
+        sentinel = object()
+        router = LightweightRouter(plan_annotator=sentinel)
+        with patch("vibesop.core.routing.UnifiedRouter") as mock_cls:
+            inner = mock_cls.return_value
+            assert router._get_router() is inner
+        assert inner.plan_annotator is sentinel
+
+    def test_set_plan_annotator_updates_live_router(self):
+        router = LightweightRouter()
+        live = MagicMock()
+        router._router = live
+        router.set_plan_annotator("ann")
+        assert live.plan_annotator == "ann"
+        assert router._plan_annotator == "ann"
+
+
 # ── AgentRuntime.route_step tests ────────────────────────────────────────────
 
 
@@ -101,6 +142,18 @@ class TestAgentRuntimeRouteStep:
             result = runtime.route_step("debug error", step_number=1, phase=2)
         assert isinstance(result, dict)
         assert result["skill_id"] == "test/skill"
+
+    def test_route_step_injects_plan_annotator(self):
+        """8.3.1-P1-1 regression pin: route_step must wire the annotator so a
+        healthy multi-intent plan is not demoted to a false blocked no_match."""
+        from vibesop.agent.runtime.agent_runtime import AgentRuntime
+
+        runtime = AgentRuntime(project_root=".")
+        with patch("vibesop.core.routing.lightweight_api.LightweightRouter") as mock_lw:
+            mock_lw.return_value.route.return_value = {"mode": "single"}
+            runtime.route_step("debug error", step_number=1, phase=2)
+        _, kwargs = mock_lw.call_args
+        assert callable(kwargs.get("plan_annotator"))
 
 
 # ── CLI --minimal integration tests ──────────────────────────────────────────
@@ -138,23 +191,41 @@ def _mock_single_result(skill_id: str, confidence: float) -> MagicMock:
     return result
 
 
-def _mock_orchestrated_result() -> MagicMock:
-    step1 = MagicMock()
-    step1.step_number = 1
-    step1.skill_id = "test/a"
-    step1.intent = "task A"
-    step1.input_query = "do A"
+def _real_orchestrated_result(execution_ready: bool | None = True) -> MagicMock:
+    """Build an orchestrated result around a REAL ExecutionPlan.
 
-    step2 = MagicMock()
-    step2.step_number = 2
-    step2.skill_id = "test/b"
-    step2.intent = "task B"
-    step2.input_query = "do B"
+    The previous MagicMock plan made ``metadata.get("execution_ready", False)``
+    truthy by accident, so the G-1 blocked-plan gate was never actually
+    exercised (8.3.1-P1-1 fake-green). ``execution_ready=None`` simulates a
+    plan that was never annotated.
+    """
+    from vibesop.core.models import ExecutionPlan, ExecutionStep
 
-    plan = MagicMock()
-    plan.workflow_pattern = WorkflowPattern.SEQUENTIAL
-    plan.plan_id = "test-plan"
-    plan.steps = [step1, step2]
+    metadata: dict = {}
+    if execution_ready is not None:
+        metadata["execution_ready"] = execution_ready
+    plan = ExecutionPlan(
+        plan_id="test-plan",
+        original_query="do A and then do B",
+        workflow_pattern=WorkflowPattern.SEQUENTIAL,
+        steps=[
+            ExecutionStep(
+                step_id="s1",
+                step_number=1,
+                skill_id="test/a",
+                intent="task A",
+                input_query="do A",
+            ),
+            ExecutionStep(
+                step_id="s2",
+                step_number=2,
+                skill_id="test/b",
+                intent="task B",
+                input_query="do B",
+            ),
+        ],
+        metadata=metadata,
+    )
 
     result = MagicMock()
     result.mode = MagicMock()

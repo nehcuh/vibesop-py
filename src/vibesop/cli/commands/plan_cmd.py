@@ -13,6 +13,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 
 from vibesop.cli.orchestration_report import render_orchestration_result, render_plan_status
 from vibesop.core.models import StepStatus
@@ -72,8 +73,22 @@ def plan_list(
             reasons = ", ".join(
                 str(b.get("reason", "?")) for b in (plan.metadata.get("blocked_steps") or [])[:2]
             )
-            console.print(f"   [red]blocked: {reasons}[/red]")
-        console.print(f"   [dim]{plan.original_query[:60]}...[/dim]\n")
+            console.print(f"   [red]blocked: {rich_escape(reasons)}[/red]")
+        console.print(f"   [dim]{rich_escape(plan.original_query[:60])}...[/dim]\n")
+
+
+def _print_blocked_notice(plan: Any) -> None:
+    """Print the blocked diagnostic literally — it embeds the full plan JSON
+    including the user's raw query, so it must never be parsed as Rich
+    markup (8.3.1-P1-2)."""
+    console.print(_blocked_notice(plan), style="red", markup=False)
+    # 8.3.1-P2-5: plans persisted before 8.3.1 carry no execution_ready
+    # verdict and read as blocked by design — tell the user how to recover.
+    console.print(
+        "[dim]Note: plans recorded before v8.3.1 have no execution_ready "
+        "verdict and are treated as blocked — re-run `vibe route` / "
+        "`vibe orchestrate` to rebuild them.[/dim]"
+    )
 
 
 def _blocked_notice(plan: Any) -> str:
@@ -95,7 +110,7 @@ def plan_show(
         raise typer.Exit(1)
 
     if not plan.metadata.get("execution_ready", False):
-        console.print(f"[red]{_blocked_notice(plan)}[/red]")
+        _print_blocked_notice(plan)
         raise typer.Exit(1)
 
     from vibesop.core.models import OrchestrationMode, OrchestrationResult
@@ -119,7 +134,7 @@ def plan_status() -> None:
         raise typer.Exit(0)
 
     if not plan.metadata.get("execution_ready", False):
-        console.print(f"[red]{_blocked_notice(plan)}[/red]")
+        _print_blocked_notice(plan)
         raise typer.Exit(1)
 
     render_plan_status(plan, console=console)
@@ -149,8 +164,8 @@ def plan_complete_step(
 
     if not plan.metadata.get("execution_ready", False):
         # Blocked plans must not be mutated toward completion.
-        console.print(f"[red]Plan {plan.plan_id} is blocked:[/red]")
-        console.print(f"[red]{_blocked_notice(plan)}[/red]")
+        console.print(f"[red]Plan {rich_escape(plan.plan_id)} is blocked:[/red]")
+        _print_blocked_notice(plan)
         raise typer.Exit(1)
 
     _safe_tracker_read(

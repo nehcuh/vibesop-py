@@ -306,26 +306,18 @@ class AgentRouter:
         else:
             plan = plan_builder.build_plan(query, sub_task_objects)
 
-        return {
-            "plan_id": plan.plan_id,
-            "original_query": plan.original_query,
-            "steps": [
-                {
-                    "step_id": step.step_id,
-                    "step_number": step.step_number,
-                    "skill_id": step.skill_id,
-                    "skill_file": getattr(step, "skill_file", "") or "",
-                    "intent": step.intent,
-                    "input_query": step.input_query,
-                    "output_as": step.output_as,
-                    "status": step.status.value,
-                }
-                for step in plan.steps
-            ],
-            "detected_intents": plan.detected_intents,
-            "reasoning": plan.reasoning,
-            "status": plan.status.value,
-        }
+        # 8.3.1-P1-3: PlanBuilder never runs the orchestrator's _persist_plan,
+        # so without this call the returned plan carries no execution_ready
+        # verdict and downstream gates (StepRunner tracker, PlanExecutor)
+        # silently treat every healthy plan as blocked.
+        annotator = getattr(self._router, "plan_annotator", None)
+        if annotator is not None:
+            annotator(plan)
+
+        # Return the full serialization — the previous hand-picked subset
+        # silently dropped metadata / workflow_pattern / is_dynamic /
+        # execution_mode, which is what made the missing verdict invisible.
+        return plan.to_dict()
 
     def orchestrate(
         self,

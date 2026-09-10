@@ -1054,9 +1054,11 @@ def route(
         # Never render a blocked plan (transparency/compact both present it as
         # an execution plan with a MANDATORY execute footer) — the blocked
         # notice replaces all downstream rendering, confirmation, telemetry
-        # and "Plan ready" output (K-6).
+        # and "Plan ready" output (K-6). Exit 1, same contract as
+        # `vibe orchestrate`: a blocked plan is not a successful route
+        # (8.3.1-P2-4). --json keeps exit 0 + has_match=false.
         _print_blocked_plan_notice(result.execution_plan, console)
-        return
+        raise typer.Exit(1)
 
     # Full transparency: show routing decision tree (default)
     already_rendered = squad_already_rendered
@@ -1359,7 +1361,9 @@ def _print_blocked_plan_notice(plan: Any, console: Console) -> None:
         # Exotic plan shapes (mocks, hand-built objects): keep the notice
         # informative without crashing the CLI on missing serializers.
         payload = {"plan_id": str(getattr(plan, "plan_id", "")), "steps": []}
-    console.print(f"[red]{SkillInjector.blocked_plan_notice(payload)}[/red]")
+    # The notice embeds the full plan JSON including the user's raw query —
+    # print it literally, never as Rich markup (8.3.1-P1-2).
+    console.print(SkillInjector.blocked_plan_notice(payload), style="red", markup=False)
 
 
 def _plan_blocked(plan: Any) -> bool:
@@ -1691,7 +1695,9 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
         from vibesop.core.orchestration import PlanTracker
 
         PlanTracker(storage_dir=Path.cwd() / ".vibe").create_plan(plan)
-        console.print(f"[red]{exc}[/red]")
+        # The refusal text embeds the plan's user query — never parse it as
+        # Rich markup (8.3.1-P1-2).
+        console.print(str(exc), style="red", markup=False)
         return
     injector = StepContextInjector(project_root=Path.cwd())
 

@@ -36,11 +36,31 @@ class LightweightRouter:
 
     Args:
         project_root: Project root directory for config resolution.
+        plan_annotator: Optional callable ``(ExecutionPlan) -> None`` that
+            annotates a freshly built plan with its truthful
+            ``execution_ready`` verdict (e.g.
+            ``SkillInjector.annotate_plan_skill_files``). Without it the
+            orchestrator never writes ``execution_ready`` and G-1 demotes
+            EVERY orchestrated result on this path to a false "plan
+            blocked" no_match (8.3.1-P1-1). Core cannot import the
+            agent-layer SkillInjector (layering rule), so callers that
+            consume multi-intent results must inject it here.
     """
 
-    def __init__(self, project_root: str | Path = ".") -> None:
+    def __init__(
+        self,
+        project_root: str | Path = ".",
+        plan_annotator: Any = None,
+    ) -> None:
         self._project_root = Path(project_root).resolve()
+        self._plan_annotator = plan_annotator
         self._router: Any = None
+
+    def set_plan_annotator(self, annotator: Any) -> None:
+        """Inject the plan annotator, including on an already-built router."""
+        self._plan_annotator = annotator
+        if self._router is not None:
+            self._router.plan_annotator = annotator
 
     def _get_router(self) -> Any:
         """Lazily initialize the UnifiedRouter."""
@@ -51,6 +71,8 @@ class LightweightRouter:
             from vibesop.core.routing import UnifiedRouter
 
             self._router = UnifiedRouter(project_root=self._project_root)
+            if self._plan_annotator is not None:
+                self._router.plan_annotator = self._plan_annotator
         except Exception as e:
             logger.debug("Failed to initialize UnifiedRouter: %s", e)
             self._router = None
@@ -111,6 +133,16 @@ class LightweightRouter:
         """Format orchestration result into a minimal dict."""
         if result.mode.value == "orchestrated" and result.execution_plan:
             plan = result.execution_plan
+            if "execution_ready" not in plan.metadata:
+                # Never-annotated plan (no plan_annotator injected): demote
+                # fail-closed like a blocked plan, but log loudly — this is a
+                # wiring gap (8.3.1-P1-1), not a user-facing skill problem.
+                logger.warning(
+                    "LightweightRouter: orchestrated plan %s has no "
+                    "execution_ready annotation — inject plan_annotator so the "
+                    "verdict is truthful; demoting to no_match fail-closed",
+                    getattr(plan, "plan_id", "?"),
+                )
             if not plan.metadata.get("execution_ready", False):
                 # 8.3.1 (G-1): a blocked plan must not be formatted as a
                 # handoffable orchestrated dict — LightweightRouter.route()

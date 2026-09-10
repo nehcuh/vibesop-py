@@ -103,6 +103,14 @@ def attach_skill_file_payload(
                 unsafe = True
                 payload["skill_file"] = ""
                 payload["notice_only"] = True
+                # 8.3.1-P2-3: carry an accurate notice — without it, consumers
+                # (e.g. the OpenCode toast) fall back to a "plan blocked"
+                # message and misdiagnose a single-skill content refusal.
+                payload["notice"] = (
+                    f"Skill '{sid}' is unavailable: its SKILL.md is missing, "
+                    "empty, or failed the safety scan. Audit or reinstall the "
+                    "skill — do not read or execute it."
+                )
         if (resolved is None or unsafe) and payload.get("mode") in (None, "", "single"):
             # Single-mode demote (mirror handle_query): a matched id whose
             # SKILL.md cannot be resolved is not a match. Orchestrated
@@ -141,7 +149,7 @@ def attach_skill_file_payload(
             payload.setdefault("metadata", {}).update(execution_plan.metadata)
         plan = payload
         inj.annotate_plan_dict(plan, source_lookup=source_lookup)
-    if isinstance(plan, dict) and plan.get("metadata", {}).get("execution_ready") is False:
+    if isinstance(plan, dict) and not plan.get("metadata", {}).get("execution_ready", False):
         payload["has_match"] = False
         if "confidence" in payload:
             payload["confidence"] = 0.0
