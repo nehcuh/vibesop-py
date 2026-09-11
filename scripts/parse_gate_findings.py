@@ -13,7 +13,11 @@ scale (spec: docs/specs/2026-09-11-evo-lane-C.md):
 
 Additionally, items under a "BLOCKS:" section header map to P0 (the
 VERDICT-style counterpart of the P-family's highest severity); "none"
-placeholder items are skipped.
+placeholder items are skipped. Section-derived items may wrap across
+indented continuation lines; those are joined into the open item until
+the next item/header/blank line. ``*-instructions.md`` files are review
+templates, not review output, and are skipped entirely (counted under
+``files_skipped_instructions`` in the summary).
 
 Dedup runs over the whole scanned set on normalized titles (lowercase,
 punctuation stripped, path fragments like ``src/foo/bar.py:12`` removed):
@@ -138,18 +142,32 @@ def _clean_title(text: str) -> str:
 
 
 def extract_findings(text: str, source: Path) -> list[dict]:
-    """Extract findings from one gate file. Never raises on weird input."""
+    """Extract findings from one gate file. Never raises on weird input.
+
+    Section-derived items (MAJOR:/NITS:/etc.) may wrap across indented
+    continuation lines; those lines are joined into the open item until the
+    next item, header, blank line, or unindented line. Inline-labeled items
+    (``[P1] ...``) are single-line, matching the P-family gate style.
+    """
     gate, reviewer = infer_source_meta(source)
     findings: list[dict] = []
     section: str | None = None
+    open_item: dict | None = None
     for line in text.splitlines():
         header = _SECTION_RE.match(line)
         if header:
             section = _SECTION_SEVERITY[header.group(1).lower()]
+            open_item = None
             continue
         item = _ITEM_RE.match(line)
         if not item:
+            if open_item is not None and line.strip() and line[:1] in (" ", "\t"):
+                open_item["_raw"] += " " + line.strip()
+                open_item["raw_title"] = _clean_title(open_item["_raw"])
+                open_item["title"] = normalize_title(open_item["raw_title"])
+                continue
             section = None
+            open_item = None
             continue
         content = item.group(1)
         labeled = _INLINE_LABEL_RE.match(content)
@@ -157,23 +175,30 @@ def extract_findings(text: str, source: Path) -> list[dict]:
             label = (labeled.group("bracketed") or labeled.group("bare")).lower()
             severity = _LABEL_SEVERITY[label]
             content = content[labeled.end() :]
+            from_section = False
         elif section:
             severity = section
+            from_section = True
         else:
+            open_item = None
             continue
         raw_title = _clean_title(content)
         if not raw_title or raw_title.lower() in _NONE_ITEMS:
+            open_item = None
             continue
-        findings.append(
-            {
-                "gate": gate,
-                "reviewer": reviewer,
-                "severity": severity,
-                "title": normalize_title(raw_title),
-                "raw_title": raw_title,
-                "source": str(source),
-            }
-        )
+        finding = {
+            "gate": gate,
+            "reviewer": reviewer,
+            "severity": severity,
+            "title": normalize_title(raw_title),
+            "raw_title": raw_title,
+            "source": str(source),
+            "_raw": content.strip(),
+        }
+        findings.append(finding)
+        open_item = finding if from_section else None
+    for finding in findings:
+        del finding["_raw"]
     return findings
 
 
@@ -228,7 +253,12 @@ def _rates(findings: list[dict]) -> dict:
     }
 
 
-def build_report(findings: list[dict], files_scanned: list[str], zero_files: list[str]) -> dict:
+def build_report(
+    findings: list[dict],
+    files_scanned: list[str],
+    zero_files: list[str],
+    skipped_instructions: list[str],
+) -> dict:
     rates = _rates(findings)
     return {
         "observational": True,
@@ -238,6 +268,8 @@ def build_report(findings: list[dict], files_scanned: list[str], zero_files: lis
         ),
         "summary": {
             "files_scanned": len(files_scanned),
+            "files_skipped_instructions": len(skipped_instructions),
+            "skipped_instructions_files": skipped_instructions,
             "files_with_zero_findings": len(zero_files),
             "zero_finding_files": zero_files,
             **rates,
@@ -251,8 +283,14 @@ def build_report(findings: list[dict], files_scanned: list[str], zero_files: lis
 
 
 def scan(root: Path, pattern: str = "gate*.md") -> dict:
-    """Scan a file or directory and return the full report dict."""
+    """Scan a file or directory and return the full report dict.
+
+    ``*-instructions.md`` files are review templates, not review output, so
+    they are skipped entirely (their example lines are not findings).
+    """
     paths = [root] if root.is_file() else sorted(p for p in root.glob(pattern) if p.is_file())
+    skipped = [str(p) for p in paths if p.name.endswith("-instructions.md")]
+    paths = [p for p in paths if not p.name.endswith("-instructions.md")]
     findings: list[dict] = []
     zero_files: list[str] = []
     for path in paths:
@@ -260,7 +298,7 @@ def scan(root: Path, pattern: str = "gate*.md") -> dict:
         findings.extend(file_findings)
         if not file_findings:
             zero_files.append(str(path))
-    return build_report(findings, [str(p) for p in paths], zero_files)
+    return build_report(findings, [str(p) for p in paths], zero_files, skipped)
 
 
 def main(argv: list[str] | None = None) -> int:

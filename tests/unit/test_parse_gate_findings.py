@@ -83,3 +83,34 @@ def test_jaccard_merges_near_identical_titles():
     assert summary["n_unique_jaccard"] == 1
     assert summary["repeat_rate_low"] == 0.0
     assert summary["repeat_rate_high"] == 0.5
+
+
+def test_section_items_continue_across_indented_lines():
+    report = pgf.scan(FIXTURES / "multiline")
+    findings = report["findings"]
+    assert report["summary"]["n_raw"] == 3
+    assert [f["severity"] for f in findings] == ["P1", "NIT", "NIT"]
+    major = findings[0]
+    assert "invocation directory" in major["raw_title"]
+    assert "wrong place" in major["raw_title"]
+    nit = findings[1]
+    assert "lives only in a yaml comment" in nit["raw_title"]
+    assert "nothing will fire on the purge date" in nit["raw_title"]
+    assert findings[2]["raw_title"] == "calibration tolerance comment is stale after the label audit."
+    # Continuation text feeds the normalized dedup key too.
+    assert "purge" in nit["title"]
+    # The trailing NOTES: item is still not a finding.
+    assert all("trailing note" not in f["raw_title"] for f in findings)
+
+
+def test_instructions_files_are_skipped_entirely():
+    report = pgf.scan(FIXTURES / "instructions_skip")
+    summary = report["summary"]
+    assert summary["files_scanned"] == 1
+    assert summary["n_raw"] == 1
+    assert report["findings"][0]["severity"] == "P1"
+    assert report["findings"][0]["gate"] == "gate12"
+    assert summary["files_skipped_instructions"] == 1
+    assert summary["skipped_instructions_files"] == [
+        str(FIXTURES / "instructions_skip" / "gate12-instructions.md")
+    ]
