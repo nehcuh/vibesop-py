@@ -139,8 +139,33 @@ ruff.toml
 # VibeSOP session-generated routing fan-out prompts (not curated)
 .vibe/prompts/
 
-# Claude Code local state (sessions, memory, worktrees)
-.claude/
+# OMX ephemeral (gate/experiment scratch).
+#
+# Boundary policy (Lane E): anything cited by a tracked doc, or kept as
+# acceptance evidence, MUST be addable with a plain `git add` — never
+# `git add -f`. So `.omx/` itself is deliberately NOT ignored here and
+# `.omx/artifacts/` stays tracked by default. Only the short-lived
+# directories below are ignored; a new artifact that lands in
+# `.omx/artifacts/` shows up in `git status` and becomes an explicit
+# decision instead of a silent loss.
+#
+# Do not add `.omx/` or `.omx/artifacts/` to this file.
+.omx/tmp/
+.omx/scratch/
+.omx/cache/
+.omx/runtime/
+.omx/logs/
+.omx/state/
+
+# Claude Code local-only state.
+#
+# `.claude/` used to be ignored as a whole directory, which silently
+# dropped team-shared `/commands` and `/hooks` too. Only the
+# machine-specific files below are local-only now; everything else under
+# `.claude/` (commands/, hooks/, skills/, settings.json) is trackable.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.json
 
 # Pi CLI / skills runtime symlinks (environment-local)
 .pi/skills/
