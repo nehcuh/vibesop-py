@@ -114,7 +114,15 @@ def wilson_interval(k: int, n: int, z: float | None = None) -> tuple[float, floa
     denom = 1.0 + z * z / n
     centre = p + z * z / (2.0 * n)
     margin = z * math.sqrt(p * (1.0 - p) / n + z * z / (4.0 * n * n))
-    return (max(0.0, (centre - margin) / denom), min(1.0, (centre + margin) / denom))
+    lo = max(0.0, (centre - margin) / denom)
+    hi = min(1.0, (centre + margin) / denom)
+    # k=0 / k=n are exact bounds; linux float noise otherwise yields ~1e-17
+    # instead of 0.0 (docker e2e on aarch64, 2026-09-11).
+    if k <= 0:
+        lo = 0.0
+    if k >= n:
+        hi = 1.0
+    return (lo, hi)
 
 
 def aggregate(
