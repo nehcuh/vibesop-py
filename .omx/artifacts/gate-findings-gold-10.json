@@ -1,0 +1,131 @@
+{
+  "schema": "gate-findings-gold-v1",
+  "observational": true,
+  "files": [
+    {
+      "path": ".omx/artifacts/gate1-review-claude.md",
+      "gate": "gate1",
+      "reviewer": "claude",
+      "parseable": true,
+      "findings": [
+        {"severity": "P1", "raw_title": "M1c join 系统性失配：triage 日志存原始 query，analytics 存 redacted query", "line": 15},
+        {"severity": "P1", "raw_title": "M1b `_build_router` 硬编码 `project_root=ROOT`", "line": 16},
+        {"severity": "NIT", "raw_title": "M1b 层分布口径污染（旧日志 index 决策标签漂移 / no_match 与 fallback_llm 哨兵命名不一致）", "line": 17},
+        {"severity": "NIT", "raw_title": "M1d 边界：负秒（时钟回拨）误判 is_rapid_reroute；analytics 追加失败时 last_route 已推进", "line": 18},
+        {"severity": "NIT", "raw_title": "M1c merge 非原子写（main 追加 + extended 重写均无 temp+rename）", "line": 19}
+      ],
+      "notes": "标签体系: [P1]/[nit] 编号列表（1.-5.），门禁结论 PASS_WITH_NITS。原文 [nit] 映射为 NIT。"
+    },
+    {
+      "path": ".omx/artifacts/gate2-review-claude.md",
+      "gate": "gate2",
+      "reviewer": "claude",
+      "parseable": true,
+      "findings": [
+        {"severity": "NIT", "raw_title": "build_eval_from_logs.py: main_text 末尾无换行会拼坏 YAML，加一行防护", "line": 11},
+        {"severity": "P1", "raw_title": "熔断/预算 gate（triage_service.py:98-112）在持久缓存查找（139 行）之前，last-good/fresh 命中在熔断 open 后全部不可达", "line": 16},
+        {"severity": "P1", "raw_title": "last-good 不衰减：一旦出现按 confidence 自动执行的下游，必须先加衰减或 clamp 到阈值下（原文“列为 P1”）", "line": 20}
+      ],
+      "notes": "结构为逐文件观察 + 「最重要发现」+ 专答两问，非统一标签列表。显式标签只有 L11 的“NIT:”与 L20 的“列为 P1”。L16 是作者自命的“最重要发现（非阻塞但应排最前修）”，无标签，按“非阻塞=P0 以下、应排最前修=高于 NIT”推为 P1。L12（TriageService.store 不受 flag 控制，补文档一句）作者未标级别、定性“行为无害”，未计入。"
+    },
+    {
+      "path": ".omx/artifacts/gate8-claude.md",
+      "gate": "gate8",
+      "reviewer": "claude",
+      "parseable": true,
+      "findings": [
+        {"severity": "NIT", "raw_title": "learner.py:~440 prune_auto_extracted clear-epoch guard 不清 _sequences，实例复用时可能复活已清序列", "line": 22},
+        {"severity": "NIT", "raw_title": "instinct_cmd.py:684 console.print 把未转义用户内容插进 Rich markup，含 [/x] 时 MarkupError", "line": 23},
+        {"severity": "NIT", "raw_title": "test_triage_recall.py 缺 similarity == min_similarity 的精确边界测试（>= 含边界语义未测）", "line": 24},
+        {"severity": "NIT", "raw_title": "skill_commands.py:519-525 install_result[\"warnings\"] 从不展示；同 id 非 force 重装时 CLI 仍打印指向 legacy 副本的 ✓ Installed", "line": 25},
+        {"severity": "NIT", "raw_title": "loader.py:362 文件名排除作用于任意 rglob 深度，名为 registry.yaml/auto-config.yaml 的合法嵌套 YAML 被静默跳过", "line": 26},
+        {"severity": "NIT", "raw_title": "无端到端测试验证 `vibe skill add --global` 实际触发 _migrate_legacy_global_skills（组合点 skill_commands.py:510-512 未测）", "line": 27}
+      ],
+      "notes": "VERDICT/BLOCKS/NITS/NOTES 代码块格式；BLOCKS 为 (none)，NITS 6 条均为 NIT。NOTES 段（L29-34）是观察备注，非 finding。"
+    },
+    {
+      "path": ".omx/artifacts/gate10-claude.md",
+      "gate": "gate10",
+      "reviewer": "claude",
+      "parseable": true,
+      "findings": [
+        {"severity": "NIT", "raw_title": "routing_eval_extended.yaml:1 header 未声明 superpowers+omx pack 依赖，裸环境跑出 5 条系统性 miss 会被误读为 router 回归", "line": 9},
+        {"severity": "NIT", "raw_title": "routing_eval_extended.yaml:448 session-end 正例无退出信号，与本集自身的剥离规则不一致", "line": 10},
+        {"severity": "NIT", "raw_title": "routing_eval_extended.yaml:74 L132→omx/git-master 可辩护，但同文件同形态 sibling 查询（L436/L128/L54）标 []，张力值得 header 注明", "line": 11},
+        {"severity": "NIT", "raw_title": "scripts/eval_routing.py:54 相对 --file 按 Path.cwd() 解析而默认值按 ROOT 锚定，换目录运行会静默指错位置", "line": 12},
+        {"severity": "NIT", "raw_title": "scripts/calibrate_index_threshold.py:58-64 _is_hit 仍容忍无 namespace 匹配，审计后标签已规范化，容忍逻辑过时", "line": 13},
+        {"severity": "NIT", "raw_title": "routing_eval_retention.yaml:13 retain_until/purge 只活在注释里，2026-09-19 无任何提醒机制", "line": 14}
+      ],
+      "notes": "VERDICT/BLOCKS/NITS/NOTES 代码块格式；BLOCKS: none，NITS 6 条均为 NIT。NOTES 段 Q1-Q6（L17-22）是专项核查结论，非 finding。"
+    },
+    {
+      "path": ".omx/artifacts/gate11-claude.md",
+      "gate": "gate11",
+      "reviewer": "claude",
+      "parseable": false,
+      "findings": [],
+      "notes": "单段散文 verdict（PASS_WITH_NITS），提到 scripts/e2e_llm_routing.py T1/T2/T4 基于已删除场景会在下次 docker e2e 失败、需 retarget——是可见的问题陈述，但无 severity 标签、无条目结构（无列表/无 file:line 模板）。按“无结构化 finding”处理。"
+    },
+    {
+      "path": ".omx/artifacts/gate12-pi.md",
+      "gate": "gate12",
+      "reviewer": "pi",
+      "parseable": true,
+      "findings": [
+        {"severity": "NIT", "raw_title": "_layers.py:367 _TRUSTED_INDEX_NAMESPACES={builtin,project} 与自身注释不符：custom/cross-cutting 被当 external，~/.vibe/skills 用户全局技能靠子串匹配落 project", "line": 15},
+        {"severity": "NIT", "raw_title": "_layers.py:452 embedding margin gate 是 namespace 盲，trusted 命中可因 pack runner-up 而弃权（slash-orchestrate 0.609/0.588）", "line": 28},
+        {"severity": "NIT", "raw_title": "_layers.py:420 vs :592-597/:611 installed-candidate 过滤只加在 embedding 排序，token 循环仍让 stale/uninstalled profile 赢并短路掉 fallback", "line": 37},
+        {"severity": "NIT", "raw_title": "manager.py:229 index_embedding_min_margin 的 le=0.5 上限武断；0.05 工作点距最近噪声接受仅 0.0005，docstring 应写明实测间隔", "line": 45}
+      ],
+      "notes": "VERDICT/BLOCKS/NITS/NOTES 代码块，NITS 4 条均为 NIT，每条 bullet 跨多行（line 取 bullet 起始行）。文件 L1-2 是路由 shell 报错的噪声行，非内容。NOTES 段（L53-112）为核查备注。"
+    },
+    {
+      "path": ".omx/artifacts/gate13-pi.md",
+      "gate": "gate13",
+      "reviewer": "pi",
+      "parseable": true,
+      "findings": [
+        {"severity": "NIT", "raw_title": "conftest.py:317 benchmark 豁免谓词漏掉 tests/performance/test_benchmarks.py，该套件静默测到 stubbed fail-open 路径，<50ms 基线断言变得平凡可满足", "line": 13},
+        {"severity": "NIT", "raw_title": "_layers.py:499 docstring 理由“promoting it would route on evidence we already rejected”对 trusted runner-up >= 0.45 的情形不准确", "line": 21},
+        {"severity": "NIT", "raw_title": "manager.py:277 fragility note 只点名一个 0.352 成员，实测还有 0.351 与另一个 0.352；建议 floor 降到 0.32", "line": 28},
+        {"severity": "NIT", "raw_title": "“extended 76 → 81/107（+5）”无法用已提交工具复现——已提交 eval driver 对该数据集不可能低于 100/107，+5 是描述层声明", "line": 39}
+      ],
+      "notes": "VERDICT/BLOCKS/NITS/NOTES 代码块，NITS 4 条均为 NIT，bullet 跨多行（line 取起始行）。L1-2 为路由 shell 报错噪声。NOTES 段（L45-94）含重要可复现性分析，但是备注不是 finding。"
+    },
+    {
+      "path": ".omx/artifacts/gate34-grok.md",
+      "gate": "gate34",
+      "reviewer": "grok",
+      "parseable": true,
+      "findings": [
+        {"severity": "P1", "raw_title": "阶段一拿 _is_agent_prompt_shape 原样打标/沉底 + discover dismiss 粘性否定列表，会把合法长 query 和 gate32 保留的回声簇一次性藏起来", "line": 5},
+        {"severity": "P1", "raw_title": "N1「为什么在这里」写「miss 跨 N 天复现 M 次」无法从 ClusterCandidate 直译，阶段一自带的防文案说谎测试会红", "line": 6},
+        {"severity": "P1", "raw_title": "阶段二把 replay_routing_baseline.py 的 p0_shadow trigger 逻辑抽成 verifier，其刻意偏离生产语义，会系统性说错生产行为", "line": 7},
+        {"severity": "P1", "raw_title": "阶段二验收缺双 embedding 分测、verdicts 未分 project/global、看板真实 UI 在 index.html:659-725 而非只改 _discoveries.py", "line": 8},
+        {"severity": "NIT", "raw_title": "「6041 测试基线」仓内无此数（最近落盘 5964 passed/14 skipped）；e2e 65/65 不覆盖 promote 降级", "line": 9},
+        {"severity": "NIT", "raw_title": "「草稿骨架用 core_steps 预填」已在 skill_promote.py:2036-2052 落地，阶段二.5 不是新活；禁止在空簇上编造 HOW", "line": 10},
+        {"severity": "NIT", "raw_title": "回声测量只量 miss 池，重议门槛却写「回声率 >80%」；脚本必须同时报已入队卡片的 echo 占比", "line": 11},
+        {"severity": "NIT", "raw_title": "D3 计数未声明用哪套 dismiss（vibe skill dismiss vs discover dismiss），列口径必须写死", "line": 12},
+        {"severity": "NIT", "raw_title": "当前 CLI 表无 fingerprint 分组，「折叠到分组末尾」分组键未定义；shadow 回放的 WARN 条件空缺", "line": 13},
+        {"severity": "NIT", "raw_title": "tests/conftest.py embedding stub 在 fixture :281，真正 setitem 在 :326，Lane B 写的「281 行 stub」是勘误", "line": 14}
+      ],
+      "notes": "标签体系: [MAJOR]/[NIT] 列表，MAJOR→P1（4 条），NIT→NIT（6 条）。L16 代码事实抽查与 L18-26 对各裁决点的意见是核查/裁决备注，非 finding。"
+    },
+    {
+      "path": ".omx/artifacts/gate34-synthesis.md",
+      "gate": "gate34",
+      "reviewer": "synthesis",
+      "parseable": false,
+      "findings": [],
+      "notes": "主代理裁决稿/三路收敛记录，非评审 finding 列表。修订 A–K 与 NIT 处置逐条引用各 lane 的 finding 编号（如 pi-MAJOR-1、claude-MAJOR-2、grok-NIT），条目本身是“修订/处置”而非独立 finding，且单条常混合多 severity（如修订 F = claude-NIT + grok-MAJOR-2）。若 parser 把修订条目当 finding 抽出会跨文件重复计数。按无结构化 finding 处理。"
+    },
+    {
+      "path": ".omx/artifacts/gate10-instructions.md",
+      "gate": "gate10",
+      "reviewer": "instructions",
+      "parseable": false,
+      "findings": [],
+      "notes": "评审任务书，非评审产出。无任何真实 finding。L28-37 含 Verdict 格式模板（`- [severity] file:line — issue — why`），是 parser 的 false-positive 陷阱——模板行不是 finding。负例。"
+    }
+  ]
+}

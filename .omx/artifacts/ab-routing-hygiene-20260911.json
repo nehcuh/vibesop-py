@@ -1,0 +1,583 @@
+{
+  "summary": {
+    "n_neg": 19,
+    "n_pos": 16,
+    "hermetic_over_inject": 2,
+    "live_over_inject": 1,
+    "hermetic_pos_hit": 15,
+    "live_pos_hit": 14,
+    "disagreements": [
+      {
+        "query": "收工了",
+        "hermetic": "builtin/session-end",
+        "live": null
+      },
+      {
+        "query": "herd instinct is what drives most market bubbles",
+        "hermetic": "builtin/instinct",
+        "live": "fallback-llm"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+      "category": "diagnosis",
+      "neg": false,
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": false,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "run a deep diagnosis of the codebase and suggest optimizations",
+      "category": "diagnosis",
+      "neg": false,
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "hermetic_primary": "builtin/deep-diagnosis-optimization",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/deep-diagnosis-optimization",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "全面审查这个仓库的代码质量",
+      "category": "diagnosis",
+      "neg": false,
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "hermetic_primary": "builtin/deep-diagnosis-optimization",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/deep-diagnosis-optimization",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "让 agent 自主运行一组实验并汇报评估结果",
+      "category": "experiment",
+      "neg": false,
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "hermetic_primary": "builtin/autonomous-experiment",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/autonomous-experiment",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "start an autonomous experiment loop with prediction evaluation",
+      "category": "experiment",
+      "neg": false,
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "hermetic_primary": "builtin/autonomous-experiment",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/autonomous-experiment",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "收工了",
+      "category": "session",
+      "neg": false,
+      "expect": [
+        "builtin/session-end"
+      ],
+      "hermetic_primary": "builtin/session-end",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": null,
+      "live_has_match": null,
+      "live_layer": null,
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": false
+    },
+    {
+      "query": "that's all for now, heading out",
+      "category": "session",
+      "neg": false,
+      "expect": [
+        "builtin/session-end"
+      ],
+      "hermetic_primary": "builtin/session-end",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/session-end",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "今天就到这里，保存一下进度",
+      "category": "session",
+      "neg": false,
+      "expect": [
+        "builtin/session-end"
+      ],
+      "hermetic_primary": "builtin/session-end",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/session-end",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "/help",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "hermetic_primary": "builtin/slash-help",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-help",
+      "live_has_match": true,
+      "live_layer": "explicit",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "vibe 这个工具怎么用",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "hermetic_primary": "builtin/slash-help",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-help",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "/install superpowers",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "hermetic_primary": "builtin/slash-install",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-install",
+      "live_has_match": true,
+      "live_layer": "explicit",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "帮我安装一个技能包",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "hermetic_primary": "builtin/slash-install",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-install",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "/list",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "hermetic_primary": "builtin/slash-list",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-list",
+      "live_has_match": true,
+      "live_layer": "explicit",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "列出所有可用技能",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "hermetic_primary": "builtin/slash-list",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-list",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "/orchestrate 同时做安全审查和补测试",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-orchestrate"
+      ],
+      "hermetic_primary": "builtin/slash-orchestrate",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-orchestrate",
+      "live_has_match": true,
+      "live_layer": "explicit",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "/route 这个查询到合适的技能",
+      "category": "slash",
+      "neg": false,
+      "expect": [
+        "builtin/slash-route"
+      ],
+      "hermetic_primary": "builtin/slash-route",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "builtin/slash-route",
+      "live_has_match": true,
+      "live_layer": "explicit",
+      "live_over_inject": false,
+      "hermetic_hit": true,
+      "live_hit": true
+    },
+    {
+      "query": "写公众号总结",
+      "category": "must_not_inject",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "写一篇微信文章",
+      "category": "must_not_inject",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "翻译这段英文",
+      "category": "must_not_inject",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "今天天气怎么样",
+      "category": "must_not_inject",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "帮我出一道考试题，不要实现",
+      "category": "must_not_inject",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "工地上的工人六点准时收工下班",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "builtin/session-end",
+      "hermetic_ok1": false,
+      "hermetic_over_inject": true,
+      "live_primary": "builtin/session-end",
+      "live_has_match": true,
+      "live_layer": "keyword",
+      "live_over_inject": true,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "the presents are all wrapped up under the tree already",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "我家猫的捕猎本能很强，总叼老鼠回家",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "herd instinct is what drives most market bubbles",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "builtin/instinct",
+      "hermetic_ok1": false,
+      "hermetic_over_inject": true,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "周末报了个陶艺课，想学一门新技能",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "预约师傅上门安装净水器",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "帮我把搬家要带的东西列个清单",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "can you list the groceries we need for the camping trip",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "这几位实习生的表现需要做个评估反馈",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "这家老字号三代人沉淀出了独门酱菜方子",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "最近总是失眠，想去医院做个全面检查",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "昨晚交响音乐会的编排太震撼了",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "自驾游从成都到拉萨走哪条路线风景最好",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    },
+    {
+      "query": "化学课上我们分组做实验观察沉淀反应",
+      "category": "near_miss",
+      "neg": true,
+      "expect": [],
+      "hermetic_primary": "fallback-llm",
+      "hermetic_ok1": true,
+      "hermetic_over_inject": false,
+      "live_primary": "fallback-llm",
+      "live_has_match": false,
+      "live_layer": "fallback_llm",
+      "live_over_inject": false,
+      "hermetic_hit": false,
+      "live_hit": false
+    }
+  ]
+}

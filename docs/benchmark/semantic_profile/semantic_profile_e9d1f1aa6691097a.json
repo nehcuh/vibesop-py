@@ -1,0 +1,1872 @@
+{
+  "schema": "vibesop/semantic-profile/1",
+  "created_utc": "2026-09-11T05:14:18.917777+00:00",
+  "git_commit": "c4dbf187593b8293c166bd831e9494da7f3c812c",
+  "dataset": {
+    "path": "/Users/huchen/Projects/vibesop-evo-A-claude/tests/benchmark/routing_eval.yaml",
+    "entries": 55
+  },
+  "model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "n_passes": 10,
+  "fingerprint_sha": "e9d1f1aa6691097a0eed1bc9fa2c177f4da5ac6a45f275817426d6ad8f918081",
+  "posture": {
+    "enable_embedding": true,
+    "enable_ai_triage": false,
+    "enable_external": false,
+    "strict_search_paths": true,
+    "load_sentence_transformer": "real-offline-first",
+    "scenario_layer": "disabled",
+    "cwd": "tmp",
+    "project_root": "tmp",
+    "home_env": "tmp",
+    "hf_home": "pinned-to-real-user-cache",
+    "omp_num_threads": "1",
+    "torch_num_threads": "1",
+    "embedding_matcher_adapter": "lazy-top-k-forwarding-in-process"
+  },
+  "env": {
+    "python": "3.12.13",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "hf_home": "/Users/huchen/.cache/huggingface",
+    "omp_num_threads_env": "1",
+    "hf_hub_offline_env": "<unset>",
+    "torch": "2.13.0",
+    "sentence_transformers": "5.7.0",
+    "transformers": "5.15.0",
+    "huggingface_hub": "1.27.0",
+    "numpy": "2.5.2",
+    "torch_get_num_threads": 1
+  },
+  "control": {
+    "n_passes": 10,
+    "n_queries": 55,
+    "mean_primary_stability": 1.0,
+    "mean_layer_stability": 1.0,
+    "unstable_primary_count": 0,
+    "unstable_layer_count": 0,
+    "primary_stability_histogram": {
+      "1.0": 55
+    },
+    "layer_stability_histogram": {
+      "1.0": 55
+    },
+    "primary_layer_distribution": {
+      "keyword": 260,
+      "fallback_llm": 240,
+      "explicit": 50
+    },
+    "per_query": [
+      {
+        "index": 0,
+        "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 1,
+        "query": "run a deep diagnosis of the codebase and suggest optimizations",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 2,
+        "query": "全面审查这个仓库的代码质量",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 3,
+        "query": "让 agent 自主运行一组实验并汇报评估结果",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "primary_mode": "builtin/autonomous-experiment",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/autonomous-experiment": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 4,
+        "query": "start an autonomous experiment loop with prediction evaluation",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "primary_mode": "builtin/autonomous-experiment",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/autonomous-experiment": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 5,
+        "query": "把最近踩过的坑沉淀下来，以后别再犯了",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "primary_mode": "builtin/experience-evolution",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/experience-evolution": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 6,
+        "query": "accumulate what we learned from practice into project knowledge",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "primary_mode": "builtin/experience-evolution",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/experience-evolution": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 7,
+        "query": "查看一下我的 instinct 学习状态",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 8,
+        "query": "show my coding instincts and their confidence",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 9,
+        "query": "从我的工作流里学习一个新的本能模式",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 10,
+        "query": "用 RIPER 流程来做这个功能",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "primary_mode": "builtin/riper-workflow",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/riper-workflow": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 11,
+        "query": "run the riper workflow for this feature",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "primary_mode": "builtin/riper-workflow",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/riper-workflow": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 12,
+        "query": "收工了",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 13,
+        "query": "that's all for now, heading out",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 14,
+        "query": "今天就到这里，保存一下进度",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 15,
+        "query": "把这段对话提炼成一个新技能",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "primary_mode": "builtin/skill-craft",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/skill-craft": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 16,
+        "query": "craft a new skill from this session's patterns",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "primary_mode": "builtin/skill-craft",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/skill-craft": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 17,
+        "query": "评估一下这些技能的使用质量和效果",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "primary_mode": "builtin/slash-evaluate",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-evaluate": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 18,
+        "query": "which skills are performing well and which need attention",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 19,
+        "query": "/help",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "primary_mode": "builtin/slash-help",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-help": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 20,
+        "query": "vibe 这个工具怎么用",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "primary_mode": "builtin/slash-help",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-help": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 21,
+        "query": "/install superpowers",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "primary_mode": "builtin/slash-install",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-install": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 22,
+        "query": "帮我安装一个技能包",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "primary_mode": "builtin/slash-install",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-install": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 23,
+        "query": "/list",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "primary_mode": "builtin/slash-list",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-list": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 24,
+        "query": "列出所有可用技能",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "primary_mode": "builtin/slash-list",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-list": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 25,
+        "query": "/orchestrate 同时做安全审查和补测试",
+        "expect": [
+          "builtin/slash-orchestrate"
+        ],
+        "primary_mode": "builtin/slash-orchestrate",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-orchestrate": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 26,
+        "query": "/route 这个查询到合适的技能",
+        "expect": [
+          "builtin/slash-route"
+        ],
+        "primary_mode": "builtin/slash-route",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-route": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 27,
+        "query": "来一次全维度代码库审计",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 28,
+        "query": "这个 bug 在 router.py 第 123 行，修复它并验证",
+        "expect": [
+          "kimi-gated-fix"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 29,
+        "query": "验证这个 prompt chain 各阶段是否符合规范",
+        "expect": [
+          "prompt-chain-validator"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 30,
+        "query": "help me write a unit test for this function",
+        "expect": [],
+        "primary_mode": "builtin/test-generation",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/test-generation": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 31,
+        "query": "help me fix this bug in the login flow",
+        "expect": [],
+        "primary_mode": "builtin/systematic-debugging",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/systematic-debugging": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 32,
+        "query": "审计一下第三方依赖的供应链安全",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 33,
+        "query": "xyzq 什么都不相关的乱码查询 blargh",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 34,
+        "query": "写公众号总结",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 35,
+        "query": "写一篇微信文章",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 36,
+        "query": "翻译这段英文",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 37,
+        "query": "今天天气怎么样",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 38,
+        "query": "帮我出一道考试题，不要实现",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 39,
+        "query": "add this to the quokka-todo list before we forget",
+        "expect": [
+          "benchpack/quokka-todo"
+        ],
+        "primary_mode": "benchpack/quokka-todo",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "benchpack/quokka-todo": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 40,
+        "query": "take a wombat-snapshot of the workspace before the risky edit",
+        "expect": [
+          "benchpack/wombat-snapshot"
+        ],
+        "primary_mode": "benchpack/wombat-snapshot",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "benchpack/wombat-snapshot": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 41,
+        "query": "工地上的工人六点准时收工下班",
+        "expect": [],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 42,
+        "query": "the presents are all wrapped up under the tree already",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 43,
+        "query": "我家猫的捕猎本能很强，总叼老鼠回家",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 44,
+        "query": "herd instinct is what drives most market bubbles",
+        "expect": [],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 45,
+        "query": "周末报了个陶艺课，想学一门新技能",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 46,
+        "query": "预约师傅上门安装净水器",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 47,
+        "query": "帮我把搬家要带的东西列个清单",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 48,
+        "query": "can you list the groceries we need for the camping trip",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 49,
+        "query": "这几位实习生的表现需要做个评估反馈",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 50,
+        "query": "这家老字号三代人沉淀出了独门酱菜方子",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 51,
+        "query": "最近总是失眠，想去医院做个全面检查",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 52,
+        "query": "昨晚交响音乐会的编排太震撼了",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 53,
+        "query": "自驾游从成都到拉萨走哪条路线风景最好",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 54,
+        "query": "化学课上我们分组做实验观察沉淀反应",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      }
+    ],
+    "control_pass": true
+  },
+  "semantic": {
+    "n_passes": 10,
+    "n_queries": 55,
+    "mean_primary_stability": 1.0,
+    "mean_layer_stability": 1.0,
+    "unstable_primary_count": 0,
+    "unstable_layer_count": 0,
+    "primary_stability_histogram": {
+      "1.0": 55
+    },
+    "layer_stability_histogram": {
+      "1.0": 55
+    },
+    "primary_layer_distribution": {
+      "keyword": 210,
+      "embedding": 180,
+      "fallback_llm": 110,
+      "explicit": 50
+    },
+    "per_query": [
+      {
+        "index": 0,
+        "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 1,
+        "query": "run a deep diagnosis of the codebase and suggest optimizations",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 2,
+        "query": "全面审查这个仓库的代码质量",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 3,
+        "query": "让 agent 自主运行一组实验并汇报评估结果",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "primary_mode": "builtin/autonomous-experiment",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/autonomous-experiment": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 4,
+        "query": "start an autonomous experiment loop with prediction evaluation",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "primary_mode": "builtin/autonomous-experiment",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/autonomous-experiment": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 5,
+        "query": "把最近踩过的坑沉淀下来，以后别再犯了",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "primary_mode": "builtin/experience-evolution",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/experience-evolution": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 6,
+        "query": "accumulate what we learned from practice into project knowledge",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "primary_mode": "builtin/experience-evolution",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/experience-evolution": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 7,
+        "query": "查看一下我的 instinct 学习状态",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 8,
+        "query": "show my coding instincts and their confidence",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 9,
+        "query": "从我的工作流里学习一个新的本能模式",
+        "expect": [
+          "builtin/instinct"
+        ],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 10,
+        "query": "用 RIPER 流程来做这个功能",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "primary_mode": "builtin/riper-workflow",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/riper-workflow": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 11,
+        "query": "run the riper workflow for this feature",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "primary_mode": "builtin/riper-workflow",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/riper-workflow": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 12,
+        "query": "收工了",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 13,
+        "query": "that's all for now, heading out",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 14,
+        "query": "今天就到这里，保存一下进度",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 15,
+        "query": "把这段对话提炼成一个新技能",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "primary_mode": "builtin/skill-craft",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/skill-craft": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 16,
+        "query": "craft a new skill from this session's patterns",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "primary_mode": "builtin/skill-craft",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/skill-craft": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 17,
+        "query": "评估一下这些技能的使用质量和效果",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "primary_mode": "builtin/slash-evaluate",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-evaluate": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 18,
+        "query": "which skills are performing well and which need attention",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "primary_mode": "builtin/slash-evaluate",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-evaluate": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 19,
+        "query": "/help",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "primary_mode": "builtin/slash-help",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-help": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 20,
+        "query": "vibe 这个工具怎么用",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "primary_mode": "builtin/slash-help",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-help": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 21,
+        "query": "/install superpowers",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "primary_mode": "builtin/slash-install",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-install": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 22,
+        "query": "帮我安装一个技能包",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "primary_mode": "builtin/slash-install",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-install": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 23,
+        "query": "/list",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "primary_mode": "builtin/slash-list",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-list": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 24,
+        "query": "列出所有可用技能",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "primary_mode": "builtin/slash-list",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-list": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 25,
+        "query": "/orchestrate 同时做安全审查和补测试",
+        "expect": [
+          "builtin/slash-orchestrate"
+        ],
+        "primary_mode": "builtin/slash-orchestrate",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-orchestrate": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 26,
+        "query": "/route 这个查询到合适的技能",
+        "expect": [
+          "builtin/slash-route"
+        ],
+        "primary_mode": "builtin/slash-route",
+        "primary_stability": 1.0,
+        "layer_mode": "explicit",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-route": 10
+        },
+        "layer_counts": {
+          "explicit": 10
+        }
+      },
+      {
+        "index": 27,
+        "query": "来一次全维度代码库审计",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 28,
+        "query": "这个 bug 在 router.py 第 123 行，修复它并验证",
+        "expect": [
+          "kimi-gated-fix"
+        ],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 29,
+        "query": "验证这个 prompt chain 各阶段是否符合规范",
+        "expect": [
+          "prompt-chain-validator"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 30,
+        "query": "help me write a unit test for this function",
+        "expect": [],
+        "primary_mode": "builtin/test-generation",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/test-generation": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 31,
+        "query": "help me fix this bug in the login flow",
+        "expect": [],
+        "primary_mode": "builtin/systematic-debugging",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/systematic-debugging": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 32,
+        "query": "审计一下第三方依赖的供应链安全",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 33,
+        "query": "xyzq 什么都不相关的乱码查询 blargh",
+        "expect": [],
+        "primary_mode": "builtin/deep-diagnosis-optimization",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/deep-diagnosis-optimization": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 34,
+        "query": "写公众号总结",
+        "expect": [],
+        "primary_mode": "builtin/commit-message",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/commit-message": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 35,
+        "query": "写一篇微信文章",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 36,
+        "query": "翻译这段英文",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 37,
+        "query": "今天天气怎么样",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 38,
+        "query": "帮我出一道考试题，不要实现",
+        "expect": [],
+        "primary_mode": "builtin/test-generation",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/test-generation": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 39,
+        "query": "add this to the quokka-todo list before we forget",
+        "expect": [
+          "benchpack/quokka-todo"
+        ],
+        "primary_mode": "benchpack/quokka-todo",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "benchpack/quokka-todo": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 40,
+        "query": "take a wombat-snapshot of the workspace before the risky edit",
+        "expect": [
+          "benchpack/wombat-snapshot"
+        ],
+        "primary_mode": "benchpack/wombat-snapshot",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "benchpack/wombat-snapshot": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 41,
+        "query": "工地上的工人六点准时收工下班",
+        "expect": [],
+        "primary_mode": "builtin/session-end",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/session-end": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 42,
+        "query": "the presents are all wrapped up under the tree already",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 43,
+        "query": "我家猫的捕猎本能很强，总叼老鼠回家",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 44,
+        "query": "herd instinct is what drives most market bubbles",
+        "expect": [],
+        "primary_mode": "builtin/instinct",
+        "primary_stability": 1.0,
+        "layer_mode": "keyword",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/instinct": 10
+        },
+        "layer_counts": {
+          "keyword": 10
+        }
+      },
+      {
+        "index": 45,
+        "query": "周末报了个陶艺课，想学一门新技能",
+        "expect": [],
+        "primary_mode": "builtin/skill-craft",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/skill-craft": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 46,
+        "query": "预约师傅上门安装净水器",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 47,
+        "query": "帮我把搬家要带的东西列个清单",
+        "expect": [],
+        "primary_mode": "builtin/slash-list",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-list": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 48,
+        "query": "can you list the groceries we need for the camping trip",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 49,
+        "query": "这几位实习生的表现需要做个评估反馈",
+        "expect": [],
+        "primary_mode": "builtin/slash-evaluate",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-evaluate": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 50,
+        "query": "这家老字号三代人沉淀出了独门酱菜方子",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 51,
+        "query": "最近总是失眠，想去医院做个全面检查",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 52,
+        "query": "昨晚交响音乐会的编排太震撼了",
+        "expect": [],
+        "primary_mode": "fallback-llm",
+        "primary_stability": 1.0,
+        "layer_mode": "fallback_llm",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "fallback-llm": 10
+        },
+        "layer_counts": {
+          "fallback_llm": 10
+        }
+      },
+      {
+        "index": 53,
+        "query": "自驾游从成都到拉萨走哪条路线风景最好",
+        "expect": [],
+        "primary_mode": "builtin/slash-route",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/slash-route": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      },
+      {
+        "index": 54,
+        "query": "化学课上我们分组做实验观察沉淀反应",
+        "expect": [],
+        "primary_mode": "builtin/autonomous-experiment",
+        "primary_stability": 1.0,
+        "layer_mode": "embedding",
+        "layer_stability": 1.0,
+        "primary_counts": {
+          "builtin/autonomous-experiment": 10
+        },
+        "layer_counts": {
+          "embedding": 10
+        }
+      }
+    ],
+    "embedding_loader_calls": 1
+  },
+  "verdict": "PROFILE"
+}

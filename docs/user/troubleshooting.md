@@ -276,6 +276,29 @@ vibe skills list
 
 ---
 
+## 6.4 路由灌进了不该有的技能 / 「收工」误伤
+
+先分清三类，不要一律当 bug：
+
+| 你输入的 | 该发生 | 若相反 |
+|---|---|---|
+| 今天天气怎么样、翻译这段英文、写一篇微信文章 | **no-match**（`has_match=false`） | 才是回归，去看 `must_not_inject` 题集 |
+| 收工了 / that's all for now / 我先走了 | 命中 `builtin/session-end` | 退出信号没写进技能触发词 |
+| 工地上的工人六点准时收工下班 | **应 no-match** | 已知近失：触发词「收工」无域过滤 |
+
+2026-09-11 在 linux/arm64 容器里，对同一组句子跑了 hermetic 闸和 live `vibe route`：前两类最低集 5/5 两臂都不注入；第三类两臂都灌进 session-end。
+
+```bash
+vibe route --json "今天天气怎么样"                 # 期望 has_match=false
+vibe route --json "工地上的工人六点准时收工下班"   # 当前仍可能命中 session-end
+vibe route "@builtin/session-end 先走了"            # 真下班：点名，避开近失
+uv run python scripts/eval_routing.py --hermetic --check
+```
+
+不要用「再降一点阈值」修近失——那会把天气类负例重新灌回去。
+
+---
+
 ## 7. 报告问题
 
 如果以上步骤无法解决，请收集以下信息并提交 Issue：

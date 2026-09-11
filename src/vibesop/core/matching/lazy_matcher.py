@@ -42,8 +42,17 @@ class LazyEmbeddingMatcher:
     def warm_up(self, candidates: list[dict[str, Any]]) -> None:
         self._ensure_real().warm_up(candidates)
 
-    def match(self, query: str, candidates: list[dict[str, Any]], context: Any = None) -> Any:
-        return self._ensure_real().match(query, candidates, context)
+    def match(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: Any = None,
+        top_k: int = 10,
+    ) -> Any:
+        # Must accept top_k: MatcherPipeline always passes it
+        # (matcher_pipeline.py). The previous 3-arg signature TypeError'd
+        # every enable_embedding=True route that reached this matcher.
+        return self._ensure_real().match(query, candidates, context, top_k=top_k)
 
     def preprocess(self, query: str) -> str:
         return self._ensure_real().preprocess(query)

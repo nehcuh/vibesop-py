@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **可信可测量（方向 E/D/C/A/B）**：`.omx/artifacts/` 默认可跟踪并断链守卫；`eval_routing` 报告双向误差与 near_miss 负例；生产 no-match 聚合（Wilson CI）；历史 gate findings 确定性解析；语义层 `--profile-semantic` 画像（report-only）。CI 每个 job 必须登记 `decision_source: deterministic | human`（`routing-eval` 为 human，其余为机器闸），守卫作为 required job 接入。
+
 ### Fixed
 
 - **8.3.1 对抗复审 punch list（P1×3 + P2×4）**：
