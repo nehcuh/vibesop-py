@@ -175,3 +175,80 @@
   expect:
   - benchpack/wombat-snapshot
   category: benchmark_pack
+
+# Near-miss negatives (evo lane D2a, direction D item 2): queries that
+# reuse trigger-word shapes of real skills but are domain-foreign by one
+# sentence of context. report-only observation category — deliberately NOT
+# must_not_inject (that is the CI hard gate; its five-entry minimum set
+# above stays untouched). Scored by the generic no-match assertion
+# (expect: [] + no reject): ok1 iff has_match is False.
+- query: 工地上的工人六点准时收工下班
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/session-end; 域外因为描述工地作息，不是结束本次会话
+- query: the presents are all wrapped up under the tree already
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/session-end; "wrap up" 形近会话收尾用语，但指礼物包装
+- query: 我家猫的捕猎本能很强，总叼老鼠回家
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/instinct; 域外因为在聊宠物习性，不是工作流本能模式
+- query: herd instinct is what drives most market bubbles
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/instinct; 域外因为是行为金融话题，不是技能本能状态
+- query: 周末报了个陶艺课，想学一门新技能
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/skill-craft; 「学新技能」形近提炼技能，但域外因为是报班手艺
+- query: 预约师傅上门安装净水器
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-install; 「安装」形近安装技能包，但域外因为装的是家电
+- query: 帮我把搬家要带的东西列个清单
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-list; 「列清单」形近列出技能，但域外因为是搬家待办
+- query: can you list the groceries we need for the camping trip
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-list; "list" 形近 /list，但域外因为是露营采购单
+- query: 这几位实习生的表现需要做个评估反馈
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-evaluate; 「评估表现」形近评估技能质量，但域外因为评的是人
+- query: 这家老字号三代人沉淀出了独门酱菜方子
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/experience-evolution; 「沉淀」形近沉淀踩坑经验，但域外因为是品牌故事
+- query: 最近总是失眠，想去医院做个全面检查
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/deep-diagnosis-optimization; 「全面检查」形近全维度审计，但域外因为是身体健康
+- query: 昨晚交响音乐会的编排太震撼了
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-orchestrate; 「编排」形近并行编排，但域外因为在聊音乐会
+- query: 自驾游从成都到拉萨走哪条路线风景最好
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/slash-route; 「路线」形近路由，但域外因为问的是旅行路线
+- query: 化学课上我们分组做实验观察沉淀反应
+  expect: []
+  category: near_miss
+  subclass: near_miss
+  note: near_miss of builtin/autonomous-experiment; 「做实验」形近自主实验循环，但域外因为是课堂实验
