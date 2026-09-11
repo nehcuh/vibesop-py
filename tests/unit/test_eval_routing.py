@@ -240,6 +240,97 @@ def test_partially_resolvable_expect_is_scored(
     assert m["top1_accuracy"] == 1.0
 
 
+def test_two_sided_error_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Direction D report-only counts: 1 pos hit + 1 pos over-reject +
+    1 must_not_inject over-inject + 1 must_not_inject correctly rejected
+    pin all four confusion counters (and the exit code stays 0)."""
+    entries = [
+        {"query": "pos hit", "expect": ["builtin/session-end"]},
+        {"query": "pos over-reject", "expect": ["builtin/session-end"]},
+        {"query": "neg over-inject", "expect": [], "category": "must_not_inject"},
+        {"query": "neg ok", "expect": [], "category": "must_not_inject"},
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        resolvable=({"builtin/session-end"}, set()),
+        responses={
+            "pos hit": ("builtin/session-end", True),
+            "pos over-reject": (None, False),
+            "neg over-inject": ("builtin/session-end", True),
+            "neg ok": (None, False),
+        },
+    )
+    assert rc == 0
+    assert m["n_pos"] == 2
+    assert m["over_reject"] == 1
+    assert m["n_neg"] == 2
+    assert m["over_inject"] == 1
+    # FakeRouter reports layer "lexical" whenever primary exists.
+    assert m["no_match_by_layer"] == {"lexical": 2, "no_match": 2}
+    assert m["no_match_rate"] == 0.5
+    assert m["n_near_miss"] == 0
+    assert m["near_miss_over_inject"] == 0
+
+
+def test_skipped_env_excluded_from_two_sided_counts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """skipped_env entries stay out of the denominator AND out of n_pos
+    (and cannot leak into n_neg either — they are never routed)."""
+    entries = [
+        {"query": "scored", "expect": ["builtin/session-end"]},
+        {
+            "query": "pack miss",
+            "expect": ["omx/git-master"],
+            "requires_packs": ["omx"],
+        },
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        resolvable=({"builtin/session-end"}, set()),  # omx pack absent
+        responses={"scored": ("builtin/session-end", True)},
+    )
+    assert rc == 0
+    assert m["total"] == 1
+    assert m["skipped_env"] == 1
+    assert m["n_pos"] == 1
+    assert m["over_reject"] == 0
+    assert m["n_neg"] == 0
+
+
+def test_near_miss_sublayer_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """near_miss is negative-for-injection in both spellings —
+    `category: near_miss` and `subclass: near_miss` under must_not_inject —
+    and always lands in n_neg via the empty-expect no-match clause."""
+    entries = [
+        {"query": "nm injected", "expect": [], "category": "near_miss"},
+        {
+            "query": "nm rejected",
+            "expect": [],
+            "category": "must_not_inject",
+            "subclass": "near_miss",
+        },
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        responses={
+            "nm injected": ("builtin/session-end", True),
+            "nm rejected": (None, False),
+        },
+    )
+    assert rc == 0
+    assert m["n_near_miss"] == 2
+    assert m["near_miss_over_inject"] == 1
+    assert m["over_inject"] == 1
+    assert m["n_neg"] == 2
+
+
 def test_extended_yaml_requires_packs_namespaces_valid() -> None:
     """Hand-edited annotations must reference namespaces declared in
     core/registry.yaml — pins against typos drifting the field away from

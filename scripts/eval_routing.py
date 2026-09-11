@@ -29,6 +29,21 @@ Entry semantics:
                                requires_packs with expect: [] never skips —
                                reject/no-match assertions stay scored.
 
+Two-sided error counts (report-only; never affect exit codes or the
+baseline gate):
+- n_pos / n_neg     — scored positives (expect non-empty) vs negatives
+                      (must_not_inject, or explicit no-match assertion:
+                      empty expect and no reject)
+- over_reject       — positives where the router produced no real match
+- over_inject       — must_not_inject / near_miss negatives where it did
+- no_match_by_layer — matched entries by primary layer plus a "no_match"
+                      bucket; no_match_rate = no_match / total
+- n_near_miss / near_miss_over_inject — entries with `subclass:
+                      near_miss` or `category: near_miss` (0 when the
+                      dataset has none). near_miss counts as a negative
+                      for over_inject but is NOT added to
+                      --update-baseline's must_not_inject hard-refuse list.
+
 Hermetic mode (gate45 P1) pins the routed universe so numbers are
 machine-independent and CI can gate routing quality:
     uv run python scripts/eval_routing.py --hermetic --check
@@ -283,6 +298,11 @@ def main() -> int:
 
     skipped_env_count = 0
     hits1 = hits3 = 0
+    n_pos = n_neg = 0
+    over_reject = over_inject = 0
+    n_near_miss = near_miss_over_inject = 0
+    no_match_count = 0
+    no_match_by_layer: dict[str, int] = {}
     errors: list[dict] = []
     per_query: list[dict] = []
     baseline_records: list[dict] = []
@@ -340,6 +360,24 @@ def main() -> int:
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3
+        # Two-sided error counts (report-only). skipped_env entries never
+        # reach this point, so they pollute neither side of the confusion.
+        if expect:
+            n_pos += 1
+            if not result.has_match:
+                over_reject += 1
+        if category == "must_not_inject" or (not expect and not reject):
+            n_neg += 1
+        if category in ("must_not_inject", "near_miss") and result.has_match:
+            over_inject += 1
+        if e.get("subclass") == "near_miss" or category == "near_miss":
+            n_near_miss += 1
+            if result.has_match:
+                near_miss_over_inject += 1
+        if result.has_match:
+            no_match_by_layer[layer] = no_match_by_layer.get(layer, 0) + 1
+        else:
+            no_match_count += 1
         baseline_records.append(
             {
                 "query": query,
@@ -388,6 +426,8 @@ def main() -> int:
     # skipped_env entries count in neither total (denominator) nor errors;
     # guard against an all-skipped dataset dividing by zero.
     total = len(entries) - skipped_env_count
+    no_match_by_layer["no_match"] = no_match_count
+    no_match_rate = round(no_match_count / total, 4) if total else 0.0
     metrics = {
         "total": total,
         "skipped_env": skipped_env_count,
@@ -395,6 +435,14 @@ def main() -> int:
         "recall_at_3": round(hits3 / total, 4) if total else 0.0,
         "errors": errors,
         "confusion_pairs": confusion,
+        "n_pos": n_pos,
+        "n_neg": n_neg,
+        "over_reject": over_reject,
+        "over_inject": over_inject,
+        "no_match_by_layer": no_match_by_layer,
+        "no_match_rate": no_match_rate,
+        "n_near_miss": n_near_miss,
+        "near_miss_over_inject": near_miss_over_inject,
     }
 
     if args.record and errors:
@@ -426,6 +474,15 @@ def main() -> int:
         pct3 = hits3 / total if total else 0.0
         print(
             f"queries: {total} (skipped_env: {skipped_env_count}) | top-1: {hits1}/{total} ({pct1:.1%}) | recall@3: {hits3}/{total} ({pct3:.1%})"
+        )
+        print(
+            f"two-sided: pos {n_pos} (over-reject {over_reject}) | neg {n_neg} "
+            f"(over-inject {over_inject}) | near-miss {n_near_miss} "
+            f"(over-inject {near_miss_over_inject})"
+        )
+        print(
+            f"no-match by layer: {json.dumps(no_match_by_layer)} | "
+            f"no-match rate: {no_match_rate:.1%}"
         )
         if errors:
             print(f"\nMisroutes ({len(errors)}):")
