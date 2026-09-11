@@ -1,0 +1,107 @@
+# Lane B / B1 — CI decision-source registry (DRAFT — NOT FINAL)
+#
+# Why this file exists
+# -------------------
+# `docs/ROADMAP.md` forbids using LLM review as a merge gate, but that ban is
+# prose: nothing in the repo detects "this CI job decides on model output".
+# This registry makes the rule machine-checkable — every job in
+# `.github/workflows/ci.yml` must declare where its verdict comes from, and
+# only `deterministic` (a program's exit code / exit-code-bearing tooling) or
+# `human` (a person reads an artifact and decides) may gate a required job.
+#
+# `scripts/check_ci_decision_source.py` cross-checks this file against the
+# workflow: unregistered job -> exit 1, registry entry with no job -> exit 1.
+#
+# Status of the values below
+# --------------------------
+# `proposed_by: grok` — every `decision_source` here is a PROPOSAL extracted
+# from the workflow's steps on 2026-09-11, NOT a maintainer ruling. The
+# per-job list that still needs a human "yes" is in
+# `.omx/artifacts/evo-lane-B-handback.md`. Do not read this file as ratified
+# until `pending_human_confirm` is false.
+#
+# Scope boundary (B1 only)
+# ------------------------
+# This registry records the claim; it does not verify it. Import-level
+# static enforcement (a `deterministic` job may not import `anthropic` /
+# `openai`) is B2 and is deliberately not implemented yet.
+
+schema_version: 1
+workflow: .github/workflows/ci.yml
+proposed_by: grok
+pending_human_confirm: true
+status: draft
+extracted_at: "2026-09-11"
+extracted_from_commit: c4dbf187593b293c166bd831e9494da7f3c812c
+
+jobs:
+  lint:
+    name: Lint
+    decision_source: deterministic
+    rationale: >-
+      ruff's own exit code (`ruff check .`, `ruff format --check .`). No model
+      output participates in the verdict.
+
+  type-check:
+    name: Type Check
+    decision_source: deterministic
+    rationale: >-
+      basedpyright 1.39.9 exit codes under `--level error` (0 pass / 1 type
+      errors / 3 config error). Warnings are advisory by explicit rule, and
+      that rule is a config decision (pyproject.toml [tool.pyright]), not a
+      model call.
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    decision_source: deterministic
+    rationale: >-
+      pytest exit code over the "not benchmark and not slow" marker filter,
+      plus a hard coverage floor (`--cov-fail-under=73`).
+
+  test-windows:
+    name: Test Windows (Python ${{ matrix.python-version }})
+    decision_source: deterministic
+    rationale: >-
+      pytest exit code on windows-latest, same marker filter. `--reruns 2`
+      absorbs OS-level flakes (Defender scans, file-lock races) — a flake
+      absorber, not a model judgement.
+
+  security:
+    name: Security Scan
+    decision_source: deterministic
+    rationale: >-
+      pip-audit (venv + full lockfile export) and bandit exit codes. Advisory
+      databases and CVEs change over time, so a re-run may flip — that is
+      upstream data drift, not a model decision.
+
+  benchmark:
+    name: Performance Benchmark
+    decision_source: deterministic
+    rationale: >-
+      pytest `-m benchmark` exit code. Absolute-µs budgets are load-sensitive,
+      which is why `--reruns 2` exists; the budget check itself is arithmetic.
+
+  routing-eval:
+    name: Routing Eval (report-only)
+    decision_source: deterministic
+    rationale: >-
+      PROPOSED deterministic (eval_routing.py exit code). This one carries an
+      open question: the job is permanently report-only
+      (`continue-on-error: true`, never a hard gate — see the job comment),
+      and it runs the NON-hermetic invocation (`--json`, no `--hermetic`), so
+      its absolute numbers are environment-sensitive and no machine verdict
+      gates anything. If the maintainer reads "the decision this job feeds is
+      a human reading the step summary", the correct value is `human`.
+      Flagged for human confirmation — see notes below.
+    notes: >-
+      Needs an explicit human ruling: deterministic vs human. Either value
+      keeps the guard green; only the claim differs.
+
+  routing-benchmark:
+    name: Routing Benchmark (gate)
+    decision_source: deterministic
+    rationale: >-
+      Hard gate (gate45 P1): `eval_routing.py --hermetic --check` exit codes
+      0 ok / 1 new top-1 failure / 3 stale baseline. Hermetic posture pins
+      cwd/project_root/HOME and the candidate universe, so the verdict is
+      machine-independent.
