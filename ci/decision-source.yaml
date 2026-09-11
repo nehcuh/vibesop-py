@@ -1,4 +1,4 @@
-# Lane B / B1 — CI decision-source registry (DRAFT — NOT FINAL)
+# Lane B / B1 — CI decision-source registry
 #
 # Why this file exists
 # -------------------
@@ -11,14 +11,13 @@
 #
 # `scripts/check_ci_decision_source.py` cross-checks this file against the
 # workflow: unregistered job -> exit 1, registry entry with no job -> exit 1.
+# The same script is a required CI job (`decision-source`).
 #
 # Status of the values below
 # --------------------------
-# `proposed_by: grok` — every `decision_source` here is a PROPOSAL extracted
-# from the workflow's steps on 2026-09-11, NOT a maintainer ruling. The
-# per-job list that still needs a human "yes" is in
-# `.omx/artifacts/evo-lane-B-handback.md`. Do not read this file as ratified
-# until `pending_human_confirm` is false.
+# Ratified 2026-09-11 by the maintainer: seven jobs stay `deterministic`;
+# `routing-eval` is `human` because it is permanently report-only and exists
+# to surface JSON for a person, not to block merges.
 #
 # Scope boundary (B1 only)
 # ------------------------
@@ -29,8 +28,10 @@
 schema_version: 1
 workflow: .github/workflows/ci.yml
 proposed_by: grok
-pending_human_confirm: true
-status: draft
+pending_human_confirm: false
+status: ratified
+confirmed_by: maintainer
+confirmed_at: "2026-09-11"
 extracted_at: "2026-09-11"
 extracted_from_commit: c4dbf187593b293c166bd831e9494da7f3c812c
 
@@ -83,19 +84,19 @@ jobs:
 
   routing-eval:
     name: Routing Eval (report-only)
+    decision_source: human
+    rationale: >-
+      Permanently report-only (`continue-on-error: true`). The harness always
+      exits 0 and runs the non-hermetic `--json` invocation; the job exists
+      to surface JSON metrics for a person, never to block merges. Maintainer
+      ruling 2026-09-11: the decision this job feeds is human.
+
+  decision-source:
+    name: Decision Source
     decision_source: deterministic
     rationale: >-
-      PROPOSED deterministic (eval_routing.py exit code). This one carries an
-      open question: the job is permanently report-only
-      (`continue-on-error: true`, never a hard gate — see the job comment),
-      and it runs the NON-hermetic invocation (`--json`, no `--hermetic`), so
-      its absolute numbers are environment-sensitive and no machine verdict
-      gates anything. If the maintainer reads "the decision this job feeds is
-      a human reading the step summary", the correct value is `human`.
-      Flagged for human confirmation — see notes below.
-    notes: >-
-      Needs an explicit human ruling: deterministic vs human. Either value
-      keeps the guard green; only the claim differs.
+      `scripts/check_ci_decision_source.py` exit code against this registry
+      and `.github/workflows/ci.yml`. No model output participates.
 
   routing-benchmark:
     name: Routing Benchmark (gate)

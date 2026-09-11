@@ -80,10 +80,12 @@ def _codes(report: ccds.Report) -> list[str]:
 
 
 def test_real_repo_registry_covers_real_ci_workflow(capsys: pytest.CaptureFixture[str]) -> None:
-    """Default paths: 8/8 jobs registered, every source in the allowed domain."""
+    """Default paths: every ci.yml job is registered, sources in the allowed domain."""
     assert ccds.main([]) == 0
     out = capsys.readouterr().out
-    assert "8 workflow job(s), 8 registry entr(y/ies)" in out
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    n = len(workflow["jobs"])
+    assert f"{n} workflow job(s), {n} registry entr(y/ies)" in out
 
 
 def test_real_repo_guard_is_red_when_a_job_is_missing(tmp_path: Path) -> None:
@@ -130,14 +132,21 @@ def test_real_workflow_with_a_model_job_injected_is_red(tmp_path: Path) -> None:
     assert _codes(report) == ["model_decision_source_on_required_job"]
 
 
-def test_real_registry_is_marked_as_a_draft() -> None:
-    """Lane B ships a proposal, not a ratified ruling — the file must say so."""
+def test_real_registry_is_ratified() -> None:
+    """Maintainer ruling 2026-09-11: routing-eval is human, the rest deterministic."""
     doc = yaml.safe_load(REAL_REGISTRY.read_text(encoding="utf-8"))
-    assert doc["proposed_by"] == "grok"
-    assert doc["pending_human_confirm"] is True
+    assert doc["pending_human_confirm"] is False
+    assert doc["status"] == "ratified"
     assert doc["workflow"] == ".github/workflows/ci.yml"
-    for job_id, entry in doc["jobs"].items():
-        assert entry["decision_source"] in ccds.ALLOWED_DECISION_SOURCES, job_id
+    jobs = doc["jobs"]
+    assert jobs["routing-eval"]["decision_source"] == "human"
+    for job_id, entry in jobs.items():
+        source = entry["decision_source"]
+        assert source in ccds.ALLOWED_DECISION_SOURCES, job_id
+        if job_id != "routing-eval":
+            assert source == "deterministic", job_id
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    assert set(jobs) == set(workflow["jobs"])
 
 
 # --------------------------------------------------------------------------
