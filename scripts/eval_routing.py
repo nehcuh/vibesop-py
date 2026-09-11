@@ -69,18 +69,40 @@ Baseline gate exit codes (--hermetic --check):
         content fingerprint changed (registry/skills/dataset/posture) —
         refresh with --update-baseline instead of comparing across universes
 
+Semantic profile mode (lane A, report-only):
+    uv run python scripts/eval_routing.py --profile-semantic [--profile-runs N]
+Keeps the hermetic 1/2/6 pins (tmp cwd/HOME, pinned candidate universe, empty
+SCENARIO layer) and releases step 3/4 for the EMBEDDING layer only: the real
+offline-first model loader, enable_embedding=True. AI triage stays OFF — the
+profile isolates embedding variance, not LLM variance. A null-embedding
+control group runs the same N passes first and must be exactly 100% stable,
+otherwise the verdict is CONTROL_BLOCKED (the harness measured its own
+noise, not semantic-layer variance). Exit code is always 0 when the profile
+ran — exit 2 only means "could not run at all" (embedding model/packages
+unavailable offline), never a quality verdict; no threshold ever gates.
+Artifacts land in docs/benchmark/semantic_profile/ only after the passes
+actually ran.
+
 Usage:
     uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
                                           [--json-out PATH]
     uv run python scripts/eval_routing.py --hermetic [--check | --update-baseline]
                                           [--baseline PATH]
+    uv run python scripts/eval_routing.py --profile-semantic [--profile-runs N]
+                                          [--profile-out DIR]
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
+import os
+import platform
+import subprocess
 import sys
+from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -97,6 +119,68 @@ from vibesop.core.routing.benchmark import (  # noqa: E402
     write_baseline,
 )
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+
+# Posture of the --profile-semantic run, hashed into the artifact filename's
+# fingerprint. Records which hermetic pins stay (universe/cwd/HOME/SCENARIO),
+# what is released (real offline-first embedding loader, EMBEDDING layer on,
+# AI triage still off) and the determinism pins this posture adds: HF_HOME
+# pinned to the real user cache (captured before HOME is redirected) and
+# single-thread CPU inference (OMP_NUM_THREADS=1 + torch.set_num_threads(1)).
+SEMANTIC_PROFILE_POSTURE: dict[str, object] = {
+    "enable_embedding": True,
+    "enable_ai_triage": False,
+    "enable_external": False,
+    "strict_search_paths": True,
+    "load_sentence_transformer": "real-offline-first",
+    "scenario_layer": "disabled",
+    "cwd": "tmp",
+    "project_root": "tmp",
+    "home_env": "tmp",
+    "hf_home": "pinned-to-real-user-cache",
+    "omp_num_threads": "1",
+    "torch_num_threads": "1",
+    # In-process harness adapter (zero product-code changes): the matcher
+    # pipeline calls match(..., top_k=...) but LazyEmbeddingMatcher does not
+    # accept top_k — enable_embedding=True currently TypeErrors inside
+    # route() for any query that reaches the EMBEDDING layer. The adapter
+    # forwards 1:1 to the real EmbeddingMatcher with the pipeline's top_k.
+    "embedding_matcher_adapter": "lazy-top-k-forwarding-in-process",
+}
+
+
+class ProfileUnavailableError(RuntimeError):
+    """The semantic profile cannot run (model or packages unavailable offline).
+
+    Raised by the offline preflight so the caller reports PARTIAL honestly
+    instead of profiling the deterministic fallback path in disguise.
+    """
+
+
+class _LazyMatcherAdapter:
+    """Profile-harness-only adapter: make LazyEmbeddingMatcher callable the
+    way MatcherPipeline actually calls it (match with a top_k kwarg).
+
+    The product path crashes today (TypeError: unexpected keyword 'top_k')
+    the moment a query falls through to the EMBEDDING layer — see the
+    posture note. Forwarding is 1:1 to the real EmbeddingMatcher; no scoring
+    or model behavior is changed by this adapter.
+    """
+
+    def __init__(self, lazy_matcher: object) -> None:
+        self._lazy = lazy_matcher
+
+    def match(self, query: str, candidates: list, context: object = None, top_k: int = 10):
+        real = self._lazy._ensure_real()
+        return real.match(query, candidates, context, top_k=top_k)
+
+    def warm_up(self, candidates: list) -> None:
+        self._lazy.warm_up(candidates)
+
+    def preprocess(self, query: str) -> str:
+        return self._lazy.preprocess(query)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._lazy, name)
 
 
 def _build_hermetic_router() -> tuple[UnifiedRouter, dict[str, Path], set[str]]:
@@ -219,6 +303,415 @@ def _is_resolvable(
     return any(ids is None or skill_id in ids for ids in (builtin_ids, external_ids))
 
 
+# ---------------------------------------------------------------------------
+# --profile-semantic (lane A): semantic-layer reliability profile. Everything
+# below is report-only — a profile is never a gate.
+# ---------------------------------------------------------------------------
+
+
+def _embedding_model_name() -> str:
+    """The model the router's EMBEDDING matcher will actually load (its
+    constructor default) — recorded in the profile instead of a guess."""
+    from vibesop.core.matching.strategies import EmbeddingMatcher
+
+    return str(EmbeddingMatcher()._model_name)
+
+
+def _build_profile_router(
+    *, enable_embedding: bool
+) -> tuple[UnifiedRouter, dict[str, Path], Callable[[], int]]:
+    """Pinned-universe router for the semantic profile.
+
+    Mirrors the hermetic builder's steps 1/2/6 (fresh tmp cwd + HOME, pinned
+    search paths with external discovery off, empty SCENARIO cache) with
+    steps 3/4 released when enable_embedding=True: load_sentence_transformer
+    stays the real offline-first loader and the EMBEDDING matcher joins the
+    pipeline. AI triage stays off either way. HF_HOME is pinned to the REAL
+    user cache (resolved before HOME is redirected — the second build in the
+    same process re-reads it from the env, so it keeps resolving the real
+    cache) and CPU inference is pinned single-threaded. Deliberately a
+    separate function from _build_hermetic_router: the CI gate's posture
+    must not gain a branch.
+
+    Returns (router, skill_roots-for-fingerprint, loader-call probe).
+    """
+    import tempfile
+
+    import vibesop.core.embedding_loader as embedding_loader_module
+    from vibesop.core.config import RoutingConfig
+    from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+    hf_cache = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+
+    tmp_root = Path(tempfile.mkdtemp(prefix="vibe-routing-profile-"))
+    os.chdir(tmp_root)
+    os.environ["HOME"] = str(tmp_root)
+    os.environ["USERPROFILE"] = str(tmp_root)
+    os.environ["HF_HOME"] = hf_cache
+    os.environ["OMP_NUM_THREADS"] = "1"
+    try:
+        import torch
+
+        torch.set_num_threads(1)
+    except ImportError:
+        pass
+
+    loads: dict[str, int] = {"n": 0}
+    if enable_embedding:
+        original_loader = embedding_loader_module.load_sentence_transformer
+
+        def _counting_loader(model_name: str) -> object:
+            loads["n"] += 1
+            return original_loader(model_name)
+
+        embedding_loader_module.load_sentence_transformer = _counting_loader  # type: ignore[assignment]
+    else:
+        # Control group: the exact hermetic null — a warm HF cache must not
+        # be able to change this router's behavior.
+        def _no_model(*_args: object, **_kwargs: object) -> None:
+            return None
+
+        embedding_loader_module.load_sentence_transformer = _no_model  # type: ignore[assignment]
+
+    router = UnifiedRouter(
+        project_root=tmp_root,
+        config=RoutingConfig(enable_embedding=enable_embedding, enable_ai_triage=False),
+    )
+    router._scenario_cache = {}
+    if enable_embedding:
+        # Product bug workaround (see posture note): LazyEmbeddingMatcher
+        # does not accept the top_k kwarg the pipeline always passes, so
+        # enable_embedding=True crashes route() today. Wrap it in-process —
+        # product code stays untouched; the wrapper only forwards.
+        from vibesop.core.matching.lazy_matcher import LazyEmbeddingMatcher
+
+        matchers = router._matcher_pipeline._matchers
+        router._matcher_pipeline._matchers = [
+            (layer, _LazyMatcherAdapter(m) if isinstance(m, LazyEmbeddingMatcher) else m)
+            for layer, m in matchers
+        ]
+
+    skill_roots = {
+        "builtin": resolve_builtin_skills_dir(ROOT),
+        "benchmark-pack": ROOT / "tests" / "fixtures" / "benchmark-pack",
+    }
+    router._candidate_manager.pin_search_paths(list(skill_roots.values()), enable_external=False)
+    return router, skill_roots, lambda: loads["n"]
+
+
+def _preflight_model(model_name: str) -> None:
+    """Load the model once, strictly offline, before any passes run.
+
+    HF_HUB_OFFLINE=1 makes even the loader's online-retry path fail fast, so
+    a missing/incomplete cache surfaces as ProfileUnavailableError here
+    instead of as a silent TFIDF-fallback profile (which would be a fake
+    semantic profile) or a mid-run download.
+    """
+    previous = os.environ.get("HF_HUB_OFFLINE")
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    try:
+        from vibesop.core.embedding_loader import load_sentence_transformer
+
+        load_sentence_transformer(model_name)
+    except Exception as exc:
+        raise ProfileUnavailableError(
+            f"embedding model {model_name!r} unavailable offline "
+            f"(HF_HOME={os.environ.get('HF_HOME')!r}): {exc!r}"
+        ) from exc
+    finally:
+        if previous is None:
+            os.environ.pop("HF_HUB_OFFLINE", None)
+        else:
+            os.environ["HF_HUB_OFFLINE"] = previous
+
+
+def _run_passes(
+    router: UnifiedRouter, entries: list[dict], n_passes: int
+) -> list[list[tuple[str | None, str | None]]]:
+    """N passes over the dataset; one (primary, layer) pair per entry per
+    pass. requires_packs annotations are scoring-only and routing-irrelevant,
+    so every entry is profiled."""
+    passes: list[list[tuple[str | None, str | None]]] = []
+    for _ in range(n_passes):
+        one_pass: list[tuple[str | None, str | None]] = []
+        for entry in entries:
+            result = router.route(entry["query"], record_telemetry=False)
+            primary = result.primary.skill_id if result.primary else None
+            layer = result.primary.layer.value if result.primary else None
+            one_pass.append((primary, layer))
+        passes.append(one_pass)
+    return passes
+
+
+def _mode_stability(values: list[str | None]) -> tuple[float, str | None]:
+    """(mode count / N, mode) — stability of one observation series."""
+    if not values:
+        return 0.0, None
+    mode, count = Counter(values).most_common(1)[0]
+    return count / len(values), mode
+
+
+def _stability_histogram(stabilities: list[float]) -> dict[str, int]:
+    counts = Counter(round(s, 4) for s in stabilities)
+    return {str(value): count for value, count in sorted(counts.items(), reverse=True)}
+
+
+def _aggregate_profile(
+    passes: list[list[tuple[str | None, str | None]]], entries: list[dict]
+) -> dict:
+    """Per-query top-1/layer stability (mode count / N) plus dataset-level
+    means, histograms and the layer distribution of the final primary."""
+    per_query: list[dict] = []
+    primary_stabilities: list[float] = []
+    layer_stabilities: list[float] = []
+    layer_distribution: Counter[str | None] = Counter()
+    for idx, entry in enumerate(entries):
+        primaries = [one_pass[idx][0] for one_pass in passes]
+        layers = [one_pass[idx][1] for one_pass in passes]
+        layer_distribution.update(layers)
+        primary_stab, primary_mode = _mode_stability(primaries)
+        layer_stab, layer_mode = _mode_stability(layers)
+        primary_stabilities.append(primary_stab)
+        layer_stabilities.append(layer_stab)
+        per_query.append(
+            {
+                "index": idx,
+                "query": entry["query"][:80],
+                "expect": entry.get("expect", []),
+                "primary_mode": primary_mode,
+                "primary_stability": round(primary_stab, 4),
+                "layer_mode": layer_mode,
+                "layer_stability": round(layer_stab, 4),
+                "primary_counts": {str(k): v for k, v in Counter(primaries).items()},
+                "layer_counts": {str(k): v for k, v in Counter(layers).items()},
+            }
+        )
+    n_queries = len(entries)
+    return {
+        "n_passes": len(passes),
+        "n_queries": n_queries,
+        "mean_primary_stability": (
+            round(sum(primary_stabilities) / n_queries, 4) if n_queries else 0.0
+        ),
+        "mean_layer_stability": (
+            round(sum(layer_stabilities) / n_queries, 4) if n_queries else 0.0
+        ),
+        "unstable_primary_count": sum(1 for s in primary_stabilities if s < 1.0),
+        "unstable_layer_count": sum(1 for s in layer_stabilities if s < 1.0),
+        "primary_stability_histogram": _stability_histogram(primary_stabilities),
+        "layer_stability_histogram": _stability_histogram(layer_stabilities),
+        "primary_layer_distribution": {str(k): v for k, v in layer_distribution.most_common()},
+        "per_query": per_query,
+    }
+
+
+def _control_passes(agg: dict) -> bool:
+    """The control contract: with embedding off, stability must be EXACTLY
+    1.0 — anything less means the harness itself is noisy and the semantic
+    numbers measure nothing (falsification (a))."""
+    return agg["unstable_primary_count"] == 0 and agg["unstable_layer_count"] == 0
+
+
+def _collect_profile_env() -> dict[str, object]:
+    env: dict[str, object] = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "hf_home": os.environ.get("HF_HOME"),
+        "omp_num_threads_env": os.environ.get("OMP_NUM_THREADS"),
+        "hf_hub_offline_env": os.environ.get("HF_HUB_OFFLINE", "<unset>"),
+    }
+    for module_name in (
+        "torch",
+        "sentence_transformers",
+        "transformers",
+        "huggingface_hub",
+        "numpy",
+    ):
+        try:
+            env[module_name] = importlib.import_module(module_name).__version__
+        except Exception:
+            env[module_name] = "not-installed"
+    try:
+        import torch
+
+        env["torch_get_num_threads"] = torch.get_num_threads()
+    except Exception:
+        env["torch_get_num_threads"] = None
+    return env
+
+
+def _git_commit() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        return out.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def _write_profile_md(md_path: Path, payload: dict) -> None:
+    control = payload["control"]
+    semantic = payload["semantic"]
+    lines = [
+        "# Semantic Layer Reliability Profile",
+        "",
+        f"- generated (UTC): {payload['created_utc']}",
+        f"- git commit: `{payload['git_commit']}`",
+        f"- dataset: `{payload['dataset']['path']}` ({payload['dataset']['entries']} entries)",
+        f"- model: `{payload['model']}` (EmbeddingMatcher default)",
+        f"- N passes per group: {payload['n_passes']}",
+        f"- fingerprint: `{payload['fingerprint_sha'][:16]}`",
+        f"- verdict: **{payload['verdict']}**",
+        "",
+        "## Environment pins",
+        "",
+    ]
+    lines += [f"- {key}: {value}" for key, value in sorted(payload["env"].items())]
+    lines += [
+        "",
+        "## Control group (embedding off — harness self-check)",
+        "",
+        f"- mean primary stability: {control['mean_primary_stability']}",
+        f"- mean layer stability: {control['mean_layer_stability']}",
+        f"- exactly 1.0: **{control['control_pass']}**",
+        "",
+        "## Semantic group (embedding on)",
+        "",
+        f"- mean primary stability: {semantic['mean_primary_stability']}",
+        f"- mean layer stability: {semantic['mean_layer_stability']}",
+        f"- unstable queries (primary): {semantic['unstable_primary_count']}"
+        f"/{semantic['n_queries']}",
+        f"- primary stability histogram: {semantic['primary_stability_histogram']}",
+        f"- primary layer distribution: {semantic['primary_layer_distribution']}",
+        f"- embedding loader calls: {semantic['embedding_loader_calls']}",
+        "",
+        "## Unstable queries (worst first, capped at 20)",
+        "",
+    ]
+    unstable = [q for q in semantic["per_query"] if q["primary_stability"] < 1.0]
+    unstable.sort(key=lambda q: q["primary_stability"])
+    if unstable:
+        lines += ["| stability | primary mode / counts | query |", "|---|---|---|"]
+        lines += [
+            f"| {q['primary_stability']} | {q['primary_mode']} {q['primary_counts']} "
+            f"| {q['query'][:60]} |"
+            for q in unstable[:20]
+        ]
+    else:
+        lines.append("(none — every query produced the same primary across all passes)")
+    lines += [
+        "",
+        "## Interpretation",
+        "",
+        "- control stability != 1.0 -> falsified (a): the harness measures its own",
+        "  noise; fix the harness, ignore the semantic numbers.",
+        "- semantic stability ~= 1.0 -> falsified (b): the blind spot is small;",
+        "  downgrade lane A to a low-frequency spot check.",
+        "- otherwise -> first quantified profile of the semantic layer.",
+        "",
+        "Report-only by construction: the profile never gates anything (script",
+        "exit code is always 0 when the run happened).",
+        "",
+        f"Machine-readable record: `{md_path.with_suffix('.json').name}`",
+        "",
+    ]
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _run_profile(entries: list[dict], eval_file: Path, n_passes: int, profile_out: Path) -> int:
+    """Run control (embedding off) + semantic (embedding on) N passes each,
+    aggregate, and write the md+json artifacts. Always returns 0 when the
+    run happened — CONTROL_BLOCKED is a reported finding, not an exit code."""
+    import vibesop.core.embedding_loader as embedding_loader_module
+
+    original_loader = embedding_loader_module.load_sentence_transformer
+
+    # Control group first and entirely within its own pinned cwd: build, run
+    # N passes. The loader is nulled exactly like the hermetic posture.
+    control_router, _skill_roots, _control_probe = _build_profile_router(enable_embedding=False)
+    control_passes = _run_passes(control_router, entries, n_passes)
+    # Un-null the loader so the semantic group loads the real model.
+    embedding_loader_module.load_sentence_transformer = original_loader  # type: ignore[assignment]
+
+    model_name = _embedding_model_name()
+    _preflight_model(model_name)
+
+    semantic_router, skill_roots, loader_probe = _build_profile_router(enable_embedding=True)
+    semantic_passes = _run_passes(semantic_router, entries, n_passes)
+    loader_calls = loader_probe()
+
+    control_agg = _aggregate_profile(control_passes, entries)
+    semantic_agg = _aggregate_profile(semantic_passes, entries)
+    control_ok = _control_passes(control_agg)
+
+    if not control_ok:
+        verdict = "CONTROL_BLOCKED_HARNESS_NOISE"
+    elif loader_calls == 0:
+        verdict = "PROFILE_INVALID_NO_EMBEDDING_LOAD"
+    else:
+        verdict = "PROFILE"
+
+    fingerprint = compute_fingerprint(
+        registry_file=ROOT / "core" / "registry.yaml",
+        skill_roots=skill_roots,
+        dataset_file=eval_file,
+        posture=SEMANTIC_PROFILE_POSTURE,
+    )
+    payload = {
+        "schema": "vibesop/semantic-profile/1",
+        "created_utc": datetime.now(UTC).isoformat(),
+        "git_commit": _git_commit(),
+        "dataset": {"path": str(eval_file), "entries": len(entries)},
+        "model": model_name,
+        "n_passes": n_passes,
+        "fingerprint_sha": fingerprint["sha"],
+        "posture": SEMANTIC_PROFILE_POSTURE,
+        "env": _collect_profile_env(),
+        "control": {**control_agg, "control_pass": control_ok},
+        "semantic": {**semantic_agg, "embedding_loader_calls": loader_calls},
+        "verdict": verdict,
+    }
+
+    profile_out.mkdir(parents=True, exist_ok=True)
+    stem = f"semantic_profile_{fingerprint['sha'][:16]}"
+    json_path = profile_out / f"{stem}.json"
+    md_path = profile_out / f"{stem}.md"
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_profile_md(md_path, payload)
+
+    print(f"\n=== Semantic Profile (N={n_passes}, {len(entries)} queries) ===")
+    print(f"model: {model_name} | fingerprint: {fingerprint['sha'][:16]}")
+    print(
+        f"control  (embedding off): mean primary {control_agg['mean_primary_stability']} | "
+        f"mean layer {control_agg['mean_layer_stability']} | exactly 1.0: {control_ok}"
+    )
+    print(
+        f"semantic (embedding on):  mean primary {semantic_agg['mean_primary_stability']} | "
+        f"mean layer {semantic_agg['mean_layer_stability']} | "
+        f"unstable {semantic_agg['unstable_primary_count']}/{semantic_agg['n_queries']} | "
+        f"histogram {semantic_agg['primary_stability_histogram']}"
+    )
+    if not control_ok:
+        print(
+            "CONTROL BLOCKED (falsified (a)): the null-embedding control group is not\n"
+            "100% stable — the numbers above measure harness noise, not semantic-layer\n"
+            "variance. Fix the harness before reading anything into them."
+        )
+    if loader_calls == 0:
+        print(
+            "WARNING: the embedding layer never loaded a model — the semantic numbers\n"
+            "are the deterministic path in disguise (verdict PROFILE_INVALID_NO_EMBEDDING_LOAD)."
+        )
+    print(f"verdict: {verdict}")
+    print(f"artifacts -> {json_path} / {md_path}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -271,6 +764,28 @@ def main() -> int:
         help="baseline file for --check/--update-baseline "
         "(default: tests/benchmark/routing_baseline.json)",
     )
+    parser.add_argument(
+        "--profile-semantic",
+        action="store_true",
+        help="semantic-layer reliability profile (lane A, report-only): hermetic "
+        "1/2/6 pinning with the EMBEDDING layer released (real offline-first "
+        "model, AI triage still off); runs a null-embedding control group N "
+        "times first (must be exactly 100% stable). Exit 0 whenever the run "
+        "happened — never a gate. Mutually exclusive with --hermetic",
+    )
+    parser.add_argument(
+        "--profile-runs",
+        type=int,
+        default=10,
+        help="N passes per group in --profile-semantic (default 10)",
+    )
+    parser.add_argument(
+        "--profile-out",
+        type=Path,
+        default=ROOT / "docs" / "benchmark" / "semantic_profile",
+        help="artifact directory for the --profile-semantic md+json "
+        "(default: docs/benchmark/semantic_profile)",
+    )
     args = parser.parse_args()
 
     if (args.check or args.update_baseline) and not args.hermetic:
@@ -279,14 +794,35 @@ def main() -> int:
         parser.error("--check and --update-baseline are mutually exclusive")
     if args.hermetic and args.record:
         parser.error("--record is incompatible with --hermetic (no repo-side writes)")
+    if args.profile_semantic and args.hermetic:
+        parser.error("--profile-semantic and --hermetic are mutually exclusive postures")
+    if args.profile_semantic and (args.check or args.update_baseline):
+        parser.error("--check/--update-baseline apply to --hermetic, not --profile-semantic")
+    if args.profile_semantic and args.record:
+        parser.error("--record is incompatible with --profile-semantic (no repo-side writes)")
+    if args.profile_runs < 2:
+        parser.error("--profile-runs requires >= 2 (a single pass cannot observe instability)")
 
     # Normalize every output path BEFORE a possible chdir into the hermetic
     # tmp — relative paths would otherwise land inside the scratch dir.
     json_out = args.json_out.resolve() if args.json_out else None
     baseline_path = args.baseline.resolve()
+    profile_out = args.profile_out.resolve()
 
     eval_file = args.file if args.file.is_absolute() else ROOT / args.file
     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
+
+    if args.profile_semantic:
+        try:
+            return _run_profile(
+                entries=entries,
+                eval_file=eval_file,
+                n_passes=args.profile_runs,
+                profile_out=profile_out,
+            )
+        except ProfileUnavailableError as exc:
+            print(f"PROFILE NOT RUN (do not fake a profile): {exc}", file=sys.stderr)
+            return 2
 
     skill_roots: dict[str, Path] | None = None
     if args.hermetic:
