@@ -27,6 +27,7 @@ These files remain in the project root for discoverability and tool integration:
 ### Getting Started
 
 - **[给 AI 找对说明书](skill-routing-explained.md)** — 技能路由科普（对照实验发现、和同类差别、怎么用和进化）。**对外叙事以这篇为准。**
+- **[研究综述：把「可信」从声称变成可测量](research-survey.md)** — 2026-04→09 全部实验与研究总账（四条实验线、F1-F10 综合发现、26 条外部对照、三层建议；数字逐项核对 + grok 逐章复审）。**研究总账以这篇为准。**
 - **[企业 AI 编程实践方法论](enterprise-agent-methodology.md)** — Agent = LLM + Harness：设计院 / 施工队 / 监理 / 档案馆；专家是点名的方法卡，不是常驻编制；放行权在确定性闸和人，不在评委打分
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
   - 19 built-in skills + community packs explained (superpowers, gstack, omx)
