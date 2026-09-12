@@ -2,7 +2,7 @@
 
 > **目标读者**：第一次接触 VibeSOP 的开发者，想知道"这玩意儿到底能帮我干什么"
 > **不是什么**：本文档不是命令参考（看 [`user/CLI_REFERENCE.md`](user/CLI_REFERENCE.md)），不是哲学阐述（看 [`PHILOSOPHY.md`](PHILOSOPHY.md)）
-> **是什么**：12 个具体场景，每个都有"痛点 → 方案 → 命令 → 预期输出"，挑你今天遇到的那条照着做
+> **是什么**：13 个具体场景，每个都有"痛点 → 方案 → 命令 → 预期输出"，挑你今天遇到的那条照着做
 >
 > **English**: [USE_CASES.en.md](USE_CASES.en.md)
 
@@ -101,6 +101,31 @@ vibe orchestrate --strategy parallel "用并行工人同时做安全审查 A 和
 ```
 
 **预期**：第一句走单 agent（可点名审查技能）。第二句才进入并行工人编排。
+
+---
+
+### 案例 13：闲聊不该灌技能，以及「收工」近失
+
+**痛点**：你随口说「今天天气怎么样」「写一篇微信文章」，Agent 却被灌进某个技能；或者你讲「工地上的工人六点准时收工下班」，却触发了下班收工技能。
+
+**VibeSOP 方案**：找不到匹配是成功（`has_match=false`）。日常闲聊/翻译/写公众号走负例闸，不应注入。真的要结束会话，用明确退出信号或点名 `session-end`。形近触发词、域在外面的句子叫**近失**——目前 keyword 层没有域过滤器，这是已知缺口，不是「路由坏了」。
+
+**命令**：
+```bash
+vibe route --json "今天天气怎么样"
+vibe route --json "写一篇微信文章"
+vibe route --json "工地上的工人六点准时收工下班"
+vibe route --json "收工了"          # 真下班，该命中 session-end
+vibe route "@builtin/session-end 先走了"
+```
+
+**预期**（2026-09-11 Docker AB，linux/arm64，hermetic 与 live 两臂）：
+
+- 天气 / 微信 / 翻译 / 公众号 / 出考试题：**两臂都不注入**
+- 「工地上的工人六点准时收工下班」：两臂都命中 `builtin/session-end`（近失过灌）
+- 真退出：「that's all for now」命中 session-end
+
+不要为了消灭近失去关 session-end，也不要把 no-match 当成故障去降阈值。
 
 ---
 

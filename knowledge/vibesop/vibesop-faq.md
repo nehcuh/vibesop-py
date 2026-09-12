@@ -53,3 +53,11 @@ SKILL.md v3.0 规范（`docs/skill-format-spec-v3.md`）：YAML frontmatter + ma
 ## 在哪看可视化？
 
 `vibe dashboard` 启动 Web 面板：路由统计、技能生态快照、任务轨迹回放、Discovery 候选队列。
+
+## 找不到匹配是不是坏了？
+
+不是。产品命题是：技能是可点名方法卡，找不到匹配是成功。`vibe route --json "今天天气怎么样"` 期望 `has_match=false`。Docker AB（2026-09-11）里「天气 / 翻译 / 写公众号 / 写微信 / 出考试题」两臂 5/5 都不注入。把 no-match 当故障去降阈值，会重新变成乱灌。
+
+## 为什么「工地上的工人六点准时收工下班」还会命中 session-end？
+
+这是近失（near_miss），不是最低集负例。`session-end` 的触发词含「收工」。真下班（「收工了」「that's all for now」）该命中；工地叙事不该。2026-09-11 容器里 hermetic 与 live `vibe route` **两臂都过灌**这条。keyword 层目前没有域过滤器。权宜：用更明确的退出信号，或 `@builtin/session-end` 点名。不要为这条去关整个 session-end。详细：`docs/essays/2026-09-11-harness-hot-takes.md`、`.omx/artifacts/ab-routing-hygiene-20260911.md`。
