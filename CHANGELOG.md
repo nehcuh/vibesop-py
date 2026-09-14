@@ -33,22 +33,32 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   `.github/workflows/ci.yml` job must declare `deterministic` or `human`;
   model output may not gate a required job. Current registry: 10/10 jobs.
 - **Artifact citation guard** (`scripts/check_artifact_links.py`) plus an
-  exact frozen-debt baseline (`ci/artifact-links-baseline.json`). Dangling
-  refs are always fatal. Checkpoint scan: 859 refs = 428 ok + 431 historical
-  nontracked occurrences across 423 keys + 0 dangling. The baseline is
-  transitional, not a permanent waiver.
+  exact frozen-debt baseline (`ci/artifact-links-baseline.json`). Default
+  scan is every tracked `*.md` path from `git ls-files` (fresh-clone set;
+  `--targets` narrows). Dangling refs are always fatal. Checkpoint scan
+  of all tracked markdown: 1109 refs = 641 ok + 468 historical nontracked
+  occurrences across 460 keys + 0 dangling. Every extracted baseline
+  target is a strict normalized POSIX artifact path/glob/dir. The
+  baseline is transitional, not a permanent waiver.
 
 ### Fixed
 
 - **`aggregate_nomatch` fail-soft on invalid UTF-8**: read spans JSONL as
   bytes and decode per line. A truncated CJK append no longer
   `UnicodeDecodeError`s the whole file into argparse exit 2; the bad
-  line is `n_corrupt` and valid route spans still score.
+  line is `n_corrupt` and valid route spans still score. A UTF-8 BOM is
+  stripped only from the first line; a mid-file U+FEFF stays payload and
+  counts as corrupt. The human line always includes `corrupt=<N>`.
 - **Artifact classifier vs glob metacharacters in filenames**: exact
   index match and a literal on-disk path (including a broken symlink)
-  win before `fnmatch`. Tracked `foo[1].md` is `ok`; untracked
-  `foo[1].md` is `dangling` even when tracked `foo1.md` would match the
-  character class.
+  win before `fnmatch`. Square brackets are literal path characters
+  (`v[1]/*.md` names directory `v[1]`, not a character class matching
+  `v1`). Only `*` and `?` are wildcards.
+- **Artifact citation extraction vs prose annotations**: ASCII `(`, `)`,
+  `:`, and `\\` are reference delimiters, matching the existing CJK
+  punctuation set. Line locators (`file:165`), parenthetical notes, and
+  shell-escaped trailing backslashes are not baseline keys. The baseline
+  schema keeps the strict normalized POSIX relative-path invariant.
 
 ### Documentation
 

@@ -57,7 +57,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 
 ### 产物引用守卫 + 冻结债务基线
 
-`scripts/check_artifact_links.py` 检查 tracked 文档对 `.omx/artifacts/` 的引用。dangling 一律失败。历史未跟踪引用冻结在 `ci/artifact-links-baseline.json`，精确匹配才过。本 checkpoint： **859** 条引用 = **428** ok + **431** 条历史非跟踪出现（**423** 个 key）+ **0** dangling，基线精确匹配。该基线是过渡账本，不是永久免责。
+`scripts/check_artifact_links.py` 检查 tracked 文档对 `.omx/artifacts/` 的引用。默认扫描 `git ls-files` 中每一个 tracked `*.md`（含 `.omx/artifacts/`、`memory/`、`knowledge/`），与 fresh-clone 集合一致。dangling 一律失败。历史未跟踪引用冻结在 `ci/artifact-links-baseline.json`，精确匹配才过。提取在 ASCII `()` / `:` / `\\` 处截断，基线 key 必须是正规化 POSIX 产物路径/glob/目录，不是 `file:line` 或注解碎片。本 checkpoint： **1109** 条引用 = **641** ok + **468** 条历史非跟踪出现（**460** 个 key）+ **0** dangling，基线精确匹配。该基线是过渡账本，不是永久免责。
 
 ## 8.4 发行闸
 
@@ -91,7 +91,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 
 截至 2026-09-14：正式终态 **241** 条；已启动但缺终态 **4** 条；未启动 **115** 条；独立 **72** 次人数诊断未启动。完整主实验与人数诊断完成前，不得把中间发现写成普遍结论。登记：[实验索引](experiments/README.md)。
 
-### D. 按有界批次削减 431 条产物引用债务
+### D. 按有界批次削减 468 条产物引用债务
 
 冻结基线只允许对账，不允许把新的 dangling 或新增 stale 解释成「基线如此」。消化后须 `--write-baseline` 显式刷新，且刷新前 dangling 必须为 0。
 
