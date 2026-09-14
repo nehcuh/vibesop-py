@@ -1,0 +1,96 @@
+{
+  "cohort": "20260913T023645Z",
+  "n": 360,
+  "unique": 360,
+  "manifest_sha256": "0b9b5f8ea460e4d496302f559f7e3900835dafc1e7f95b637435aa49ceb0d2f4",
+  "calls": 4665,
+  "models": {
+    "deepseek-flash": 4665
+  },
+  "issues": [],
+  "arms": {
+    "A": {
+      "n": 72,
+      "passed": 67,
+      "hidden_evaluated": 67,
+      "errors": {
+        "incomplete_final_response": 5
+      },
+      "input": 2328319,
+      "output": 319166,
+      "cache": 2131066
+    },
+    "C": {
+      "n": 72,
+      "passed": 2,
+      "hidden_evaluated": 2,
+      "errors": {
+        "stage_budget_exhausted:independent-0": 66,
+        "stage_budget_exhausted:independent-2": 2,
+        "stage_budget_exhausted:independent-1": 2
+      },
+      "input": 1586626,
+      "output": 198797,
+      "cache": 1385597
+    },
+    "E": {
+      "n": 72,
+      "passed": 15,
+      "hidden_evaluated": 26,
+      "errors": {
+        "budget_exhausted:I_precheck": 36,
+        "stage_budget_exhausted:worker-1": 8,
+        "ownership_or_conflict": 11,
+        "incomplete_final_response": 1,
+        "stage_budget_exhausted:worker-0": 1
+      },
+      "input": 16338662,
+      "output": 689088,
+      "cache": 13859448
+    },
+    "D": {
+      "n": 72,
+      "passed": 0,
+      "hidden_evaluated": 0,
+      "errors": {
+        "stage_budget_exhausted:independent-0": 68,
+        "stage_budget_exhausted:independent-1": 4
+      },
+      "input": 1381375,
+      "output": 181364,
+      "cache": 1213050
+    },
+    "B": {
+      "n": 72,
+      "passed": 65,
+      "hidden_evaluated": 65,
+      "errors": {
+        "budget_exhausted:I_precheck": 6,
+        "budget_exhausted:T": 1
+      },
+      "input": 12655701,
+      "output": 674022,
+      "cache": 12113526
+    }
+  },
+  "comparison": "D-A",
+  "point": -0.9305555555555555,
+  "ci95": [
+    -1.0,
+    -0.8194444444444445
+  ],
+  "task_means": {
+    "route-priority-table-v1": -1.0,
+    "route-plan-dag-v1": -0.8333333333333334,
+    "config-render-resolve-v1": -1.0,
+    "match-lot-calendar-v1": -1.0,
+    "etl-join-aggregate-v1": -1.0,
+    "route-lifecycle-v1": -1.0,
+    "config-adapter-vs-entry-v1": -1.0,
+    "config-home-isolation-v1": -1.0,
+    "match-vwap-window-v1": -1.0,
+    "window-dedup-late-v1": -1.0,
+    "route-nomatch-contract-v1": -0.3333333333333333,
+    "config-param-passthrough-v1": -1.0
+  }
+}

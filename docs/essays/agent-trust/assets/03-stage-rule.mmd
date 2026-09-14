@@ -1,0 +1,12 @@
+flowchart TB
+    A["两批旧小型 CLI 实验<br/>分开计分，同一总资源上限"]
+    A --> B["主实验 · 360次<br/>阶段用尽即终止整项任务"]
+    A --> D["探索补充 · 144次<br/>阶段用尽仍可带着已有工作继续"]
+    B --> C["专家委员会 0 / 72<br/>同批单模型 67 / 72"]
+    D --> E["专家委员会 61 / 72<br/>同批新单模型 69 / 72"]
+    C --> F["失败集中在分析阶段<br/>没有进入最终验收"]
+    E --> G["含8次控制器中断，按规则计0<br/>不足以断言统计上整体更差"]
+    classDef stop fill:#fae9df,stroke:#bf5a3d,color:#623c30;
+    classDef go fill:#e5f0ef,stroke:#16756f,color:#183c3b;
+    class B,C,F stop;
+    class D,E,G go;

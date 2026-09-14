@@ -1,16 +1,20 @@
 # VibeSOP Roadmap
 
-> **Version**: 8.2.0
-> **最后更新 Last Updated**: 2026-09-07
+> **当前发行 Current release**: 8.3.0
+> **最后更新 Last Updated**: 2026-09-14
 > **当前锁**：`.omx/artifacts/next-opt-design-v1.md`（三路对抗 + kimi/pi 确认 APPROVE_WITH_NITS）
 
 ---
 
 ## Current direction (2026-09) — 图书管理员先可信
 
-方法论与八轮实验把产品命题改了口：技能图集是可点名方法卡，不是常驻专家编制；找不到匹配是成功。W1（D1–D5）已随 **8.3.0 交付**（`disable-model-invocation` 一等字段与全层剥离、角色词小队拆除、`must_not_inject` hermetic 闸、no-match 改口），8.3.1 修复轮补齐 triage 层过滤（P1-2）与编排出口 fail-close（P1-1）。剩余事项以 W2 实验与 8.3.1 修复轮清单为准，**不**再扩张编排/市场/专家团。
+当前定位为**可靠 AI 辅助开发的工程工具与实证研究**，详见 [POSITIONING.md](POSITIONING.md)。产品实现、研究发现和待验证假设分别管理；定位扩展不自动扩大本周期功能承诺。
 
-### W1 — 产品停止自相矛盾（已交付于 8.3.0，归档）
+方法论与既有实验把产品命题改了口：技能图集是可点名方法卡，不是常驻专家编制；找不到匹配是正常结果。W1（D1–D5）已进入 **8.3.0**（`disable-model-invocation` 一等字段与全层剥离、角色词小队拆除、`must_not_inject` hermetic 闸、no-match 改口），内部称作 8.3.1 的修复轮补齐 triage 层过滤（P1-2）与编排出口 fail-close（P1-1）。版本事实见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。剩余事项以 W2 实验与修复轮清单为准，**不**再扩张编排/市场/专家团。
+
+近期收口：核对 8.2.0 之后的发布范围与迁移说明；按协议完成未完研究；对 recall 和反馈机制的效用保留独立验证要求。研究当前进度统一从[实验登记册](experiments/README.md)读取，下面的 W2 清单保留原任务口径，不用新实验结果直接代填。
+
+### W1 — 产品停止自相矛盾（已进入 8.3.0 源码，任务归档）
 
 锁：D1–D5，详见 v1。摘要：
 

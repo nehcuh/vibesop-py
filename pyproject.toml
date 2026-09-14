@@ -1,7 +1,7 @@
 [project]
 name = "vibesop"
 version = "8.3.0"
-description = "AI SkillOS — discover skills, route queries, orchestrate tasks, manage lifecycles. Unified dashboard, interactive cleanup, community sharing."
+description = "Engineering tools for AI-assisted development: skill routing, workflow verification, traces, and experience retrieval."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -108,6 +108,17 @@ packages = ["src/vibesop"]
 "core/registry.yaml" = "vibesop/builtin_data/core/registry.yaml"
 "core/policies" = "vibesop/builtin_data/core/policies"
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/README.md",
+    "/README.zh-CN.md",
+    "/core",
+    "/pyproject.toml",
+    "/src",
+]
+
 # ============================================
 # Ruff - Modern Python Linter
 # ============================================
@@ -115,9 +126,13 @@ packages = ["src/vibesop"]
 target-version = "py312"
 line-length = 100
 indent-width = 4
-# .vibe/skills/ holds git-tracked third-party skill content (data, not project
-# source) — its scripts are not held to the project's lint/format bar.
-extend-exclude = [".vibe"]
+# Vendored skills, frozen research harnesses, and article rendering assets are
+# data rather than maintained project source, so they keep their recorded form.
+extend-exclude = [
+    ".vibe",
+    "docs/essays/agent-trust/assets",
+    "docs/experiments",
+]
 
 [tool.ruff.lint]
 select = [
@@ -335,4 +350,3 @@ exclude_lines = [
 # (The previous duplicate [dependency-groups].dev diverged from it, which is what
 # broke CI's test job: `uv sync --extra dev` installed the extra but not the
 # group's pytest plugins.)
-

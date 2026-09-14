@@ -1,0 +1,60 @@
+# Candidate resource ceilings. Informal calibration may replace these numbers
+# in freeze.json. Do not treat this file as a completed freeze.
+model:
+  request: deepseek-v4-flash
+  served_as: DeepSeek-V4.1-Flash
+  expected_response_model: deepseek-flash
+  temperature: 0
+  thinking:
+    type: disabled
+  sdk_max_retries: 0
+  alias_limitation: >
+    The request name deepseek-v4-flash is redirected by the vendor to
+    DeepSeek-V4.1-Flash; responses currently report model deepseek-flash.
+    This does not freeze weights. Record request name, response model, and
+    service window on every call. Temperature is ignored if thinking is left
+    on; this experiment always sends extra_body thinking.type=disabled.
+budget:
+  T_completion_tokens: 24000
+  I_prompt_tokens: 400000
+  K_tool_calls: 120
+  hang_timeout_s: 600
+  per_call_cap: remaining_T
+  per_loop_max_turns: null
+  model_call_cap: null
+  identical_for_all_arms: true
+  notes: >
+    A may consume the full T/I/K. There is no extra 6000 per-call cap and no
+    per-Loop turn cap that would give multi-agent arms more calls than A.
+    The actual stop conditions are T, I, K, hang_timeout_s, and (for C/D/E)
+    per-member stage caps. Unused stage tokens transfer forward.
+    Reasoning tokens count in T. Cache hit tokens count in I. Tool calls count in K.
+    Limits are enforced before each request using remaining T and a UTF-8 size
+    precheck for I. Stage exhaustion is reported as stage_budget_exhausted,
+    not as global budget_exhausted.
+stage_fractions:
+  C_D:
+    independent_each: 0.10
+    exchange_total: 0.10
+    exchange_reserved_per_member: split_of_10_percent
+    integrate: 0.60
+  E:
+    plan: 0.20
+    workers_total: 0.50
+    worker_reserved_each: split_of_50_percent
+    integrate: 0.30
+pricing_offpeak_usd_per_mtok:
+  cache_hit_input: 0.003
+  cache_miss_input: 0.15
+  output: 0.6
+  source: https://api-docs.deepseek.com/quick_start/pricing/
+  not_an_invoice: true
+docker:
+  image_name: python:3.12-slim
+  image_id: sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9
+execution:
+  concurrency: 8
+  seed: 20260913
+  max_new_first_batch: 12
+  independent_client_ledger_workspace_recorder: true
+  wall_clock_not_a_result: true

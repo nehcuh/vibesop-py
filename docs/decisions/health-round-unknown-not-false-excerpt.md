@@ -1,6 +1,6 @@
 # Health 轮「未知 ≠ 错误」裁决（记忆摘录）
 
-> **性质**：记忆摘录入库。原文仅存于 Claude 项目记忆（`~/.claude/projects/-Users-huchen-Projects-vibesop-py/memory/feedback-health-round-unknown-not-false.md`，originSession a1d207ac），仓库内无独立测量 artifact——按 F10「凡被 tracked 文档引用的产物必须在 tracked 路径」原则，摘录入库供 `docs/research-survey.md` §2 工具 #3 引用。**发生日期未在记忆内记录**（记忆条目记录于 2026-09-09）；证据等级「记忆摘录【文档】」，未复测。
+> **性质**：记忆摘录入库。原文仅存于 Claude 项目记忆（`~/.claude/projects/-Users-huchen-Projects-vibesop-py/memory/feedback-health-round-unknown-not-false.md`，originSession a1d207ac），仓库内无独立测量 artifact——按 F10「凡被 tracked 文档引用的产物必须在 tracked 路径」原则，摘录入库供 `docs/research/research-survey.md` §2 工具 #3 引用。**发生日期未在记忆内记录**（记忆条目记录于 2026-09-09）；证据等级「记忆摘录【文档】」，未复测。
 
 ## 裁决内容（原文摘录）
 

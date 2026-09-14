@@ -1,0 +1,8 @@
+flowchart TB
+    U["模糊目标<br/>做一个量化驾驶舱"] --> S["需求与设计类 Skill<br/>找遗漏、查事实、列取舍"]
+    S --> H["人确认关键决定"]
+    H --> P["落成 spec<br/>数据、接口、边界、验收"]
+    P --> E["执行模型实现<br/>未必再读原方法卡"]
+    E --> V["按 spec 验收"]
+    classDef insight fill:#fff4df,stroke:#b7873d,color:#654811;
+    class P insight;

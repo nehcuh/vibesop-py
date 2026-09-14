@@ -1,0 +1,11 @@
+{
+  "experiment": "multi-expert-calibration",
+  "runs": {
+    "original_path": "docs/experiments/multi-expert-calibration/runs",
+    "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-calibration/runs",
+    "file_count": 428,
+    "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-calibration/runs-manifest.json",
+    "manifest_sha256": "4e98f1adab6adb61980c51cd0f1c3b44489a2d030052de8a9854f3ca3078f04d"
+  },
+  "status": "archived; original bytes retained; local compatibility link exists"
+}

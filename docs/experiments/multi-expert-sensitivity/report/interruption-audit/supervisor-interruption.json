@@ -1,0 +1,281 @@
+{
+  "at": "2026-09-13T03:51:46.288807+00:00",
+  "cause": "Grok headless background wait timeout600 killed pending background work at2026-09-13T03:46:53Z; confirmed stderr; runner no longer present",
+  "completed": 123,
+  "running_interrupted": 8,
+  "not_started": 13,
+  "rows": [
+    {
+      "allocation_id": "window-dedup-late-v1-brief-D_soft-r0",
+      "arm": "D_soft",
+      "request_count": 6,
+      "response_count": 5,
+      "result_before_interrupt": {
+        "task_id": "window-dedup-late-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "brief",
+        "repeat": 0,
+        "allocation_id": "window-dedup-late-v1-brief-D_soft-r0",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:40.199965+00:00",
+        "task_hash": "8fbcc0f489466566a4c26645e7b2d21e7fcaaeb26ae1dde788cd9d99de4a5c98",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r2",
+      "arm": "D_soft",
+      "request_count": 30,
+      "response_count": 29,
+      "result_before_interrupt": {
+        "task_id": "config-render-resolve-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "brief",
+        "repeat": 2,
+        "allocation_id": "config-render-resolve-v1-brief-D_soft-r2",
+        "status": "running",
+        "started_at": "2026-09-13T03:45:45.048239+00:00",
+        "task_hash": "b1a6589e16cec2480629af96a5618e9a7604f64c954ec2981fe5c7bce5deccfb",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-D_soft-r0",
+      "arm": "D_soft",
+      "request_count": 2,
+      "response_count": 1,
+      "result_before_interrupt": {
+        "task_id": "route-priority-table-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "full",
+        "repeat": 0,
+        "allocation_id": "route-priority-table-v1-full-D_soft-r0",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:50.228064+00:00",
+        "task_hash": "796d23edc85a9163ae8d9582a300158f75a177b0ba530f2b7898877cfc96d1b8",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-A-r0",
+      "arm": "A",
+      "request_count": 5,
+      "response_count": 4,
+      "result_before_interrupt": {
+        "task_id": "route-priority-table-v1",
+        "arm": "A",
+        "flow_arm": "A",
+        "spec_variant": "full",
+        "repeat": 0,
+        "allocation_id": "route-priority-table-v1-full-A-r0",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:47.975845+00:00",
+        "task_hash": "796d23edc85a9163ae8d9582a300158f75a177b0ba530f2b7898877cfc96d1b8",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "route-lifecycle-v1-full-D_soft-r1",
+      "arm": "D_soft",
+      "request_count": 16,
+      "response_count": 15,
+      "result_before_interrupt": {
+        "task_id": "route-lifecycle-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "full",
+        "repeat": 1,
+        "allocation_id": "route-lifecycle-v1-full-D_soft-r1",
+        "status": "running",
+        "started_at": "2026-09-13T03:45:51.115556+00:00",
+        "task_hash": "3e6b454c4f6c3debf527f7d12562b163eb9209a1947e12d813d75e90beeab184",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "match-vwap-window-v1-brief-D_soft-r2",
+      "arm": "D_soft",
+      "request_count": 12,
+      "response_count": 11,
+      "result_before_interrupt": {
+        "task_id": "match-vwap-window-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "brief",
+        "repeat": 2,
+        "allocation_id": "match-vwap-window-v1-brief-D_soft-r2",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:26.299208+00:00",
+        "task_hash": "d95d1bbcfb0d9efab48cf83f1de2d9c7e2805fa86c39a5085e3e6399262f17c7",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r0",
+      "arm": "D_soft",
+      "request_count": 3,
+      "response_count": 2,
+      "result_before_interrupt": {
+        "task_id": "config-render-resolve-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "brief",
+        "repeat": 0,
+        "allocation_id": "config-render-resolve-v1-brief-D_soft-r0",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:52.464659+00:00",
+        "task_hash": "b1a6589e16cec2480629af96a5618e9a7604f64c954ec2981fe5c7bce5deccfb",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    },
+    {
+      "allocation_id": "route-priority-table-v1-brief-D_soft-r0",
+      "arm": "D_soft",
+      "request_count": 11,
+      "response_count": 11,
+      "result_before_interrupt": {
+        "task_id": "route-priority-table-v1",
+        "arm": "D_soft",
+        "flow_arm": "D",
+        "spec_variant": "brief",
+        "repeat": 0,
+        "allocation_id": "route-priority-table-v1-brief-D_soft-r0",
+        "status": "running",
+        "started_at": "2026-09-13T03:46:17.963958+00:00",
+        "task_hash": "796d23edc85a9163ae8d9582a300158f75a177b0ba530f2b7898877cfc96d1b8",
+        "model_request": "deepseek-v4-flash",
+        "temperature": 0,
+        "thinking": {
+          "type": "disabled"
+        },
+        "limits": {
+          "per_loop_max_turns": null,
+          "model_call_cap": null,
+          "identical_for_all_arms": true,
+          "enforced": [
+            "T",
+            "I",
+            "K",
+            "hang_timeout_s",
+            "stage_caps"
+          ]
+        }
+      }
+    }
+  ]
+}

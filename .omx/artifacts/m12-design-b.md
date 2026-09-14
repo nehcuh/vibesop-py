@@ -173,7 +173,7 @@ elif cluster 成员是 miss 路由:  走新门 span_count≥3 AND resolved_rate�
 
 **迁移路径**：
 1. M1 落地桥与结局信号后，新数据自然流入；旧 spans.jsonl 无 tool_call span，旧 miss 簇走 `behavior_evidence: unavailable` 降级路径，无需回填迁移。
-2. `clusters_from_analytics` 标 deprecated，一个版本后删除；`SkillSuggestionCollector.add_missed_query` 的调用方（cli/main.py:280）改为读候选池，collector 本身保留给 sequence-pattern 建议（它本来就只消费工具序列模式，docs/decisions/_review-sprint1-evolution-pi.md:96 明确过两者不该混）。
+2. `clusters_from_analytics` 标 deprecated，一个版本后删除；`SkillSuggestionCollector.add_missed_query` 的调用方（cli/main.py:280）改为读候选池，collector 本身保留给 sequence-pattern 建议（它本来就只消费工具序列模式，docs/archive/reviews/observability/_review-sprint1-evolution-pi.md:96 明确过两者不该混）。
 
 ## 7. Dashboard 端点契约（问题 5 的前半）
 

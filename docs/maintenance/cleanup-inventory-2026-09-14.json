@@ -1,0 +1,480 @@
+{
+  "captured_at": "2026-09-14T01:00:52.080467+00:00",
+  "main_head": "de5370add3284ec45beef4bf10c469a687a0ad0c",
+  "remote_state": "local refs only; no fetch performed",
+  "worktrees": [
+    {
+      "path": "/Users/huchen/Projects/vibesop-py",
+      "branch": "main",
+      "head": "de5370add3284ec45beef4bf10c469a687a0ad0c",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M docs/INDEX.md"
+      ],
+      "untracked_count": 20451,
+      "action": "retain-primary",
+      "result": "retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-A-claude",
+      "branch": "feat/evo-A",
+      "head": "0abbd6efa272b8b4caf8c003fa9c2d9fb86c4d1d",
+      "commits_not_in_main": 9,
+      "tracked_changes": [],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-A-claude",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-B-pi",
+      "branch": "feat/evo-B",
+      "head": "e1a94b73f4b1e07897162fdc4cb3575f5347c603",
+      "commits_not_in_main": 10,
+      "tracked_changes": [
+        " M PROJECT_CONTEXT.md",
+        " M memory/overview.md",
+        " M memory/project-knowledge.md",
+        " M memory/session.md"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-B-pi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-C-kimi",
+      "branch": "feat/evo-C",
+      "head": "ae3a1ab9185ee91d12a354d1b689dae3e9002d66",
+      "commits_not_in_main": 2,
+      "tracked_changes": [],
+      "untracked_count": 7,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-C-kimi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-Cgold-kimi",
+      "branch": "feat/evo-Cgold",
+      "head": "e63c47b61f93c1e1ded79a720d11a5d4ae84ddee",
+      "commits_not_in_main": 1,
+      "tracked_changes": [],
+      "untracked_count": 7,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-Cgold-kimi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-D1-claude",
+      "branch": "feat/evo-D1",
+      "head": "a5f4878deb4b2ffcd6ad5b7aa196157486caba64",
+      "commits_not_in_main": 1,
+      "tracked_changes": [],
+      "untracked_count": 7,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-D1-claude",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-D2-claude",
+      "branch": "feat/evo-D2",
+      "head": "f7293b450e83d42a723986298f9f29a5830b50ba",
+      "commits_not_in_main": 2,
+      "tracked_changes": [],
+      "untracked_count": 7,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-D2-claude",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-E-pi",
+      "branch": "feat/evo-E",
+      "head": "c8a6e87ccbdb23b1c8c0f541efc0fc515cc7bb68",
+      "commits_not_in_main": 1,
+      "tracked_changes": [],
+      "untracked_count": 7,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-E-pi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-evo-wave1",
+      "branch": "feat/evo-wave1",
+      "head": "036f30c7c745ceab314e793fc4fdbdaed9ecea30",
+      "commits_not_in_main": 17,
+      "tracked_changes": [],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-evo-wave1",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-health-claude",
+      "branch": "codex/health-learning",
+      "head": "461c51402c521186d99442c7b44f0a3a09e675be",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/core/feedback.py",
+        " M src/vibesop/core/skills/feedback_loop.py",
+        " M tests/core/skills/test_feedback_loop.py",
+        " M tests/core/test_feedback.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-health-claude",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-health-grok",
+      "branch": "codex/health-routing",
+      "head": "461c51402c521186d99442c7b44f0a3a09e675be",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/core/orchestration/plan_builder.py",
+        " M src/vibesop/core/orchestration/task_decomposer.py",
+        " M src/vibesop/core/routing/orchestrator.py",
+        " M src/vibesop/utils/json_extract.py",
+        " M tests/core/orchestration/test_plan_builder.py",
+        " M tests/core/orchestration/test_task_decomposer.py",
+        " M tests/utils/test_json_extract.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-health-grok",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-health-kimi",
+      "branch": "codex/health-adapters",
+      "head": "461c51402c521186d99442c7b44f0a3a09e675be",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/adapters/_content.py",
+        " M src/vibesop/adapters/templates/pi/AGENTS.md.j2",
+        " M src/vibesop/adapters/templates/pi/AGENTS.md.project.j2",
+        " M src/vibesop/adapters/templates/pi/extensions/vibesop-route.ts.j2",
+        " M src/vibesop/adapters/templates/shared/SKILL.md.j2",
+        " M tests/adapters/test_skill_md_template.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-health-kimi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-health-pi",
+      "branch": "codex/health-validation",
+      "head": "461c51402c521186d99442c7b44f0a3a09e675be",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M scripts/eval_routing.py",
+        " M scripts/replay_routing_baseline.py",
+        " M src/vibesop/core/routing/benchmark.py",
+        " M tests/scripts/test_replay_routing_baseline.py",
+        " M tests/test_routing_baseline.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-health-pi",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-next-claude-20260909",
+      "branch": "codex/practice-next-claude",
+      "head": "8b67225929f51cf0920197860d6605e376d4dc27",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/core/orchestration/plan_tracker.py",
+        " M tests/core/orchestration/test_plan_tracker.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-next-claude-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-next-grok-20260909",
+      "branch": "codex/practice-next-grok",
+      "head": "8b67225929f51cf0920197860d6605e376d4dc27",
+      "commits_not_in_main": 0,
+      "tracked_changes": [],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-next-grok-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-next-kimi-20260909",
+      "branch": "codex/practice-next-kimi",
+      "head": "8b67225929f51cf0920197860d6605e376d4dc27",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/adapters/kimi_cli.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-next-kimi-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-next-pi-20260909",
+      "branch": "codex/practice-next-pi",
+      "head": "8b67225929f51cf0920197860d6605e376d4dc27",
+      "commits_not_in_main": 0,
+      "tracked_changes": [],
+      "untracked_count": 3,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-next-pi-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-py/.experiment/worktree",
+      "branch": "codex/fixed-role-committee-v2",
+      "head": "bacd55e1ec93f18c56259d5ec6917190f2262123",
+      "commits_not_in_main": 32,
+      "tracked_changes": [
+        " M docs/experiments/README.md",
+        " M docs/experiments/fixed-role-v2/EXECUTION.md",
+        " M docs/experiments/fixed-role-v2/README.md",
+        " M docs/experiments/fixed-role-v2/SHARED_EXECUTABLE_READY.md",
+        " M docs/experiments/fixed-role-v2/STATUS.md",
+        " M docs/experiments/fixed-role-v2/baselines/CODEBASES.md",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/SNAPSHOT.json",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/chrome-extension/package.json",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/chrome-extension/src/sidepanel/utils/normalize-config.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/package.json",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/src/cli-version.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/src/message-router/handlers/config.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/src/ws-auth.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/src/ws/lifecycle.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-cmspark/companion/tests/protocol.test.ts",
+        " M docs/experiments/fixed-role-v2/baselines/cb-rstdx/SNAPSHOT.json",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/__init__.py",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/__init__.pyi",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/_async.py",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/exceptions.py",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/helpers.py",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/python/rstdx/models.py",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/calendar.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/client.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/client_async.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/mod.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/pool.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/pool_async.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/query.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/query_async.rs",
+        " D docs/experiments/fixed-role-v2/baselines/cb-rstdx/src/python/utils.rs",
+        " M docs/experiments/fixed-role-v2/baselines/cb-vibesop/SNAPSHOT.json",
+        " M docs/experiments/fixed-role-v2/freeze.cal.template.json",
+        " M docs/experiments/fixed-role-v2/freeze.gcal.template.json",
+        " M docs/experiments/fixed-role-v2/harness/budget.py",
+        " M docs/experiments/fixed-role-v2/harness/design.md",
+        " M docs/experiments/fixed-role-v2/harness/docker_eval.py",
+        " M docs/experiments/fixed-role-v2/harness/freeze.py",
+        " M docs/experiments/fixed-role-v2/harness/loop.py",
+        " M docs/experiments/fixed-role-v2/harness/resources.py",
+        " M docs/experiments/fixed-role-v2/harness/resources.yaml",
+        " M docs/experiments/fixed-role-v2/harness/runner.py",
+        " M docs/experiments/fixed-role-v2/harness/shared_tests.py",
+        " M docs/experiments/fixed-role-v2/images/rust.Dockerfile",
+        " M docs/experiments/fixed-role-v2/roles/common_system.md"
+      ],
+      "untracked_count": 25096,
+      "action": "retain-unfinished-experiment",
+      "result": "retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-verify-ci-20260909",
+      "branch": "codex/verify-ci-20260909",
+      "head": "99185be9596d77db12104405216a5240e3b1edcb",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/adapters/_shared.py",
+        " M src/vibesop/adapters/claude_code.py",
+        " M src/vibesop/adapters/grok_build.py",
+        " M src/vibesop/cli/confirmation.py",
+        " M src/vibesop/cli/render.py",
+        " M src/vibesop/core/observability/skill_promote.py",
+        " M src/vibesop/core/observability/tool_call_bridge.py",
+        " M src/vibesop/core/observability/tracer.py",
+        " M src/vibesop/core/orchestration/plan_tracker.py",
+        " M src/vibesop/dashboard/server.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-verify-ci-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-verify-claude-20260909",
+      "branch": "codex/verify-claude-20260909",
+      "head": "99185be9596d77db12104405216a5240e3b1edcb",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/core/orchestration/plan_builder.py",
+        " M tests/core/orchestration/test_workflow_pattern.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-verify-claude-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-verify-grok-20260909",
+      "branch": "codex/verify-grok-20260909",
+      "head": "99185be9596d77db12104405216a5240e3b1edcb",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M Makefile",
+        " M core/registry.yaml",
+        " M scripts/verify-release.sh",
+        " M tests/benchmark/routing_baseline.json",
+        " M tests/core/skills/test_registry_sync.py"
+      ],
+      "untracked_count": 3,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-verify-grok-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-verify-kimi-20260909",
+      "branch": "codex/verify-kimi-20260909",
+      "head": "99185be9596d77db12104405216a5240e3b1edcb",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/agent/runtime/plan_executor.py",
+        " M src/vibesop/agent/runtime/skill_injector.py",
+        " M tests/agent/runtime/test_plan_executor.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-verify-kimi-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-verify-pi-20260909",
+      "branch": "codex/verify-pi-20260909",
+      "head": "99185be9596d77db12104405216a5240e3b1edcb",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M .github/workflows/ci.yml",
+        " M CHANGELOG.md",
+        " M Makefile",
+        " M README.md",
+        " M README.zh-CN.md",
+        " M docs/EXTERNAL_SKILLS_EXAMPLES.md",
+        " M docs/EXTERNAL_SKILLS_GUIDE.md",
+        " M docs/INDEX.md",
+        " M docs/OMX_GUIDE.md",
+        " M docs/PHILOSOPHY.md",
+        " M docs/PROJECT_STATUS.md",
+        " M docs/QUICKSTART_DEVELOPERS.md",
+        " M docs/QUICKSTART_USERS.md",
+        " M docs/README.md",
+        " M docs/SKILLS_GUIDE.md",
+        " M docs/TRUST_AND_SECURITY_AUDIT.md",
+        " M docs/USE_CASES.en.md",
+        " M docs/USE_CASES.md",
+        " M docs/architecture/ARCHITECTURE.md",
+        " M docs/architecture/README.md",
+        " M docs/architecture/cross-platform-support.md",
+        " M docs/architecture/external-integrations.md",
+        " M docs/architecture/overview.md",
+        " M docs/architecture/routing-system.md",
+        " M docs/architecture/three-layers.md",
+        " M docs/cold-start-guide.md",
+        " M docs/dev/platform-invariants.md",
+        " M docs/proposals/skill-market-search-and-feedback-loop.md",
+        " M docs/semantic/guide.md",
+        " M docs/triggers/api.md",
+        " M docs/triggers/guide.md",
+        " M docs/triggers/patterns.md",
+        " M docs/user/session-intelligent-routing.md",
+        " M docs/user/troubleshooting.md",
+        " M docs/user/workflows.md",
+        " M pyproject.toml",
+        " M scripts/verify-release.sh",
+        " M scripts/verify-type-checking.sh",
+        " M uv.lock"
+      ],
+      "untracked_count": 4,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-verify-pi-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-win-ci-20260909",
+      "branch": "codex/win-ci-20260909",
+      "head": "42f5c18f48735459d4d931d5fdf0ac429e627e6b",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M .github/workflows/ci.yml"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-win-ci-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-win-claude-20260909",
+      "branch": "codex/win-claude-20260909",
+      "head": "42f5c18f48735459d4d931d5fdf0ac429e627e6b",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M src/vibesop/adapters/kimi_cli.py",
+        " M tests/adapters/test_kimi_config_merge.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-win-claude-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-win-grok-20260909",
+      "branch": "codex/win-grok-20260909",
+      "head": "42f5c18f48735459d4d931d5fdf0ac429e627e6b",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M tests/scripts/test_release_checks.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-win-grok-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-win-kimi-20260909",
+      "branch": "codex/win-kimi-20260909",
+      "head": "42f5c18f48735459d4d931d5fdf0ac429e627e6b",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M tests/agent/runtime/test_plan_availability_handoff.py",
+        " M tests/agent/runtime/test_plan_content_safety.py",
+        " M tests/conformance/test_agent_runtime.py"
+      ],
+      "untracked_count": 0,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-win-kimi-20260909",
+      "result": "archived and retired; branch retained"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-win-pi-20260909",
+      "branch": "codex/win-pi-20260909",
+      "head": "42f5c18f48735459d4d931d5fdf0ac429e627e6b",
+      "commits_not_in_main": 0,
+      "tracked_changes": [
+        " M tests/adapters/test_pi_route_extension.py",
+        " M tests/adapters/test_route_process_boundary.py"
+      ],
+      "untracked_count": 1,
+      "action": "archive-before-retire",
+      "archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/worktrees/vibesop-win-pi-20260909",
+      "result": "archived and retired; branch retained"
+    }
+  ],
+  "stash": [
+    "stash@{0}: On docs/skill-routing-explained: wip: alternate skill-routing-explained draft after PR 117 merge"
+  ],
+  "execution_status": "completed after explicit user approval; see cleanup-verification-2026-09-14.json",
+  "full_original_inventory": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/cleanup-inventory-before.json"
+}

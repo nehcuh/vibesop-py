@@ -1,0 +1,228 @@
+{
+  "at": "2026-09-13T02:38:20.270573+00:00",
+  "assignments": 360,
+  "unique": 360,
+  "freeze_verified": true,
+  "manifest_sha256": "0b9b5f8ea460e4d496302f559f7e3900835dafc1e7f95b637435aa49ceb0d2f4",
+  "image_id_matches": true,
+  "image_runtime_caveat": "common.py uses tag to launch, image ID checked at batch boundary, not digest in argv",
+  "errors": [],
+  "rows": [
+    {
+      "allocation": "route-priority-table-v1-full-A-r0",
+      "status": "passed",
+      "calls": 6,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 18075,
+        "t": 2291,
+        "cache": 15488
+      }
+    },
+    {
+      "allocation": "route-plan-dag-v1-full-C-r0",
+      "status": "failed",
+      "calls": 7,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "stage_budget_exhausted:independent-0",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 21714,
+        "t": 2400,
+        "cache": 18944
+      }
+    },
+    {
+      "allocation": "config-render-resolve-v1-full-A-r1",
+      "status": "passed",
+      "calls": 7,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 20601,
+        "t": 2115,
+        "cache": 18176
+      }
+    },
+    {
+      "allocation": "match-lot-calendar-v1-full-E-r1",
+      "status": "passed",
+      "calls": 20,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 178190,
+        "t": 9154,
+        "cache": 138752
+      }
+    },
+    {
+      "allocation": "etl-join-aggregate-v1-brief-D-r2",
+      "status": "failed",
+      "calls": 6,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "stage_budget_exhausted:independent-0",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 18866,
+        "t": 2400,
+        "cache": 16384
+      }
+    },
+    {
+      "allocation": "route-priority-table-v1-full-B-r1",
+      "status": "passed",
+      "calls": 14,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 68679,
+        "t": 5510,
+        "cache": 63104
+      }
+    },
+    {
+      "allocation": "etl-join-aggregate-v1-full-C-r1",
+      "status": "failed",
+      "calls": 7,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "stage_budget_exhausted:independent-0",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 23984,
+        "t": 2400,
+        "cache": 21376
+      }
+    },
+    {
+      "allocation": "route-lifecycle-v1-brief-B-r0",
+      "status": "passed",
+      "calls": 10,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 57360,
+        "t": 6119,
+        "cache": 51456
+      }
+    },
+    {
+      "allocation": "route-plan-dag-v1-full-D-r1",
+      "status": "failed",
+      "calls": 7,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "stage_budget_exhausted:independent-0",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 22654,
+        "t": 2400,
+        "cache": 19840
+      }
+    },
+    {
+      "allocation": "config-adapter-vs-entry-v1-brief-D-r0",
+      "status": "failed",
+      "calls": 7,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "stage_budget_exhausted:independent-0",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 23429,
+        "t": 2400,
+        "cache": 20992
+      }
+    },
+    {
+      "allocation": "config-home-isolation-v1-full-E-r1",
+      "status": "failed",
+      "calls": 24,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": "budget_exhausted:I_precheck",
+      "violations": null,
+      "member_violations": null,
+      "hidden_evaluated": false,
+      "tokens": {
+        "i": 264649,
+        "t": 8042,
+        "cache": 220032
+      }
+    },
+    {
+      "allocation": "route-lifecycle-v1-full-E-r2",
+      "status": "passed",
+      "calls": 17,
+      "usage_match": true,
+      "models": [
+        "deepseek-flash"
+      ],
+      "error": null,
+      "violations": [],
+      "member_violations": null,
+      "hidden_evaluated": true,
+      "tokens": {
+        "i": 133806,
+        "t": 5212,
+        "cache": 105728
+      }
+    }
+  ]
+}

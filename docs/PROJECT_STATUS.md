@@ -1,269 +1,48 @@
 # VibeSOP Project Status
 
-> **Last Updated**: 2026-07-18
-> **Version**: 8.3.0
-> **Status**: 🟢 Production Ready (SkillOS — Spec v3.0, Conformance Suite, Agent Runtime, Multi-Agent Squad)
+> 核对日期：2026-09-14。本文区分源码状态、公开发行和研究进度；不以历史测试记录宣称整个工作区已验收。
 
-## Executive Summary
+## 项目定位
 
-VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating System (SkillOS) for developer tools. The project has successfully completed all planned improvements across security, cross-platform compatibility, architecture, and documentation. The control-panel extension was split into its own repository ([vibesop-py-panel](https://github.com/nehcuh/vibesop-py-panel)) on 2026-07-18.
+VibeSOP 是**围绕可靠 AI 辅助开发的工程工具与实证研究项目**。SkillOS 描述技能管理子系统；当前仓库还包含任务计划与验证交付、执行观测、经验检索、定时任务及相关实验。定位依据与边界见 [POSITIONING.md](POSITIONING.md)。
 
-## Current Status
+## 版本事实
 
-### ✅ Production Ready
+| 对象 | 已核对状态 | 依据 |
+|---|---|---|
+| 当前源码版本 | **8.3.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
+| 当前 PyPI 发行 | **8.3.0** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json) |
+| 当前 GitHub Release | **v8.3.0** | [GitHub Release](https://github.com/nehcuh/vibesop-py/releases/tag/v8.3.0) |
+| 上一公开版本 | **8.2.0**，2026-09-03 发布 | [GitHub Release](https://github.com/nehcuh/vibesop-py/releases/tag/v8.2.0) |
+| 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复 |
+| SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |
 
-**Key Metrics:**
-- **Test Status**: 4,095 tests collected (4,066 passing in the default CI filter, 13 skipped — mostly external-environment dependent)
-- **Security**: AST-based safe evaluation, no eval() usage; T1 supply-chain hardening landed (F-01/F-02/F-03/F-10)
-- **Cross-Platform**: Windows, macOS, Linux compatible
-- **Documentation**: Complete with organized archive
-- **Architecture**: Clean, testable, dependency injection
-- **Code Quality**: No critical issues, maintainable
+8.3.0 汇总了 8.2.0 之后的验证器与计划交付合同、路由与阻断行为、跨平台修复，以及新的项目定位和研究资料结构。内部“8.3.1 修复批次”属于本次 8.3.0 发行范围，不代表独立的软件包版本。
 
-## Core Capabilities
+## 工程能力与验证边界
 
-### 1. Intelligent Orchestration (Default Mode)
-- **Multi-Intent Detection**: Automatic detection of complex queries with multiple intents
-- **Task Decomposition**: LLM-based query splitting into independently executable sub-tasks
-- **Execution Planning**: Automatic serial/parallel strategy with dependency inference
-- **Streaming Progress**: Real-time phase-by-phase orchestration display
-- **Error Recovery**: Skip/retry/abort strategies per step
+| 范围 | 当前源码情况 | 不据此推断 |
+|---|---|---|
+| 技能与平台 | 技能发现/安装/作用域/路由/生命周期；多个代理的配置适配 | 所有平台具有相同 hook 或工具执行语义 |
+| 计划与交付 | 计划跟踪、验证器选择、可用性和内容安全阻断；[合同](architecture/verification-contract.md) | 生成计划就已执行；模型声称通过就可发布 |
+| 观测与经验 | trace、回放、聚类、recall、反馈与项目 pool | 记忆量增加必然提高任务成功率 |
+| 持续任务 | loop 存储、调度及显式执行路径 | 任意任务均能无需监督地安全完成 |
+| 8.3.0 文档与发行 | 同步定位、发行说明、入口文档与 CLI 介绍 | 未完成研究自动成为已发行产品能力 |
 
-### 2. Intelligent Routing (Foundation)
-- **94% Accuracy**: AI semantic triage with multi-layer fallback
-- **Multi-Language**: English + Chinese support
-- **Preference Learning**: Gets better with use
-- **4-Stage Cascade**: Explicit → Scenario+Semantic Index → AI Triage → Matcher aggregation (keyword/TF-IDF/embedding/Levenshtein in parallel); No Match / Fallback LLM are terminal
+历史测试结果保留在对应变更、验收凭据和研究报告中。当前可信度应按具体功能、执行路径与最近实际验证判断，不再使用“全部计划完成”“全项目 production-ready”作为总括。
 
-### 3. Skill Lifecycle Management
-- **Lifecycle States**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED
-- **Scope System**: Project-level vs global skill isolation
-- **Enable/Disable**: Runtime skill toggling without uninstall
-- **Transition Validation**: Enforced valid state transitions
+## 研究状态
 
-### 4. Feedback Loop
-- **Usage Analytics**: JSONL storage of execution records
-- **Quality Assessment**: Skill satisfaction tracking and low-quality detection
-- **User Feedback**: Post-execution interactive satisfaction collection
-- **Continuous Improvement**: Data-driven routing optimization
+- 研究综述覆盖既有技能/规格/harness、路由、评审与学习闭环记录，见[研究索引](research/README.md)。它是有时间边界的证据汇总。
+- 旧多专家主实验与敏感性队列已结算；固定角色委员会 v2 尚未完成。当前登记与后续记录见[实验索引](experiments/README.md)。
+- evo 优化提交仍保留在分支中；未完成的固定角色实验保留单独 worktree。不能将这些成果直接描述为主线或 PyPI 已发行能力。
+- 2026-09-14 已归档退役 26 个旧工作目录；研究原始数据有校验清单和恢复方法，见[清理结果](maintenance/cleanup-result-2026-09-14.md)。
 
-### 5. Developer Experience
-- **Quick Start**: Developer and user guides (5-minute setup)
-- **Clear Philosophy**: "Discovery > Execution" positioning
-- **Bilingual**: Chinese and English documentation
-- **Archive**: Historical documents preserved and organized
+## 接下来
 
-## Architecture
+1. 持续保持源码、包元数据、tag 与发行记录一致。
+2. 优先验证技能选择、no-match 和计划交付的可信性；保持失败、缺证据、通过状态可区分。
+3. 未完研究按各自协议收口，保留旧/新冻结版本和原始失败记录。
+4. 评估记忆、规格和多代理方法的适用条件，达到证据要求后再决定产品化。
 
-### Three-Layer Design
-1. **Discovery Layer**: Skill loading, metadata extraction, routing
-2. **Execution Layer**: Workflow parsing, secure evaluation, timeout handling
-3. **Integration Layer**: CLI adapters, configuration, hooks
-
-### Key Components
-- **UnifiedRouter**: 4-stage routing cascade with AI semantic triage
-- **SkillManager**: High-level skill management API
-- **WorkflowEngine**: AST-based safe workflow execution
-- **ExternalSkillExecutor**: External skill execution with security audit
-
-### Security Enhancements
-- **AST Safe Evaluation**: Replaced eval() with ast.parse() + whitelist
-- **Built-in Sandboxing**: Only safe functions allowed in conditions
-- **Special Attribute Blocking**: `__class__`, `__bases__` access prevented
-- **Security Audit**: External skills audited before loading
-
-### Cross-Platform Compatibility
-- **ThreadPoolExecutor**: Replaced signal.SIGALRM for timeout handling
-- **No Signal Dependencies**: Eliminated Windows compatibility issues
-- **Portable Design**: Works on Windows, macOS, Linux
-
-## Documentation Structure
-
-### Current Documentation
-- **README.md** - Vision, philosophy, quick start
-- **PHILOSOPHY.md** - Core philosophy and design principles
-- **QUICKSTART_DEVELOPERS.md** - Developer-focused guide
-- **QUICKSTART_USERS.md** - User-focused guide
-- **EXTERNAL_SKILLS_GUIDE.md** - External skills specification
-- **docs/README.md** - Documentation index with archive reference
-
-### Archive Documentation
-- **docs/archive/** - Historical documents organized with README
-- Phase completion reports (PHASE1-4)
-- Project assessments and planning
-- Legacy and superseded documents
-
-## Test Results
-
-```bash
-# Core Skills Test Suite (2026-04-18)
-tests/core/skills/test_executor.py ........... 14 passed ✅
-tests/core/skills/test_workflow_safe_eval.py .. 12 passed ✅
-tests/core/skills/test_manager_integration.py .. 15 passed ✅
-─────────────────────────────────────────────────
-TOTAL: 41/41 tests passing (100%)
-```
-
-## KIMI 评审问题修复 (完成 2026-04-18)
-
-根据 KIMI 深度评审报告，已修复所有 P0 和 P1 问题：
-
-### ✅ P0 问题已修复
-- **CLI 回归**: test_execute_command_removed → test_execute_command_exists
-- **Parser 回归**: 修复工具调用检测过于严格的问题
-
-### ✅ P1 问题已修复
-- **getattr 安全漏洞**: 阻止 getattr(obj, "__class__") 形式的特殊属性访问
-- **全量测试验证** (2026-04-18): 1,501/1,502 测试通过 (99.93%)
-
-### 历史测试结果 (2026-04-18)
-```bash
-# 全量测试 (KIMI 评审时)
-TOTAL: 1,501 passed, 1 failed, 2 skipped
-覆盖率: ~73% (目标: 75%，冲刺即将完成)
-运行时间: 5分19秒
-
-# KIMI 报告的 2 个核心失败已修复
-✅ tests/cli/test_skills.py::test_execute_command_exists
-✅ tests/core/skills/test_parser_enhanced.py::test_detect_tool_call_step
-
-# 新增 getattr 安全测试 (5个)
-✅ tests/core/skills/test_getattr_security.py
-```
-
----
-
-## Recent Improvements (Completed 2026-04-18)
-
-### Phase 1: Emergency Fixes (P0)
-- Fixed test failures (AuditResult field mismatches)
-- Clarified architecture positioning
-- Implemented loader dependency injection
-
-### Phase 2: Security & Cross-Platform (P1)
-- Replaced eval() with AST safe evaluation
-- Replaced signal.SIGALRM with ThreadPoolExecutor
-- Added 12 comprehensive security tests
-
-### Phase 3: Additional Fixes (P2)
-- Fixed workflow type detection
-- Added SessionContext dependency injection
-- Fixed integration tests
-
-### Phase 4: Documentation & Cleanup
-- Created PHILOSOPHY.md core document
-- Rewrote README.md with vision
-- Created quick start guides
-- Organized archive with README
-
-## Production Readiness Checklist
-
-- ✅ **All Tests Passing**: 4,066 tests passing
-- ✅ **Security Audit**: AST-based safe evaluation, no eval()
-- ✅ **Cross-Platform**: Windows, macOS, Linux compatible
-- ✅ **Documentation**: Complete with archive organization
-- ✅ **Architecture**: Clean, testable, dependency injection
-- ✅ **Code Quality**: No critical issues, maintainable
-- ✅ **Performance**: No regressions, efficient routing
-- ✅ **Error Handling**: Comprehensive error handling
-
-## Project Philosophy
-
-### Core Principles
-1. **Lifecycle > Accumulation**: Skills should be managed, not accumulated — enable, disable, evaluate, retain, deprecate
-2. **Matching > Guessing**: Use AI routing with confidence-gated degradation, not random selection
-3. **Orchestration > Single-Skill**: Complex tasks decomposed and planned, not just one-skill dispatch
-4. **Open > Closed**: Extensible skill ecosystem with cross-platform adapters
-
-### What We Oppose
-- ❌ "One AI Agent Does Everything" - Different tasks need different approaches
-- ❌ "Keyword Matching is Enough" - Semantic understanding matters
-- ❌ "Accumulation Without Management" - Skills need lifecycle management, not infinite accumulation
-- ❌ "Closed Systems" - Open ecosystems win in the long run
-
-### What We Pursue
-- ✅ **Lifecycle Management**: Full lifecycle from discovery through retention/deprecation
-- ✅ **Semantic Understanding**: AI-powered intent recognition with confidence-gated degradation
-- ✅ **Preference Learning**: Better routing through user feedback and usage analytics
-- ✅ **Open Extensibility**: Anyone can create and share skills cross-platform
-
-## Technology Stack
-
-### Core Technologies
-- **Python 3.12+**: Modern Python with type hints
-- **Pydantic**: Data validation and settings management
-- **Pytest**: Testing framework with coverage
-- **AST**: Abstract Syntax Tree for safe evaluation
-- **ThreadPoolExecutor**: Cross-platform timeout handling
-
-### External Integrations
-- **Claude Haiku**: AI semantic triage (primary)
-- **OpenAI GPT**: AI semantic triage (fallback)
-- **Claude Code**: CLI adapter for VS Code
-- **External Skills**: SKILL.md specification format
-
-## Getting Started
-
-### For Users
-```bash
-# Install VibeSOP
-uv add vibesop
-
-# Route a task
-vibe route "帮我调试这个错误"
-
-# Get skill recommendation
-vibe skills use systematic-debugging
-```
-
-### For Developers
-```bash
-# Clone repository
-git clone https://github.com/nehcuh/vibesop-py.git
-
-# Install development dependencies
-uv sync --extra dev
-
-# Run tests
-uv run pytest tests/
-
-# Build documentation
-vibe build claude-code
-```
-
-## Recent Improvements (Completed 2026-04-25)
-
-### Phase 5: SkillOS Evolution (In Progress — Target: 4.4.x)
-- **Orchestration Preview**: Multi-intent detection + task decomposition (partial, CLI available)
-- **Streaming Progress**: Real-time phase display with Rich Live (implemented)
-- **Skill Lifecycle**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED state machine (implemented)
-- **Scope System**: Project-level vs global skill isolation (implemented)
-- **Feedback Loop**: Usage analytics + interactive satisfaction collection (partial)
-- **CLI Commands**: `vibe skill list/enable/disable/status` (implemented)
-
-## Future Roadmap
-
-### Potential Enhancements
-1. **Performance Optimization**: Reduce routing P95 from 225ms to <100ms
-2. **Additional Tests**: Increase coverage from ~73% to 75%
-3. **Lint Cleanup**: Fix 157 lint errors
-4. **Plugin System**: Extend external skills with hooks
-
-### Maintenance Priorities
-1. **Regular Testing**: Keep tests updated with new features
-2. **Documentation**: Keep guides current with API changes
-3. **Security**: Regular security audits and dependency updates
-4. **Archive**: Periodic archive cleanup and organization
-
-## Conclusion
-
-VibeSOP is **production-ready** with a solid foundation for continued development. The project successfully evolved from "只检测不使用" (only detect, don't use) to a complete Skill Operating System (SkillOS) managing the full skill lifecycle: discovery, routing, orchestration, evaluation, and retention.
-
-The combination of intelligent routing, secure execution, cross-platform compatibility, and comprehensive documentation makes VibeSOP a powerful tool for AI-assisted development workflows.
-
----
-
-**Version**: 8.3.0
-**Status**: 🟢 Production Ready — Skill Protocol Standard + Multi-Agent Squad
-**Last Updated**: 2026-07-18
-**Repository**: https://github.com/nehcuh/vibesop-py
+具体研发优先级见 [ROADMAP.md](ROADMAP.md)，文档入口见 [INDEX.md](INDEX.md)。

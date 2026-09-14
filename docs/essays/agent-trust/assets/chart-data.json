@@ -1,0 +1,86 @@
+{
+  "interim": {
+    "at": "2026-09-13T16:26:11.529557+00:00",
+    "terminal": 241,
+    "statuses": {
+      "passed": 200,
+      "failed": 41
+    },
+    "complete_tasks": 16,
+    "per_arm": {
+      "S": {
+        "n": 48,
+        "passed": 39,
+        "mean_calls": 25.395833333333332,
+        "mean_input": 794300.5208333334
+      },
+      "S+C": {
+        "n": 48,
+        "passed": 42,
+        "mean_calls": 27.5625,
+        "mean_input": 1551527.0208333333
+      },
+      "F3": {
+        "n": 48,
+        "passed": 41,
+        "mean_calls": 80.77083333333333,
+        "mean_input": 2964726.0833333335
+      },
+      "F5": {
+        "n": 48,
+        "passed": 37,
+        "mean_calls": 136.75,
+        "mean_input": 5034160.5625
+      },
+      "F7": {
+        "n": 48,
+        "passed": 40,
+        "mean_calls": 210.75,
+        "mean_input": 8235383.166666667
+      }
+    },
+    "task_ids": [
+      "cms-docs-userenv-migrate-v1",
+      "cms-feat-auth-session-v1",
+      "cms-int-daemon-stale-lock-v1",
+      "cms-int-loopback-hmac-ws-v1",
+      "cms-reg-log-event-bucket-v1",
+      "rstdx-docs-client-config-migrate",
+      "rstdx-docs-store-schema-migrate",
+      "rstdx-feat-query-retry-budget",
+      "rstdx-int-query-calendar-meta",
+      "rstdx-reg-decode-body-contract",
+      "rstdx-reg-reconnect-retry-budget",
+      "vibe-docs-hook-upgrade-v1",
+      "vibe-docs-pack-migrate-v1",
+      "vibe-feat-overlay-skill-merge-v1",
+      "vibe-reg-hook-ownership-v1",
+      "vibe-reg-path-symlink-v1"
+    ],
+    "limitations": "Completion-selected subset, not full24; descriptive only, no significance or causal extrapolation. Includes original AuthSession ambiguity scores. Currentcomplete taskcount compared only within same subset."
+  },
+  "interim_source_sha256": "f38fccd67b7153191bf2b688b05e1c0034fd0b2284c85dc95429d043aedd8e96",
+  "wikiskill": {
+    "source": "https://arxiv.org/html/2608.27454v1#S4.SS2",
+    "table": 1,
+    "models": [
+      "Qwen-3.5-9B",
+      "Qwen-3.6-27B"
+    ],
+    "no_skill": [
+      29.9,
+      39.4
+    ],
+    "wikiskill": [
+      47.4,
+      63.3
+    ]
+  },
+  "echo": {
+    "pre_fixed_baseline": 14.4,
+    "recomputed_baseline_approx": 14.34,
+    "week1": 3.57,
+    "week2": 13.0,
+    "unit": "matched hook-cli pairs/day; not independent requests"
+  }
+}

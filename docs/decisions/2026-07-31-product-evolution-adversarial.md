@@ -1,7 +1,7 @@
 # 2026-07-31 — 产品进化方向（对抗验证终裁）
 
 > **Status**: **Binding** — 取代 [2026-07-31-positioning-vs-llm-space.md](2026-07-31-positioning-vs-llm-space.md) 中的 **Phase 1→4 执行排序**；定位红线与 non-goals **仍然有效**。  
-> **Pi review**: CONDITIONAL → GO（[`_review-sprint1-evolution-merged.md`](_review-sprint1-evolution-merged.md)）；Sprint 1 接线已开工（2026-07-31）。  
+> **Pi review**: CONDITIONAL → GO（[`_review-sprint1-evolution-merged.md`](../archive/reviews/observability/_review-sprint1-evolution-merged.md)）；Sprint 1 接线已开工（2026-07-31）。
 > **Method**: 4 路并行对抗（魔鬼代言 / 主用户 persona / 工程事实 / 竞品护城河）→ 主会话综合裁决。  
 > **Persona**: 独立开发者本人（dashboard v2 已锚定；非团队 lead、非布道场景）。
 

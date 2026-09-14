@@ -1,0 +1,102 @@
+{
+  "cohort": "20260913T033401Z",
+  "n": 144,
+  "unique": 144,
+  "manifest_sha256": "77122b30f3a25a50757b9f5eae6237aa9c74dde0e23e0fb3fcf9ef788b81eb40",
+  "calls": 2404,
+  "models": {
+    "deepseek-flash": 2397
+  },
+  "issues": [],
+  "interruption_unknowns": [
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r2",
+      "request": "call-029-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "route-lifecycle-v1-full-D_soft-r1",
+      "request": "call-015-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "match-vwap-window-v1-brief-D_soft-r2",
+      "request": "call-011-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "window-dedup-late-v1-brief-D_soft-r0",
+      "request": "call-005-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-A-r0",
+      "request": "call-004-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-D_soft-r0",
+      "request": "call-001-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    },
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r0",
+      "request": "call-002-request.json",
+      "kind": "response_and_billed_usage_unknown"
+    }
+  ],
+  "usage_scope": "Known persisted usage only; interrupted pending calls may incur additional unknown billing",
+  "arms": {
+    "D_soft": {
+      "n": 72,
+      "passed": 61,
+      "interrupted": 7,
+      "hidden_evaluated": 61,
+      "errors": {
+        "budget_exhausted:K": 3,
+        "incomplete_final_response": 1,
+        "interrupted": 7
+      },
+      "input": 8418038,
+      "output": 771631,
+      "cache": 7728856
+    },
+    "A": {
+      "n": 72,
+      "passed": 69,
+      "interrupted": 1,
+      "hidden_evaluated": 69,
+      "errors": {
+        "incomplete_final_response": 2,
+        "interrupted": 1
+      },
+      "input": 1461876,
+      "output": 183911,
+      "cache": 1348084
+    }
+  },
+  "comparison": "D_soft-A",
+  "point": -0.1111111111111111,
+  "ci95": [
+    -0.23611111111111108,
+    0.0
+  ],
+  "task_means": {
+    "config-render-resolve-v1": -0.3333333333333333,
+    "config-param-passthrough-v1": 0.0,
+    "match-lot-calendar-v1": 0.0,
+    "route-priority-table-v1": -0.16666666666666666,
+    "match-vwap-window-v1": -0.16666666666666666,
+    "window-dedup-late-v1": -0.16666666666666666,
+    "route-lifecycle-v1": -0.6666666666666666,
+    "etl-join-aggregate-v1": 0.0,
+    "route-plan-dag-v1": 0.0,
+    "route-nomatch-contract-v1": 0.16666666666666666,
+    "config-home-isolation-v1": 0.0,
+    "config-adapter-vs-entry-v1": 0.0
+  },
+  "interruption_point_bounds": [
+    -0.125,
+    -0.013888888888888881
+  ]
+}

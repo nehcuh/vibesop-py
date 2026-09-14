@@ -1,0 +1,280 @@
+{
+  "da": {
+    "n_tasks": 12,
+    "n_bootstrap": 20000,
+    "seed": 20260913,
+    "point": -0.9305555555555555,
+    "ci95": [
+      -1.0,
+      -0.8194444444444445
+    ],
+    "task_means": {
+      "config-adapter-vs-entry-v1": -1.0,
+      "config-home-isolation-v1": -1.0,
+      "config-param-passthrough-v1": -1.0,
+      "config-render-resolve-v1": -1.0,
+      "etl-join-aggregate-v1": -1.0,
+      "match-lot-calendar-v1": -1.0,
+      "match-vwap-window-v1": -1.0,
+      "route-lifecycle-v1": -1.0,
+      "route-nomatch-contract-v1": -0.3333333333333333,
+      "route-plan-dag-v1": -0.8333333333333334,
+      "route-priority-table-v1": -1.0,
+      "window-dedup-late-v1": -1.0
+    },
+    "interpretation": "support_worse",
+    "threshold": 0.1,
+    "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+    "comparison": "D-A",
+    "confirmatory": true
+  },
+  "exploratory": {
+    "B-A": {
+      "n_tasks": 12,
+      "n_bootstrap": 20000,
+      "seed": 20260913,
+      "point": -0.027777777777777776,
+      "ci95": [
+        -0.125,
+        0.06944444444444443
+      ],
+      "task_means": {
+        "config-adapter-vs-entry-v1": -0.3333333333333333,
+        "config-home-isolation-v1": 0.0,
+        "config-param-passthrough-v1": 0.0,
+        "config-render-resolve-v1": -0.3333333333333333,
+        "etl-join-aggregate-v1": -0.16666666666666666,
+        "match-lot-calendar-v1": 0.0,
+        "match-vwap-window-v1": 0.0,
+        "route-lifecycle-v1": 0.0,
+        "route-nomatch-contract-v1": 0.3333333333333333,
+        "route-plan-dag-v1": 0.16666666666666666,
+        "route-priority-table-v1": 0.0,
+        "window-dedup-late-v1": 0.0
+      },
+      "interpretation": "rules_out_minimum_gain",
+      "threshold": 0.1,
+      "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+      "confirmatory": false,
+      "comparison": "B-A"
+    },
+    "E-A": {
+      "n_tasks": 12,
+      "n_bootstrap": 20000,
+      "seed": 20260913,
+      "point": -0.7222222222222222,
+      "ci95": [
+        -0.8611111111111112,
+        -0.5694444444444444
+      ],
+      "task_means": {
+        "config-adapter-vs-entry-v1": -1.0,
+        "config-home-isolation-v1": -0.8333333333333334,
+        "config-param-passthrough-v1": -1.0,
+        "config-render-resolve-v1": -1.0,
+        "etl-join-aggregate-v1": -0.6666666666666666,
+        "match-lot-calendar-v1": -0.5,
+        "match-vwap-window-v1": -1.0,
+        "route-lifecycle-v1": -0.6666666666666666,
+        "route-nomatch-contract-v1": -0.16666666666666666,
+        "route-plan-dag-v1": -0.3333333333333333,
+        "route-priority-table-v1": -0.6666666666666666,
+        "window-dedup-late-v1": -0.8333333333333334
+      },
+      "interpretation": "support_worse",
+      "threshold": 0.1,
+      "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+      "confirmatory": false,
+      "comparison": "E-A"
+    },
+    "D-C": {
+      "n_tasks": 12,
+      "n_bootstrap": 20000,
+      "seed": 20260913,
+      "point": -0.027777777777777776,
+      "ci95": [
+        -0.06944444444444443,
+        0.0
+      ],
+      "task_means": {
+        "config-adapter-vs-entry-v1": 0.0,
+        "config-home-isolation-v1": -0.16666666666666666,
+        "config-param-passthrough-v1": 0.0,
+        "config-render-resolve-v1": 0.0,
+        "etl-join-aggregate-v1": 0.0,
+        "match-lot-calendar-v1": 0.0,
+        "match-vwap-window-v1": -0.16666666666666666,
+        "route-lifecycle-v1": 0.0,
+        "route-nomatch-contract-v1": 0.0,
+        "route-plan-dag-v1": 0.0,
+        "route-priority-table-v1": 0.0,
+        "window-dedup-late-v1": 0.0
+      },
+      "interpretation": "rules_out_minimum_gain",
+      "threshold": 0.1,
+      "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+      "confirmatory": false,
+      "comparison": "D-C"
+    },
+    "C-A": {
+      "n_tasks": 12,
+      "n_bootstrap": 20000,
+      "seed": 20260913,
+      "point": -0.9027777777777778,
+      "ci95": [
+        -0.9861111111111112,
+        -0.7777777777777778
+      ],
+      "task_means": {
+        "config-adapter-vs-entry-v1": -1.0,
+        "config-home-isolation-v1": -0.8333333333333334,
+        "config-param-passthrough-v1": -1.0,
+        "config-render-resolve-v1": -1.0,
+        "etl-join-aggregate-v1": -1.0,
+        "match-lot-calendar-v1": -1.0,
+        "match-vwap-window-v1": -0.8333333333333334,
+        "route-lifecycle-v1": -1.0,
+        "route-nomatch-contract-v1": -0.3333333333333333,
+        "route-plan-dag-v1": -0.8333333333333334,
+        "route-priority-table-v1": -1.0,
+        "window-dedup-late-v1": -1.0
+      },
+      "interpretation": "support_worse",
+      "threshold": 0.1,
+      "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+      "confirmatory": false,
+      "comparison": "C-A"
+    }
+  },
+  "arms": {
+    "A": {
+      "n": 72,
+      "pass": 67,
+      "rate": 0.9305555555555556,
+      "hidden": 0.9305555555555556,
+      "integrate": 1.0,
+      "T_mean": 4432.861111111111,
+      "T_median": 2873.5,
+      "I_mean": 32337.76388888889,
+      "I_median": 31492.5,
+      "K_mean": 14.166666666666666,
+      "K_median": 13.5,
+      "cache_mean": 29598.13888888889,
+      "T_sum": 319166,
+      "I_sum": 2328319,
+      "K_sum": 1020,
+      "cache_sum": 2131066,
+      "miss_sum": 197253,
+      "est_usd": 0.227480748,
+      "mech": {
+        "passed": 67,
+        "failed_without_hidden_eval": 5
+      }
+    },
+    "B": {
+      "n": 72,
+      "pass": 65,
+      "rate": 0.9027777777777778,
+      "hidden": 0.9027777777777778,
+      "integrate": 1.0,
+      "T_mean": 9361.416666666666,
+      "T_median": 8361.0,
+      "I_mean": 175773.625,
+      "I_median": 159157.0,
+      "K_mean": 34.52777777777778,
+      "K_median": 34.0,
+      "cache_mean": 168243.41666666666,
+      "T_sum": 674022,
+      "I_sum": 12655701,
+      "K_sum": 2486,
+      "cache_sum": 12113526,
+      "miss_sum": 542175,
+      "est_usd": 0.5220800280000001,
+      "mech": {
+        "passed": 65,
+        "i_precheck": 6,
+        "global_budget": 1
+      }
+    },
+    "C": {
+      "n": 72,
+      "pass": 2,
+      "rate": 0.027777777777777776,
+      "hidden": 0.027777777777777776,
+      "integrate": 0.027777777777777776,
+      "T_mean": 2761.0694444444443,
+      "T_median": 2400.0,
+      "I_mean": 22036.472222222223,
+      "I_median": 17262.0,
+      "K_mean": 14.041666666666666,
+      "K_median": 11.0,
+      "cache_mean": 19244.402777777777,
+      "T_sum": 198797,
+      "I_sum": 1586626,
+      "K_sum": 1011,
+      "cache_sum": 1385597,
+      "miss_sum": 201029,
+      "est_usd": 0.153589341,
+      "mech": {
+        "stage_cap": 70,
+        "passed": 2
+      }
+    },
+    "D": {
+      "n": 72,
+      "pass": 0,
+      "rate": 0.0,
+      "hidden": 0.0,
+      "integrate": 0.0,
+      "T_mean": 2518.9444444444443,
+      "T_median": 2400.0,
+      "I_mean": 19185.76388888889,
+      "I_median": 17976.0,
+      "K_mean": 12.61111111111111,
+      "K_median": 11.0,
+      "cache_mean": 16847.916666666668,
+      "T_sum": 181364,
+      "I_sum": 1381375,
+      "K_sum": 908,
+      "cache_sum": 1213050,
+      "miss_sum": 168325,
+      "est_usd": 0.13770629999999998,
+      "mech": {
+        "stage_cap": 72
+      }
+    },
+    "E": {
+      "n": 72,
+      "pass": 15,
+      "rate": 0.20833333333333334,
+      "hidden": 0.3611111111111111,
+      "integrate": 0.8611111111111112,
+      "T_mean": 9570.666666666666,
+      "T_median": 9738.0,
+      "I_mean": 226925.86111111112,
+      "I_median": 248667.0,
+      "K_mean": 38.958333333333336,
+      "K_median": 38.0,
+      "cache_mean": 192492.33333333334,
+      "T_sum": 689088,
+      "I_sum": 16338662,
+      "K_sum": 2805,
+      "cache_sum": 13859448,
+      "miss_sum": 2479214,
+      "est_usd": 0.826913244,
+      "mech": {
+        "passed": 15,
+        "i_precheck": 36,
+        "stage_cap": 9,
+        "ownership_or_path": 11,
+        "failed_without_hidden_eval": 1
+      }
+    }
+  },
+  "status": {
+    "passed": 149,
+    "failed": 211
+  },
+  "audit_ok": 360,
+  "est_usd": 1.867769661
+}

@@ -1,0 +1,7 @@
+iteration	belief	predicted	actual	compound	verdict
+0	B1	offline pass; fidelity unmet	offline pass; formal 0/360	0	baseline
+1	B5+B6+B7+B11-B17	16/18 then 22+/25	22/25; two mutant targets miss; harness offline pass; no 360	22	keep
+2	B18 mutant targets	23/25	23/25; reference+mutant pass; live cal 0; no READY	23	keep
+3	B19 raise shared K/I from calibration starvation	24-25/25	25/25; freeze T=24000 I=400000 K=120; READY written; formal 0/360	25	keep
+4	B20-B23 resume/freeze/bootstrap	34/34	34/34; 360 manifest+max-new+concurrency+pack+toy CI; formal still 0	34	keep
+5	B24 resume 348 + report	360 terminal; D-A envelope-dominated	360/360; D-A -93.1pp CI[-100,-81.9] support_worse on hard stage caps; REPORT written	360	keep

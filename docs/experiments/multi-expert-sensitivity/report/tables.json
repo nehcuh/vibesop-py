@@ -1,0 +1,200 @@
+{
+  "da": {
+    "n_tasks": 12,
+    "n_bootstrap": 20000,
+    "seed": 20260913,
+    "point": -0.1111111111111111,
+    "ci95": [
+      -0.23611111111111108,
+      0.0
+    ],
+    "task_means": {
+      "config-adapter-vs-entry-v1": 0.0,
+      "config-home-isolation-v1": 0.0,
+      "config-param-passthrough-v1": 0.0,
+      "config-render-resolve-v1": -0.3333333333333333,
+      "etl-join-aggregate-v1": 0.0,
+      "match-lot-calendar-v1": 0.0,
+      "match-vwap-window-v1": -0.16666666666666666,
+      "route-lifecycle-v1": -0.6666666666666666,
+      "route-nomatch-contract-v1": 0.16666666666666666,
+      "route-plan-dag-v1": 0.0,
+      "route-priority-table-v1": -0.16666666666666666,
+      "window-dedup-late-v1": -0.16666666666666666
+    },
+    "interpretation": "rules_out_minimum_gain",
+    "threshold": 0.1,
+    "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+    "comparison": "D_soft-A",
+    "confirmatory": false,
+    "label": "exploratory_sensitivity_inspired_by_primary_diagnostics"
+  },
+  "da_best_interrupt": {
+    "n_tasks": 12,
+    "n_bootstrap": 20000,
+    "seed": 20260913,
+    "point": -0.01388888888888889,
+    "ci95": [
+      -0.1111111111111111,
+      0.05555555555555555
+    ],
+    "task_means": {
+      "config-adapter-vs-entry-v1": 0.0,
+      "config-home-isolation-v1": 0.0,
+      "config-param-passthrough-v1": 0.0,
+      "config-render-resolve-v1": 0.0,
+      "etl-join-aggregate-v1": 0.0,
+      "match-lot-calendar-v1": 0.0,
+      "match-vwap-window-v1": 0.0,
+      "route-lifecycle-v1": -0.5,
+      "route-nomatch-contract-v1": 0.16666666666666666,
+      "route-plan-dag-v1": 0.0,
+      "route-priority-table-v1": 0.16666666666666666,
+      "window-dedup-late-v1": 0.0
+    },
+    "interpretation": "rules_out_minimum_gain",
+    "threshold": 0.1,
+    "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+    "comparison": "D_soft-A",
+    "confirmatory": false,
+    "label": "post_accident_bounds_not_preregistered"
+  },
+  "da_worst_interrupt": {
+    "n_tasks": 12,
+    "n_bootstrap": 20000,
+    "seed": 20260913,
+    "point": -0.125,
+    "ci95": [
+      -0.25,
+      -0.013888888888888888
+    ],
+    "task_means": {
+      "config-adapter-vs-entry-v1": 0.0,
+      "config-home-isolation-v1": 0.0,
+      "config-param-passthrough-v1": 0.0,
+      "config-render-resolve-v1": -0.3333333333333333,
+      "etl-join-aggregate-v1": 0.0,
+      "match-lot-calendar-v1": 0.0,
+      "match-vwap-window-v1": -0.16666666666666666,
+      "route-lifecycle-v1": -0.6666666666666666,
+      "route-nomatch-contract-v1": 0.16666666666666666,
+      "route-plan-dag-v1": 0.0,
+      "route-priority-table-v1": -0.3333333333333333,
+      "window-dedup-late-v1": -0.16666666666666666
+    },
+    "interpretation": "support_worse",
+    "threshold": 0.1,
+    "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+    "comparison": "D_soft-A",
+    "confirmatory": false,
+    "label": "post_accident_bounds_not_preregistered"
+  },
+  "da_complete_case_biased": {
+    "n_tasks": 12,
+    "n_bootstrap": 20000,
+    "seed": 20260913,
+    "point": -0.036111111111111115,
+    "ci95": [
+      -0.15,
+      0.041666666666666664
+    ],
+    "task_means": {
+      "config-adapter-vs-entry-v1": 0.0,
+      "config-home-isolation-v1": 0.0,
+      "config-param-passthrough-v1": 0.0,
+      "config-render-resolve-v1": 0.0,
+      "etl-join-aggregate-v1": 0.0,
+      "match-lot-calendar-v1": 0.0,
+      "match-vwap-window-v1": 0.0,
+      "route-lifecycle-v1": -0.6,
+      "route-nomatch-contract-v1": 0.16666666666666666,
+      "route-plan-dag-v1": 0.0,
+      "route-priority-table-v1": 0.0,
+      "window-dedup-late-v1": 0.0
+    },
+    "interpretation": "rules_out_minimum_gain",
+    "threshold": 0.1,
+    "method": "cluster_bootstrap_percentile_resample_tasks_with_replacement_keep_all_spec_repeat",
+    "comparison": "D-A",
+    "confirmatory": false,
+    "pairs_dropped": 7,
+    "label": "complete_case_biased_not_preregistered"
+  },
+  "arms": {
+    "A": {
+      "n": 72,
+      "n_ledger": 71,
+      "n_interrupted": 1,
+      "pass": 69,
+      "rate": 0.9583333333333334,
+      "hidden": 0.9583333333333334,
+      "integrate": 1.0,
+      "soft_close": 0,
+      "T_mean": 2578.7323943661972,
+      "T_median": 1620,
+      "I_mean": 20477.352112676057,
+      "I_median": 13790,
+      "K_mean": 17.52112676056338,
+      "K_median": 15,
+      "cache_mean": 18884.338028169015,
+      "T_sum": 183090,
+      "I_sum": 1453892,
+      "K_sum": 1244,
+      "cache_sum": 1340788,
+      "miss_sum": 113104,
+      "est_usd_ledger": 0.130841964,
+      "est_usd": 0.131459652,
+      "mech": {
+        "passed": 69,
+        "failed_without_hidden_eval": 2,
+        "interrupted": 1
+      },
+      "est_usd_interrupt_lower_bound": 0.000617688,
+      "est_usd_known_lower_bound": 0.131459652
+    },
+    "D_soft": {
+      "n": 72,
+      "n_ledger": 65,
+      "n_interrupted": 7,
+      "pass": 61,
+      "rate": 0.8472222222222222,
+      "hidden": 0.8472222222222222,
+      "integrate": 0.9027777777777778,
+      "soft_close": 65,
+      "T_mean": 11446.030769230769,
+      "T_median": 11215,
+      "I_mean": 125990.7076923077,
+      "I_median": 115129,
+      "K_mean": 80.61538461538461,
+      "K_median": 80,
+      "cache_mean": 115711.4923076923,
+      "T_sum": 743992,
+      "I_sum": 8189396,
+      "K_sum": 5240,
+      "cache_sum": 7521247,
+      "miss_sum": 668149,
+      "est_usd_ledger": 0.5691812909999999,
+      "est_usd": 0.5895424679999999,
+      "mech": {
+        "passed": 61,
+        "global_budget": 3,
+        "failed_without_hidden_eval": 1,
+        "interrupted": 7
+      },
+      "est_usd_interrupt_lower_bound": 0.020361176999999998,
+      "est_usd_known_lower_bound": 0.5895424679999999
+    }
+  },
+  "status": {
+    "passed": 130,
+    "failed": 6,
+    "interrupted": 8
+  },
+  "audit_ok": 144,
+  "est_usd": 0.72100212,
+  "est_usd_ledger": 0.700023255,
+  "est_usd_interrupt_lower_bound": 0.020978865000000003,
+  "est_usd_is_lower_bound": true,
+  "n_open_http_unknown_usage": 7,
+  "run": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-sensitivity/runs/20260913T033401Z"
+}

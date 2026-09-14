@@ -1,0 +1,10 @@
+flowchart TB
+    A["固定代码版本与本轮验收范围"] --> B["按检查面独立评审<br/>功能 · 接口 · 部署"]
+    B --> C["把意见放进同一账本<br/>根因 · 条件 · 影响 · 证据"]
+    C --> D["确认的阻塞缺陷<br/>修复并定向复验"]
+    C --> E["其余意见逐条处理<br/>非阻塞建议：记录取舍、排期<br/>重复／缺依据：合并或补证据"]
+    D --> G["本轮阻塞闭合<br/>满足验收条件后交付"]
+    classDef blue fill:#e5f0ef,stroke:#16756f,color:#183c3b;
+    classDef warm fill:#fae9df,stroke:#bf5a3d,color:#623c30;
+    class D warm;
+    class C,G blue;

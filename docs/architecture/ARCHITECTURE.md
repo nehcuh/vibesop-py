@@ -1,7 +1,7 @@
 # VibeSOP Architecture
 
 > **Version**: 8.3.0
-> **Last Updated**: 2026-06-05
+> **入口说明更新**: 2026-09-14。本文保留技能子系统的详细与历史描述；当前完整模块图和执行边界以 [架构导览](../dev/architecture-overview.md) 为准，源码/发行状态见 [PROJECT_STATUS.md](../PROJECT_STATUS.md)。
 
 ## Three-Pillar Architecture (v5.5.0+)
 
@@ -41,7 +41,7 @@ compliance. `vibe spec conformance --all` runs all 85 tests.
 
 ## Overview
 
-VibeSOP is a **Skill Operating System (SkillOS)** that manages the full lifecycle of AI development skills. It sits as a middleware layer between AI agents (Claude Code, OpenCode, etc.) and skill ecosystems.
+VibeSOP provides engineering tools for AI-assisted development and hosts empirical research. **SkillOS** describes the skill-lifecycle subsystem connecting coding agents and skill ecosystems. Planning and delivery checks, traces, recall, recurring work and research extend beyond this subsystem; see the [current module map](../dev/architecture-overview.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

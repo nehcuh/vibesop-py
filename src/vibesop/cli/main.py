@@ -2,17 +2,18 @@
 
 Built with Typer for modern CLI UX.
 
-VibeSOP is a Skill Operating System (SkillOS) that manages the full lifecycle
-of AI development skills: discovery → installation → routing → orchestration →
-evaluation → retention/deprecation.
+VibeSOP provides workflow tools for AI-assisted development: skill selection,
+task planning, delivery checks, execution traces, and experience retrieval.
+SkillOS names its skill-management subsystem; the repository also hosts
+empirical research on these engineering methods.
 
 Routing: VibeSOP routes natural language queries to the best-matching skill
 and injects the skill's instructions (SKILL.md) into an AI Agent's context.
 
-Execution: VibeSOP does NOT execute skills. Actual execution (code changes,
-file writes, tool calls) is performed by an external AI Agent such as Claude
-Code, OpenCode, or Kimi Code CLI. Use `--guided` mode for step-by-step
-guidance at the terminal, or hand the plan off to your Agent.
+Execution: the hook path hands context to an external coding agent. Explicit
+runtime, loop, and validation paths have their own configured execution
+behavior. Use `--guided` for terminal guidance or hand a deliverable plan to
+the host agent; a generated plan is not evidence of completed work.
 
 See docs/user/HOOK_INTEGRATION.md for the integration model.
 """
@@ -153,7 +154,7 @@ def _build_prompt_builder() -> Any:
 
 app = typer.Typer(
     name="vibe",
-    help="VibeSOP - AI-powered workflow SOP",
+    help="VibeSOP - workflow tools for AI-assisted development",
     no_args_is_help=False,
     # -h as short help alias; Click propagates help_option_names to every
     # subcommand context. Commands that already use -h for their own option
@@ -601,10 +602,10 @@ def route(
     queries, decomposes into sub-tasks and builds an execution plan.
     For single-intent queries, routes to the best matching skill directly.
 
-    VibeSOP is a Skill Operating System (SkillOS) — it manages the full
-    lifecycle of skills: discovers, routes, orchestrates, evaluates, and
-    retains or deprecates. Skill execution is delegated to your AI Agent
-    (Claude Code, Cursor, OpenCode).
+    This command selects skills and prepares plans for your coding agent.
+    Skill management is part of VibeSOP's workflow tooling, alongside delivery
+    checks, execution traces, and experience retrieval. A match or a generated
+    plan does not mean the task has been executed or verified.
 
     Confirmation defaults to 'ambiguous_only': low-confidence or contested
     routing asks for confirmation, confident matches proceed automatically.

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="576pt" height="576pt" viewBox="0 0 576 576" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-14T07:00:52.121429</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 576 
+L 576 576 
+L 576 0 
+L 0 0 
+z
+" style="fill: #fffdf8"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 40.896 300.672 
+L 535.104 300.672 
+Q 545.472 300.672 545.472 290.304 
+L 545.472 115.776 
+Q 545.472 105.408 535.104 105.408 
+L 40.896 105.408 
+Q 30.528 105.408 30.528 115.776 
+L 30.528 290.304 
+Q 30.528 300.672 40.896 300.672 
+z
+" clip-path="url(#pca1ef1c87c)" style="fill: #e5f0ef"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 97.92 199.872 
+C 105.099578 199.872 111.986066 197.019523 117.062795 191.942795 
+C 122.139523 186.866066 124.992 179.979578 124.992 172.8 
+C 124.992 165.620422 122.139523 158.733934 117.062795 153.657205 
+C 111.986066 148.580477 105.099578 145.728 97.92 145.728 
+C 90.740422 145.728 83.853934 148.580477 78.777205 153.657205 
+C 73.700477 158.733934 70.848 165.620422 70.848 172.8 
+C 70.848 179.979578 73.700477 186.866066 78.777205 191.942795 
+C 83.853934 197.019523 90.740422 199.872 97.92 199.872 
+L 97.92 199.872 
+z
+" clip-path="url(#pca1ef1c87c)" style="fill: none; stroke: #16756f; stroke-width: 2; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 40.896 519.552 
+L 535.104 519.552 
+Q 545.472 519.552 545.472 509.184 
+L 545.472 334.656 
+Q 545.472 324.288 535.104 324.288 
+L 40.896 324.288 
+Q 30.528 324.288 30.528 334.656 
+L 30.528 509.184 
+Q 30.528 519.552 40.896 519.552 
+z
+" clip-path="url(#pca1ef1c87c)" style="fill: #fae9df"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 97.92 418.752 
+C 105.099578 418.752 111.986066 415.899523 117.062795 410.822795 
+C 122.139523 405.746066 124.992 398.859578 124.992 391.68 
+C 124.992 384.500422 122.139523 377.613934 117.062795 372.537205 
+C 111.986066 367.460477 105.099578 364.608 97.92 364.608 
+C 90.740422 364.608 83.853934 367.460477 78.777205 372.537205 
+C 73.700477 377.613934 70.848 384.500422 70.848 391.68 
+C 70.848 398.859578 73.700477 405.746066 78.777205 410.822795 
+C 83.853934 415.899523 90.740422 418.752 97.92 418.752 
+L 97.92 418.752 
+z
+" clip-path="url(#pca1ef1c87c)" style="fill: none; stroke: #bf5a3d; stroke-width: 2; stroke-linejoin: miter"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 97.92 152.64 
+L 97.92 172.8 
+L 109.44 182.592 
+" clip-path="url(#pca1ef1c87c)" style="fill: none; stroke: #16756f; stroke-width: 2; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 24px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="40.32" y="55.126875" transform="rotate(-0 40.32 55.126875)">一个 now，两种“现在几点”</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 13px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #67777c" x="40.32" y="79.395703" transform="rotate(-0 40.32 79.395703)">真实接口争议 · 解释用伪代码</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 20px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="155.52" y="165.77" transform="rotate(-0 155.52 165.77)">传一张“此刻时间”的纸条</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 17px; font-family: 'Hiragino Sans GB'; fill: #243640" transform="translate(60.48 237.578969)">now = 1000</text>
+    <text style="font-size: 17px; font-family: 'Hiragino Sans GB'; fill: #243640" transform="translate(60.48 266.530766)">使用时直接读取这个数值</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 13px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #16756f" x="60.48" y="289.641797" transform="rotate(-0 60.48 289.641797)">隐藏测试采用这种约定</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 24px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #bf5a3d" x="97.92" y="401.17125" transform="rotate(-0 97.92 401.17125)">?</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 20px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="155.52" y="384.720312" transform="rotate(-0 155.52 384.720312)">给一个“问时间”的方法</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 17px; font-family: 'Hiragino Sans GB'; fill: #243640" transform="translate(60.48 455.183969)">now = () =&gt; 1000</text>
+    <text style="font-size: 17px; font-family: 'Hiragino Sans GB'; fill: #243640" transform="translate(60.48 484.576703)">使用时调用 now() 获取时间</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 13px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #bf5a3d" x="60.48" y="508.638594" transform="rotate(-0 60.48 508.638594)">13个候选采用这种理解</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 12px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #67777c" x="40.32" y="558.85125" transform="rotate(-0 40.32 558.85125)">任务书没有明确类型：原始失败保留，歧义另做分析。</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pca1ef1c87c">
+   <rect x="0" y="0" width="576" height="576"/>
+  </clipPath>
+ </defs>
+</svg>

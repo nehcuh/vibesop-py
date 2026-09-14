@@ -1,0 +1,13 @@
+flowchart TB
+    A["用户目标<br/>先说要解决什么问题"] --> B["强模型＋按需方法技能<br/>查事实、找歧义、明确取舍"]
+    B --> C["把决定写进任务书<br/>接口 · 范围 · 依赖 · 验收"]
+    C --> D["边界清楚的子任务 A<br/>较弱模型实现"]
+    C --> E["边界清楚的子任务 B<br/>较弱模型实现"]
+    D --> F["统一集成验收<br/>检查实际行为与原始要求"]
+    E --> F
+    F --> G["通过后交付"]
+    F -. "歧义或失败时升级" .-> B
+    classDef blue fill:#e5f0ef,stroke:#16756f,color:#183c3b;
+    classDef warm fill:#fae9df,stroke:#bf5a3d,color:#623c30;
+    class B,C blue;
+    class D,E warm;

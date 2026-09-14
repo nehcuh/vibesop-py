@@ -1,0 +1,28 @@
+{
+  "task_id": "route-lifecycle-v1",
+  "arm": "D_soft",
+  "flow_arm": "D",
+  "spec_variant": "full",
+  "repeat": 1,
+  "allocation_id": "route-lifecycle-v1-full-D_soft-r1",
+  "status": "running",
+  "started_at": "2026-09-13T03:45:51.115556+00:00",
+  "task_hash": "3e6b454c4f6c3debf527f7d12562b163eb9209a1947e12d813d75e90beeab184",
+  "model_request": "deepseek-v4-flash",
+  "temperature": 0,
+  "thinking": {
+    "type": "disabled"
+  },
+  "limits": {
+    "per_loop_max_turns": null,
+    "model_call_cap": null,
+    "identical_for_all_arms": true,
+    "enforced": [
+      "T",
+      "I",
+      "K",
+      "hang_timeout_s",
+      "stage_caps"
+    ]
+  }
+}

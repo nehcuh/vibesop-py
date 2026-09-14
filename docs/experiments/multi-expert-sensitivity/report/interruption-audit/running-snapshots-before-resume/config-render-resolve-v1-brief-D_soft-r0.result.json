@@ -1,0 +1,28 @@
+{
+  "task_id": "config-render-resolve-v1",
+  "arm": "D_soft",
+  "flow_arm": "D",
+  "spec_variant": "brief",
+  "repeat": 0,
+  "allocation_id": "config-render-resolve-v1-brief-D_soft-r0",
+  "status": "running",
+  "started_at": "2026-09-13T03:46:52.464659+00:00",
+  "task_hash": "b1a6589e16cec2480629af96a5618e9a7604f64c954ec2981fe5c7bce5deccfb",
+  "model_request": "deepseek-v4-flash",
+  "temperature": 0,
+  "thinking": {
+    "type": "disabled"
+  },
+  "limits": {
+    "per_loop_max_turns": null,
+    "model_call_cap": null,
+    "identical_for_all_arms": true,
+    "enforced": [
+      "T",
+      "I",
+      "K",
+      "hang_timeout_s",
+      "stage_caps"
+    ]
+  }
+}

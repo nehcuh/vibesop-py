@@ -5,7 +5,7 @@
 **Goal:** Ship the persistence contracts + JOIN keys that the Phase B/C Dashboard Map view needs to render — plan↔trace, step structure, `parent_session`. NOT in-process fill rate cosmetics.
 
 **v3 design doc:** `docs/decisions/2026-07-27-dashboard-v3-orchestration-map-and-reflection.md` § 3
-**Review trail:** `docs/decisions/_review-dashboard-v3-phase-a-plan-merged.md` (grok+pi CONDITIONAL, 4 P0 + 3 P1 + 1 Nit absorbed)
+**Review trail:** `docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-merged.md` (grok+pi CONDITIONAL, 4 P0 + 3 P1 + 1 Nit absorbed)
 
 **Scope:**
 - **IN:** 5 instrumentation fixes + Plan↔Trace contract (PlanTracker wiring) + DAG rebuilder + Reflection Store (data layer only)

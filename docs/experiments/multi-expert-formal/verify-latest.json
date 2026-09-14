@@ -1,0 +1,186 @@
+{
+  "evaluator": "verify_experiment.py",
+  "meaning": "protocol fidelity gates, not organizational win rate",
+  "gates": [
+    {
+      "name": "catalog_12x2xQA",
+      "passed": true,
+      "detail": "{'routing': 4, 'config': 4, 'quant': 4}"
+    },
+    {
+      "name": "two_specs_and_shared_qa",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "contract_reconstructs_full_spec",
+      "passed": true,
+      "detail": "T3 id grammar in contract"
+    },
+    {
+      "name": "t4_depends_emission_order",
+      "passed": true,
+      "detail": "group starts at 0. First group depends_on []. Later groups depend on all skills of the previous group in emission order: left-to-right as those steps were appended from the source segment, not lexicographically sorted."
+    },
+    {
+      "name": "t9_real_vwap",
+      "passed": true,
+      "detail": "fied application errors.\nEach request starts a fresh process. Malformed JSON or invalid request shapes yield\n{\"error\":\"invalid_input\"} unless a task names a more specific error. Booleans are\nnot numbe"
+    },
+    {
+      "name": "t6_cross_layer_bind_lookup",
+      "passed": true,
+      "detail": "fied application errors.\nEach request starts a fresh process. Malformed JSON or invalid request shapes yield\n{\"error\":\"invalid_input\"} unless a task names a more specific error. Booleans are\nnot numbe"
+    },
+    {
+      "name": "independence_review",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-formal/independence.md"
+    },
+    {
+      "name": "preregistration_DA_cluster_10pp",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-formal/preregistration.md"
+    },
+    {
+      "name": "preregistration_interval_rules",
+      "passed": true,
+      "detail": "interval branches"
+    },
+    {
+      "name": "model_alias_documented",
+      "passed": true,
+      "detail": "resources.yaml"
+    },
+    {
+      "name": "budget_precheck_full_T_for_A",
+      "passed": true,
+      "detail": "resources.yaml"
+    },
+    {
+      "name": "calibration_excluded_from_360",
+      "passed": true,
+      "detail": "['cal-harness-files-v1', 'cal-harness-join-v1', 'cal-harness-route-v1']"
+    },
+    {
+      "name": "formal_360_not_started",
+      "passed": true,
+      "detail": "no phase=formal 360 manifest"
+    },
+    {
+      "name": "reference_and_mutant_sensitivity",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-formal/runs/20260913T015759Z/self-check.json"
+    },
+    {
+      "name": "visible_hidden_split",
+      "passed": true,
+      "detail": "visible.json in files"
+    },
+    {
+      "name": "real_cli_entry",
+      "passed": true,
+      "detail": "hidden cases invoke python app.py / adapter.py in Docker"
+    },
+    {
+      "name": "harness_offline_protocol",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "harness_call_id_and_usage_sum",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "request_before_http",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "per_member_stage_quota",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "truncation_tool_calls",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "e_dag_and_overlap_fail",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "docker_isolation",
+      "passed": true,
+      "detail": "self_check harness"
+    },
+    {
+      "name": "resume_max_new_360",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "concurrency_isolation",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "freeze_pack_complete",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "analysis_toy",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "no_resource_fallback",
+      "passed": true,
+      "detail": "{'freeze_verify_ok', 'overlap_fails', 'C_usage_sum', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r5', 'running_becomes_interrupted', 'formal_unique_ids', 'C_no_overwrite', 'unknown_dep_fails', 'concurrency_results_8', 'E_planner_history_kept', 'request_exists_on_api_error', 'no_inline_default_budget', 'overlap_run_failed', 'exchange_caps_reserved', 'overlap_run_not_passed', 'duplicate_allocation_refused', 'no_cross_dir_calls_cal-harness-route-v1-full-A-r4', 'B_plan_asks_stage_deliver', 'A_ma"
+    },
+    {
+      "name": "docker_image_id_pinned",
+      "passed": true,
+      "detail": "resources.yaml"
+    },
+    {
+      "name": "concurrency_8_frozen",
+      "passed": true,
+      "detail": "resources.yaml"
+    },
+    {
+      "name": "docker_digest_matches_live",
+      "passed": true,
+      "detail": "sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9"
+    },
+    {
+      "name": "historical_calibration_untouched_note",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-calibration/RESULTS.md"
+    },
+    {
+      "name": "informal_live_calibration_frozen_TIK",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-formal/runs/20260913T020657Z | T=24000 I=400000 K=120"
+    },
+    {
+      "name": "ready_for_review_complete",
+      "passed": true,
+      "detail": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-formal/READY_FOR_REVIEW.md"
+    }
+  ],
+  "passed": 34,
+  "total": 34,
+  "compound": 34,
+  "formal_completed": 0,
+  "formal_target": 360,
+  "offline_harness": {
+    "passed": true,
+    "failed": []
+  },
+  "task_self_check_failed": []
+}

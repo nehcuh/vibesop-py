@@ -1,0 +1,11 @@
+flowchart TB
+    R["同一批改动"] --> A["A：正确性<br/>要求修复"]
+    R --> B["B：架构一致性<br/>通过，附小问题"]
+    R --> C["C：外部部署<br/>要求修复"]
+    C --> D["一路独有：<br/>旧部署规则未刷新<br/>平台提示仍猜路径"]
+    A --> V["逐条核对代码<br/>报告与部署实况"]
+    B --> V
+    D --> V
+    V --> F["终裁：5 项 P1 需修复<br/>包含外部独有问题"]
+    classDef risk fill:#fff0ec,stroke:#be7665,color:#753729;
+    class D risk;

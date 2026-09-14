@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "case": "internal_soft",
+      "observed": "returned",
+      "expected": "returned",
+      "passed": true,
+      "soft_closes": [
+        {
+          "type": "soft_close",
+          "stage": "independent-0",
+          "member": null,
+          "reason": "stage_budget_exhausted:independent-0",
+          "delivered": false,
+          "messages": 1
+        }
+      ]
+    },
+    {
+      "case": "integrate_hard",
+      "observed": "stage_budget_exhausted:integrate",
+      "expected": "stage_budget_exhausted:integrate",
+      "passed": true,
+      "soft_closes": []
+    },
+    {
+      "case": "global_T_hard",
+      "observed": "budget_exhausted:T",
+      "expected": "budget_exhausted:T",
+      "passed": true,
+      "soft_closes": []
+    },
+    {
+      "case": "api_hard",
+      "observed": "supervisor_fake_api_failure",
+      "expected": "supervisor_fake_api_failure",
+      "passed": true,
+      "soft_closes": []
+    },
+    {
+      "case": "final_truncation_hard",
+      "observed": "incomplete_final_response",
+      "expected": "incomplete_final_response",
+      "passed": true,
+      "soft_closes": []
+    }
+  ],
+  "source": "supervisor direct Loop runtime checks; no live model calls",
+  "at": "2026-09-13T03:18:54.036125+00:00",
+  "engine_sha256": "f5316b0d06d8c1cd45066b1bfae3d61eed9f67aadd311bad0a499f636868d805"
+}

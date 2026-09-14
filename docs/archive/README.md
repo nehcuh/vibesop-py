@@ -4,7 +4,7 @@ This directory contains historical and intermediate documentation files that are
 
 ## Files
 
-- **AGENTS.md** - Agent integration documentation (superseded by docs/agent-integration.md)
+- **[agent-integration-legacy.md](agent-integration-legacy.md)** - Agent integration documentation (superseded by docs/agent-integration.md)
 - **core-usecase-analysis.md** - Core use case analysis (archived 2026-04-29)
 - **DELIVERY_SUMMARY.md** - Delivery summary (archived 2026-04-29)
 - **LLM_CONFIG_IMPLEMENTATION_SUMMARY.md** - LLM config implementation summary (archived 2026-04-29)
@@ -16,3 +16,11 @@ This directory contains historical and intermediate documentation files that are
 ## Notes
 
 These files are kept for historical reference. For current documentation, see [INDEX.md](../INDEX.md).
+
+## 分类入口
+
+- [历史评审](reviews/README.md)：按主题整理的 70 份过程材料。
+- [过程材料导航](research-artifacts.md)：.omx/artifacts 原件的主题索引。
+- [维护与恢复](../maintenance/README.md)：worktree、冷归档、文件迁移映射。
+
+原 AGENTS.md 是过期的代理集成说明，现更名为 agent-integration-legacy.md，避免历史文档继续充当嵌套目录的代理指令。其原始内容保留。

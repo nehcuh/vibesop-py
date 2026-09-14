@@ -14,3 +14,8 @@ tests/benchmark/**/*.yml text eol=lf
 tests/fixtures/benchmark-pack/**/*.md text eol=lf
 tests/fixtures/benchmark-pack/**/*.yaml text eol=lf
 tests/fixtures/benchmark-pack/**/*.yml text eol=lf
+
+# Generated figures and frozen experiment evidence are hash-verified artifacts.
+# Preserve their recorded whitespace instead of rewriting them for diff hygiene.
+docs/essays/agent-trust/assets/** whitespace=-blank-at-eol,-blank-at-eof
+docs/experiments/** whitespace=-blank-at-eol,-blank-at-eof

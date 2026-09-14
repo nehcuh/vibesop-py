@@ -82,10 +82,10 @@ def _print_blocked_notice(plan: Any) -> None:
     including the user's raw query, so it must never be parsed as Rich
     markup (8.3.1-P1-2)."""
     console.print(_blocked_notice(plan), style="red", markup=False)
-    # 8.3.1-P2-5: plans persisted before 8.3.1 carry no execution_ready
+    # Plans persisted before 8.3.0 carry no execution_ready
     # verdict and read as blocked by design — tell the user how to recover.
     console.print(
-        "[dim]Note: plans recorded before v8.3.1 have no execution_ready "
+        "[dim]Note: plans recorded before v8.3.0 have no execution_ready "
         "verdict and are treated as blocked — re-run `vibe route` / "
         "`vibe orchestrate` to rebuild them.[/dim]"
     )

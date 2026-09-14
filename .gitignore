@@ -147,3 +147,9 @@ ruff.toml
 
 # Audit reports: generated locally; commit explicitly if they should be shared.
 /audit-report-*
+
+# Settled experiment runs are kept in a checksummed local cold archive.
+# These ignored compatibility symlinks preserve local report/replay paths.
+/docs/experiments/multi-expert-calibration/runs
+/docs/experiments/multi-expert-formal/runs
+/docs/experiments/multi-expert-sensitivity/runs

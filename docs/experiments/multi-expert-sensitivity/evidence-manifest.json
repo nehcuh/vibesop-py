@@ -1,0 +1,11 @@
+{
+  "experiment": "multi-expert-sensitivity",
+  "runs": {
+    "original_path": "docs/experiments/multi-expert-sensitivity/runs",
+    "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-sensitivity/runs",
+    "file_count": 6588,
+    "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-sensitivity/runs-manifest.json",
+    "manifest_sha256": "61baefb36d8cf379c81e753158fa67a632bf2bc8b64356b0c066130acf317fd2"
+  },
+  "status": "archived; original bytes retained; local compatibility link exists"
+}

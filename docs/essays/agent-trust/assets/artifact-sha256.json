@@ -1,0 +1,142 @@
+[
+  {
+    "path": "docs/2026-09-12-agent-trust-wechat.html",
+    "sha256": "421c3cc9d4bddbecf9f950c7c6ac115575a49f31ff87b73992830c2820c0d8d2",
+    "bytes": 1672952
+  },
+  {
+    "path": "docs/2026-09-12-agent-trust-wechat.md",
+    "sha256": "3aeac8c01835eaac176ad919db00f0e5f14b4c39cab76546c7ec11eb71191622",
+    "bytes": 35735
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/01-committee.png",
+    "sha256": "b8d50904b786d093c20d8424f6583b88d792e56899bf8ec72a105b71fce40fb2",
+    "bytes": 152063
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/01-committee.svg",
+    "sha256": "15e6847c29d7540b3779b7778a4e0016e49453c14298e75c0832b0ee57524f66",
+    "bytes": 13311
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/02-roles.mmd",
+    "sha256": "276a4885d69f7de29f6f274498bd2711c8b12daa9777048ac13fd74a2fb27973",
+    "bytes": 616
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/02-roles.png",
+    "sha256": "f25b32d0be2c8f50058bf5915160fd39ff091788269455f3d8c6753f0208b93a",
+    "bytes": 127394
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/02-roles.svg",
+    "sha256": "5b8b452b3c1ea0091d89507411285ca3cbd647cc610286c8e1b743cf452aba72",
+    "bytes": 20337
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/03-stage-rule.mmd",
+    "sha256": "111f0638df56be8b164b36c683e857722e318b77e54b6e06dfad40b85e79ec61",
+    "bytes": 713
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/03-stage-rule.png",
+    "sha256": "8521cc8385c68a7c707f2a38602940fc863287f48b131b2f8811228cee3a82ec",
+    "bytes": 172440
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/03-stage-rule.svg",
+    "sha256": "6321ac0e9dd6223e5bf279cf0e89a40aaca73a55cb40a72055a77caa8bb417b3",
+    "bytes": 19587
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/04-clock.png",
+    "sha256": "8585fbe2d785bc8d0fb2bcaa53ad2f25abfcf748eedf2f2f39f4821ba31e9094",
+    "bytes": 131381
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/04-clock.svg",
+    "sha256": "6ec08d083d01996c989679af8bf819681f7c57ea346f842ce34722117e05ce80",
+    "bytes": 6001
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/05-delegation.mmd",
+    "sha256": "b2d9d97ec333cf9594b029000abc887cf8cc5801d57b34d0ef5fc28d2a1dceb3",
+    "bytes": 678
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/05-delegation.png",
+    "sha256": "cf604be7d874c3779b06fd628751b41431c934527f92f3868bb228aa3e2460b5",
+    "bytes": 158926
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/05-delegation.svg",
+    "sha256": "645d800d5fcca8b4e34718d211f35a08bbabc750b6d211424eb92b4e1d6f46e9",
+    "bytes": 21351
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/06-wikiskill.png",
+    "sha256": "77ea2aacbef8277bd9477077098999262fb7fcc3a5d04f94ba2af90b9b8bb9b4",
+    "bytes": 105706
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/06-wikiskill.svg",
+    "sha256": "683351b0400c6fa45a8e8373177e878e27ea6c82e8c324d5bdb04e6652b4d6db",
+    "bytes": 7590
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/07-review.mmd",
+    "sha256": "9028c03f56140876d7e896098ad17088bfab8c4cc4ae5a5a09c10616e57d8ac3",
+    "bytes": 628
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/07-review.png",
+    "sha256": "3baa4d7740d5b6785fa2138c9aaee632e938bd06374726ffb02c0c64ace9441a",
+    "bytes": 140522
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/07-review.svg",
+    "sha256": "3cef4102169b2c9f4e2347002cc4ef30adff34822a70b3273fcaae0bd666d811",
+    "bytes": 17834
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/08-harness.png",
+    "sha256": "1be44b64b035c419ad19206f8b1ebfe83d36ecd8f5aadd5c44b7006f44db1ab0",
+    "bytes": 136135
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/08-harness.svg",
+    "sha256": "34dd7fcad4cd188926b7b46749358dbb24d87d6bcac3ec12a8a56d1a1f6f9589",
+    "bytes": 6540
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/09-memory.png",
+    "sha256": "a72b812175dccf5ea3777c657bc292920670c7683c619e0ae34bcaaa05055a5f",
+    "bytes": 98249
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/09-memory.svg",
+    "sha256": "75eeba32155e95177d9112ef07b7235bb4223011131931dc12876979cf5799aa",
+    "bytes": 7240
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/EDITORIAL-AUDIT.md",
+    "sha256": "8114f65ee838143496c45d94b09ace2ff120b353a33104fcf19eb36d9431a080",
+    "bytes": 6204
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/chart-data.json",
+    "sha256": "413fe5a4842af96235b83e409fe96188414e39d3edaddfba821730ce19b0b19d",
+    "bytes": 2294
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/mobile-verification.json",
+    "sha256": "f6e5984eba6307982b62870d3cb2fc752eabe9bbc15a4445a33f139ef0ff3818",
+    "bytes": 128
+  },
+  {
+    "path": "docs/assets/agent-trust-20260914/raw-result-verification.json",
+    "sha256": "c0f15a4e2ed521e0af4d9ad7acf7f01d7739cbb5f03bb7e5c4b657e9a4f8c603",
+    "bytes": 1011
+  }
+]

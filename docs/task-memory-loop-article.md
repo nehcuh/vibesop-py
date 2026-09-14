@@ -325,4 +325,4 @@ VibeSOP task-memory-loop v3 闭合了这个环：
 >
 > **代码**：[github.com/nehcuh/vibesop-py](https://github.com/nehcuh/vibesop-py)
 > **设计文档**：[`docs/decisions/2026-07-29-task-memory-product-design.md`](./decisions/2026-07-29-task-memory-product-design.md)
-> **W4 review brief**：[`docs/decisions/w4-review-brief.md`](./decisions/w4-review-brief.md)
+> **W4 review brief**：[`docs/archive/reviews/task-memory/w4-review-brief.md`](archive/reviews/task-memory/w4-review-brief.md)

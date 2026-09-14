@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-14",
+  "remaining_worktrees": 2,
+  "retired_worktrees": 26,
+  "all_refs_and_stash_unchanged": true,
+  "protected_product_files_unchanged": 871,
+  "experiment_head_tracked_changes_and_untracked_count_unchanged": true,
+  "archive_content_verified_before_removal": true,
+  "full_restore_smoke": "vibesop-health-grok: bytes and Git status verified; temporary worktree removed",
+  "raw_files_sha256_verified": 20199,
+  "handbacks_sha256_verified": 10,
+  "files_relocated": 137,
+  "local_links_valid": 1109,
+  "introduced_broken_links": [],
+  "preexisting_missing_links": [],
+  "git_diff_check": "passed",
+  "disk": {
+    "removed_allocated_gib": 53.31,
+    "rust_target_removed_gib": 44.25,
+    "archive_gib": 0.95,
+    "raw_moved_not_freed_gib": 0.31,
+    "estimated_net_reclaimed_gib": 52.67,
+    "note": "du allocated sizes; APFS sharing/compression may differ from global free-space change; raw data relocation is not counted as freed space"
+  },
+  "rename_aware_diff_check": "passed using temporary index; user index unchanged"
+}

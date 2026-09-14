@@ -1,0 +1,13 @@
+flowchart TB
+    T["历史报告中的两条路径"]
+    T --> L["画像实验<br/>55 题 × 10 轮"]
+    L --> AD["支架适配器<br/>转发 top_k 参数"]
+    AD --> EM["真实语义匹配器<br/>结果稳定度 1.0"]
+    EM --> LIMIT["只覆盖本机、单进程<br/>固定环境下的画像路径"]
+    T --> P["产品入口<br/>流水线传入 top_k"]
+    P --> LA["懒加载匹配器<br/>不接受该参数"]
+    LA --> ERR["请求走到这里<br/>抛出 TypeError"]
+    classDef risk fill:#fff0ec,stroke:#be7665,color:#753729;
+    classDef boundary fill:#fff4df,stroke:#b7873d,color:#654811;
+    class LA,ERR risk;
+    class LIMIT boundary;

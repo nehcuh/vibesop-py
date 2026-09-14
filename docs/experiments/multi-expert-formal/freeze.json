@@ -1,0 +1,72 @@
+{
+  "frozen_at": "2026-09-13T02:17:05Z",
+  "phase": "pre-formal-review",
+  "not_formal_360": true,
+  "model": {
+    "request": "deepseek-v4-flash",
+    "served_as": "DeepSeek-V4.1-Flash",
+    "expected_response_model": "deepseek-flash",
+    "observed_response_model": "deepseek-flash",
+    "temperature": 0,
+    "thinking": {"type": "disabled"},
+    "sdk_max_retries": 0,
+    "alias_limitation": "Request name deepseek-v4-flash is redirected by the vendor to DeepSeek-V4.1-Flash; responses report deepseek-flash. This does not freeze weights."
+  },
+  "budget": {
+    "T_completion_tokens": 24000,
+    "I_prompt_tokens": 400000,
+    "K_tool_calls": 120,
+    "hang_timeout_s": 600,
+    "per_call_cap": "remaining_T",
+    "per_loop_max_turns": null,
+    "identical_for_all_arms": true,
+    "rationale": {
+      "T": "Max observed completion 8319 in informal K=80 batch; 24000 leaves headroom for harder formal tasks.",
+      "I": "K=80 batch hit I_precheck on one E run at used_i=114657 with growing worker traces; 200000 was too tight for E integrator history. 400000 is the shared ceiling (A may use all of it).",
+      "K": "K=40 exhausted C/D/E (batch 20260913T015759Z). K=80 still exhausted 2/15 (C files, D route) with used_k=80. Freeze 120 as the shared ceiling; A used at most 14 in both batches and may still spend all 120."
+    }
+  },
+  "informal_batches": [
+    {
+      "id": "20260913T015759Z",
+      "K_cap": 40,
+      "allocated": 15,
+      "passed": 7,
+      "failed": 8,
+      "note": "Most failures budget_exhausted:K. Retained. Not a 360 sample."
+    },
+    {
+      "id": "20260913T020657Z",
+      "K_cap": 80,
+      "allocated": 15,
+      "passed": 11,
+      "failed": 4,
+      "note": "Failures: K, stage_budget_exhausted:independent-0, I_precheck. Retained. Not a 360 sample."
+    }
+  ],
+  "calibration_tasks_excluded_from_360": [
+    "cal-harness-route-v1",
+    "cal-harness-files-v1",
+    "cal-harness-join-v1"
+  ],
+  "formal_task_hashes": {
+    "route-lifecycle-v1": "3e6b454c4f6c3debf527f7d12562b163eb9209a1947e12d813d75e90beeab184",
+    "route-nomatch-contract-v1": "956cf9f9f54471a8b18bcae16fa033d550a3998071056ef0ca7407ee469bc355",
+    "route-priority-table-v1": "796d23edc85a9163ae8d9582a300158f75a177b0ba530f2b7898877cfc96d1b8",
+    "route-plan-dag-v1": "c89ea482b3f56721163565beae2075fccd2c2616b6f539574d436bfc4ef1eb53",
+    "config-render-resolve-v1": "b1a6589e16cec2480629af96a5618e9a7604f64c954ec2981fe5c7bce5deccfb",
+    "config-adapter-vs-entry-v1": "a6450109791bcc27db54922fdc3ed6fb93993daf993a535c95eb8db1cf2b15b9",
+    "config-home-isolation-v1": "a5de113083ba9154fffcd1531bdcc97c786a49ca68ec584439bb1164aa65e3f0",
+    "config-param-passthrough-v1": "c39a646642f700b7a50309f434ca49abfeae8bd6aa5caa094a3df86857d6358d",
+    "match-vwap-window-v1": "d95d1bbcfb0d9efab48cf83f1de2d9c7e2805fa86c39a5085e3e6399262f17c7",
+    "match-lot-calendar-v1": "913c3f5beab11ba46205755297725a1cfe848694fa94ac65c638665390a26777",
+    "etl-join-aggregate-v1": "ee554ba541745b71f2a407b8855ff3410bd1eed6054cb9a7f723fbfedfdcd2be",
+    "window-dedup-late-v1": "8fbcc0f489466566a4c26645e7b2d21e7fcaaeb26ae1dde788cd9d99de4a5c98"
+  },
+  "cost_offpeak_not_invoice_usd": {
+    "batch_20260913T015759Z": 0.0407,
+    "batch_20260913T020657Z": 0.0603,
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "formula": "(input-cache)*0.15 + cache*0.003 + output*0.6 per MTok"
+  }
+}

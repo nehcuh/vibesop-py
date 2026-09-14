@@ -1,0 +1,11 @@
+{
+  "experiment": "multi-expert-formal",
+  "runs": {
+    "original_path": "docs/experiments/multi-expert-formal/runs",
+    "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-formal/runs",
+    "file_count": 13183,
+    "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-formal/runs-manifest.json",
+    "manifest_sha256": "acd31c5f6e164450f919becaf5598ac8c407afe2c98d24bc8dcb6a73af434b78"
+  },
+  "status": "archived; original bytes retained; local compatibility link exists"
+}

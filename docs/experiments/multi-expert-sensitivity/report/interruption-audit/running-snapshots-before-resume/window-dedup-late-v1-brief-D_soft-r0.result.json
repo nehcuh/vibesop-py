@@ -1,0 +1,28 @@
+{
+  "task_id": "window-dedup-late-v1",
+  "arm": "D_soft",
+  "flow_arm": "D",
+  "spec_variant": "brief",
+  "repeat": 0,
+  "allocation_id": "window-dedup-late-v1-brief-D_soft-r0",
+  "status": "running",
+  "started_at": "2026-09-13T03:46:40.199965+00:00",
+  "task_hash": "8fbcc0f489466566a4c26645e7b2d21e7fcaaeb26ae1dde788cd9d99de4a5c98",
+  "model_request": "deepseek-v4-flash",
+  "temperature": 0,
+  "thinking": {
+    "type": "disabled"
+  },
+  "limits": {
+    "per_loop_max_turns": null,
+    "model_call_cap": null,
+    "identical_for_all_arms": true,
+    "enforced": [
+      "T",
+      "I",
+      "K",
+      "hang_timeout_s",
+      "stage_caps"
+    ]
+  }
+}

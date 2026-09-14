@@ -1,0 +1,18 @@
+{
+  "reviews": [
+    {
+      "path": "/Users/huchen/Projects/vibesop-py/.experiment/v2/glm53-article-20260914-review.review.md",
+      "sha256": "91cc977e41b1938511e1d3896581db497d5f143601e8081d8df89f48f69ed2b3",
+      "model": "glm-5.3",
+      "verdict": "NEEDS_FIX; adjudicated and clarified"
+    },
+    {
+      "path": "/Users/huchen/Projects/vibesop-py/.experiment/v2/grok-article-20260914-review-r2.review.md",
+      "sha256": "c8511619cf3d80fa6f4c670234d2ee41a522ed1cc184e1bc6b74944568377959",
+      "model": "grok-4.6-build",
+      "verdict": "READY; two editorial suggestions adopted"
+    }
+  ],
+  "final_arbiter": "ChatGPT",
+  "notes": "Review snapshots differ from final bytes. See EDITORIAL-AUDIT.md for organizer corrections and post-review edits."
+}

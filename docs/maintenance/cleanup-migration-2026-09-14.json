@@ -1,0 +1,1032 @@
+{
+  "date": "2026-09-14",
+  "moves": [
+    {
+      "from": "docs/decisions/_review-w2-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-w2-merged.md",
+      "sha256_before": "6b2ac49e85e183233d982d25e73165ff5c892f09df618fc9ab0548690223a66e",
+      "sha256_after": "6b2ac49e85e183233d982d25e73165ff5c892f09df618fc9ab0548690223a66e"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-kimi.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-kimi.md",
+      "sha256_before": "9181db7a18266405c8ed4b06874f5ea4f872758bea6f30cb5dc04b280a77dff9",
+      "sha256_after": "12603764d7f0da557bc333f3943c4ec26e5caa7ea4a5f64cb8043ca82ca0b735"
+    },
+    {
+      "from": "docs/decisions/_fix-s51-m1-m7.md",
+      "to": "docs/archive/reviews/s51/_fix-s51-m1-m7.md",
+      "sha256_before": "3881ec08ae2b44f06ddc233ed8c54eb6a9a8880b2b10fd50d347e29739bf972b",
+      "sha256_after": "f64fcafc3a4f98850227e87b2a1ceadd92bdab0b3aa664f550be2e52d4c82824"
+    },
+    {
+      "from": "docs/decisions/_review-w5-2-cross-project-promote-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-w5-2-cross-project-promote-merged.md",
+      "sha256_before": "fc5081bd5f5f3bf372e7feec027a1fb0230ce303b5da2e584e345adfab7b159a",
+      "sha256_after": "f4ec59b172ea09bdc4a2792c224a7a1d041fb05eb09d898117f9f2f097ee0530"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-brief.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-brief.md",
+      "sha256_before": "8947801f1e1f2f4cb287e011aefcd55ac0be6aaad169ade326996ea676856305",
+      "sha256_after": "8947801f1e1f2f4cb287e011aefcd55ac0be6aaad169ade326996ea676856305"
+    },
+    {
+      "from": "docs/decisions/_review-w0-implementation-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-w0-implementation-brief.md",
+      "sha256_before": "9ee18b9e7158466878d3ee8b33b1a9151a357f9c61ac00708407b5a9240cc277",
+      "sha256_after": "9ee18b9e7158466878d3ee8b33b1a9151a357f9c61ac00708407b5a9240cc277"
+    },
+    {
+      "from": "docs/decisions/_diagnosis-2026-07-24-synthesis.md",
+      "to": "docs/archive/reviews/diagnosis/_diagnosis-2026-07-24-synthesis.md",
+      "sha256_before": "468484fca5ab4ea6700d7150aa1a4a8cee384b95cbc9c9c330b3d712e395cf1c",
+      "sha256_after": "468484fca5ab4ea6700d7150aa1a4a8cee384b95cbc9c9c330b3d712e395cf1c"
+    },
+    {
+      "from": "docs/decisions/_review-m5-pi.md",
+      "to": "docs/archive/reviews/observability/_review-m5-pi.md",
+      "sha256_before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-v2-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-merged.md",
+      "sha256_before": "ed251572a81b75fc1ca5cb75cd6016d1ce00c44e2dcdae6387a9971ed74cdd77",
+      "sha256_after": "ed251572a81b75fc1ca5cb75cd6016d1ce00c44e2dcdae6387a9971ed74cdd77"
+    },
+    {
+      "from": "docs/decisions/_fix-s51-m1-m7-review-correctness.md",
+      "to": "docs/archive/reviews/s51/_fix-s51-m1-m7-review-correctness.md",
+      "sha256_before": "1a1bbcfafad3d86d099abaeb088fe1e6cb230c20ec303f3d3a611875f214cbe6",
+      "sha256_after": "2d926a57c5575b398468c68dff97f2dbc399e31cbdc042cad13967376412d3d0"
+    },
+    {
+      "from": "docs/decisions/_review-w3-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-w3-merged.md",
+      "sha256_before": "a23813f2d28e6a89fc0b1c5e2df04a4a6a24d2a99ec5792876ec9619f1d25eb7",
+      "sha256_after": "115b18698fd059fa662a2685474ba8ce7bf8e23a5d7671a7be34373aeb518d74"
+    },
+    {
+      "from": "docs/decisions/_review-m5-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-m5-kimi.md",
+      "sha256_before": "b7d798ce04fb3b4b14b62f688da2ad402ff700842d1591366d12affc023bbc1e",
+      "sha256_after": "b7d798ce04fb3b4b14b62f688da2ad402ff700842d1591366d12affc023bbc1e"
+    },
+    {
+      "from": "docs/decisions/_review-cross-session-cluster-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-cross-session-cluster-merged.md",
+      "sha256_before": "bc60390811a62930c69da33780b1470ff768953b12953e4be72ca79c1406b23e",
+      "sha256_after": "6664afb6408e267fddd264aa9cb53d8f3569dad3b1aff52edb37ddb2110e0043"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-phase-a-plan-brief-grok.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-grok.md",
+      "sha256_before": "327bbbd2c37b60bd2c973dfde099ebfbc9392f3494f1e45d925faebbacf4f668",
+      "sha256_after": "9aff16c122c86484abd4cd90093ded08045bb03fdb6c0397261f314952147ed7"
+    },
+    {
+      "from": "docs/decisions/_review-brief-p2.md",
+      "to": "docs/archive/reviews/observability/_review-brief-p2.md",
+      "sha256_before": "4956315fc20b3068a0e855c63b81bc993b3615424d046aa7426638ca24f4afba",
+      "sha256_after": "4956315fc20b3068a0e855c63b81bc993b3615424d046aa7426638ca24f4afba"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-c-kimi.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-kimi.md",
+      "sha256_before": "91843e2d4ece38f4529b66ee8a8233266407914c7ebfc0e53cc12a31da1641e2",
+      "sha256_after": "91843e2d4ece38f4529b66ee8a8233266407914c7ebfc0e53cc12a31da1641e2"
+    },
+    {
+      "from": "docs/decisions/_review-p2-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-p2-kimi.md",
+      "sha256_before": "d72fa7256353dec1f5d001a3116218b50be3a493af560300a0bc924a7671979c",
+      "sha256_after": "d72fa7256353dec1f5d001a3116218b50be3a493af560300a0bc924a7671979c"
+    },
+    {
+      "from": "docs/decisions/_review-m2-pi.md",
+      "to": "docs/archive/reviews/observability/_review-m2-pi.md",
+      "sha256_before": "a0d6bc2794ddfec135bfc9d50a8620d3b55a162572d6a3ebf5a14662f23dfb06",
+      "sha256_after": "a0d6bc2794ddfec135bfc9d50a8620d3b55a162572d6a3ebf5a14662f23dfb06"
+    },
+    {
+      "from": "docs/decisions/_review-brief-m4.md",
+      "to": "docs/archive/reviews/observability/_review-brief-m4.md",
+      "sha256_before": "4834e4c5ef86dff06fa870b4bc2e0f11e1714355e790927883fd33e5bd6b405a",
+      "sha256_after": "4834e4c5ef86dff06fa870b4bc2e0f11e1714355e790927883fd33e5bd6b405a"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-phase-a-plan-merged.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-merged.md",
+      "sha256_before": "0ec45fc6a3a9566ffc7cfd1ef62823a844729c88336860798b2f6d07a4bbbd9b",
+      "sha256_after": "0ec45fc6a3a9566ffc7cfd1ef62823a844729c88336860798b2f6d07a4bbbd9b"
+    },
+    {
+      "from": "docs/decisions/_review-sprint1-evolution-merged.md",
+      "to": "docs/archive/reviews/observability/_review-sprint1-evolution-merged.md",
+      "sha256_before": "a88e9ac52071446d44fb125c037f071ef28ae7b0ec869cf8979208e86451c1a1",
+      "sha256_after": "a88e9ac52071446d44fb125c037f071ef28ae7b0ec869cf8979208e86451c1a1"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-a-merged.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-merged.md",
+      "sha256_before": "e72be85162918add89676db67ca54dd9a9739c9919df52f9f086da557b620751",
+      "sha256_after": "d55304eedef2c318e5c9f0ebde2d0d4ee16dde0a114e66e708d2fec6784616d6"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-phase-a-plan-brief-pi.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-pi.md",
+      "sha256_before": "f578a35c64a532b4d2283d6c4b5d718c521b62bfc9ce3283eda0cd39a2f735ff",
+      "sha256_after": "f578a35c64a532b4d2283d6c4b5d718c521b62bfc9ce3283eda0cd39a2f735ff"
+    },
+    {
+      "from": "docs/decisions/_review-w3-implementation-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-w3-implementation-brief.md",
+      "sha256_before": "94309250eeb45040af2cdbabe6a78d6c8c3580a2bd252a70854013b662fd5e52",
+      "sha256_after": "94309250eeb45040af2cdbabe6a78d6c8c3580a2bd252a70854013b662fd5e52"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-a-brief.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-brief.md",
+      "sha256_before": "8a87d24c81bd4bcd4d446c54288112aa1da026013e22f6755ac5c9ce15d47380",
+      "sha256_after": "1bacf845143c71614bc95b507098bab2cf05127ec5ed3f3ee07999ee2a369f76"
+    },
+    {
+      "from": "docs/decisions/_review-brief-m5.md",
+      "to": "docs/archive/reviews/observability/_review-brief-m5.md",
+      "sha256_before": "0d816ae8cc64cdf7359223851a080526e4ceabb57817ab779e42c73b0a5ab9d7",
+      "sha256_after": "0d816ae8cc64cdf7359223851a080526e4ceabb57817ab779e42c73b0a5ab9d7"
+    },
+    {
+      "from": "docs/decisions/w4-review-brief.md",
+      "to": "docs/archive/reviews/task-memory/w4-review-brief.md",
+      "sha256_before": "d1496960e30d8c1b1e27abae42544b9637b81d2e5badabca2ca91d7f96f49515",
+      "sha256_after": "d1496960e30d8c1b1e27abae42544b9637b81d2e5badabca2ca91d7f96f49515"
+    },
+    {
+      "from": "docs/decisions/_review-m4-pi.md",
+      "to": "docs/archive/reviews/observability/_review-m4-pi.md",
+      "sha256_before": "3bcfc5d82b8552f74f6f936fa69ab3987cf472567687f5996d5373d6a68cd816",
+      "sha256_after": "3bcfc5d82b8552f74f6f936fa69ab3987cf472567687f5996d5373d6a68cd816"
+    },
+    {
+      "from": "docs/decisions/_review-m4-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-m4-kimi.md",
+      "sha256_before": "76c52fd8201f15df36479f2d0771e93fbd77199392e354ac786ce6bb97518c34",
+      "sha256_after": "76c52fd8201f15df36479f2d0771e93fbd77199392e354ac786ce6bb97518c34"
+    },
+    {
+      "from": "docs/decisions/_review-s51-lane-correctness.md",
+      "to": "docs/archive/reviews/s51/_review-s51-lane-correctness.md",
+      "sha256_before": "4603f3810752b6500d7ad6604acc3d45134b9f00a28dd04e35f4f4b256d54c54",
+      "sha256_after": "b222c101957e68ac65dad71f3ce3b1795cd76570440fffc2e30b60c463dba91a"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-phase-a-plan-brief.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief.md",
+      "sha256_before": "b7a42217563a026070f27bda29f0d32909a806f847174bfc23046392a6b93822",
+      "sha256_after": "b7a42217563a026070f27bda29f0d32909a806f847174bfc23046392a6b93822"
+    },
+    {
+      "from": "docs/decisions/_review-cross-session-cluster-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-cross-session-cluster-brief.md",
+      "sha256_before": "7fa1c91fdf4101eeb5aa395c87711692aa93d1158e770cdeb8aecfab927290cf",
+      "sha256_after": "7fa1c91fdf4101eeb5aa395c87711692aa93d1158e770cdeb8aecfab927290cf"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-grok.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-grok.md",
+      "sha256_before": "5886e9ffade7b4957959675f80abc533e5801efcfd764c6f1d880ab384c2291e",
+      "sha256_after": "5886e9ffade7b4957959675f80abc533e5801efcfd764c6f1d880ab384c2291e"
+    },
+    {
+      "from": "docs/decisions/_review-w0-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-w0-merged.md",
+      "sha256_before": "9ad8b1a23a935725fee0b838bb8f857b0a66cb40335d2ef00e65b0b457f4c344",
+      "sha256_after": "74ea33602801bfcda67392c4223b025e26a0a3210e1eb9a5a5a6a7cb993fdb2c"
+    },
+    {
+      "from": "docs/decisions/_review-sprint1-evolution-brief.md",
+      "to": "docs/archive/reviews/observability/_review-sprint1-evolution-brief.md",
+      "sha256_before": "975d349587c7bc9b14afb061840b299beb96ef88a4f37d2cf548d3cf58466f39",
+      "sha256_after": "975d349587c7bc9b14afb061840b299beb96ef88a4f37d2cf548d3cf58466f39"
+    },
+    {
+      "from": "docs/decisions/_w5-2-cross-project-promote-brief.md",
+      "to": "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief.md",
+      "sha256_before": "1e89c6cfadebb4002231232db92fa77c96a45108e97e389fc6cb6216a42d276b",
+      "sha256_after": "1e89c6cfadebb4002231232db92fa77c96a45108e97e389fc6cb6216a42d276b"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-d-merged.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-merged.md",
+      "sha256_before": "387d01d5afea677e3832986a99c0e946b90a9394d9b8ac589fa8e6258ac9ab7e",
+      "sha256_after": "387d01d5afea677e3832986a99c0e946b90a9394d9b8ac589fa8e6258ac9ab7e"
+    },
+    {
+      "from": "docs/decisions/_review-brief-l2.md",
+      "to": "docs/archive/reviews/observability/_review-brief-l2.md",
+      "sha256_before": "a72fa5a32632d44d3a6bc3f469cc08f9d84b18070cee8472d6afb1272ce4d5ba",
+      "sha256_after": "a72fa5a32632d44d3a6bc3f469cc08f9d84b18070cee8472d6afb1272ce4d5ba"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-pi.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-pi.md",
+      "sha256_before": "51d5e000ff752ac34ea359c8c69cfb5c12f3dffbe0ad12b6cdf2fe1171ec492d",
+      "sha256_after": "ec5894a6665bda86b7eccb5223c40356e5323c653fad1ec44d27e39348df3305"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-v2-grok.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-grok.md",
+      "sha256_before": "6979652ec9ba32ae68809b884da4e98e17ff46e0e3d97ed6b60cc41676d65562",
+      "sha256_after": "6979652ec9ba32ae68809b884da4e98e17ff46e0e3d97ed6b60cc41676d65562"
+    },
+    {
+      "from": "docs/decisions/_review-brief-m2.md",
+      "to": "docs/archive/reviews/observability/_review-brief-m2.md",
+      "sha256_before": "47ee85097a741d2bb59e6fff6ad0fb578a6fc413416cb7c5874b1441b0943af3",
+      "sha256_after": "47ee85097a741d2bb59e6fff6ad0fb578a6fc413416cb7c5874b1441b0943af3"
+    },
+    {
+      "from": "docs/decisions/_fix-s51-m1-m7-review-architecture.md",
+      "to": "docs/archive/reviews/s51/_fix-s51-m1-m7-review-architecture.md",
+      "sha256_before": "af9459dead0bd15072960bf3be7ec3c29a3ce2cbcf045a15c4f6d66ae105262a",
+      "sha256_after": "049afc63180141593d1b2bf2f54e1ca43938f4cfc51742b52d4c4440b698ddf8"
+    },
+    {
+      "from": "docs/decisions/_review-s51-lane-invariants.md",
+      "to": "docs/archive/reviews/s51/_review-s51-lane-invariants.md",
+      "sha256_before": "7f5934508cdde82d34c012f32f1e82d79f6c14a8e30a281bf499f9eb2e8ad241",
+      "sha256_after": "68032e23ded490833435ecea4d5e6a2af3c7515b1a10f74c150a6f79e9f49c9e"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-b-merged.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-merged.md",
+      "sha256_before": "3320ff61189a6caf56571b9388cebd49a803ec2564b531fb3f59648078f2f344",
+      "sha256_after": "b64d12764a5786e06a9a801968141b189668ed984014a73b27f0cb816e067f4f"
+    },
+    {
+      "from": "docs/decisions/_review-p2-pi.md",
+      "to": "docs/archive/reviews/observability/_review-p2-pi.md",
+      "sha256_before": "c6fc9f0471a458904c4f90f6dfd0f27d19b0f64de0a5e6b715ec6851dc833f9b",
+      "sha256_after": "c6fc9f0471a458904c4f90f6dfd0f27d19b0f64de0a5e6b715ec6851dc833f9b"
+    },
+    {
+      "from": "docs/decisions/_review-w1-implementation-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-w1-implementation-brief.md",
+      "sha256_before": "99c84380723fde951e07b94b749f21395a954f97ff7b08aa5b189c9865420c41",
+      "sha256_after": "99c84380723fde951e07b94b749f21395a954f97ff7b08aa5b189c9865420c41"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-merged.md",
+      "sha256_before": "554e5c26fc39aae400dd9e0e93709db1c549e2910f4b12fbc28ad2517ba4ca24",
+      "sha256_after": "554e5c26fc39aae400dd9e0e93709db1c549e2910f4b12fbc28ad2517ba4ca24"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-v2-pi.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-pi.md",
+      "sha256_before": "c677925612b46f437c3365456d00f9295fbd6e414bb077ce8c77d347069611ba",
+      "sha256_after": "c677925612b46f437c3365456d00f9295fbd6e414bb077ce8c77d347069611ba"
+    },
+    {
+      "from": "docs/decisions/_w5-2-cross-project-promote-brief-v2.md",
+      "to": "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief-v2.md",
+      "sha256_before": "849244189cda201181ba2d1f81f277434fbf967aead77444388f2dad983ac416",
+      "sha256_after": "849244189cda201181ba2d1f81f277434fbf967aead77444388f2dad983ac416"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-brief.md",
+      "sha256_before": "3b8921e36f9edc78859401e8f7e60ded889247e46b09fd367b4b911ae1b2d4c5",
+      "sha256_after": "3b8921e36f9edc78859401e8f7e60ded889247e46b09fd367b4b911ae1b2d4c5"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-d-brief.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-brief.md",
+      "sha256_before": "dd887c64ddfbd8ccc16cdbd2567c3aabddda4266e477e96913bda15cdc2b6227",
+      "sha256_after": "dd887c64ddfbd8ccc16cdbd2567c3aabddda4266e477e96913bda15cdc2b6227"
+    },
+    {
+      "from": "docs/decisions/_review-s51-lane-architecture.md",
+      "to": "docs/archive/reviews/s51/_review-s51-lane-architecture.md",
+      "sha256_before": "18b2eea6d02bbeb84e17c095816dfcce6e2899744a0d345ef5e94b286a6682eb",
+      "sha256_after": "c8596a578a932587273a79d10e9115bffa24144d13054bcf6b317f1b9f2e40f5"
+    },
+    {
+      "from": "docs/decisions/_review-l2-pi.md",
+      "to": "docs/archive/reviews/observability/_review-l2-pi.md",
+      "sha256_before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "from": "docs/decisions/_review-sprint1-evolution-pi.md",
+      "to": "docs/archive/reviews/observability/_review-sprint1-evolution-pi.md",
+      "sha256_before": "99ca75d18993fbcad5e0557ec4322b1d1474f57ee81727c4f5505ded03575d06",
+      "sha256_after": "99ca75d18993fbcad5e0557ec4322b1d1474f57ee81727c4f5505ded03575d06"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-e-merged.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-e-merged.md",
+      "sha256_before": "7ee318377dcad873c29b397f5b190a2b87c32d498b22258341a062690464f0d6",
+      "sha256_after": "7ee318377dcad873c29b397f5b190a2b87c32d498b22258341a062690464f0d6"
+    },
+    {
+      "from": "docs/decisions/_review-w1-merged.md",
+      "to": "docs/archive/reviews/task-memory/_review-w1-merged.md",
+      "sha256_before": "7158e7d71d9e79f0f8c2c3fb22a797c5c4f95835759ff06204ff6975fcf28722",
+      "sha256_after": "7158e7d71d9e79f0f8c2c3fb22a797c5c4f95835759ff06204ff6975fcf28722"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-c-pi.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-pi.md",
+      "sha256_before": "affbf1fb8f298027c2f849d234f4765b5c9f1bd8e8b125f852589a99a373791f",
+      "sha256_after": "affbf1fb8f298027c2f849d234f4765b5c9f1bd8e8b125f852589a99a373791f"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-brief.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-brief.md",
+      "sha256_before": "52bdfc182a7d2f13a09b2c65373effc646d66cd6541c38c04825e225c0a50989",
+      "sha256_after": "d202c1eddc5c34da581cffd5d16a8b9911da289c0a8609721a387b168bbf7d8c"
+    },
+    {
+      "from": "docs/decisions/_review-m2-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-m2-kimi.md",
+      "sha256_before": "79050c6d3880db6ae7429f8b22dad3701ec972bac20b8798f71f528f969cbe88",
+      "sha256_after": "79050c6d3880db6ae7429f8b22dad3701ec972bac20b8798f71f528f969cbe88"
+    },
+    {
+      "from": "docs/decisions/_review-l2-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-l2-kimi.md",
+      "sha256_before": "900ec4a6aa2f05c9eb3bcc22b33f7336cfac4faf1d803d5dedf28b520cd497fb",
+      "sha256_after": "900ec4a6aa2f05c9eb3bcc22b33f7336cfac4faf1d803d5dedf28b520cd497fb"
+    },
+    {
+      "from": "docs/decisions/_review-w2-implementation-brief.md",
+      "to": "docs/archive/reviews/task-memory/_review-w2-implementation-brief.md",
+      "sha256_before": "b513caff7635aeb9ca2c6ae7c9b703c47211587f7c108ac785cb77ba6c2a3ee9",
+      "sha256_after": "b513caff7635aeb9ca2c6ae7c9b703c47211587f7c108ac785cb77ba6c2a3ee9"
+    },
+    {
+      "from": "docs/decisions/_review-task-memory-loop-pi.md",
+      "to": "docs/archive/reviews/task-memory/_review-task-memory-loop-pi.md",
+      "sha256_before": "6d450f63f39405156f056c2f9e5a0df65616b1a32cf9d9a0c7bf477a96cc5c3d",
+      "sha256_after": "6d450f63f39405156f056c2f9e5a0df65616b1a32cf9d9a0c7bf477a96cc5c3d"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-b-brief.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-brief.md",
+      "sha256_before": "78855e9b42324c3d02bd862fb6a3087f3e50ec5a998cb066fd2ee4578127823e",
+      "sha256_after": "4561cca08cf717b3feed006c89c786efdf04799b67d90464869c29863d94fbc1"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-c-brief.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-brief.md",
+      "sha256_before": "e47fab826675262194c7bb9f27d3bc22c7a923cb5aa1a546f311ea954946c6b9",
+      "sha256_after": "83db21fbeb6f2bdabd00fd8687f060a778b05b94f6c50a2ff31ad178cdcc99d3"
+    },
+    {
+      "from": "docs/decisions/_review-dashboard-v3-phase-a-task1-brief.md",
+      "to": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-task1-brief.md",
+      "sha256_before": "9c823ede577b64a65c3bff3fdfdf9929041a464d56662f68f1215b84e97ca671",
+      "sha256_after": "9c823ede577b64a65c3bff3fdfdf9929041a464d56662f68f1215b84e97ca671"
+    },
+    {
+      "from": "docs/decisions/_review-instinct-loop-phase-c-merged.md",
+      "to": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-merged.md",
+      "sha256_before": "169f284d46510654a4b6d221b1a8daec3abf2cdd1985469b324cbfae59a84862",
+      "sha256_after": "fbbc6d53f52c40e3d9250e143337b78f2d48ece74f660ef5f0866b55bba67f93"
+    },
+    {
+      "from": "docs/decisions/_review-s51-gate45-46-merged.md",
+      "to": "docs/archive/reviews/s51/_review-s51-gate45-46-merged.md",
+      "sha256_before": "563438bc818eec164babde62ba96e3fb03ec5a0137e2d31cf1c8f07f2a7aa407",
+      "sha256_after": "861e5dcf77c0454281897bc48093cc0e1b771927eaac78267da1b1299b7aaa3e"
+    },
+    {
+      "from": "docs/decisions/_review-s51-gate45-46-brief.md",
+      "to": "docs/archive/reviews/s51/_review-s51-gate45-46-brief.md",
+      "sha256_before": "b408182616c6e7c1c5fee88d3c25c217fbbe5fe61718d62673b145cc253c4d7c",
+      "sha256_after": "93ba98f1c92acaf7e22db202307b71f13883621704b9a63ee8df88af4c302907"
+    },
+    {
+      "from": "docs/decisions/_review-pi.md",
+      "to": "docs/archive/reviews/observability/_review-pi.md",
+      "sha256_before": "8f1446db3718e8c199b74337e2258e81b3616590fd1abaa60ef581a3f683d867",
+      "sha256_after": "8f1446db3718e8c199b74337e2258e81b3616590fd1abaa60ef581a3f683d867"
+    },
+    {
+      "from": "docs/decisions/_review-kimi.md",
+      "to": "docs/archive/reviews/observability/_review-kimi.md",
+      "sha256_before": "edec902bc0fd37acd9379c64a6d30c645072d4b9c6d60d08478e70a1bd47e1b3",
+      "sha256_after": "edec902bc0fd37acd9379c64a6d30c645072d4b9c6d60d08478e70a1bd47e1b3"
+    },
+    {
+      "from": "docs/archive/AGENTS.md",
+      "to": "docs/archive/agent-integration-legacy.md",
+      "sha256_before": "e6a31829cdb81f8482e39412de0ef4cd44630077393d6ae50142f6dec1ff77cf",
+      "sha256_after": "e6a31829cdb81f8482e39412de0ef4cd44630077393d6ae50142f6dec1ff77cf"
+    },
+    {
+      "from": "docs/research-survey.md",
+      "to": "docs/research/research-survey.md",
+      "sha256_before": "13118cdf6e198f7888811ebbe1d6f03b365fcd239bc47e23f206c900dadb7b85",
+      "sha256_after": "e0f9490487bf9a938a84fe8675412f7718c96b8a4c9f2f2c920d690a94c29dc9"
+    },
+    {
+      "from": "docs/2026-09-12-agent-trust-wechat.md",
+      "to": "docs/essays/agent-trust/article.md",
+      "sha256_before": "3aeac8c01835eaac176ad919db00f0e5f14b4c39cab76546c7ec11eb71191622",
+      "sha256_after": "a755b3bf7e046582cfbce3f4f40d70ac6c9e1ac659035345df7caba4d2569e3a"
+    },
+    {
+      "from": "docs/2026-09-12-agent-trust-wechat.html",
+      "to": "docs/essays/agent-trust/preview.html",
+      "sha256_before": "421c3cc9d4bddbecf9f950c7c6ac115575a49f31ff87b73992830c2820c0d8d2",
+      "sha256_after": "421c3cc9d4bddbecf9f950c7c6ac115575a49f31ff87b73992830c2820c0d8d2"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/01-committee.svg",
+      "to": "docs/essays/agent-trust/assets/01-committee.svg",
+      "sha256_before": "15e6847c29d7540b3779b7778a4e0016e49453c14298e75c0832b0ee57524f66",
+      "sha256_after": "15e6847c29d7540b3779b7778a4e0016e49453c14298e75c0832b0ee57524f66"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/05-delegation.svg",
+      "to": "docs/essays/agent-trust/assets/05-delegation.svg",
+      "sha256_before": "645d800d5fcca8b4e34718d211f35a08bbabc750b6d211424eb92b4e1d6f46e9",
+      "sha256_after": "645d800d5fcca8b4e34718d211f35a08bbabc750b6d211424eb92b4e1d6f46e9"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/03-stage-rule.png",
+      "to": "docs/essays/agent-trust/assets/03-stage-rule.png",
+      "sha256_before": "8521cc8385c68a7c707f2a38602940fc863287f48b131b2f8811228cee3a82ec",
+      "sha256_after": "8521cc8385c68a7c707f2a38602940fc863287f48b131b2f8811228cee3a82ec"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/04-clock.png",
+      "to": "docs/essays/agent-trust/assets/04-clock.png",
+      "sha256_before": "8585fbe2d785bc8d0fb2bcaa53ad2f25abfcf748eedf2f2f39f4821ba31e9094",
+      "sha256_after": "8585fbe2d785bc8d0fb2bcaa53ad2f25abfcf748eedf2f2f39f4821ba31e9094"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mermaid-config.json",
+      "to": "docs/essays/agent-trust/assets/mermaid-config.json",
+      "sha256_before": "f0c227b9e2775b92fe47fc03886eda1782d706d329309cf495dc528e7d1687a7",
+      "sha256_after": "f0c227b9e2775b92fe47fc03886eda1782d706d329309cf495dc528e7d1687a7"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/05-delegation.mmd",
+      "to": "docs/essays/agent-trust/assets/05-delegation.mmd",
+      "sha256_before": "b2d9d97ec333cf9594b029000abc887cf8cc5801d57b34d0ef5fc28d2a1dceb3",
+      "sha256_after": "b2d9d97ec333cf9594b029000abc887cf8cc5801d57b34d0ef5fc28d2a1dceb3"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/review-provenance.json",
+      "to": "docs/essays/agent-trust/assets/review-provenance.json",
+      "sha256_before": "15b4890034fc3a27bd40200f8e6ec5a0b4d581c21035c44068581b07d7310a66",
+      "sha256_after": "15b4890034fc3a27bd40200f8e6ec5a0b4d581c21035c44068581b07d7310a66"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/07-review.mmd",
+      "to": "docs/essays/agent-trust/assets/07-review.mmd",
+      "sha256_before": "9028c03f56140876d7e896098ad17088bfab8c4cc4ae5a5a09c10616e57d8ac3",
+      "sha256_after": "9028c03f56140876d7e896098ad17088bfab8c4cc4ae5a5a09c10616e57d8ac3"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/09-memory.png",
+      "to": "docs/essays/agent-trust/assets/09-memory.png",
+      "sha256_before": "a72b812175dccf5ea3777c657bc292920670c7683c619e0ae34bcaaa05055a5f",
+      "sha256_after": "a72b812175dccf5ea3777c657bc292920670c7683c619e0ae34bcaaa05055a5f"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/07-review.svg",
+      "to": "docs/essays/agent-trust/assets/07-review.svg",
+      "sha256_before": "3cef4102169b2c9f4e2347002cc4ef30adff34822a70b3273fcaae0bd666d811",
+      "sha256_after": "3cef4102169b2c9f4e2347002cc4ef30adff34822a70b3273fcaae0bd666d811"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/artifact-sha256.json",
+      "to": "docs/essays/agent-trust/assets/artifact-sha256.json",
+      "sha256_before": "bec59f510a8320eac2e1812ba4ef2f02b53935809119549873645d946b5b9fdf",
+      "sha256_after": "bec59f510a8320eac2e1812ba4ef2f02b53935809119549873645d946b5b9fdf"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/07-review.png",
+      "to": "docs/essays/agent-trust/assets/07-review.png",
+      "sha256_before": "3baa4d7740d5b6785fa2138c9aaee632e938bd06374726ffb02c0c64ace9441a",
+      "sha256_after": "3baa4d7740d5b6785fa2138c9aaee632e938bd06374726ffb02c0c64ace9441a"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/09-memory.svg",
+      "to": "docs/essays/agent-trust/assets/09-memory.svg",
+      "sha256_before": "75eeba32155e95177d9112ef07b7235bb4223011131931dc12876979cf5799aa",
+      "sha256_after": "75eeba32155e95177d9112ef07b7235bb4223011131931dc12876979cf5799aa"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/raw-result-verification.json",
+      "to": "docs/essays/agent-trust/assets/raw-result-verification.json",
+      "sha256_before": "c0f15a4e2ed521e0af4d9ad7acf7f01d7739cbb5f03bb7e5c4b657e9a4f8c603",
+      "sha256_after": "c0f15a4e2ed521e0af4d9ad7acf7f01d7739cbb5f03bb7e5c4b657e9a4f8c603"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/03-stage-rule.mmd",
+      "to": "docs/essays/agent-trust/assets/03-stage-rule.mmd",
+      "sha256_before": "111f0638df56be8b164b36c683e857722e318b77e54b6e06dfad40b85e79ec61",
+      "sha256_after": "111f0638df56be8b164b36c683e857722e318b77e54b6e06dfad40b85e79ec61"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/04-clock.svg",
+      "to": "docs/essays/agent-trust/assets/04-clock.svg",
+      "sha256_before": "6ec08d083d01996c989679af8bf819681f7c57ea346f842ce34722117e05ce80",
+      "sha256_after": "6ec08d083d01996c989679af8bf819681f7c57ea346f842ce34722117e05ce80"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/EDITORIAL-AUDIT.md",
+      "to": "docs/essays/agent-trust/assets/EDITORIAL-AUDIT.md",
+      "sha256_before": "8114f65ee838143496c45d94b09ace2ff120b353a33104fcf19eb36d9431a080",
+      "sha256_after": "8114f65ee838143496c45d94b09ace2ff120b353a33104fcf19eb36d9431a080"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/chart-data.json",
+      "to": "docs/essays/agent-trust/assets/chart-data.json",
+      "sha256_before": "413fe5a4842af96235b83e409fe96188414e39d3edaddfba821730ce19b0b19d",
+      "sha256_after": "413fe5a4842af96235b83e409fe96188414e39d3edaddfba821730ce19b0b19d"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/05-delegation.png",
+      "to": "docs/essays/agent-trust/assets/05-delegation.png",
+      "sha256_before": "cf604be7d874c3779b06fd628751b41431c934527f92f3868bb228aa3e2460b5",
+      "sha256_after": "cf604be7d874c3779b06fd628751b41431c934527f92f3868bb228aa3e2460b5"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/03-stage-rule.svg",
+      "to": "docs/essays/agent-trust/assets/03-stage-rule.svg",
+      "sha256_before": "6321ac0e9dd6223e5bf279cf0e89a40aaca73a55cb40a72055a77caa8bb417b3",
+      "sha256_after": "6321ac0e9dd6223e5bf279cf0e89a40aaca73a55cb40a72055a77caa8bb417b3"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/01-committee.png",
+      "to": "docs/essays/agent-trust/assets/01-committee.png",
+      "sha256_before": "b8d50904b786d093c20d8424f6583b88d792e56899bf8ec72a105b71fce40fb2",
+      "sha256_after": "b8d50904b786d093c20d8424f6583b88d792e56899bf8ec72a105b71fce40fb2"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mobile-clock-section.png",
+      "to": "docs/essays/agent-trust/assets/mobile-clock-section.png",
+      "sha256_before": "1672d8757e387ea42d5ae2317e4d3111dcf68e72202fb92d5c19f0c1fdf1c6fe",
+      "sha256_after": "1672d8757e387ea42d5ae2317e4d3111dcf68e72202fb92d5c19f0c1fdf1c6fe"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/render_figures.py",
+      "to": "docs/essays/agent-trust/assets/render_figures.py",
+      "sha256_before": "f8a29170d922d2efc95dfe588a5e21f5dd8d9ed9f63eca9b470ac9cdcba0c6c2",
+      "sha256_after": "f8a29170d922d2efc95dfe588a5e21f5dd8d9ed9f63eca9b470ac9cdcba0c6c2"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/README.md",
+      "to": "docs/essays/agent-trust/assets/README.md",
+      "sha256_before": "6cfc177c1085d1f0dfe20f06fc8a73f5aaff10e2319650b5588432ebc9850863",
+      "sha256_after": "6fc9c258a9b68820b13fe913f851df5d139faaa1be65e9adcb52c5b484a07826"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/06-wikiskill.png",
+      "to": "docs/essays/agent-trust/assets/06-wikiskill.png",
+      "sha256_before": "77ea2aacbef8277bd9477077098999262fb7fcc3a5d04f94ba2af90b9b8bb9b4",
+      "sha256_after": "77ea2aacbef8277bd9477077098999262fb7fcc3a5d04f94ba2af90b9b8bb9b4"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mobile-main-figure.png",
+      "to": "docs/essays/agent-trust/assets/mobile-main-figure.png",
+      "sha256_before": "00fd0aa4adbe6f0957c013986dfe8077f0e5f49fbea7b3ccbb9cff8206c6f146",
+      "sha256_after": "00fd0aa4adbe6f0957c013986dfe8077f0e5f49fbea7b3ccbb9cff8206c6f146"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/08-harness.png",
+      "to": "docs/essays/agent-trust/assets/08-harness.png",
+      "sha256_before": "1be44b64b035c419ad19206f8b1ebfe83d36ecd8f5aadd5c44b7006f44db1ab0",
+      "sha256_after": "1be44b64b035c419ad19206f8b1ebfe83d36ecd8f5aadd5c44b7006f44db1ab0"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/02-roles.png",
+      "to": "docs/essays/agent-trust/assets/02-roles.png",
+      "sha256_before": "f25b32d0be2c8f50058bf5915160fd39ff091788269455f3d8c6753f0208b93a",
+      "sha256_after": "f25b32d0be2c8f50058bf5915160fd39ff091788269455f3d8c6753f0208b93a"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/build_article.py",
+      "to": "docs/essays/agent-trust/assets/build_article.py",
+      "sha256_before": "c442ee11d0ad20783893afdca39f53d54feecb34b761a8cb2a73d7f258f702b8",
+      "sha256_after": "c442ee11d0ad20783893afdca39f53d54feecb34b761a8cb2a73d7f258f702b8"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/contact-sheet.jpg",
+      "to": "docs/essays/agent-trust/assets/contact-sheet.jpg",
+      "sha256_before": "e7970489a501570a92b018caaaa1881d35499aaf21b978b8500457ea9c300c9d",
+      "sha256_after": "e7970489a501570a92b018caaaa1881d35499aaf21b978b8500457ea9c300c9d"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/02-roles.mmd",
+      "to": "docs/essays/agent-trust/assets/02-roles.mmd",
+      "sha256_before": "276a4885d69f7de29f6f274498bd2711c8b12daa9777048ac13fd74a2fb27973",
+      "sha256_after": "276a4885d69f7de29f6f274498bd2711c8b12daa9777048ac13fd74a2fb27973"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/02-roles.svg",
+      "to": "docs/essays/agent-trust/assets/02-roles.svg",
+      "sha256_before": "5b8b452b3c1ea0091d89507411285ca3cbd647cc610286c8e1b743cf452aba72",
+      "sha256_after": "5b8b452b3c1ea0091d89507411285ca3cbd647cc610286c8e1b743cf452aba72"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mobile-opening.png",
+      "to": "docs/essays/agent-trust/assets/mobile-opening.png",
+      "sha256_before": "1b129f146539ff10c240e50863411691463739858c6cda6b720fa2d53d83922d",
+      "sha256_after": "1b129f146539ff10c240e50863411691463739858c6cda6b720fa2d53d83922d"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/08-harness.svg",
+      "to": "docs/essays/agent-trust/assets/08-harness.svg",
+      "sha256_before": "34dd7fcad4cd188926b7b46749358dbb24d87d6bcac3ec12a8a56d1a1f6f9589",
+      "sha256_after": "34dd7fcad4cd188926b7b46749358dbb24d87d6bcac3ec12a8a56d1a1f6f9589"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mobile-table-section.png",
+      "to": "docs/essays/agent-trust/assets/mobile-table-section.png",
+      "sha256_before": "5c1f24d9b012b4bd36e90a7de16b97221e32dfc35b1e882f7d00d238cafca26b",
+      "sha256_after": "5c1f24d9b012b4bd36e90a7de16b97221e32dfc35b1e882f7d00d238cafca26b"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/06-wikiskill.svg",
+      "to": "docs/essays/agent-trust/assets/06-wikiskill.svg",
+      "sha256_before": "683351b0400c6fa45a8e8373177e878e27ea6c82e8c324d5bdb04e6652b4d6db",
+      "sha256_after": "683351b0400c6fa45a8e8373177e878e27ea6c82e8c324d5bdb04e6652b4d6db"
+    },
+    {
+      "from": "docs/assets/agent-trust-20260914/mobile-verification.json",
+      "to": "docs/essays/agent-trust/assets/mobile-verification.json",
+      "sha256_before": "f6e5984eba6307982b62870d3cb2fc752eabe9bbc15a4445a33f139ef0ff3818",
+      "sha256_after": "f6e5984eba6307982b62870d3cb2fc752eabe9bbc15a4445a33f139ef0ff3818"
+    },
+    {
+      "from": "docs/essays/2026-09-12-agent-trust-wechat-illustrated.md",
+      "to": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "sha256_before": "21519fc6aa08f36a1632daa680d79a730f2b087cc6c6160bf2f042ad7f834a6a",
+      "sha256_after": "b1fdb8445bd1cb6271702fda4e40624ab6720fc96cf98ed3dc813e0e86807659"
+    },
+    {
+      "from": "docs/essays/2026-09-12-agent-trust-wechat-editorial.md",
+      "to": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-editorial.md",
+      "sha256_before": "6d34485a329b7443fc9954ddae42781496b46a69d5baadce7ee8c8053841ddc7",
+      "sha256_after": "11bf1dd41a49403f1e613855ca1f079a572cd58e31e5ed5c0420ef106f8ae7ce"
+    },
+    {
+      "from": "docs/essays/2026-09-12-agent-trust-wechat.md",
+      "to": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "sha256_before": "7f94ba39fac8b61510a6adc91d1e3157966cb11103b49fe142cea872abb03a91",
+      "sha256_after": "fb9ffbd2ae0e2a8344e08362a919d8e2e9ccd64a6fa19b5b18860536667b7403"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-1.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-1.mmd",
+      "sha256_before": "16e80e8870b52b3aa5eaac92bd4ccb420e1a91f4109206599db41735f5df4642",
+      "sha256_after": "16e80e8870b52b3aa5eaac92bd4ccb420e1a91f4109206599db41735f5df4642"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-10.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-10.mmd",
+      "sha256_before": "5d70901e9e1198473c6057eea7fc6babace9b302e84343ef61f254c9ce498ac1",
+      "sha256_after": "5d70901e9e1198473c6057eea7fc6babace9b302e84343ef61f254c9ce498ac1"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-2.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-2.mmd",
+      "sha256_before": "3c0657abb1ccb9091b0be57bbbb0d7afdec1a73922331ef1a0b9097e4a48f464",
+      "sha256_after": "3c0657abb1ccb9091b0be57bbbb0d7afdec1a73922331ef1a0b9097e4a48f464"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-3.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-3.mmd",
+      "sha256_before": "04d47eeffb6a682b44ba8041f4145a762913e229c0333ce29d1a99f907b20e1d",
+      "sha256_after": "04d47eeffb6a682b44ba8041f4145a762913e229c0333ce29d1a99f907b20e1d"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/mermaid-config.json",
+      "to": "docs/essays/agent-trust/archive/assets/mermaid-config.json",
+      "sha256_before": "a3e1f8fa2354060931d268898c56c163f92ce25ffcbc897fcc33d2cbd9353329",
+      "sha256_after": "a3e1f8fa2354060931d268898c56c163f92ce25ffcbc897fcc33d2cbd9353329"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-7.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-7.mmd",
+      "sha256_before": "216233b5502854018939962e4df4abfe9f1d032ffa4f1d63e45385f44c54807c",
+      "sha256_after": "216233b5502854018939962e4df4abfe9f1d032ffa4f1d63e45385f44c54807c"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-6.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-6.mmd",
+      "sha256_before": "a53616d63dfbbe307265acb24fab548949b5ad3cb11e1e8c969e96ef19ec6e97",
+      "sha256_after": "a53616d63dfbbe307265acb24fab548949b5ad3cb11e1e8c969e96ef19ec6e97"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-4.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-4.mmd",
+      "sha256_before": "10ecb0d24f903faf834874c9755d8717ed48a1433675bc890945b45f9d63177e",
+      "sha256_after": "10ecb0d24f903faf834874c9755d8717ed48a1433675bc890945b45f9d63177e"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-5.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-5.mmd",
+      "sha256_before": "5a4fe1f4bf9b3ad98dd384510be59c571d0b8ba4fa31aa50e64b2b511ea90f2f",
+      "sha256_after": "5a4fe1f4bf9b3ad98dd384510be59c571d0b8ba4fa31aa50e64b2b511ea90f2f"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-6.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-6.png",
+      "sha256_before": "ab49a0ff946e31ad18589063aeb1abecbc5d2d2320b51132f2e8e6279e9cd8cf",
+      "sha256_after": "ab49a0ff946e31ad18589063aeb1abecbc5d2d2320b51132f2e8e6279e9cd8cf"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-7.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-7.png",
+      "sha256_before": "5bae2196db8b65375072b63730c886a0381a29109e2a03c7e5fe490e12162a65",
+      "sha256_after": "5bae2196db8b65375072b63730c886a0381a29109e2a03c7e5fe490e12162a65"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-5.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-5.png",
+      "sha256_before": "7505fe4fd695bf9bf399ef28054190fef158f782b03288e38a7009d8015ff2fc",
+      "sha256_after": "7505fe4fd695bf9bf399ef28054190fef158f782b03288e38a7009d8015ff2fc"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-4.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-4.png",
+      "sha256_before": "476481b41901ca59ed980a9bfd25c83c28d5e0450b693f18c18ce7f4dd692718",
+      "sha256_after": "476481b41901ca59ed980a9bfd25c83c28d5e0450b693f18c18ce7f4dd692718"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-10.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-10.png",
+      "sha256_before": "41046988ee10e64460ace55355d765af4151416636e1b880b01ddb7e3ff92133",
+      "sha256_after": "41046988ee10e64460ace55355d765af4151416636e1b880b01ddb7e3ff92133"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-1.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-1.png",
+      "sha256_before": "51a8ea098a88f2784c3fba5c37f6fe95365a6dd4a3408ec82fdb53363cb2f04a",
+      "sha256_after": "51a8ea098a88f2784c3fba5c37f6fe95365a6dd4a3408ec82fdb53363cb2f04a"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-3.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-3.png",
+      "sha256_before": "0684e39c6efa1a75cb39ec30fc26e5e1ef4e934e8e5b464af5c84c6b8c8201d6",
+      "sha256_after": "0684e39c6efa1a75cb39ec30fc26e5e1ef4e934e8e5b464af5c84c6b8c8201d6"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-2.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-2.png",
+      "sha256_before": "fc3136cdaaf06a87dc3217ef26cd35e03f3f7b67f20e8963f1137799ea6d3bfb",
+      "sha256_after": "fc3136cdaaf06a87dc3217ef26cd35e03f3f7b67f20e8963f1137799ea6d3bfb"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-9.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-9.png",
+      "sha256_before": "da50876838e7ec86871fd01e394b3c0ecc4b1eb2c0256e14b8193dbe77830718",
+      "sha256_after": "da50876838e7ec86871fd01e394b3c0ecc4b1eb2c0256e14b8193dbe77830718"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-8.png",
+      "to": "docs/essays/agent-trust/archive/assets/figure-8.png",
+      "sha256_before": "ea27f837e3ac2f2960a030736f4a6d9c5f6681821cc9dbd26c68266e17ed3da9",
+      "sha256_after": "ea27f837e3ac2f2960a030736f4a6d9c5f6681821cc9dbd26c68266e17ed3da9"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-8.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-8.mmd",
+      "sha256_before": "dfed16c17a44036712aede747f3c0fc101ef78d879bd7e968e1bd314ff29203f",
+      "sha256_after": "dfed16c17a44036712aede747f3c0fc101ef78d879bd7e968e1bd314ff29203f"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/figure-9.mmd",
+      "to": "docs/essays/agent-trust/archive/assets/figure-9.mmd",
+      "sha256_before": "0a415f1bf82c0accc681e5dc73eb8624a5abe524b26482b296ef45c637a22641",
+      "sha256_after": "0a415f1bf82c0accc681e5dc73eb8624a5abe524b26482b296ef45c637a22641"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/evidence/evo-lane-A-handback.md",
+      "to": "docs/essays/agent-trust/archive/assets/evidence/evo-lane-A-handback.md",
+      "sha256_before": "acb808e37d2788904260d460eb63648263a6c6c50308f6e0caa56db822048c93",
+      "sha256_after": "acb808e37d2788904260d460eb63648263a6c6c50308f6e0caa56db822048c93"
+    },
+    {
+      "from": "docs/essays/assets/agent-trust-wechat/evidence/evo-lane-C1-handback.md",
+      "to": "docs/essays/agent-trust/archive/assets/evidence/evo-lane-C1-handback.md",
+      "sha256_before": "812fde06bce64aa11c4e400eb1f13c149c261345ef7e767224d7b4e7c7663f89",
+      "sha256_after": "812fde06bce64aa11c4e400eb1f13c149c261345ef7e767224d7b4e7c7663f89"
+    }
+  ],
+  "promoted_evidence": [
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-A-claude/.omx/artifacts/evo-lane-A-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-A-claude/artifacts/evo-lane-A-handback.md",
+      "sha256": "acb808e37d2788904260d460eb63648263a6c6c50308f6e0caa56db822048c93"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-D2-claude/.omx/artifacts/evo-lane-D2-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-D2-claude/artifacts/evo-lane-D2-handback.md",
+      "sha256": "d994dbcdbaddee07fa6dbce4e6e155f67fd1b7464e1466240b88ea9ccc875283"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-B-pi/.omx/artifacts/evo-lane-B-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-B-pi/artifacts/evo-lane-B-handback.md",
+      "sha256": "bb592197ed548c514bb1f9e3b878bcbc52cda16f526d92e99d831e01f3a42c75"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-wave1/.omx/artifacts/evo-lane-B-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-B-handback.md",
+      "sha256": "bb592197ed548c514bb1f9e3b878bcbc52cda16f526d92e99d831e01f3a42c75"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-wave1/.omx/artifacts/evo-lane-A-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-A-handback.md",
+      "sha256": "acb808e37d2788904260d460eb63648263a6c6c50308f6e0caa56db822048c93"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-D1-claude/.omx/artifacts/evo-lane-D1-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-D1-claude/artifacts/evo-lane-D1-handback.md",
+      "sha256": "fa56f764cb67b0bbe3a0800cf74d69d3321ef673919e228c62d9f1d7eeb8229a"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-E-pi/.omx/artifacts/evo-lane-E-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-E-pi/artifacts/evo-lane-E-handback.md",
+      "sha256": "95fa70c2cc647336b244fa383e5efad6605b3b8b1e4eefc29a87ffdb8f35d6cd"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-Cgold-kimi/.omx/artifacts/evo-lane-Cgold-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-Cgold-kimi/artifacts/evo-lane-Cgold-handback.md",
+      "sha256": "1a9d1216a9edf6e2b92df6f1741e9a71b8fce29d8494f54a2433c237bd6a28f6"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-C-kimi/.omx/artifacts/evo-lane-C-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-C-kimi/artifacts/evo-lane-C-handback.md",
+      "sha256": "4874526bec06fea4c368e4fc981b58e3935266697f48e842ef8af60145c8f90e"
+    },
+    {
+      "old": "/Users/huchen/Projects/vibesop-evo-C-kimi/.omx/artifacts/evo-lane-C1-handback.md",
+      "new": "docs/research/evidence/evo-20260911/vibesop-evo-C-kimi/artifacts/evo-lane-C1-handback.md",
+      "sha256": "812fde06bce64aa11c4e400eb1f13c149c261345ef7e767224d7b4e7c7663f89"
+    }
+  ],
+  "raw_archives": [
+    {
+      "experiment": "multi-expert-calibration",
+      "runs": {
+        "original_path": "docs/experiments/multi-expert-calibration/runs",
+        "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-calibration/runs",
+        "file_count": 428,
+        "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-calibration/runs-manifest.json",
+        "manifest_sha256": "4e98f1adab6adb61980c51cd0f1c3b44489a2d030052de8a9854f3ca3078f04d"
+      },
+      "status": "archived; original bytes retained; local compatibility link exists"
+    },
+    {
+      "experiment": "multi-expert-formal",
+      "runs": {
+        "original_path": "docs/experiments/multi-expert-formal/runs",
+        "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-formal/runs",
+        "file_count": 13183,
+        "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-formal/runs-manifest.json",
+        "manifest_sha256": "acd31c5f6e164450f919becaf5598ac8c407afe2c98d24bc8dcb6a73af434b78"
+      },
+      "status": "archived; original bytes retained; local compatibility link exists"
+    },
+    {
+      "experiment": "multi-expert-sensitivity",
+      "runs": {
+        "original_path": "docs/experiments/multi-expert-sensitivity/runs",
+        "local_archive": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-sensitivity/runs",
+        "file_count": 6588,
+        "manifest": "/Users/huchen/Projects/vibesop-py-archives/2026-09-14/experiments/multi-expert-sensitivity/runs-manifest.json",
+        "manifest_sha256": "61baefb36d8cf379c81e753158fa67a632bf2bc8b64356b0c066130acf317fd2"
+      },
+      "status": "archived; original bytes retained; local compatibility link exists"
+    }
+  ],
+  "updated_documents": [
+    "docs/essays/agent-trust/preview.html",
+    "docs/research/research-survey.md",
+    "docs/INDEX.md",
+    "docs/task-memory-loop-article.md",
+    "docs/essays/agent-trust/article.md",
+    "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+    "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-editorial.md",
+    "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+    "docs/archive/agent-integration-legacy.md",
+    "docs/plans/2026-07-27-dashboard-v3-phase-a-data-instrumentation.md",
+    "docs/archive/reviews/task-memory/_review-w2-merged.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-kimi.md",
+    "docs/archive/reviews/s51/_fix-s51-m1-m7.md",
+    "docs/archive/reviews/task-memory/_review-w5-2-cross-project-promote-merged.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-brief.md",
+    "docs/archive/reviews/task-memory/_review-w0-implementation-brief.md",
+    "docs/archive/reviews/diagnosis/_diagnosis-2026-07-24-synthesis.md",
+    "docs/archive/reviews/observability/_review-m5-pi.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-merged.md",
+    "docs/archive/reviews/s51/_fix-s51-m1-m7-review-correctness.md",
+    "docs/archive/reviews/task-memory/_review-w3-merged.md",
+    "docs/archive/reviews/observability/_review-m5-kimi.md",
+    "docs/archive/reviews/task-memory/_review-cross-session-cluster-merged.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-grok.md",
+    "docs/archive/reviews/observability/_review-brief-p2.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-kimi.md",
+    "docs/archive/reviews/observability/_review-p2-kimi.md",
+    "docs/archive/reviews/observability/_review-m2-pi.md",
+    "docs/archive/reviews/observability/_review-brief-m4.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-merged.md",
+    "docs/archive/reviews/observability/_review-sprint1-evolution-merged.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-merged.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-pi.md",
+    "docs/archive/reviews/task-memory/_review-w3-implementation-brief.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-brief.md",
+    "docs/archive/reviews/observability/_review-brief-m5.md",
+    "docs/archive/reviews/task-memory/w4-review-brief.md",
+    "docs/archive/reviews/observability/_review-m4-pi.md",
+    "docs/archive/reviews/observability/_review-m4-kimi.md",
+    "docs/archive/reviews/s51/_review-s51-lane-correctness.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief.md",
+    "docs/archive/reviews/task-memory/_review-cross-session-cluster-brief.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-grok.md",
+    "docs/decisions/health-round-unknown-not-false-excerpt.md",
+    "docs/archive/reviews/task-memory/_review-w0-merged.md",
+    "docs/archive/reviews/observability/_review-sprint1-evolution-brief.md",
+    "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-merged.md",
+    "docs/archive/reviews/observability/_review-brief-l2.md",
+    "docs/decisions/2026-07-31-product-evolution-adversarial.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-pi.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-grok.md",
+    "docs/archive/reviews/observability/_review-brief-m2.md",
+    "docs/decisions/2026-07-29-bm25-chinese-recall-precheck.md",
+    "docs/archive/reviews/s51/_fix-s51-m1-m7-review-architecture.md",
+    "docs/archive/reviews/s51/_review-s51-lane-invariants.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-merged.md",
+    "docs/archive/reviews/observability/_review-p2-pi.md",
+    "docs/archive/reviews/task-memory/_review-w1-implementation-brief.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-merged.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-pi.md",
+    "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief-v2.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-brief.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-brief.md",
+    "docs/archive/reviews/s51/_review-s51-lane-architecture.md",
+    "docs/archive/reviews/observability/_review-l2-pi.md",
+    "docs/archive/reviews/observability/_review-sprint1-evolution-pi.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-e-merged.md",
+    "docs/archive/reviews/task-memory/_review-w1-merged.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-pi.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-brief.md",
+    "docs/archive/reviews/observability/_review-m2-kimi.md",
+    "docs/archive/reviews/observability/_review-l2-kimi.md",
+    "docs/archive/reviews/task-memory/_review-w2-implementation-brief.md",
+    "docs/archive/reviews/task-memory/_review-task-memory-loop-pi.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-brief.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-brief.md",
+    "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-task1-brief.md",
+    "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-merged.md",
+    "docs/archive/reviews/s51/_review-s51-gate45-46-merged.md",
+    "docs/archive/reviews/s51/_review-s51-gate45-46-brief.md",
+    "docs/archive/reviews/observability/_review-pi.md",
+    "docs/archive/reviews/observability/_review-kimi.md",
+    "docs/essays/agent-trust/assets/EDITORIAL-AUDIT.md",
+    "docs/essays/agent-trust/assets/README.md",
+    "memory/session.md",
+    ".omx/artifacts/pull-20260828-review-lane-b.md",
+    ".omx/artifacts/pull-20260828-review-synthesis.md",
+    ".omx/artifacts/m12-design-b.md",
+    ".omx/artifacts/pull-20260828-review-instructions.md",
+    ".omx/artifacts/pull-20260828-review-grok.md",
+    ".omx/artifacts/pull-20260828-review-lane-a.md",
+    ".omx/tmp/survey-fill/grok-review-s5.md",
+    ".omx/tmp/survey-fill/review-s6-prompt.md",
+    ".omx/tmp/survey-fill/review-final-prompt.md",
+    ".omx/tmp/survey-fill/grok-review-s4.md",
+    ".omx/tmp/survey-fill/s6.md",
+    ".omx/tmp/survey-fill/review-s7-prompt.md",
+    ".omx/tmp/survey-fill/s3.md",
+    ".omx/tmp/survey-fill/review-s2s9-fix-prompt.md",
+    ".omx/tmp/survey-fill/s4.md",
+    ".omx/tmp/survey-fill/review-s9-prompt.md",
+    ".omx/tmp/survey-fill/review-s4-prompt.md",
+    ".omx/tmp/survey-fill/grok-review-s2s9-fix.md",
+    ".omx/tmp/survey-fill/grok-review-s9.md",
+    ".omx/tmp/survey-fill/review-s8-fix-prompt.md",
+    ".omx/tmp/survey-fill/grok-review-s8.md",
+    ".omx/tmp/survey-fill/s5.md",
+    ".omx/tmp/survey-fill/review-s2-prompt.md",
+    ".omx/tmp/survey-fill/review-s8-prompt.md",
+    ".omx/tmp/survey-fill/grok-review-s7.md",
+    ".omx/tmp/survey-fill/review-s5-prompt.md",
+    ".omx/tmp/survey-fill/grok-review-s3.md",
+    ".omx/tmp/survey-fill/grok-review-s2.md",
+    ".omx/tmp/survey-fill/review-s3-prompt.md",
+    "CHANGELOG.md"
+  ]
+}

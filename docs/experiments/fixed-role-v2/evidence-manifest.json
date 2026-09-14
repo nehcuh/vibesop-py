@@ -1,0 +1,26 @@
+{
+  "status": "unfinished; no experiment rerun by cleanup",
+  "as_of": "2026-09-14",
+  "worktree": ".experiment/worktree",
+  "branch": "codex/fixed-role-committee-v2",
+  "head": "bacd55e1ec93f18c56259d5ec6917190f2262123",
+  "raw_runs": ".experiment/v2/runs",
+  "evidence": [
+    {
+      "path": ".experiment/v2/interim-pre-amendment-balanced.json",
+      "sha256": "f38fccd67b7153191bf2b688b05e1c0034fd0b2284c85dc95429d043aedd8e96"
+    },
+    {
+      "path": ".experiment/v2/auth-now-final-adjudication.md",
+      "sha256": "14f876a7673a59b1af6df52c44fbc133c04938ac2889d6c7874c0b182e327f58"
+    },
+    {
+      "path": ".experiment/v2/docker-timeout-final-adjudication.md",
+      "sha256": "edc354df0cad68ec585abea79b0b29b40c1193203b3ade0b1b0477e51803cd44"
+    },
+    {
+      "path": ".experiment/v2/FORMAL2-FREEZE-RECEIPT.json",
+      "sha256": "358f7ccaa0bd9cca98105e5bb68a6b67c2b13211ceda6a4ada5eef67a6f74818"
+    }
+  ]
+}

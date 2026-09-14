@@ -152,7 +152,6 @@ class SkillConfigManager:
 
     @classmethod
     def list_skill_configs(cls) -> dict[str, SkillConfig]:
-
         config_data = cls._load_skill_config_file()
         skill_configs = {}
 
@@ -293,7 +292,6 @@ class SkillConfigManager:
 
     @classmethod
     def _save_skill_config_file(cls, config_data: dict[str, Any]) -> None:
-
         config_file = cls.SKILL_CONFIG_FILE
 
         config_file.parent.mkdir(parents=True, exist_ok=True)

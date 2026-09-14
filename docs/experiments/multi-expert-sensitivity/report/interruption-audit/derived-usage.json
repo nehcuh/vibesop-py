@@ -1,0 +1,1323 @@
+{
+  "at": "2026-09-13T04:11:24.082960+00:00",
+  "run_root": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-sensitivity/runs/20260913T033401Z",
+  "label": "controller_interruption_usage_lower_bound",
+  "not_a_substitute_for_preregistered_stats": true,
+  "do_not_treat_missing_ledger_as_zero_usage": true,
+  "do_not_claim_all_calls_have_responses": true,
+  "n_interrupted": 8,
+  "n_dsoft": 7,
+  "n_A": 1,
+  "n_with_open_http": 7,
+  "n_all_persisted_calls_have_response": 1,
+  "n_open_http_requests": 7,
+  "derived_known_sum": {
+    "T_completion": 28460,
+    "I_prompt": 236626,
+    "cache_hit": 214905,
+    "cache_miss": 21721,
+    "K_tools_jsonl": 271,
+    "est_usd": 0.020978865000000003,
+    "bound": "lower_bound"
+  },
+  "unknown_billable": {
+    "n_open_http_requests": 7,
+    "usage": "unknown",
+    "note": "Request JSON was persisted; HTTP may have completed and been charged without a saved response. Do not record as 0."
+  },
+  "price": {
+    "miss": 0.15,
+    "hit": 0.003,
+    "out": 0.6,
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+  },
+  "scope": "participant_model_inference_only",
+  "excludes": [
+    "grok_implementation",
+    "codex_supervision",
+    "docker_host",
+    "human_time"
+  ],
+  "rows": [
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r2",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "config-render-resolve-v1",
+      "spec_variant": "brief",
+      "repeat": 2,
+      "rerun": false,
+      "started_at": "2026-09-13T03:45:45.048239+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.378286+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 30,
+      "n_response_files": 29,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 77,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-029-request.json",
+          "call_id": 29,
+          "stage": "integrate",
+          "member": "member-0",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 13498,
+          "started_at": "2026-09-13T03:46:53.152997+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1227,
+          "completion_tokens": 65,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 203,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1758,
+          "completion_tokens": 67,
+          "prompt_cache_hit_tokens": 1536,
+          "prompt_cache_miss_tokens": 222,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2037,
+          "completion_tokens": 145,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 245,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2416,
+          "completion_tokens": 1246,
+          "prompt_cache_hit_tokens": 2176,
+          "prompt_cache_miss_tokens": 240,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-004-response.json",
+          "call_id": 4,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3692,
+          "completion_tokens": 87,
+          "prompt_cache_hit_tokens": 3456,
+          "prompt_cache_miss_tokens": 236,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-005-response.json",
+          "call_id": 5,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3858,
+          "completion_tokens": 323,
+          "prompt_cache_hit_tokens": 3712,
+          "prompt_cache_miss_tokens": 146,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-006-response.json",
+          "call_id": 6,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4381,
+          "completion_tokens": 434,
+          "prompt_cache_hit_tokens": 4096,
+          "prompt_cache_miss_tokens": 285,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-007-response.json",
+          "call_id": 7,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5023,
+          "completion_tokens": 33,
+          "prompt_cache_hit_tokens": 4736,
+          "prompt_cache_miss_tokens": 287,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-008-response.json",
+          "call_id": 8,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1226,
+          "completion_tokens": 82,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 202,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-009-response.json",
+          "call_id": 9,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1908,
+          "completion_tokens": 50,
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 628,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-010-response.json",
+          "call_id": 10,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2036,
+          "completion_tokens": 77,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 244,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-011-response.json",
+          "call_id": 11,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2246,
+          "completion_tokens": 77,
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 198,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-012-response.json",
+          "call_id": 12,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2428,
+          "completion_tokens": 1190,
+          "prompt_cache_hit_tokens": 2176,
+          "prompt_cache_miss_tokens": 252,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-013-response.json",
+          "call_id": 13,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3648,
+          "completion_tokens": 87,
+          "prompt_cache_hit_tokens": 3456,
+          "prompt_cache_miss_tokens": 192,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-014-response.json",
+          "call_id": 14,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3814,
+          "completion_tokens": 227,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 230,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-015-response.json",
+          "call_id": 15,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4181,
+          "completion_tokens": 279,
+          "prompt_cache_hit_tokens": 3968,
+          "prompt_cache_miss_tokens": 213,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-016-response.json",
+          "call_id": 16,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4584,
+          "completion_tokens": 331,
+          "prompt_cache_hit_tokens": 4352,
+          "prompt_cache_miss_tokens": 232,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-017-response.json",
+          "call_id": 17,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1228,
+          "completion_tokens": 94,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 204,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-018-response.json",
+          "call_id": 18,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1948,
+          "completion_tokens": 156,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 156,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-019-response.json",
+          "call_id": 19,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2338,
+          "completion_tokens": 1475,
+          "prompt_cache_hit_tokens": 2176,
+          "prompt_cache_miss_tokens": 162,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-020-response.json",
+          "call_id": 20,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3843,
+          "completion_tokens": 99,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 259,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-021-response.json",
+          "call_id": 21,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4021,
+          "completion_tokens": 451,
+          "prompt_cache_hit_tokens": 3840,
+          "prompt_cache_miss_tokens": 181,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-022-response.json",
+          "call_id": 22,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4733,
+          "completion_tokens": 125,
+          "prompt_cache_hit_tokens": 4352,
+          "prompt_cache_miss_tokens": 381,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-023-response.json",
+          "call_id": 23,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5133,
+          "completion_tokens": 800,
+          "prompt_cache_hit_tokens": 4992,
+          "prompt_cache_miss_tokens": 141,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-024-response.json",
+          "call_id": 24,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5068,
+          "completion_tokens": 455,
+          "prompt_cache_hit_tokens": 4480,
+          "prompt_cache_miss_tokens": 588,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-025-response.json",
+          "call_id": 25,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5001,
+          "completion_tokens": 513,
+          "prompt_cache_hit_tokens": 4736,
+          "prompt_cache_miss_tokens": 265,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-026-response.json",
+          "call_id": 26,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5803,
+          "completion_tokens": 216,
+          "prompt_cache_hit_tokens": 5504,
+          "prompt_cache_miss_tokens": 299,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-027-response.json",
+          "call_id": 27,
+          "model": "deepseek-flash",
+          "prompt_tokens": 6077,
+          "completion_tokens": 71,
+          "prompt_cache_hit_tokens": 5888,
+          "prompt_cache_miss_tokens": 189,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-028-response.json",
+          "call_id": 28,
+          "model": "deepseek-flash",
+          "prompt_tokens": 6548,
+          "completion_tokens": 1247,
+          "prompt_cache_hit_tokens": 5120,
+          "prompt_cache_miss_tokens": 1428,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 10502,
+        "I_prompt": 102204,
+        "cache_hit": 93696,
+        "cache_miss": 8508,
+        "reasoning": 0,
+        "K_tools_jsonl": 77,
+        "est_usd": 0.007858487999999999
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "route-lifecycle-v1-full-D_soft-r1",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "route-lifecycle-v1",
+      "spec_variant": "full",
+      "repeat": 1,
+      "rerun": false,
+      "started_at": "2026-09-13T03:45:51.115556+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.378740+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 16,
+      "n_response_files": 15,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 89,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-015-request.json",
+          "call_id": 15,
+          "stage": "independent-2",
+          "member": "member-2",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 419,
+          "started_at": "2026-09-13T03:46:51.701110+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1494,
+          "completion_tokens": 123,
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 214,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2339,
+          "completion_tokens": 919,
+          "prompt_cache_hit_tokens": 2176,
+          "prompt_cache_miss_tokens": 163,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3288,
+          "completion_tokens": 661,
+          "prompt_cache_hit_tokens": 3072,
+          "prompt_cache_miss_tokens": 216,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4591,
+          "completion_tokens": 617,
+          "prompt_cache_hit_tokens": 3840,
+          "prompt_cache_miss_tokens": 751,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-004-response.json",
+          "call_id": 4,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5744,
+          "completion_tokens": 80,
+          "prompt_cache_hit_tokens": 5120,
+          "prompt_cache_miss_tokens": 624,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-005-response.json",
+          "call_id": 5,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1493,
+          "completion_tokens": 110,
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 213,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-006-response.json",
+          "call_id": 6,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2306,
+          "completion_tokens": 820,
+          "prompt_cache_hit_tokens": 2172,
+          "prompt_cache_miss_tokens": 134,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-007-response.json",
+          "call_id": 7,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3156,
+          "completion_tokens": 491,
+          "prompt_cache_hit_tokens": 2944,
+          "prompt_cache_miss_tokens": 212,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-008-response.json",
+          "call_id": 8,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4123,
+          "completion_tokens": 446,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 539,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-009-response.json",
+          "call_id": 9,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4949,
+          "completion_tokens": 481,
+          "prompt_cache_hit_tokens": 4480,
+          "prompt_cache_miss_tokens": 469,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-010-response.json",
+          "call_id": 10,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1495,
+          "completion_tokens": 79,
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 215,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-011-response.json",
+          "call_id": 11,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1819,
+          "completion_tokens": 53,
+          "prompt_cache_hit_tokens": 1536,
+          "prompt_cache_miss_tokens": 283,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-012-response.json",
+          "call_id": 12,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2334,
+          "completion_tokens": 830,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 542,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-013-response.json",
+          "call_id": 13,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3194,
+          "completion_tokens": 452,
+          "prompt_cache_hit_tokens": 2944,
+          "prompt_cache_miss_tokens": 250,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-014-response.json",
+          "call_id": 14,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4042,
+          "completion_tokens": 567,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 458,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 6729,
+        "I_prompt": 46367,
+        "cache_hit": 41084,
+        "cache_miss": 5283,
+        "reasoning": 0,
+        "K_tools_jsonl": 89,
+        "est_usd": 0.004953102
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "route-priority-table-v1-brief-D_soft-r0",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "route-priority-table-v1",
+      "spec_variant": "brief",
+      "repeat": 0,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:17.963958+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.379346+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 11,
+      "n_response_files": 11,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 46,
+      "n_open_http_requests": 0,
+      "open_http_requests": [],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1278,
+          "completion_tokens": 111,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 254,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2012,
+          "completion_tokens": 820,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 220,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2862,
+          "completion_tokens": 103,
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 174,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3051,
+          "completion_tokens": 590,
+          "prompt_cache_hit_tokens": 2816,
+          "prompt_cache_miss_tokens": 235,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-004-response.json",
+          "call_id": 4,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4003,
+          "completion_tokens": 625,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 419,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-005-response.json",
+          "call_id": 5,
+          "model": "deepseek-flash",
+          "prompt_tokens": 5015,
+          "completion_tokens": 151,
+          "prompt_cache_hit_tokens": 4608,
+          "prompt_cache_miss_tokens": 407,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-006-response.json",
+          "call_id": 6,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1277,
+          "completion_tokens": 111,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 253,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-007-response.json",
+          "call_id": 7,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2011,
+          "completion_tokens": 902,
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 219,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-008-response.json",
+          "call_id": 8,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2943,
+          "completion_tokens": 103,
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 255,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-009-response.json",
+          "call_id": 9,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3132,
+          "completion_tokens": 481,
+          "prompt_cache_hit_tokens": 2944,
+          "prompt_cache_miss_tokens": 188,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-010-response.json",
+          "call_id": 10,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3906,
+          "completion_tokens": 561,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 322,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 4558,
+        "I_prompt": 31490,
+        "cache_hit": 28544,
+        "cache_miss": 2946,
+        "reasoning": 0,
+        "K_tools_jsonl": 46,
+        "est_usd": 0.0032623319999999993
+      },
+      "unknown": {
+        "in_flight_http": 0,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "match-vwap-window-v1-brief-D_soft-r2",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "match-vwap-window-v1",
+      "spec_variant": "brief",
+      "repeat": 2,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:26.299208+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.379498+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 12,
+      "n_response_files": 11,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 30,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-011-request.json",
+          "call_id": 11,
+          "stage": "independent-1",
+          "member": "member-1",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 962,
+          "started_at": "2026-09-13T03:46:52.110911+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1307,
+          "completion_tokens": 88,
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 155,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2051,
+          "completion_tokens": 939,
+          "prompt_cache_hit_tokens": 1917,
+          "prompt_cache_miss_tokens": 134,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3020,
+          "completion_tokens": 128,
+          "prompt_cache_hit_tokens": 2816,
+          "prompt_cache_miss_tokens": 204,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3256,
+          "completion_tokens": 415,
+          "prompt_cache_hit_tokens": 3072,
+          "prompt_cache_miss_tokens": 184,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-004-response.json",
+          "call_id": 4,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3971,
+          "completion_tokens": 517,
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 387,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-005-response.json",
+          "call_id": 5,
+          "model": "deepseek-flash",
+          "prompt_tokens": 4674,
+          "completion_tokens": 313,
+          "prompt_cache_hit_tokens": 4480,
+          "prompt_cache_miss_tokens": 194,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-006-response.json",
+          "call_id": 6,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1306,
+          "completion_tokens": 110,
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 154,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-007-response.json",
+          "call_id": 7,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2120,
+          "completion_tokens": 682,
+          "prompt_cache_hit_tokens": 1408,
+          "prompt_cache_miss_tokens": 712,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-008-response.json",
+          "call_id": 8,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2832,
+          "completion_tokens": 97,
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 144,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-009-response.json",
+          "call_id": 9,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3037,
+          "completion_tokens": 302,
+          "prompt_cache_hit_tokens": 2816,
+          "prompt_cache_miss_tokens": 221,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-010-response.json",
+          "call_id": 10,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3608,
+          "completion_tokens": 247,
+          "prompt_cache_hit_tokens": 3328,
+          "prompt_cache_miss_tokens": 280,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 3838,
+        "I_prompt": 31182,
+        "cache_hit": 28413,
+        "cache_miss": 2769,
+        "reasoning": 0,
+        "K_tools_jsonl": 30,
+        "est_usd": 0.002803389
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "window-dedup-late-v1-brief-D_soft-r0",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "window-dedup-late-v1",
+      "spec_variant": "brief",
+      "repeat": 0,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:40.199965+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.379693+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 6,
+      "n_response_files": 5,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 15,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-005-request.json",
+          "call_id": 5,
+          "stage": "independent-0",
+          "member": "member-0",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 642,
+          "started_at": "2026-09-13T03:46:52.976157+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1287,
+          "completion_tokens": 111,
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 135,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2067,
+          "completion_tokens": 769,
+          "prompt_cache_hit_tokens": 1920,
+          "prompt_cache_miss_tokens": 147,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2866,
+          "completion_tokens": 101,
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 178,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3085,
+          "completion_tokens": 330,
+          "prompt_cache_hit_tokens": 2944,
+          "prompt_cache_miss_tokens": 141,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-004-response.json",
+          "call_id": 4,
+          "model": "deepseek-flash",
+          "prompt_tokens": 3682,
+          "completion_tokens": 447,
+          "prompt_cache_hit_tokens": 3328,
+          "prompt_cache_miss_tokens": 354,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 1758,
+        "I_prompt": 12987,
+        "cache_hit": 12032,
+        "cache_miss": 955,
+        "reasoning": 0,
+        "K_tools_jsonl": 15,
+        "est_usd": 0.001234146
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-A-r0",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "A",
+      "task_id": "route-priority-table-v1",
+      "spec_variant": "full",
+      "repeat": 0,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:47.975845+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.379800+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 5,
+      "n_response_files": 4,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 6,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-004-request.json",
+          "call_id": 4,
+          "stage": "main",
+          "member": "A",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 23179,
+          "started_at": "2026-09-13T03:46:53.697732+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1371,
+          "completion_tokens": 64,
+          "prompt_cache_hit_tokens": 1152,
+          "prompt_cache_miss_tokens": 219,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1814,
+          "completion_tokens": 38,
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 150,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-002-response.json",
+          "call_id": 2,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2071,
+          "completion_tokens": 627,
+          "prompt_cache_hit_tokens": 1920,
+          "prompt_cache_miss_tokens": 151,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-003-response.json",
+          "call_id": 3,
+          "model": "deepseek-flash",
+          "prompt_tokens": 2728,
+          "completion_tokens": 92,
+          "prompt_cache_hit_tokens": 2560,
+          "prompt_cache_miss_tokens": 168,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 821,
+        "I_prompt": 7984,
+        "cache_hit": 7296,
+        "cache_miss": 688,
+        "reasoning": 0,
+        "K_tools_jsonl": 6,
+        "est_usd": 0.000617688
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "route-priority-table-v1-full-D_soft-r0",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "route-priority-table-v1",
+      "spec_variant": "full",
+      "repeat": 0,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:50.228064+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.379911+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 2,
+      "n_response_files": 1,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 4,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-001-request.json",
+          "call_id": 1,
+          "stage": "independent-0",
+          "member": "member-0",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 2278,
+          "started_at": "2026-09-13T03:46:51.108089+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1427,
+          "completion_tokens": 122,
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 147,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 122,
+        "I_prompt": 1427,
+        "cache_hit": 1280,
+        "cache_miss": 147,
+        "reasoning": 0,
+        "K_tools_jsonl": 4,
+        "est_usd": 9.909e-05
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    },
+    {
+      "allocation_id": "config-render-resolve-v1-brief-D_soft-r0",
+      "status": "interrupted",
+      "error": "interrupted",
+      "arm": "D_soft",
+      "task_id": "config-render-resolve-v1",
+      "spec_variant": "brief",
+      "repeat": 0,
+      "rerun": false,
+      "started_at": "2026-09-13T03:46:52.464659+00:00",
+      "interrupted_at": "2026-09-13T03:58:44.380024+00:00",
+      "has_ledger": false,
+      "ledger": null,
+      "n_request_files": 3,
+      "n_response_files": 2,
+      "n_error_files": 0,
+      "n_tools_jsonl_events": 4,
+      "n_open_http_requests": 1,
+      "open_http_requests": [
+        {
+          "file": "call-002-request.json",
+          "call_id": 2,
+          "stage": "independent-0",
+          "member": "member-0",
+          "model": "deepseek-v4-flash",
+          "max_tokens": 2268,
+          "started_at": "2026-09-13T03:46:53.902461+00:00",
+          "http_response": "missing_may_have_been_billed",
+          "usage": "unknown_not_zero"
+        }
+      ],
+      "persisted_response_usage": [
+        {
+          "file": "call-000-response.json",
+          "call_id": 0,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1227,
+          "completion_tokens": 65,
+          "prompt_cache_hit_tokens": 1024,
+          "prompt_cache_miss_tokens": 203,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        },
+        {
+          "file": "call-001-response.json",
+          "call_id": 1,
+          "model": "deepseek-flash",
+          "prompt_tokens": 1758,
+          "completion_tokens": 67,
+          "prompt_cache_hit_tokens": 1536,
+          "prompt_cache_miss_tokens": 222,
+          "reasoning_tokens": 0,
+          "has_usage": true
+        }
+      ],
+      "derived_known": {
+        "source": "sum_of_persisted_call_star_response_json_usage_plus_tools_jsonl_event_count",
+        "bound": "lower_bound_not_invoice",
+        "T_completion": 132,
+        "I_prompt": 2985,
+        "cache_hit": 2560,
+        "cache_miss": 425,
+        "reasoning": 0,
+        "K_tools_jsonl": 4,
+        "est_usd": 0.00015062999999999999
+      },
+      "unknown": {
+        "in_flight_http": 1,
+        "tokens_for_open_requests": "unknown_may_have_been_charged_do_not_record_as_0",
+        "unpersisted_subsequent_requests": "possible_if_killed_before_request_json"
+      },
+      "models": [
+        "deepseek-flash"
+      ],
+      "cause": "grok_headless_background_wait_timeout_600s_killed_runner_not_deepseek_api_or_model_failure"
+    }
+  ],
+  "snapshots": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume",
+  "snapshot_index": "/Users/huchen/Projects/vibesop-py/.experiment/worktree/docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshot-index.json"
+}

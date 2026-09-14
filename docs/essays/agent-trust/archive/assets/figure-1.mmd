@@ -1,0 +1,9 @@
+flowchart TB
+    T["任务：喷气发动机实验台"]
+    T --> S["强模型 R5<br/>技能组读取 80 次<br/>对照组不用技能系统"]
+    T --> W["弱模型 R6<br/>处理组 3 试，1 次留产物<br/>对照组 2 试，均无产物"]
+    S --> SR["静态评分 23.5 对 23.5<br/>未测出总分增量"]
+    W --> WR["两次路由均未匹配<br/>技能正文读取为 0"]
+    WR --> L["不能把产出<br/>归因于技能正文"]
+    classDef boundary fill:#fff4df,stroke:#b7873d,color:#654811;
+    class SR,WR,L boundary;

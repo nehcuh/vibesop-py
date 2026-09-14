@@ -1,74 +1,40 @@
 # Architecture Overview
 
-## VibeSOP is a Tool, Not a Consumer
+> Refreshed 2026-09-14 for the current source tree. Package and publication status: [PROJECT_STATUS.md](../PROJECT_STATUS.md).
 
-VibeSOP is a CLI tool that generates and manages workflow SOPs (Standard Operating
-Procedures) for AI-assisted development. It is NOT a consumer of the skills it produces.
+## Scope
 
-### Two Roles
+VibeSOP provides workflow tools for AI-assisted development and a repository for empirical research. SkillOS names the skill-management part of that system. The source repository also uses its own tooling for development and experiments; there is no rule that its own skills must remain uninstalled.
 
-**VibeSOP (this project)** — The Skill Operating System (SkillOS):
-- Discovers skills from filesystem and remote registries
-- Routes natural language queries to the right skill (10-layer routing)
-- Orchestrates multi-skill execution plans for complex tasks
-- Manages full skill lifecycle (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
-- Evaluates skill quality (A-F grading) and applies retention policies
-- Generates platform configuration (Claude Code, Cursor, OpenCode)
-- Manages skill installations, scope, and cross-platform symlinks
+The package and the research workspace have different boundaries: `src/vibesop/` and bundled `core/` resources provide the installable tooling; experiment branches, raw runs and research protocols are not automatically included in a wheel.
 
-**Your project** — The "skill consumer":
-- Run `vibe install claude-code` to generate `.claude/` config
-- The generated config includes skills, rules, hooks
-- Your AI assistant (Claude Code) then uses those skills
+## Main components
 
-### Why This Repo Doesn't Have Skills Installed
+| Component | Responsibility | Source |
+|---|---|---|
+| CLI | Routing, plans, skills, traces, recall, recurring tasks and diagnostics | [cli/](../../src/vibesop/cli/) |
+| Skill management | Discovery, installation, scopes, metadata, lifecycle | [core/skills/](../../src/vibesop/core/skills/), [installer/](../../src/vibesop/installer/) |
+| Routing | Explicit selection, scenario/semantic selection, LLM triage and matching; no-match is a valid outcome | [core/routing/](../../src/vibesop/core/routing/) |
+| Plans and verification | Dependencies, state, events, availability annotation and delivery contracts | [core/orchestration/](../../src/vibesop/core/orchestration/) |
+| Agent integration | Intent interception, context injection, presentation and execution guidance | [agent/runtime/](../../src/vibesop/agent/runtime/) |
+| Platform configuration | Agent-specific files, hooks, plugins and templates | [adapters/](../../src/vibesop/adapters/), [builder/](../../src/vibesop/builder/) |
+| Observability and memory | Trace storage, replay, clustering, recall and feedback | [core/observability/](../../src/vibesop/core/observability/), [core/instinct/](../../src/vibesop/core/instinct/) |
+| Recurring tasks | Specifications, scheduling, execution and persisted run state | [core/loop/](../../src/vibesop/core/loop/) |
+| Research | Protocols, reports and versioned evidence outside the package boundary | [research/](../research/README.md), [experiments/](../experiments/README.md) |
 
-This is the source code of the tool itself. Installing VibeSOP's own output into
-its own source repo would be circular. Skills are meant for project repos where
-AI assistants help you write code — not for the tool's own development.
+## Routing and execution are separate decisions
 
-### Skill Discovery vs Skill Installation
+Routing uses a four-stage cascade with query-dependent branches and multiple matchers. Historical “ten-layer” diagrams count internal handlers and fallback cases differently; use the [routing guide](../architecture/routing-system.md) and current code for behavior.
 
-- `vibe skills` — Lists all skills VibeSOP can route to (discovery)
-- `vibe install <platform>` — Generates config with those skills for a target project
-- `vibe route "query"` — Routes a query to the best skill (uses 10-layer system)
-- `vibe route --validate` — Shows routing decision path and diagnostics
+A match does not imply a deliverable plan. Availability and content checks annotate or reject plans; consumers must respect `execution_ready` and the [verification contract](../architecture/verification-contract.md).
 
-### 10-Layer Routing Architecture
+On the hook path, the host agent executes after receiving context. Explicit runtime, loop and validation paths can run configured work themselves. A generated adapter does not establish that every host's tool execution, authorization or completion detection is identical.
 
-```
-User Query → Layer 0: Explicit (/review, 使用 review)
-              ↓ (no match)
-            Layer 1: Scenario (debug/test/review/refactor keywords)
-              ↓ (no match)
-            Layer 2: AI Triage (LLM, optional — forced for long queries >5 chars by default)
-              ↓ (no match)
-            Layer 3: Keyword (exact token matching, short queries only)
-              ↓ (no match)
-            Layer 4: TF-IDF Semantic (cosine similarity)
-              ↓ (no match)
-            Layer 5: Embedding (vector-based semantic)
-              ↓ (no match)
-            Layer 6: Fuzzy (Levenshtein distance)
-              ↓ (no match)
-            Layer 7: Custom Plugin Matchers
-              ↓ (no match)
-            Layer 8: No Match (below threshold)
-              ↓ (no match)
-            Layer 9: Fallback LLM (last-resort routing)
-```
+## Development and integration
 
-Each layer is implemented as a separate `RoutingHandler` class with a common
-interface, registered in the `SkillRouter` handler chain.
+- Install a skill pack with `vibe install <pack>`; generate agent configuration with `vibe build <platform> --output <directory>`.
+- Use `vibe route --verbose` for routing diagnostics; `--validate` checks routing configuration.
+- Inspect the [Agent Integration Guide](../agent-integration.md) for in-process LLM injection and platform contracts.
+- Read [positioning](../POSITIONING.md) and [project status](../PROJECT_STATUS.md) before describing implementation details as shipped capabilities or proven research outcomes.
 
-### Key Modules
-
-- `core/routing/` — 10-layer intelligent routing with pluggable handlers
-- `core/matching/` — Matching algorithms (keyword, TF-IDF, embedding, fuzzy)
-- `core/optimization/` — Preference boost, instinct learning, conflict resolution
-- `cli/` — Typer-based CLI with subcommand groups
-- `security/` — Threat detection and path safety
-- `adapters/` — Platform adapters (Claude Code, OpenCode)
-- `builder/` — Configuration generation and rendering
-- `integrations/` — External skill pack integration
-- `installer/` — Installation and verification
+Skill format and conformance remain independently versioned: [SKILL.md v3.0](../skill-format-spec-v3.md). Historical implementation detail remains in [ARCHITECTURE.md](../architecture/ARCHITECTURE.md).

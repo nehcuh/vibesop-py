@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="576pt" height="720pt" viewBox="0 0 576 720" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-14T07:00:52.081978</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 720 
+L 576 720 
+L 576 0 
+L 0 0 
+z
+" style="fill: #fffdf8"/>
+  </g>
+  <g id="axes_1">
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 24px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="40.32" y="58.055625" transform="rotate(-0 40.32 58.055625)">专家增加，结果没有一路变好</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 13px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #67777c" x="40.32" y="85.953906" transform="rotate(-0 40.32 85.953906)">真实仓库实验 · 已完整完成的16题 · 每组48次</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 16px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="40.32" y="119.84875" transform="rotate(-0 40.32 119.84875)">通过次数 / 48</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 16px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="40.32" y="404.2325" transform="rotate(-0 40.32 404.2325)">平均模型调用 / 次</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 12px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #67777c" x="40.32" y="679.86" transform="rotate(-0 40.32 679.86)">阶段性描述：按执行进度形成的子集，非完整24题。</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 12px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #67777c" x="40.32" y="704.352188" transform="rotate(-0 40.32 704.352188)">含争议任务原始评分；调用量不等于费用或耗时。</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_2">
+    <path d="M 190.08 334.8 
+L 524.16 334.8 
+L 524.16 126 
+L 190.08 126 
+z
+" style="fill: #fffdf8"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 190.08 334.8 
+L 190.08 126 
+" clip-path="url(#p6e9c383516)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_7">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="190.08" y="351.5" transform="rotate(-0 190.08 351.5)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 336.606316 334.8 
+L 336.606316 126 
+" clip-path="url(#p6e9c383516)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_8">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="336.606316" y="351.5" transform="rotate(-0 336.606316 351.5)">24</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 483.132632 334.8 
+L 483.132632 126 
+" clip-path="url(#p6e9c383516)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_9">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="483.132632" y="351.5" transform="rotate(-0 483.132632 351.5)">48</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_7"/>
+     <g id="text_10">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="152.823423" transform="rotate(-0 186.58 152.823423)">单模型</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_8"/>
+     <g id="text_11">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="194.911711" transform="rotate(-0 186.58 194.911711)">单模型＋资料</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_9"/>
+     <g id="text_12">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="237" transform="rotate(-0 186.58 237)">三专家</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_10"/>
+     <g id="text_13">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="279.088289" transform="rotate(-0 186.58 279.088289)">五专家</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_11"/>
+     <g id="text_14">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="321.176577" transform="rotate(-0 186.58 321.176577)">七专家</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 190.08 135.490909 
+L 428.185263 135.490909 
+L 428.185263 156.955936 
+L 190.08 156.955936 
+z
+" clip-path="url(#p6e9c383516)" style="fill: #67777c"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 190.08 177.579198 
+L 446.501053 177.579198 
+L 446.501053 199.044225 
+L 190.08 199.044225 
+z
+" clip-path="url(#p6e9c383516)" style="fill: #16756f"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 190.08 219.667486 
+L 440.395789 219.667486 
+L 440.395789 241.132514 
+L 190.08 241.132514 
+z
+" clip-path="url(#p6e9c383516)" style="fill: #d69c82"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 190.08 261.755775 
+L 415.974737 261.755775 
+L 415.974737 283.220802 
+L 190.08 283.220802 
+z
+" clip-path="url(#p6e9c383516)" style="fill: #c97958"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 190.08 303.844064 
+L 434.290526 303.844064 
+L 434.290526 325.309091 
+L 190.08 325.309091 
+z
+" clip-path="url(#p6e9c383516)" style="fill: #bf5a3d"/>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="435.511579" y="153.063423" transform="rotate(-0 435.511579 153.063423)">39</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="453.827368" y="195.151711" transform="rotate(-0 453.827368 195.151711)">42</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="447.722105" y="237.24" transform="rotate(-0 447.722105 237.24)">41</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="423.301053" y="279.328289" transform="rotate(-0 423.301053 279.328289)">37</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="441.616842" y="321.416577" transform="rotate(-0 441.616842 321.416577)">40</text>
+   </g>
+  </g>
+  <g id="axes_3">
+   <g id="patch_8">
+    <path d="M 190.08 619.2 
+L 524.16 619.2 
+L 524.16 410.4 
+L 190.08 410.4 
+z
+" style="fill: #fffdf8"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_4">
+     <g id="line2d_12">
+      <path d="M 190.08 619.2 
+L 190.08 410.4 
+" clip-path="url(#p7d74f54c3e)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_13"/>
+     <g id="text_20">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="190.08" y="635.9" transform="rotate(-0 190.08 635.9)">0</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_14">
+      <path d="M 287.764211 619.2 
+L 287.764211 410.4 
+" clip-path="url(#p7d74f54c3e)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_15"/>
+     <g id="text_21">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="287.764211" y="635.9" transform="rotate(-0 287.764211 635.9)">80</text>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_16">
+      <path d="M 385.448421 619.2 
+L 385.448421 410.4 
+" clip-path="url(#p7d74f54c3e)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_17"/>
+     <g id="text_22">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="385.448421" y="635.9" transform="rotate(-0 385.448421 635.9)">160</text>
+     </g>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_18">
+      <path d="M 483.132632 619.2 
+L 483.132632 410.4 
+" clip-path="url(#p7d74f54c3e)" style="fill: none; stroke: #d7dfdc; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_19"/>
+     <g id="text_23">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: middle; fill: #67777c" x="483.132632" y="635.9" transform="rotate(-0 483.132632 635.9)">240</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_6">
+     <g id="line2d_20"/>
+     <g id="text_24">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="437.223423" transform="rotate(-0 186.58 437.223423)">单模型</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_21"/>
+     <g id="text_25">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="479.311711" transform="rotate(-0 186.58 479.311711)">单模型＋资料</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_22"/>
+     <g id="text_26">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="521.4" transform="rotate(-0 186.58 521.4)">三专家</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_23"/>
+     <g id="text_27">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="563.488289" transform="rotate(-0 186.58 563.488289)">五专家</text>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_24"/>
+     <g id="text_28">
+      <text style="font-size: 15px; font-family: 'Hiragino Sans GB'; text-anchor: end; fill: #67777c" x="186.58" y="605.576577" transform="rotate(-0 186.58 605.576577)">七专家</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_9">
+    <path d="M 190.08 419.890909 
+L 221.089649 419.890909 
+L 221.089649 441.355936 
+L 190.08 441.355936 
+z
+" clip-path="url(#p7d74f54c3e)" style="fill: #67777c"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 190.08 461.979198 
+L 223.735263 461.979198 
+L 223.735263 483.444225 
+L 190.08 483.444225 
+z
+" clip-path="url(#p7d74f54c3e)" style="fill: #16756f"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 190.08 504.067486 
+L 288.705439 504.067486 
+L 288.705439 525.532514 
+L 190.08 525.532514 
+z
+" clip-path="url(#p7d74f54c3e)" style="fill: #d69c82"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 190.08 546.155775 
+L 357.058947 546.155775 
+L 357.058947 567.620802 
+L 190.08 567.620802 
+z
+" clip-path="url(#p7d74f54c3e)" style="fill: #c97958"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 190.08 588.244064 
+L 447.416842 588.244064 
+L 447.416842 609.709091 
+L 190.08 609.709091 
+z
+" clip-path="url(#p7d74f54c3e)" style="fill: #bf5a3d"/>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="228.415965" y="437.463423" transform="rotate(-0 228.415965 437.463423)">25.4</text>
+   </g>
+   <g id="text_30">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="231.061579" y="479.551711" transform="rotate(-0 231.061579 479.551711)">27.6</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="296.031754" y="521.64" transform="rotate(-0 296.031754 521.64)">80.8</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="364.385263" y="563.728289" transform="rotate(-0 364.385263 563.728289)">136.8</text>
+   </g>
+   <g id="text_33">
+    <text style="font-size: 18px; font-family: 'Hiragino Sans GB'; text-anchor: start; fill: #243640" x="454.743158" y="605.816577" transform="rotate(-0 454.743158 605.816577)">210.8</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p6e9c383516">
+   <rect x="190.08" y="126" width="334.08" height="208.8"/>
+  </clipPath>
+  <clipPath id="p7d74f54c3e">
+   <rect x="190.08" y="410.4" width="334.08" height="208.8"/>
+  </clipPath>
+ </defs>
+</svg>

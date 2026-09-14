@@ -1,0 +1,13 @@
+flowchart TB
+    A["同一套七种角色资料"]
+    A --> B["单模型＋全部资料<br/>一个上下文使用整套资料"]
+    A --> C["七个固定角色<br/>资料按角色分配"]
+    B --> D["一个执行者<br/>从理解到实现、交付"]
+    C --> E["产品 · SRE · 测试 · 发布文档<br/>安全 · 架构 · 开发"]
+    E --> F["交换与整合<br/>开发席位负责最终交付"]
+    D --> G["同一套验收要求"]
+    F --> G
+    classDef blue fill:#e5f0ef,stroke:#16756f,color:#183c3b;
+    classDef warm fill:#fae9df,stroke:#bf5a3d,color:#623c30;
+    class B,D blue;
+    class C,E,F warm;

@@ -1,0 +1,650 @@
+[
+  {
+    "run": "20260913T010758Z",
+    "allocated": 15,
+    "statuses": {
+      "error": 15
+    },
+    "models": [
+      "deepseek-flash"
+    ],
+    "responses": 15,
+    "usage": {
+      "input": 8795,
+      "cached": 4096,
+      "output": 37799,
+      "reasoning": 37799
+    },
+    "estimated_usd_offpeak": 0.023396537999999998,
+    "price_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "not_account_invoice": true,
+    "checks": [
+      {
+        "name": "frozen:run.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:tasks.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:README.md",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-00-response.json:request",
+        "passed": true
+      }
+    ],
+    "record_audit_passed": true,
+    "all_allocations_finished": true
+  },
+  {
+    "run": "20260913T010956Z",
+    "allocated": 15,
+    "statuses": {
+      "error": 6,
+      "failed": 1,
+      "passed": 8
+    },
+    "models": [
+      "deepseek-flash"
+    ],
+    "responses": 53,
+    "usage": {
+      "input": 103453,
+      "cached": 25088,
+      "output": 48850,
+      "reasoning": 0
+    },
+    "estimated_usd_offpeak": 0.041140013999999996,
+    "price_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "not_account_invoice": true,
+    "checks": [
+      {
+        "name": "frozen:run_nonthinking.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:tasks.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:README.md",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-02-response.json:request",
+        "passed": true
+      }
+    ],
+    "record_audit_passed": true,
+    "all_allocations_finished": true
+  },
+  {
+    "run": "20260913T011141Z",
+    "allocated": 15,
+    "statuses": {
+      "failed": 1,
+      "passed": 13,
+      "error": 1
+    },
+    "models": [
+      "deepseek-flash"
+    ],
+    "responses": 66,
+    "usage": {
+      "input": 152415,
+      "cached": 31739,
+      "output": 58197,
+      "reasoning": 0
+    },
+    "estimated_usd_offpeak": 0.053114816999999995,
+    "price_source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "not_account_invoice": true,
+    "checks": [
+      {
+        "name": "frozen:run_partial_reports.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:tasks.py",
+        "passed": true
+      },
+      {
+        "name": "frozen:README.md",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-D/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-C/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-D/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-C/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-D/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-B/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-E/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-next-bar-v1-B/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-03-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-04-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-05-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-02-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-config-path-v1-C/call-06-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-A/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-00-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-01-response.json:request",
+        "passed": true
+      },
+      {
+        "name": "calibration-intent-v1-B/call-02-response.json:request",
+        "passed": true
+      }
+    ],
+    "record_audit_passed": true,
+    "all_allocations_finished": true
+  }
+]

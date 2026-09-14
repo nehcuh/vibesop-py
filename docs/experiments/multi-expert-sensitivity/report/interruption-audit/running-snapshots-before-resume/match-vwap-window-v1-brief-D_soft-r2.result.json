@@ -1,0 +1,28 @@
+{
+  "task_id": "match-vwap-window-v1",
+  "arm": "D_soft",
+  "flow_arm": "D",
+  "spec_variant": "brief",
+  "repeat": 2,
+  "allocation_id": "match-vwap-window-v1-brief-D_soft-r2",
+  "status": "running",
+  "started_at": "2026-09-13T03:46:26.299208+00:00",
+  "task_hash": "d95d1bbcfb0d9efab48cf83f1de2d9c7e2805fa86c39a5085e3e6399262f17c7",
+  "model_request": "deepseek-v4-flash",
+  "temperature": 0,
+  "thinking": {
+    "type": "disabled"
+  },
+  "limits": {
+    "per_loop_max_turns": null,
+    "model_call_cap": null,
+    "identical_for_all_arms": true,
+    "enforced": [
+      "T",
+      "I",
+      "K",
+      "hang_timeout_s",
+      "stage_caps"
+    ]
+  }
+}

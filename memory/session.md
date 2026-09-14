@@ -5,7 +5,7 @@
 
 - 用户要求：为项目全部实验/研究写综述；骨架先行（案例/图/对比类比/外部参考占位），后分章填充；多路子代理填充，每章完成后 grok 复审确认。
 - 进度（同日四续）：§3-§7 六路 grok 复审 findings 全清 → §2/§9 修后确认审 APPROVE → §8 修后确认审 APPROVE（26 条 E1-E26 全核验 + 4 口径纠正）→ 附录 B #0/#25/#26/#27 刷新（**全量 7123 passed**，HF offline + 3 deselect）→ 摘要/附录 C/D 定稿 → **mmdc 11/11 渲染全绿** → INDEX.md 登记 → **全文终审（grok 无头，`.omx/tmp/survey-fill/grok-review-final.md`）REQUEST CHANGES：1 P0 + 2 P1 + 5 P2 + 4 NIT，逐项亲证后全部回修**——P0 摘要/附录 A「22 项」实数 21 行（I6+II5+III5+IV5 亲证计数）；P1 附录 A「5 P0×8 轮」→「6 评审轮/13 报告、5 P1（0 P0）」+ 勾 §4.10 回写项；P1 摘要 R5 误归「写满」→「留白平手：80 次读取、23.5/23.5」；P2×5（文档头 29 项口径/文末终稿落款/§5.6 BM25 出处改挂 precheck.md/F9 总表 promote 人审分列/附录 A R5 行 80 次出处拆 weak-prereg）；NIT×4（「八轮 A/B」→「R1-R8 系列（R4 为方案评审）」×2、F6 总表 56%/11%/15%、§4.7 投票加「严重度」限定、图 1 frontmatter title 重渲染通过）→ 按任务书过线条件自查 P0/P1 清零，**终稿 v1.0 收口**。
-- 交付物：`docs/research-survey.md` 终稿 v1.0（~1700 行、21 项实验、F1-F10、E1-E26 外部对照、11 图全渲染、9 轮 grok 评审全闭环）。
+- 交付物：`docs/research/research-survey.md` 终稿 v1.0（~1700 行、21 项实验、F1-F10、E1-E26 外部对照、11 图全渲染、9 轮 grok 评审全闭环）。
 - Next：公众号拆分（附录 E 四拆分点）/ T+21 回声复检（09-14）后按 9.1#4 更新 / R8 盲评结算触发 E4。
 - Recorded: yes — auto-memory project-research-survey-skeleton
 

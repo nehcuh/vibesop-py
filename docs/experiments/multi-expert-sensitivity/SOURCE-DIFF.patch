@@ -1,0 +1,417 @@
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/arms.py	2026-09-13 09:43:18
++++ docs/experiments/multi-expert-sensitivity/harness/arms.py	2026-09-13 11:15:10
+@@ -132,7 +132,7 @@
+ 
+ 
+ def run_arm(client, ledger: Ledger, recorder: RunRecorder, run_dir: Path,
+-            task_id: str, arm: str, spec_variant: str) -> dict:
++            task_id: str, arm: str, spec_variant: str, *, soft_internal: bool = False) -> dict:
+     workspace = run_dir / "workspace"
+     _seed_workspace(task_id, workspace)
+     prompt = _user_prompt(task_id, spec_variant)
+@@ -177,7 +177,7 @@
+             private = run_dir / f"member-{i}-workspace"
+             _copy_ws(workspace, private)
+             box = ToolBox(task_id, private)
+-            loop = Loop(client, ledger, recorder, box, member=f"member-{i}")
++            loop = Loop(client, ledger, recorder, box, member=f"member-{i}", soft_internal=soft_internal)
+             messages = [
+                 {"role": "system", "content": SYSTEM + "\n" + _identity(arm, i)},
+                 {"role": "user", "content": prompt + "\nIndependent analysis. You may use tools on your private copy. "
+@@ -185,6 +185,8 @@
+             ]
+             loop.run(messages, stage=f"independent-{i}", stop_on_deliver=True)
+             report = (box.deliver_payload or {}).get("note") or ""
++            if not box.delivered:
++                notes.setdefault("missing_deliver", []).append(f"independent-{i}")
+             reports.append(report)
+             histories.append(messages)
+             member_traces[f"independent-{i}"] = list(box.traces)
+@@ -193,7 +195,7 @@
+         exchange = []
+         for i in range(3):
+             box = ToolBox(task_id, run_dir / f"member-{i}-workspace")
+-            loop = Loop(client, ledger, recorder, box, member=f"member-{i}")
++            loop = Loop(client, ledger, recorder, box, member=f"member-{i}", soft_internal=soft_internal)
+             messages = list(histories[i]) + [{
+                 "role": "user",
+                 "content": "One synchronous exchange. All initial reports (frozen):\n"
+@@ -204,13 +206,15 @@
+             }]
+             box.delivered = False
+             loop.run(messages, stage=f"exchange-{i}", stop_on_deliver=True)
++            if not box.delivered:
++                notes.setdefault("missing_deliver", []).append(f"exchange-{i}")
+             exchange.append((box.deliver_payload or {}).get("note") or "")
+             histories[i] = messages
+             member_traces[f"exchange-{i}"] = list(box.traces)
+         for src in [f"independent-{i}" for i in range(3)] + [f"exchange-{i}" for i in range(3)]:
+             ledger.transfer_unused(src, "integrate")
+         box = ToolBox(task_id, workspace)
+-        loop = Loop(client, ledger, recorder, box, member="member-0")
++        loop = Loop(client, ledger, recorder, box, member="member-0", soft_internal=False)
+         integrator = list(histories[0]) + [{
+             "role": "user",
+             "content": "You are the designated integrator (member 0). Official workspace is a fresh copy of the initial files, not the private analysis copies. Exchange notes:\n"
+@@ -226,6 +230,7 @@
+             "member_violations": member_violations,
+             "member_traces": member_traces,
+             "delivered": box.delivered,
++            "soft_closes": list(getattr(recorder, "soft_closes", [])),
+         })
+     if arm == "E":
+         box = ToolBox(task_id, workspace)
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/engine.py	2026-09-13 09:42:26
++++ docs/experiments/multi-expert-sensitivity/harness/engine.py	2026-09-13 11:15:10
+@@ -33,18 +33,50 @@
+ 
+ 
+ class Loop:
+-    def __init__(self, client, ledger: Ledger, recorder: RunRecorder, toolbox: ToolBox, *, member: str | None = None):
++    def __init__(self, client, ledger: Ledger, recorder: RunRecorder, toolbox: ToolBox, *,
++                 member: str | None = None, soft_internal: bool = False):
+         self.client = client
+         self.ledger = ledger
+         self.recorder = recorder
+         self.toolbox = toolbox
+         self.member = member
++        self.soft_internal = soft_internal
+ 
++    def _soft_close(self, stage: str, reason: str, messages: list) -> None:
++        event = {
++            "type": "soft_close",
++            "stage": stage,
++            "member": self.member,
++            "reason": reason,
++            "delivered": bool(self.toolbox.delivered),
++            "messages": len(messages),
++        }
++        if not hasattr(self.recorder, "soft_closes"):
++            self.recorder.soft_closes = []
++        self.recorder.soft_closes.append(event)
++        self.recorder.events = getattr(self.recorder, "events", [])
++        if hasattr(self.ledger, "events"):
++            self.ledger.events.append(event)
++
++    def _allow_soft(self, stage: str, exc: BaseException) -> bool:
++        if not self.soft_internal:
++            return False
++        msg = str(exc)
++        if not msg.startswith("stage_budget_exhausted:"):
++            return False
++        return stage.startswith("independent-") or stage.startswith("exchange-")
++
+     def run(self, messages: list, *, stage: str, stop_on_deliver: bool = True) -> list:
+         tools = SCHEMA
+         while True:
+             self.recorder.check_hang()
+-            cap = self.ledger.precheck(messages, stage=stage, tools=tools)
++            try:
++                cap = self.ledger.precheck(messages, stage=stage, tools=tools)
++            except RuntimeError as exc:
++                if self._allow_soft(stage, exc):
++                    self._soft_close(stage, str(exc), messages)
++                    return messages
++                raise
+             n = self.recorder.allocate_call()
+             started = datetime.now(timezone.utc).isoformat()
+             request = {
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/pack.py	2026-09-13 10:33:48
++++ docs/experiments/multi-expert-sensitivity/harness/pack.py	2026-09-13 11:24:54
+@@ -25,6 +25,7 @@
+     "harness/runner.py",
+     "harness/schedule.py",
+     "harness/tools.py",
++    "harness/test_soft.py",
+     "tasks/__init__.py",
+     "tasks/cases.py",
+     "tasks/catalog.py",
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/recorder.py	2026-09-13 09:41:34
++++ docs/experiments/multi-expert-sensitivity/harness/recorder.py	2026-09-13 11:15:36
+@@ -27,6 +27,7 @@
+         self.call_id = 0
+         self.tool_events: list[dict] = []
+         self.partial_stages: list[str] = []
++        self.soft_closes: list[dict] = []
+         self.hang_timeout_s = hang_timeout_s
+         self.started_mono = time.monotonic()
+         self.schema_hash = SCHEMA_HASH
+@@ -82,6 +83,7 @@
+             "calls": self.call_id,
+             "tool_events": list(self.tool_events),
+             "partial_stages": list(self.partial_stages),
++            "soft_closes": list(self.soft_closes),
+             "tools_schema_hash": self.schema_hash,
+             "hang_timeout_s": self.hang_timeout_s,
+             "elapsed_s": self.elapsed(),
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/runner.py	2026-09-13 10:34:59
++++ docs/experiments/multi-expert-sensitivity/harness/runner.py	2026-09-13 11:24:54
+@@ -94,13 +94,19 @@
+     hang = int(budget["hang_timeout_s"])
+     ledger = Ledger(T=int(budget["T_completion_tokens"]), I=int(budget["I_prompt_tokens"]),
+                     K=int(budget["K_tool_calls"]))
+-    caps = stage_caps_for(arm, ledger.T)
++    flow = "D" if arm == "D_soft" else arm
++    if arm == "D_soft" and not stage_caps_for("D", ledger.T):
++        raise RuntimeError("D_soft_missing_D_stage_caps")
++    caps = stage_caps_for(flow, ledger.T)
++    if arm == "D_soft" and not caps:
++        raise RuntimeError("D_soft_must_use_D_stage_caps")
+     if caps:
+         ledger.set_stage_caps(caps)
+     recorder = RunRecorder(dest, hang_timeout_s=hang)
+     result = {
+         "task_id": task_id,
+         "arm": arm,
++        "flow_arm": flow,
+         "spec_variant": spec_variant,
+         "repeat": repeat,
+         "allocation_id": dest.name,
+@@ -114,7 +120,8 @@
+     }
+     _save(dest / "result.json", result)
+     try:
+-        notes = run_arm(client, ledger, recorder, dest, task_id, arm, spec_variant)
++        notes = run_arm(client, ledger, recorder, dest, task_id, flow, spec_variant,
++                        soft_internal=(arm == "D_soft"))
+         evaluation = evaluate(task_id, dest / "workspace")
+         slim = {k: notes[k] for k in notes if k not in {"all_tool_traces"}}
+         result["notes"] = slim
+@@ -144,6 +151,11 @@
+     result["ledger"] = ledger.snapshot()
+     result["recorder"] = recorder.snapshot()
+     result["finished_at"] = datetime.now(timezone.utc).isoformat()
++    if getattr(recorder, "soft_closes", None):
++        _save(dest / "soft_closes.json", recorder.soft_closes)
++        result["soft_closes"] = list(recorder.soft_closes)
++    else:
++        result["soft_closes"] = []
+     _save(dest / "result.json", result)
+     print(json.dumps({k: result.get(k) for k in ("task_id", "arm", "spec_variant", "repeat", "status")},
+                      ensure_ascii=False), flush=True)
+@@ -157,17 +169,18 @@
+                    repeat=int(row.get("repeat") or 0))
+ 
+ 
+-def write_formal_manifest(run_root: Path, resources: dict, seed: int) -> dict:
+-    assignments = build_assignments("formal", seed)
+-    if len(assignments) != 360:
+-        raise RuntimeError("formal_assignment_count")
++def write_formal_manifest(run_root: Path, resources: dict, seed: int, phase: str = "formal") -> dict:
++    assignments = build_assignments(phase, seed)
++    expected = 360 if phase == "formal" else 144
++    if len(assignments) != expected:
++        raise RuntimeError("assignment_count")
+     pack = write_pack(run_root / "frozen-sources")
+     live_id = docker_image_id(resources["docker"]["image_name"])
+     if live_id != resources["docker"]["image_id"]:
+         raise RuntimeError("docker_image_id_drift")
+     manifest = {
+-        "phase": "formal",
+-        "n_assignments": 360,
++        "phase": phase,
++        "n_assignments": expected,
+         "seed": seed,
+         "concurrency": CONCURRENCY,
+         "execution": "threadpool_independent_client_ledger_workspace_recorder",
+@@ -185,6 +198,8 @@
+         "calibration_tasks_excluded_from_360": list(CALIBRATION_TASKS),
+         "created_at": datetime.now(timezone.utc).isoformat(),
+         "immutable": True,
++        "exploratory": phase == "sensitivity",
++        "label": "exploratory_sensitivity_soft_internal_stage" if phase == "sensitivity" else "primary",
+     }
+     _save(run_root / "manifest.json", manifest)
+     return manifest
+@@ -194,6 +209,8 @@
+     data = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+     if data.get("phase") == "formal" and len(data.get("assignments") or []) != 360:
+         raise RuntimeError("manifest_not_360")
++    if data.get("phase") == "sensitivity" and len(data.get("assignments") or []) != 144:
++        raise RuntimeError("manifest_not_144")
+     return data
+ 
+ 
+@@ -237,7 +254,7 @@
+ def main(argv: list[str] | None = None) -> int:
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--phase", default="informal-calibration",
+-                        choices=["informal-calibration", "formal", "offline"])
++                        choices=["informal-calibration", "formal", "offline", "sensitivity"])
+     parser.add_argument("--seed", type=int, default=SEED)
+     parser.add_argument("--i-understand-formal", action="store_true")
+     parser.add_argument("--max-new", type=int, default=0,
+@@ -247,29 +264,30 @@
+     parser.add_argument("--workers", type=int, default=CONCURRENCY)
+     parser.add_argument("--offline-client", action="store_true", help="Used by tests.")
+     args = parser.parse_args(argv)
+-    if args.workers != CONCURRENCY and args.phase == "formal":
++    if args.workers != CONCURRENCY and args.phase in {"formal", "sensitivity"}:
+         raise RuntimeError("formal_workers_must_be_frozen_concurrency")
+     resources = load_resources()
+-    if args.phase == "formal":
+-        if not args.i_understand_formal:
++    if args.phase in {"formal", "sensitivity"}:
++        if args.phase == "formal" and not args.i_understand_formal:
+             print("Formal 360 requires --i-understand-formal.", file=sys.stderr)
+             return 2
+-        max_new = args.max_new or 12
++        expected = 360 if args.phase == "formal" else 144
++        max_new = args.max_new or (12 if args.phase == "formal" else 144)
+         if args.resume:
+             run_root = Path(args.resume)
+             if not (run_root / "manifest.json").is_file():
+                 raise RuntimeError("resume_missing_manifest")
+             manifest = load_manifest(run_root)
+-            if len(manifest["assignments"]) != 360:
+-                raise RuntimeError("resume_manifest_not_360")
++            if len(manifest["assignments"]) != expected:
++                raise RuntimeError("resume_manifest_count")
+             assert_freeze(run_root, resources)
+         else:
+             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+             run_root = ROOT / "runs" / stamp
+             run_root.mkdir(parents=True, exist_ok=False)
+-            manifest = write_formal_manifest(run_root, resources, args.seed)
+-            if len(manifest["assignments"]) != 360:
+-                raise RuntimeError("manifest_not_360")
++            manifest = write_formal_manifest(run_root, resources, args.seed, phase=args.phase)
++            if len(manifest["assignments"]) != expected:
++                raise RuntimeError("manifest_count")
+         interrupted = scan_and_interrupt(run_root, manifest["assignments"])
+         _save(run_root / "interrupted.json", {"ids": interrupted, "at": datetime.now(timezone.utc).isoformat()})
+         todo = select_new(run_root, manifest["assignments"], max_new)
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/schedule.py	2026-09-13 10:29:28
++++ docs/experiments/multi-expert-sensitivity/harness/schedule.py	2026-09-13 11:15:36
+@@ -9,7 +9,7 @@
+ from tasks.catalog import CALIBRATION_TASKS, FORMAL_TASKS
+ 
+ TERMINAL = {"passed", "failed", "error", "interrupted"}
+-SEED = 20260913
++SEED = 20260914
+ CONCURRENCY = 8
+ 
+ 
+@@ -36,6 +36,14 @@
+                         rows.append({"task_id": task_id, "arm": arm, "spec_variant": spec, "repeat": repeat})
+         if len(rows) != 360:
+             raise RuntimeError("formal_assignment_count:" + str(len(rows)))
++    elif phase == "sensitivity":
++        for task_id in FORMAL_TASKS:
++            for spec in ("full", "brief"):
++                for arm in ("A", "D_soft"):
++                    for repeat in range(3):
++                        rows.append({"task_id": task_id, "arm": arm, "spec_variant": spec, "repeat": repeat})
++        if len(rows) != 144:
++            raise RuntimeError("sensitivity_assignment_count:" + str(len(rows)))
+     else:
+         raise ValueError(phase)
+     rng.shuffle(rows)
+@@ -44,6 +52,8 @@
+         row["order"] = i
+     if phase == "formal" and len({r["allocation_id"] for r in rows}) != 360:
+         raise RuntimeError("duplicate_allocation_id")
++    if phase == "sensitivity" and len({r["allocation_id"] for r in rows}) != 144:
++        raise RuntimeError("duplicate_allocation_id")
+     return rows
+ 
+ 
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/resources.yaml	2026-09-13 10:33:14
++++ docs/experiments/multi-expert-sensitivity/resources.yaml	2026-09-13 11:15:36
+@@ -54,7 +54,7 @@
+   image_id: sha256:d764629ce0ddd8c71fd371e9901efb324a95789d2315a47db7e4d27e78f1b0e9
+ execution:
+   concurrency: 8
+-  seed: 20260913
++  seed: 20260914
+   max_new_first_batch: 12
+   independent_client_ledger_workspace_recorder: true
+   wall_clock_not_a_result: true
+--- docs/experiments/multi-expert-sensitivity/frozen-primary-sources/preregistration.md	2026-09-13 10:33:14
++++ docs/experiments/multi-expert-sensitivity/preregistration.md	2026-09-13 11:28:28
+@@ -1,62 +1,36 @@
+-# 预注册（正式 360）
++# 探索性敏感性分析（D_soft）预注册
+ 
+-主比较 **D−A**。本文件在任何正式模型调用之前冻结。正式结果出现后不得更换方法。
++**标签：探索性敏感性分析，受主实验诊断启发。不是独立新任务确认，不与原 360 池化。**
+ 
+-## 问题与范围
++触发：原 360 中 D 失败至少一半为内部 `stage_budget_exhausted`（independent-* / exchange-*）。实测 72/72（independent-0: 68，independent-1: 4）。
+ 
+-同一模型、同一工具、同一全局 T/I/K 下，带专家角色的委员会（D）是否比单体（A）在隐藏 CLI 验收上交付更多成功产物？
++决策记录：`/Users/huchen/Projects/vibesop-py/.experiment/sensitivity-decision.md`（主实验早期、first12 后预先写下，不是看完 360 再发明方案）。
+ 
+-这是受控小型 CLI 基准，不是异质真实专家团队，也不是整库工程结论。
++## 设计
+ 
+-次要比较（探索，不做未注册显著性宣传）：D−C、B−A、E−A、E−D、规格、类别。
++12 任务 × 2 spec × A（原样）/ D_soft × 3 repeat = **144**。
+ 
+-## 样本
++- seed **20260914**；并发 8；模型/工具/T=24000/I=400000/K=120/hang=600 与主实验相同。
++- 新 A 与新 D_soft **同一批随机交错**，不能只拿新 D 和历史 A 比。
++- A 不启用任何新机制。
++- D_soft **必须** `stage_caps_for('D')` + `run_arm(..., arm='D')`（原 ROLE 提示）。禁止 `stage_caps_for('D_soft')` 变成无阶段限制。
++- 唯一机制：independent-* 与 exchange-* 上的 `stage_budget_exhausted` 记录 `soft_close`，保留 history/private 产物，继续后续成员与整合。不增加额度、不改提示、不追加摘要调用、不合成缺失的 deliver note。
++- integrate / 全局 T/I/K / API / hang / 最终截断 / 所有权：仍硬失败，计 0。
++- 全部 144 失败保留，无选择重跑；不可池化原 360。
+ 
+-12 基础任务 × 2 规格（full/brief）× 5 组 × 3 重复 = **360**。
++## 统计
+ 
+-推断单位是 **12 个基础任务**。规格与重复不是独立任务。校准任务与历史 75 次校准运行排除在 360 之外。
++使用**原冻结** `harness/analysis.py`：12 任务等权、配对 2 spec × 3 repeat、cluster bootstrap 20000、seed **20260913**、+10pp 阈值。比较 D_soft（映射为 D 仅用于该函数）相对**同批新 A**。`confirmatory=False`。
+ 
+-## 成功定义
++成功定义与主实验相同：总预算内交付 + 全部隐藏验收通过 + 无所有权/路径违规。`failed`/`error`/`interrupted` 记 0。
+ 
+-一次分配成功当且仅当：在 T/I/K 内 deliver，全部隐藏验收通过，且无所有权/路径违规。`failed` / `error` / `interrupted` 均记 0。分母包括全部 360 个分配。没有 hidden evaluation 时，不把失败称为代码 bug。
++## 要回答的问题（不预设结果）
+ 
+-LLM 评分 **不是** 放行闸（`not LLM`）。
++1. 硬阶段终止是否解释主实验 D 相对 A 的劣势？
++2. 软结束后 D_soft 相对同批 A 的成功率/成本与区间如何？
++3. 是否达到 +10pp？
++4. 哪些判断仍不能做（纯角色效应、异质专家、整库、强弱模型、skills、盲评维护性）？
+ 
+-## 主比较估计
++## 非目标
+ 
+-对每个基础任务，有 full/brief × 3 repeat 共 **6 个配对观测**。配对内计算 `1[D passed] - 1[A passed]`，再对 6 个差取平均，得到 12 个任务等权的任务均值；总点估计是这 12 个均值的等权平均。
+-
+-## 区间
+-
+-95% **cluster bootstrap percentile** 区间：
+-
+-- 重复 20000 次
+-- seed = `20260913`
+-- 每次有放回抽取 12 个 **task 索引**
+-- 被抽中的 task **保留其全部 spec 与 repeat**（即保留该 task 的任务均值，不把 6 个配对拆开再抽）
+-- 百分位用相邻次序统计量的线性插值
+-- 实现：`harness/analysis.py`；先用 toy 数据校验符号、聚类与端点
+-
+-## 阈值解释（方向与工程价值分开）
+-
+-工程采用阈值 = +10 个百分点。
+-
+-| 区间 | 判定 |
+-|---|---|
+-| lower > +10pp | 支持在本电池上达到预定采用阈值（`support_adoption_threshold`） |
+-| upper < +10pp | 排除这一最低收益，**不**证明等价（`rules_out_minimum_gain`） |
+-| upper < 0 | 支持更差（`support_worse`） |
+-| 整段落在 (0, +10pp) | 小正效应但不足采用阈值（`small_positive_below_threshold`） |
+-| 区间跨越上述界限 | 未定（`unresolved`） |
+-
+-不得把 “upper < +10pp” 写成等价，也不得把 “(0, +10) 小正效应” 写成一无所知。
+-
+-## 资源与执行（冻结）
+-
+-T=24000，I=400000，K=120，hang=600s。各组共享，A 可使用全部额度。并发 **8** 个独立运行（独立 client/ledger/workspace/recorder）。分配 seed=`20260913`。Docker 以 **image id**（digest）为准，不以浮动 tag 为准。
+-
+-K=40 批次的耗尽是该资源包络下的真实成本观察，不是日志覆盖类缺陷，不称为假象。正式结论以 T/I/K=24000/400000/120 为条件。
+-
+-## 可恢复性
+-
+-360 行一次性写入不可变 manifest。`--max-new` 只跑尚未开始的分配。`--resume` 继续同一 manifest。`passed`/`failed`/`error`/`interrupted` 不重跑、不覆盖。中断的 `running` 记 `interrupted` 并保留原调用。
++这不是「最好的多智能体」搜索，也不是对专家能力的一般确认。只隔离一条编排终止规则。

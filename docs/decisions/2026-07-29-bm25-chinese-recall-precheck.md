@@ -1,6 +1,6 @@
 # BM25 中文召回预检发现（2026-07-29）
 
-> **性质**：预检发现摘录。原文仅存于 Claude 项目记忆（`~/.claude/projects/-Users-huchen-Projects-vibesop-py/memory/project-task-id-bug-and-cross-project.md`，originSession e43d6ad0），仓库内无独立测量 artifact——按 F10「凡被 tracked 文档引用的产物必须在 tracked 路径」原则，摘录入库供 `docs/research-survey.md` §5/附录 B #18 引用。证据等级降为「记忆摘录【文档】」，未复测。
+> **性质**：预检发现摘录。原文仅存于 Claude 项目记忆（`~/.claude/projects/-Users-huchen-Projects-vibesop-py/memory/project-task-id-bug-and-cross-project.md`，originSession e43d6ad0），仓库内无独立测量 artifact——按 F10「凡被 tracked 文档引用的产物必须在 tracked 路径」原则，摘录入库供 `docs/research/research-survey.md` §5/附录 B #18 引用。证据等级降为「记忆摘录【文档】」，未复测。
 
 ## Finding 3 — BM25 在中文真实 query 上完全失败（原文摘录）
 

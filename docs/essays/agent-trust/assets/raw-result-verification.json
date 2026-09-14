@@ -1,0 +1,42 @@
+{
+  "terminal": 241,
+  "statuses": {
+    "failed": 41,
+    "passed": 200
+  },
+  "paired_raw_results": {
+    "S": {
+      "n": 48,
+      "passed": 39,
+      "mean_calls": 25.395833333333332,
+      "mean_input": 794300.5208333334
+    },
+    "F5": {
+      "n": 48,
+      "passed": 37,
+      "mean_calls": 136.75,
+      "mean_input": 5034160.5625
+    },
+    "S+C": {
+      "n": 48,
+      "passed": 42,
+      "mean_calls": 27.5625,
+      "mean_input": 1551527.0208333333
+    },
+    "F3": {
+      "n": 48,
+      "passed": 41,
+      "mean_calls": 80.77083333333333,
+      "mean_input": 2964726.0833333335
+    },
+    "F7": {
+      "n": 48,
+      "passed": 40,
+      "mean_calls": 210.75,
+      "mean_input": 8235383.166666667
+    }
+  },
+  "ratio_F7_vs_SC_calls": 7.64625850340136,
+  "source_snapshot_sha256": "f38fccd67b7153191bf2b688b05e1c0034fd0b2284c85dc95429d043aedd8e96",
+  "check": "Independent top-level raw result recount matched the entire chart snapshot; no participant calls or writes to experiment roots."
+}
