@@ -75,6 +75,64 @@ def _run_eval(
     return rc, json.loads(out.read_text(encoding="utf-8"))
 
 
+_CHECK_FINGERPRINT = {"version": 1, "sha": "0" * 64, "inputs": {}}
+
+
+def _run_eval_check(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    entries: list[dict],
+    *,
+    baseline_entries: list[dict],
+    responses: dict[str, tuple[str | None, bool]] | None = None,
+) -> tuple[int, dict]:
+    """Hermetic --check against a temp baseline; fingerprint is canned.
+
+    Production YAML/baseline are never read. Two-sided counters still
+    accumulate from ``entries``; the gate uses ``baseline_records`` only.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    dataset = tmp_path / "eval.yaml"
+    dataset.write_text(yaml.safe_dump(entries, allow_unicode=True), encoding="utf-8")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "fingerprint": _CHECK_FINGERPRINT,
+                "entries": baseline_entries,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out.json"
+    monkeypatch.setattr(evr, "UnifiedRouter", _fake_router(responses or {}))
+    monkeypatch.setattr(
+        evr,
+        "_build_hermetic_router",
+        lambda: (_fake_router(responses or {})(None), {"builtin": tmp_path}, set()),
+    )
+    monkeypatch.setattr(evr, "compute_fingerprint", lambda **_kw: _CHECK_FINGERPRINT)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "eval_routing.py",
+            "--hermetic",
+            "--check",
+            "--file",
+            str(dataset),
+            "--baseline",
+            str(baseline),
+            "--json-out",
+            str(out),
+        ],
+    )
+    rc = evr.main()
+    return rc, json.loads(out.read_text(encoding="utf-8"))
+
+
 def test_skipped_env_excluded_from_denominator_and_errors(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -329,6 +387,156 @@ def test_near_miss_sublayer_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert m["near_miss_over_inject"] == 1
     assert m["over_inject"] == 1
     assert m["n_neg"] == 2
+
+
+def test_bare_nomatch_over_inject_increments_n_neg_and_over_inject(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Empty expect + no reject is an explicit no-match negative; injecting
+    a real skill must close both n_neg and over_inject."""
+    entries = [{"query": "bare inject", "expect": []}]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        responses={"bare inject": ("builtin/session-end", True)},
+    )
+    assert rc == 0
+    assert m["n_pos"] == 0
+    assert m["n_neg"] == 1
+    assert m["over_inject"] == 1
+    assert m["over_reject"] == 0
+    assert m["n_near_miss"] == 0
+    assert m["near_miss_over_inject"] == 0
+
+
+def test_subclass_only_near_miss_over_inject_is_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """subclass: near_miss without category: near_miss still counts as
+    negative; over_inject and near_miss_over_inject stay nested."""
+    entries = [
+        {
+            "query": "subclass inject",
+            "expect": [],
+            "reject": ["builtin/session-end"],
+            "subclass": "near_miss",
+        }
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        responses={"subclass inject": ("builtin/session-end", True)},
+    )
+    assert rc == 0
+    assert m["n_pos"] == 0
+    assert m["n_neg"] == 1
+    assert m["over_inject"] == 1
+    assert m["n_near_miss"] == 1
+    assert m["near_miss_over_inject"] == 1
+    assert m["near_miss_over_inject"] <= m["over_inject"]
+
+
+def test_negative_label_precedes_nonempty_expect(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A must_not_inject row with a leftover expect is classified once as
+    negative, not as both n_pos and n_neg."""
+    entries = [
+        {
+            "query": "conflict",
+            "expect": ["builtin/session-end"],
+            "category": "must_not_inject",
+        }
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        resolvable=({"builtin/session-end"}, set()),
+        responses={"conflict": ("builtin/session-end", True)},
+    )
+    assert rc == 0
+    assert m["n_pos"] == 0
+    assert m["n_neg"] == 1
+    assert m["over_inject"] == 1
+    assert m["over_reject"] == 0
+    assert m["n_pos"] + m["n_neg"] == 1
+
+
+def test_report_only_counters_do_not_change_check_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Nonzero two-sided counters are invisible to --check. Matching
+    baseline_records → exit 0; an ok1 true→false flip → exit 1. Temp
+    YAML + baseline only; production files are not read."""
+    entries = [
+        {"query": "pos hit", "expect": ["builtin/session-end"]},
+        {"query": "neg inject", "expect": [], "category": "must_not_inject"},
+        {"query": "pos miss", "expect": ["builtin/session-end"]},
+    ]
+    responses = {
+        "pos hit": ("builtin/session-end", True),
+        "neg inject": ("builtin/session-end", True),
+        "pos miss": (None, False),
+    }
+    matching_baseline = [
+        {
+            "query": "pos hit",
+            "expect": ["builtin/session-end"],
+            "reject": [],
+            "primary": "builtin/session-end",
+            "layer": "lexical",
+            "ok1": True,
+            "category": None,
+        },
+        {
+            "query": "neg inject",
+            "expect": [],
+            "reject": [],
+            "primary": "builtin/session-end",
+            "layer": "lexical",
+            "ok1": False,
+            "category": "must_not_inject",
+        },
+        {
+            "query": "pos miss",
+            "expect": ["builtin/session-end"],
+            "reject": [],
+            "primary": None,
+            "layer": None,
+            "ok1": False,
+            "category": None,
+        },
+    ]
+    rc0, m0 = _run_eval_check(
+        monkeypatch,
+        tmp_path / "ok",
+        entries,
+        baseline_entries=matching_baseline,
+        responses=responses,
+    )
+    assert rc0 == 0
+    assert m0["over_inject"] == 1
+    assert m0["over_reject"] == 1
+    assert m0["n_pos"] == 2
+    assert m0["n_neg"] == 1
+
+    flipped = [dict(row) for row in matching_baseline]
+    flipped[2] = {**flipped[2], "ok1": True, "primary": "builtin/session-end", "layer": "lexical"}
+    rc1, m1 = _run_eval_check(
+        monkeypatch,
+        tmp_path / "fail",
+        entries,
+        baseline_entries=flipped,
+        responses=responses,
+    )
+    assert rc1 == 1
+    assert m1["over_inject"] == m0["over_inject"]
+    assert m1["over_reject"] == m0["over_reject"]
+    assert m1["n_pos"] == m0["n_pos"]
+    assert m1["n_neg"] == m0["n_neg"]
 
 
 def test_extended_yaml_requires_packs_namespaces_valid() -> None:

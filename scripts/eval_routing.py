@@ -30,19 +30,21 @@ Entry semantics:
                                reject/no-match assertions stay scored.
 
 Two-sided error counts (report-only; never affect exit codes or the
-baseline gate):
-- n_pos / n_neg     — scored positives (expect non-empty) vs negatives
-                      (must_not_inject, or explicit no-match assertion:
-                      empty expect and no reject)
-- over_reject       — positives where the router produced no real match
-- over_inject       — must_not_inject / near_miss negatives where it did
-- no_match_by_layer — matched entries by primary layer plus a "no_match"
-                      bucket; no_match_rate = no_match / total
-- n_near_miss / near_miss_over_inject — entries with `subclass:
-                      near_miss` or `category: near_miss` (0 when the
-                      dataset has none). near_miss counts as a negative
-                      for over_inject but is NOT added to
-                      --update-baseline's must_not_inject hard-refuse list.
+baseline gate). Per-entry booleans, negative-label precedence first:
+
+- is_near_miss — category or subclass is ``near_miss``
+- is_negative  — ``must_not_inject``, any near-miss, or an explicit
+                 no-match assertion (empty expect and no reject)
+- is_positive  — non-empty expect and not negative
+- n_pos / n_neg are disjoint; a negative label with non-empty expect
+                 counts once as negative
+- over_reject  — positive entries with no real match
+- over_inject  — every negative entry with a real match (closed with n_neg)
+- near_miss_over_inject — subset of over_inject (near-miss + real match)
+- reject-only entries (empty expect, nonempty reject, no negative label)
+                 stay outside the binary denominator
+- near_miss is NOT added to --update-baseline's must_not_inject
+                 hard-refuse list
 
 Hermetic mode (gate45 P1) pins the routed universe so numbers are
 machine-independent and CI can gate routing quality:
@@ -83,6 +85,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -97,6 +100,24 @@ from vibesop.core.routing.benchmark import (  # noqa: E402
     write_baseline,
 )
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+
+
+def _classify_two_sided(
+    entry: dict[str, Any], expect: list[str], reject: list[str]
+) -> tuple[bool, bool, bool]:
+    """Report-only class for one eval entry.
+
+    Returns ``(is_near_miss, is_negative, is_positive)``. Negative labels
+    win over a non-empty ``expect`` so ``n_pos`` and ``n_neg`` stay disjoint.
+    Reject-only rows (empty expect, nonempty reject, no negative label) are
+    neither positive nor negative.
+    """
+    category = entry.get("category")
+    is_near_miss = category == "near_miss" or entry.get("subclass") == "near_miss"
+    is_explicit_nomatch = not expect and not reject
+    is_negative = category == "must_not_inject" or is_near_miss or is_explicit_nomatch
+    is_positive = bool(expect) and not is_negative
+    return is_near_miss, is_negative, is_positive
 
 
 def _build_hermetic_router() -> tuple[UnifiedRouter, dict[str, Path], set[str]]:
@@ -362,15 +383,16 @@ def main() -> int:
         hits3 += ok3
         # Two-sided error counts (report-only). skipped_env entries never
         # reach this point, so they pollute neither side of the confusion.
-        if expect:
+        is_near_miss, is_negative, is_positive = _classify_two_sided(e, expect, reject)
+        if is_positive:
             n_pos += 1
             if not result.has_match:
                 over_reject += 1
-        if category == "must_not_inject" or (not expect and not reject):
+        if is_negative:
             n_neg += 1
-        if category in ("must_not_inject", "near_miss") and result.has_match:
-            over_inject += 1
-        if e.get("subclass") == "near_miss" or category == "near_miss":
+            if result.has_match:
+                over_inject += 1
+        if is_near_miss:
             n_near_miss += 1
             if result.has_match:
                 near_miss_over_inject += 1
