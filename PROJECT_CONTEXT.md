@@ -5,10 +5,9 @@
 VibeSOP 是围绕可靠 AI 辅助开发的工程工具与实证研究项目。SkillOS 是技能管理子系统；任务计划与验证交付、执行观测、经验检索、定时任务和实验研究共同构成当前仓库。
 
 - 定位依据与边界：[docs/POSITIONING.md](docs/POSITIONING.md)。
-- 源码元数据为 **8.3.0**；截至核对日，公开 PyPI / GitHub Release 最新为 **8.2.0**。内部 8.3.1 修复标签不等于发行，见[项目状态](docs/PROJECT_STATUS.md)。
+- 源码与包元数据为 **8.4.0**；截至本 release commit，公开 PyPI / GitHub Release 仍为 **8.3.0**。内部 8.3.1 修复标签不等于独立发行，见[项目状态](docs/PROJECT_STATUS.md)。
 - 工程主线继续验证选择和交付的可信性；未合并 evo 分支和未完成固定角色实验不算已发行能力。
 - 旧 worktree 已归档，当前保留主目录与 `.experiment/worktree`。原始数据和未提交成果的恢复见[维护索引](docs/maintenance/README.md)。
-- 当前文档与整理改动尚未提交或推送；源码版本未因定位更新而递增。
 
 ## Historical session handoff
 

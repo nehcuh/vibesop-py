@@ -139,6 +139,27 @@ ruff.toml
 # VibeSOP session-generated routing fan-out prompts (not curated)
 .vibe/prompts/
 
+# OMX ephemeral (gate/experiment scratch).
+#
+# `.omx/` itself is deliberately NOT ignored here. Shared ignore must not
+# hide `.omx/artifacts/`: an artifact cited by a tracked Markdown document
+# must itself be tracked, and `scripts/check_artifact_links.py` enforces
+# that contract even when a developer-local `.git/info/exclude` hides the
+# file from ordinary `git status`.
+#
+# Local-only historical/research artifacts may be retained on one machine
+# via `.git/info/exclude` (not this file). Do not cite those from tracked
+# docs unless they are also tracked.
+#
+# Only the short-lived directories below are ignored in this shared file.
+# Do not add `.omx/` or `.omx/artifacts/` to this file.
+.omx/tmp/
+.omx/scratch/
+.omx/cache/
+.omx/runtime/
+.omx/logs/
+.omx/state/
+
 # Claude Code local state (sessions, memory, worktrees)
 .claude/
 

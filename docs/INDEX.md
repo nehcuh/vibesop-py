@@ -1,7 +1,8 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-09-14
-> **Current release**: 8.3.0（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **Current release**: 8.4.0（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **This branch**: 8.4.0 Trust & Evidence（包元数据已升；PyPI / GitHub Release 待后续 tag/publish）
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -56,8 +57,8 @@ These files remain in the project root for discoverability and tool integration:
 - **[Project Context](../PROJECT_CONTEXT.md)** — Project background, goals, and scope（根目录，持续更新）
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
-- **[Roadmap](ROADMAP.md)** — Future development plans and timeline (v4.x → v8.0)
-- **[v8.0 Roadmap: Autonomous Loop System](ROADMAP.md#v800--autonomous-loop-system)** — 自主循环任务路线图
+- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.4.0 Trust & Evidence, next-optimization order A–E
+- **[Historical roadmap through 8.3](archive/roadmap-through-8.3.md)** — Frozen 804-line v4–v8 / W1–W2 narrative
 - **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
 - **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
 - **[Use Cases Guide (EN)](USE_CASES.en.md)** — 12 concrete scenarios with pain → approach → commands
@@ -170,6 +171,7 @@ These files remain in the project root for discoverability and tool integration:
 ## 📂 Archive
 
 - **[archive/README.md](archive/README.md)** — Archive index
+- **[Historical roadmap through 8.3](archive/roadmap-through-8.3.md)** — Frozen product roadmap through public 8.3.0
 - **[archive/](archive/)** — Historical documents, delivery summaries, and superseded plans
 
 ---
@@ -182,19 +184,21 @@ These files remain in the project root for discoverability and tool integration:
 
 ---
 
-## 📊 Key Metrics (v7.0.0+)
+## 📊 Current facts (do not treat as a reliability proof)
 
-| Metric | Value |
+| Item | Value |
 |--------|-------|
-| **Version** | 8.3.0 |
-| **Tests** | 4,066+ pytest passing |
-| **Coverage** | ~73% (target: 75%) |
+| **Source / package version** | 8.4.0 |
+| **Public PyPI / GitHub Release** | 8.3.0 until later tag/publish |
+| **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
 | **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
 | **Routing Model** | 4-Stage Cascade |
 | **Workflow Patterns** | 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT) |
 | **Spec Version** | SKILL.md v3.0 (29 fields) |
+
+Routing eval, artifact-citation, and CI registry numbers live in [ROADMAP.md](ROADMAP.md); they are checkpoint measurements, not a claim that the full test suite has passed.
 
 ---
 

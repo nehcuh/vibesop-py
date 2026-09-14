@@ -60,7 +60,7 @@ Tests: add `encoding="utf-8"` to fixture writes and assertion reads in all faili
 - New `src/vibesop/utils/symlinks.py`: `can_create_dir_symlink(directory)` — empirical probe, `@lru_cache` per directory, handles WinError 1314/1/5. Used at `adapters/base.py:478`, `installer/pack_installer.py:590`, `core/skills/storage.py:293`.
 - `tests/conftest.py`: session-scoped `symlink_supported` fixture (same probe). Applied to all symlink tests (incl. `test_skill_storage.py:239,292`, `test_indexer.py:858`, `test_pack_installer.py:311`).
 - Exec-bit assertions (~9 sites): `if sys.platform != "win32":` line guard with comment.
-- New unit tests mocking `symlink_to` to raise `OSError` → covers fallback on POSIX CI too (pays ROADMAP.md:592 debt).
+- New unit tests mocking `symlink_to` to raise `OSError` → covers fallback on POSIX CI too (pays `docs/archive/roadmap-through-8.3.md:640` debt).
 - Fix `tests/cli/test_skills_cmd.py:168` (`/dev/null` target) and `tests/adapters/test_base.py:354` (add `target_is_directory=True`).
 
 ### P3 — Paths & remaining test fixes

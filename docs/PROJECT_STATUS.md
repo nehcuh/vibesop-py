@@ -10,14 +10,16 @@ VibeSOP 是**围绕可靠 AI 辅助开发的工程工具与实证研究项目**�
 
 | 对象 | 已核对状态 | 依据 |
 |---|---|---|
-| 当前源码版本 | **8.3.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
-| 当前 PyPI 发行 | **8.3.0** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json) |
-| 当前 GitHub Release | **v8.3.0** | [GitHub Release](https://github.com/nehcuh/vibesop-py/releases/tag/v8.3.0) |
-| 上一公开版本 | **8.2.0**，2026-09-03 发布 | [GitHub Release](https://github.com/nehcuh/vibesop-py/releases/tag/v8.2.0) |
-| 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复 |
+| 当前源码版本 | **8.4.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
+| 当前包元数据 | **8.4.0** | 本分支 release commit；公开发行 tag/publish 尚未完成 |
+| 当前 PyPI 发行 | **8.3.0** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json)；8.4.0 待后续 publish |
+| 当前 GitHub Release | 8.3.0 | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases)；8.4.0 待后续 tag |
+| 上一公开版本 | **8.3.0**，2026-09-14 发布 | [CHANGELOG](../CHANGELOG.md) |
+| 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复；属于 8.3.0，不是独立软件包版本 |
 | SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |
+| 本分支 | **8.4.0 Trust & Evidence** | 分支 `codex/v84-trust-evidence`；观测工具与必选 CI 治理已进入源码与 changelog。切片、数字与后续闸见 [ROADMAP.md](ROADMAP.md) |
 
-8.3.0 汇总了 8.2.0 之后的验证器与计划交付合同、路由与阻断行为、跨平台修复，以及新的项目定位和研究资料结构。内部“8.3.1 修复批次”属于本次 8.3.0 发行范围，不代表独立的软件包版本。
+当前**源码与包元数据是 8.4.0**。公开发行（PyPI / GitHub Release）在 tag 与 publish 完成前仍是 8.3.0。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
 
 ## 工程能力与验证边界
 
@@ -28,6 +30,7 @@ VibeSOP 是**围绕可靠 AI 辅助开发的工程工具与实证研究项目**�
 | 观测与经验 | trace、回放、聚类、recall、反馈与项目 pool | 记忆量增加必然提高任务成功率 |
 | 持续任务 | loop 存储、调度及显式执行路径 | 任意任务均能无需监督地安全完成 |
 | 8.3.0 文档与发行 | 同步定位、发行说明、入口文档与 CLI 介绍 | 未完成研究自动成为已发行产品能力 |
+| 8.4.0 Trust & Evidence | 双向路由评测、near_miss 负例、no-match 聚合、decision_source 注册表、全量 tracked markdown 产物引用守卫（1109 refs / 0 dangling / 468 stale occurrences across 460 keys）；详见路线图 | 源码已升版本即 PyPI 已发布；评测数字即可靠性证明 |
 
 历史测试结果保留在对应变更、验收凭据和研究报告中。当前可信度应按具体功能、执行路径与最近实际验证判断，不再使用“全部计划完成”“全项目 production-ready”作为总括。
 

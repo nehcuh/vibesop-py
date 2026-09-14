@@ -336,7 +336,7 @@ VibeSOP is **not** the following tools. Forcing it into these roles is inefficie
 | Long-running tasks (>1 hour) | Loop v1 doesn't support | CI/CD pipeline |
 | GUI-required workflows | CLI only | IDE plugins |
 | Modifying skill content | VibeSOP doesn't author skill content | Find the skill pack author |
-| High-risk ops like DB migrations | No Guard system yet (v8.1) | Manual + human review |
+| High-risk ops like DB migrations | No Guard system yet | Manual + human review |
 
 ---
 
@@ -378,6 +378,6 @@ vibe instinct status                   # pattern learning
 - **Want cross-platform**: [`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) install guide
 - **Want loops**: [`loop-setup-guide.md`](loop-setup-guide.md) 24-hour deployment
 - **Want the philosophy**: [`PHILOSOPHY.md`](PHILOSOPHY.md) design rationale
-- **Want the roadmap**: [`ROADMAP.md`](ROADMAP.md) v4.x → v8.0
+- **Want the roadmap**: [`ROADMAP.md`](ROADMAP.md) (current source 8.4.0 Trust & Evidence; historical copy [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md))
 
 Specific scenario not covered here? Open an issue; we'll add it to the next revision.

@@ -9,6 +9,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.4.0] — 2026-09-14
+
+Trust & Evidence: two-sided routing evaluation, production no-match
+aggregation, CI `decision_source` governance, and artifact citation guards.
+
+### Added
+
+- **Two-sided routing evaluation and `top_k` propagation**:
+  `scripts/eval_routing.py` reports over-reject and over-inject without
+  changing hermetic `--check` exit codes. `LazyEmbeddingMatcher` accepts
+  `MatcherPipeline`'s `top_k`. Hermetic dataset on this checkpoint:
+  55 total / 53 scored / 2 skipped; top-1 47/53; positive 31 (4 over-reject);
+  negative 20 (2 over-inject); near_miss 14 (2 over-inject); 6 known failures.
+- **14 `near_miss` negatives** in `tests/benchmark/routing_eval.yaml`:
+  separately reported counters, not folded into `must_not_inject`; still
+  scored as no-match expectations by the hermetic evaluation. Hermetic
+  baseline refreshed to include them.
+- **Production no-match aggregator** (`scripts/aggregate_nomatch.py`):
+  windowed `route:` span rate with Wilson 95% CI; fail-soft on missing
+  input; not a CI gate.
+- **CI `decision_source` registry** (`ci/decision-source.yaml`) and
+  required drift guard (`scripts/check_ci_decision_source.py`). Every
+  `.github/workflows/ci.yml` job must declare `deterministic` or `human`;
+  model output may not gate a required job. Current registry: 10/10 jobs.
+- **Artifact citation guard** (`scripts/check_artifact_links.py`) plus an
+  exact frozen-debt baseline (`ci/artifact-links-baseline.json`). Default
+  scan is every tracked `*.md` path from `git ls-files` (fresh-clone set;
+  `--targets` narrows). Dangling refs are always fatal. Checkpoint scan
+  of all tracked markdown: 1109 refs = 641 ok + 468 historical nontracked
+  occurrences across 460 keys + 0 dangling. Every extracted baseline
+  target is a strict normalized POSIX artifact path/glob/dir. The
+  baseline is transitional, not a permanent waiver.
+
+### Fixed
+
+- **`aggregate_nomatch` fail-soft on invalid UTF-8**: read spans JSONL as
+  bytes and decode per line. A truncated CJK append no longer
+  `UnicodeDecodeError`s the whole file into argparse exit 2; the bad
+  line is `n_corrupt` and valid route spans still score. A UTF-8 BOM is
+  stripped only from the first line; a mid-file U+FEFF stays payload and
+  counts as corrupt. The human line always includes `corrupt=<N>`.
+- **Artifact classifier vs glob metacharacters in filenames**: exact
+  index match and a literal on-disk path (including a broken symlink)
+  win before `fnmatch`. Square brackets are literal path characters
+  (`v[1]/*.md` names directory `v[1]`, not a character class matching
+  `v1`). Only `*` and `?` are wildcards.
+- **Artifact citation extraction vs prose annotations**: ASCII `(`, `)`,
+  `:`, and `\\` are reference delimiters, matching the existing CJK
+  punctuation set. Line locators (`file:165`), parenthetical notes, and
+  shell-escaped trailing backslashes are not baseline keys. The baseline
+  schema keeps the strict normalized POSIX relative-path invariant.
+- **Artifact scan fail-closed on non-normalized citations**: an extracted
+  target with `../`, `/./`, or `//` under the artifacts prefix is rejected
+  at the citing `source:line` (CLI exit 2) before classification or
+  baseline write. The schema is not relaxed and the citation is not
+  rewritten.
+- **Terminal `?` glob wildcard**: `_TRAILING_JUNK` no longer strips `?`,
+  so a bare or backticked citation ending in `?` stays a glob. Markdown
+  link destinations such as `.md?raw` still strip the query.
+- **Windows artifact-link tests**: CJK fixture writes pin UTF-8 so they
+  survive a cp1252 locale, and `ci/artifact-links-baseline.json` is
+  pinned `eol=lf` so Windows autocrlf cannot fail the byte-level LF
+  contract.
+
+### Documentation
+
+- Artifact filenames containing ASCII `()` are valid POSIX baseline keys
+  but are not citable: extraction treats parentheses as delimiters. No
+  tracked `.omx/artifacts/` filename currently contains them.
+- Freeze the 804-line through-8.3 roadmap at
+  `docs/archive/roadmap-through-8.3.md`. Replace `docs/ROADMAP.md` with the
+  8.4.0 Trust & Evidence boundary, 8.4 slices, remaining gates, and
+  next-optimization order A–E.
+- Align package metadata, README badges, project status, and current
+  documentation headers with 8.4.0. Public PyPI / GitHub Release remain
+  8.3.0 until the later tag and publish steps.
+
 ## [8.3.0] — 2026-09-14
 
 ### Documentation and positioning

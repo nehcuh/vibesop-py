@@ -29,6 +29,26 @@ Entry semantics:
                                requires_packs with expect: [] never skips —
                                reject/no-match assertions stay scored.
 
+Two-sided error counts (report-only; never affect exit codes or the
+baseline gate). Per-entry booleans, negative-label precedence first:
+
+- is_near_miss — category or subclass is ``near_miss``
+- is_negative  — ``must_not_inject``, any near-miss, or an explicit
+                 no-match assertion (empty expect and no reject)
+- is_positive  — non-empty expect and not negative
+- n_pos / n_neg are disjoint; a negative label with non-empty expect
+                 counts once as negative
+- over_reject  — positive entries with no real match
+- over_inject  — every negative entry with a real match (closed with n_neg)
+- near_miss_over_inject — subset of over_inject (near-miss + real match)
+- reject-only entries (empty expect, nonempty reject, no negative label)
+                 stay outside the binary denominator (n_pos / n_neg)
+- routing_outcomes_by_layer — one bucket per matched layer plus ``no_match``
+- no_match_rate — no_match_count / total over all scored entries
+                 (including reject-only); not divided by n_pos + n_neg
+- near_miss is NOT added to --update-baseline's must_not_inject
+                 hard-refuse list
+
 Hermetic mode (gate45 P1) pins the routed universe so numbers are
 machine-independent and CI can gate routing quality:
     uv run python scripts/eval_routing.py --hermetic --check
@@ -68,6 +88,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -82,6 +103,24 @@ from vibesop.core.routing.benchmark import (  # noqa: E402
     write_baseline,
 )
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
+
+
+def _classify_two_sided(
+    entry: dict[str, Any], expect: list[str], reject: list[str]
+) -> tuple[bool, bool, bool]:
+    """Report-only class for one eval entry.
+
+    Returns ``(is_near_miss, is_negative, is_positive)``. Negative labels
+    win over a non-empty ``expect`` so ``n_pos`` and ``n_neg`` stay disjoint.
+    Reject-only rows (empty expect, nonempty reject, no negative label) are
+    neither positive nor negative.
+    """
+    category = entry.get("category")
+    is_near_miss = category == "near_miss" or entry.get("subclass") == "near_miss"
+    is_explicit_nomatch = not expect and not reject
+    is_negative = category == "must_not_inject" or is_near_miss or is_explicit_nomatch
+    is_positive = bool(expect) and not is_negative
+    return is_near_miss, is_negative, is_positive
 
 
 def _build_hermetic_router() -> tuple[UnifiedRouter, dict[str, Path], set[str]]:
@@ -283,6 +322,11 @@ def main() -> int:
 
     skipped_env_count = 0
     hits1 = hits3 = 0
+    n_pos = n_neg = 0
+    over_reject = over_inject = 0
+    n_near_miss = near_miss_over_inject = 0
+    no_match_count = 0
+    routing_outcomes_by_layer: dict[str, int] = {}
     errors: list[dict] = []
     per_query: list[dict] = []
     baseline_records: list[dict] = []
@@ -340,6 +384,25 @@ def main() -> int:
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3
+        # Two-sided error counts (report-only). skipped_env entries never
+        # reach this point, so they pollute neither side of the confusion.
+        is_near_miss, is_negative, is_positive = _classify_two_sided(e, expect, reject)
+        if is_positive:
+            n_pos += 1
+            if not result.has_match:
+                over_reject += 1
+        if is_negative:
+            n_neg += 1
+            if result.has_match:
+                over_inject += 1
+        if is_near_miss:
+            n_near_miss += 1
+            if result.has_match:
+                near_miss_over_inject += 1
+        if result.has_match:
+            routing_outcomes_by_layer[layer] = routing_outcomes_by_layer.get(layer, 0) + 1
+        else:
+            no_match_count += 1
         baseline_records.append(
             {
                 "query": query,
@@ -388,6 +451,8 @@ def main() -> int:
     # skipped_env entries count in neither total (denominator) nor errors;
     # guard against an all-skipped dataset dividing by zero.
     total = len(entries) - skipped_env_count
+    routing_outcomes_by_layer["no_match"] = no_match_count
+    no_match_rate = round(no_match_count / total, 4) if total else 0.0
     metrics = {
         "total": total,
         "skipped_env": skipped_env_count,
@@ -395,6 +460,14 @@ def main() -> int:
         "recall_at_3": round(hits3 / total, 4) if total else 0.0,
         "errors": errors,
         "confusion_pairs": confusion,
+        "n_pos": n_pos,
+        "n_neg": n_neg,
+        "over_reject": over_reject,
+        "over_inject": over_inject,
+        "routing_outcomes_by_layer": routing_outcomes_by_layer,
+        "no_match_rate": no_match_rate,
+        "n_near_miss": n_near_miss,
+        "near_miss_over_inject": near_miss_over_inject,
     }
 
     if args.record and errors:
@@ -426,6 +499,15 @@ def main() -> int:
         pct3 = hits3 / total if total else 0.0
         print(
             f"queries: {total} (skipped_env: {skipped_env_count}) | top-1: {hits1}/{total} ({pct1:.1%}) | recall@3: {hits3}/{total} ({pct3:.1%})"
+        )
+        print(
+            f"two-sided: pos {n_pos} (over-reject {over_reject}) | neg {n_neg} "
+            f"(over-inject {over_inject}) | near-miss {n_near_miss} "
+            f"(over-inject {near_miss_over_inject})"
+        )
+        print(
+            f"routing outcomes by layer: {json.dumps(routing_outcomes_by_layer)} | "
+            f"no-match rate: {no_match_rate:.1%}"
         )
         if errors:
             print(f"\nMisroutes ({len(errors)}):")
