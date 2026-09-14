@@ -59,9 +59,20 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   punctuation set. Line locators (`file:165`), parenthetical notes, and
   shell-escaped trailing backslashes are not baseline keys. The baseline
   schema keeps the strict normalized POSIX relative-path invariant.
+- **Artifact scan fail-closed on non-normalized citations**: an extracted
+  target with `../`, `/./`, or `//` under the artifacts prefix is rejected
+  at the citing `source:line` (CLI exit 2) before classification or
+  baseline write. The schema is not relaxed and the citation is not
+  rewritten.
+- **Terminal `?` glob wildcard**: `_TRAILING_JUNK` no longer strips `?`,
+  so a bare or backticked citation ending in `?` stays a glob. Markdown
+  link destinations such as `.md?raw` still strip the query.
 
 ### Documentation
 
+- Artifact filenames containing ASCII `()` are valid POSIX baseline keys
+  but are not citable: extraction treats parentheses as delimiters. No
+  tracked `.omx/artifacts/` filename currently contains them.
 - Freeze the 804-line through-8.3 roadmap at
   `docs/archive/roadmap-through-8.3.md`. Replace `docs/ROADMAP.md` with the
   current 8.3.0 / unreleased-8.4.0 candidate boundary, 8.4 slices, release

@@ -381,6 +381,49 @@ def test_write_baseline_rejects_annotation_fragments_and_path_escape(
     assert _tmp_leftovers(tmp_path) == []
 
 
+@pytest.mark.parametrize(
+    "citation",
+    [
+        ".omx/artifacts/../x.md",
+        ".omx/artifacts/./x.md",
+        ".omx/artifacts//x.md",
+    ],
+)
+def test_cli_non_normalized_extracted_target_fails_closed_with_source_line(
+    repo: Path, citation: str
+) -> None:
+    """Dot-segment / empty-segment citations are exit 2 at the citing line.
+
+    extract_targets still emits them (no silent normalize). scan must reject
+    before classify or baseline write, with repo-relative source:line, so a
+    default scan cannot warn-only green and --write-baseline cannot hide
+    behind a global invalid-target error after a full scan.
+    """
+    (repo / "docs" / "notes.md").write_text(
+        f"ok `.omx/artifacts/missing.md`\nbad `{citation}`\n",
+        encoding="utf-8",
+    )
+    _commit_all(repo)
+    dest = repo / "ci" / "artifact-links-baseline.json"
+
+    code, out = _run(repo, "--targets", "docs")
+    assert code == 2, out
+    assert "docs/notes.md:2:" in out
+    assert citation in out
+    assert "invalid artifact target" in out
+    assert "Traceback" not in out
+    assert "cannot write baseline" not in out
+
+    write_code, write_out = _run(repo, "--targets", "docs", "--write-baseline", str(dest))
+    assert write_code == 2, write_out
+    assert "docs/notes.md:2:" in write_out
+    assert citation in write_out
+    assert "invalid artifact target" in write_out
+    assert "cannot write baseline" not in write_out
+    assert not dest.exists()
+    assert _tmp_leftovers(repo / "ci") == []
+
+
 def test_write_baseline_unencodable_target_is_guard_error(tmp_path: Path) -> None:
     dest = tmp_path / "baseline.json"
     with pytest.raises(chal.GuardError, match="cannot write baseline"):

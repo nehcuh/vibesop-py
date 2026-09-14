@@ -112,7 +112,10 @@ Field names:
     target          normalized ``.omx/artifacts/...`` path, glob, or dir prefix
                     (strict POSIX-relative; colon, backslash, and ``..``
                     rejected). Extraction stops at ASCII ``()`` / ``:`` / ``\\``
-                    so line locators and parenthetical prose never become keys.
+                    so line locators and parenthetical prose never become keys
+                    (parentheses in a filename are POSIX-legal but not citable).
+                    Remaining non-normalized citations (``../``, ``/./``, ``//``)
+                    fail closed at scan time with source:line.
     count           exact positive integer occurrence count
 
 Check-mode verdicts:
@@ -191,8 +194,10 @@ _BASELINE_ENTRY_KEYS: tuple[str, ...] = ("source", "target", "count")
 _REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|\\():（）【】「」，、；：。]+)")
 
 # Trailing punctuation that is prose, not path. `.md` ends in a letter, so
-# stripping a trailing dot is safe; `*` and `?` are kept for glob targets.
-_TRAILING_JUNK = ".,;:!?)]}>。，；：！？）】、"
+# stripping a trailing dot is safe. `*` and `?` are glob wildcards and are
+# not stripped. Characters already excluded by `_REF_RE` (ASCII `():\\`
+# and the CJK delimiter set) are omitted here.
+_TRAILING_JUNK = ".,;!]}>！？"
 
 # Markdown *link destinations* only: a pre-`?` basename ending in `.` plus
 # an alphanumeric extension (`report.md`) means the `?` starts a query
@@ -315,6 +320,12 @@ def extract_targets(text: str) -> list[str]:
     query; backticked and bare references only strip an explicit
     ``key=value`` query and otherwise keep ``?`` as a glob wildcard. See
     ``_strip_markdown_suffixes``.
+
+    Known prose delimiters are removed from the capture. Any remaining
+    non-normalized citation (dot-segments, ``//``, a rest that starts
+    with ``./``) is not rewritten: ``scan`` rejects it with a
+    ``source:line`` ``GuardError`` before classification or baseline
+    accumulation.
     """
     found: list[str] = []
     for match in _REF_RE.finditer(text):
@@ -651,6 +662,8 @@ def scan(
             raise GuardError(f"cannot decode markdown at {path} as UTF-8: {extra}") from extra
         for lineno, line in enumerate(text.splitlines(), start=1):
             for target in extract_targets(line):
+                if not _is_normalized_artifact_target(target):
+                    raise GuardError(f"{rel}:{lineno}: invalid artifact target {target!r}")
                 refs.append(
                     ArtifactRef(
                         source=rel,
@@ -717,8 +730,9 @@ def _is_normalized_artifact_target(target: str) -> bool:
 
     Baseline keys are artifact path / glob / dir strings, not scanner
     identity fragments. Colon, backslash, NUL, ``..``, and other
-    non-normalized POSIX forms are rejected here; extraction must not
-    emit them.
+    non-normalized POSIX forms are rejected here. Extraction still
+    emits such strings when they appear in markdown; ``scan`` fails
+    closed on them with source:line before classification.
     """
     if type(target) is not str or not target.startswith(ARTIFACT_PREFIX):
         return False

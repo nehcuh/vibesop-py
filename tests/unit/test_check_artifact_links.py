@@ -889,7 +889,13 @@ def test_extract_targets_handles_multiple_and_punctuation() -> None:
 
 
 def test_normalized_artifact_target_is_strict_posix_path() -> None:
-    """Baseline keys are path/glob/dir strings, not scanner identity fragments."""
+    """Baseline keys are path/glob/dir strings, not scanner identity fragments.
+
+    Parentheses are valid POSIX filename characters, so the normalizer
+    accepts ``foo(1).md``. Extraction still treats ASCII ``()`` as prose
+    delimiters — that filename is not citable from markdown. See
+    ``test_parentheses_in_filenames_are_not_citable``.
+    """
     assert chal._is_normalized_artifact_target(".omx/artifacts/x.md")
     assert chal._is_normalized_artifact_target(".omx/artifacts/dir/")
     assert chal._is_normalized_artifact_target(".omx/artifacts/v[1]/*.md")
@@ -899,7 +905,20 @@ def test_normalized_artifact_target_is_strict_posix_path() -> None:
     assert not chal._is_normalized_artifact_target(".omx/artifacts/y.md\\")
     assert not chal._is_normalized_artifact_target(".omx/artifacts/foo\\..\\secret.md")
     assert not chal._is_normalized_artifact_target(".omx/artifacts/../secret.md")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/./x.md")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts//x.md")
     assert not chal._is_normalized_artifact_target(".omx/artifacts/z.md(注:1")
+
+
+def test_parentheses_in_filenames_are_not_citable() -> None:
+    """Accepted limitation: ``()`` are POSIX-legal but extraction delimiters.
+
+    Tracked ``.omx/artifacts/`` filenames currently contain none. Do not
+    broaden ``_REF_RE`` to emit parenthetical names.
+    """
+    assert chal._is_normalized_artifact_target(".omx/artifacts/foo(1).md")
+    assert chal.extract_targets("see `.omx/artifacts/foo(1).md`") == [".omx/artifacts/foo"]
+    assert chal.extract_targets("[x](.omx/artifacts/foo(1).md)") == [".omx/artifacts/foo"]
 
 
 @pytest.mark.parametrize(
@@ -929,6 +948,8 @@ def test_normalized_artifact_target_is_strict_posix_path() -> None:
         ("    [r]: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
         ("label: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
         ("`.omx/artifacts/gate7-?.md`", ".omx/artifacts/gate7-?.md", "glob"),
+        ("`.omx/artifacts/2026-09-?`", ".omx/artifacts/2026-09-?", "glob"),
+        (".omx/artifacts/2026-09-?", ".omx/artifacts/2026-09-?", "glob"),
         ("`.omx/artifacts/v1.2?.md`", ".omx/artifacts/v1.2?.md", "glob"),
         ("`.omx/artifacts/report.v2?.md`", ".omx/artifacts/report.v2?.md", "glob"),
         ("`.omx/artifacts/report.md?raw=1`", ".omx/artifacts/report.md", "file"),
