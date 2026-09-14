@@ -99,10 +99,11 @@ _REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|（）【】「」
 # stripping a trailing dot is safe; `*` and `?` are kept for glob targets.
 _TRAILING_JUNK = ".,;:!?)]}>。，；：！？）】、"
 
-# A pre-`?` basename ending in `.` + alphanumeric extension (`report.md`)
-# means the `?` starts a query, not a glob. `gate7-?.md` / `v1.2-?.md` do
-# not match: the `?` sits before the suffix, so the basename is `gate7-`
-# / `v1.2-`.
+# Markdown *link destinations* only: a pre-`?` basename ending in `.` plus
+# an alphanumeric extension (`report.md`) means the `?` starts a query
+# (`report.md?raw`, `report.md?download`). `gate7-?.md` / `v1.2-?.md` do
+# not match: the `?` sits before the suffix. Backticked and bare references
+# do not use this heuristic — a lone `?` stays a glob wildcard.
 _QUERY_AFTER_EXT_RE = re.compile(r"\.[A-Za-z0-9]+$")
 
 
@@ -124,12 +125,30 @@ class ArtifactRef:
         return f"{self.source}:{self.lineno}: {self.status}: {self.target}"
 
 
+def _is_markdown_link_destination(text: str, match: re.Match[str]) -> bool:
+    """True if ``match`` sits in a Markdown link destination after ``](``.
+
+    Covers ``[x](.omx/artifacts/report.md?raw)`` and the angle-wrapped form
+    ``[x](<.omx/artifacts/report.md?raw>)``. Backticks and bare prose are not
+    link destinations.
+    """
+    start = match.start()
+    if start > 0 and text[start - 1] == "<":
+        start -= 1
+    return start >= 2 and text[start - 2 : start] == "]("
+
+
 def extract_targets(text: str) -> list[str]:
     """Return every `.omx/artifacts/...` target written in ``text``.
 
     Works for backticked paths, markdown link targets, and bare prose paths —
     all three appear in this repo. Template placeholders such as
     `.omx/artifacts/evo-lane-<id>-handback.md` are skipped: they name no file.
+
+    Query stripping is context-aware: Markdown link destinations treat a
+    ``?`` after a file extension as a URL query; backticked and bare
+    references only strip an explicit ``key=value`` query and otherwise keep
+    ``?`` as a glob wildcard. See ``_strip_markdown_suffixes``.
     """
     found: list[str] = []
     for match in _REF_RE.finditer(text):
@@ -139,28 +158,34 @@ def extract_targets(text: str) -> list[str]:
         if "<" in raw or ">" in raw:
             # A placeholder such as `evo-lane-<id>-handback.md` names no file.
             continue
-        raw = _strip_markdown_suffixes(raw)
+        raw = _strip_markdown_suffixes(
+            raw, markdown_link=_is_markdown_link_destination(text, match)
+        )
         if not raw:
             continue
         found.append(ARTIFACT_PREFIX + raw)
     return found
 
 
-def _strip_markdown_suffixes(raw: str) -> str:
+def _strip_markdown_suffixes(raw: str, *, markdown_link: bool) -> str:
     """Drop a Markdown/URL fragment or query from a captured path.
 
     ``[x](.omx/artifacts/report.md#section)`` must validate ``report.md``.
 
-    Query vs glob ``?`` (conservative syntactic rule, no filesystem check):
+    Context rule for ``?`` (conservative syntactic rule, no filesystem check):
 
     1. Fragment: drop everything from the first ``#``.
-    2. Key/value query: if the text after the first ``?`` contains ``=``
-       or ``&`` (``report.md?raw=1``), strip from ``?``.
-    3. Extension query: if the pre-``?`` *basename* ends with ``.`` plus
-       an alphanumeric extension (``[A-Za-z0-9]+``), the ``?`` begins a
-       query (``report.md?raw``, ``report.md?download``).
-    4. Otherwise the ``?`` is a glob wildcard (``gate7-?.md``,
-       ``v1.2-?.md``). Dots in the stem are not evidence of a URL.
+    2. Explicit ``key=value`` query (``report.md?raw=1``): strip from ``?``
+       in every context.
+    3. Markdown link destinations only: also strip a lone query flag when
+       the pre-``?`` *basename* ends with ``.`` plus an alphanumeric
+       extension (``[x](.omx/artifacts/report.md?raw)``,
+       ``[x](.omx/artifacts/report.md?download)``), or when the query uses
+       ``&``. A ``?`` that is not after an extension stays a glob
+       (``gate7-?.md``).
+    4. Backticked or bare references: a lone ``?`` is a glob wildcard
+       (``gate7-?.md``, ``v1.2-?.md``, ``v1.2?.md``, ``report.v2?.md``,
+       ``report.md?raw``). Dots in the stem are not evidence of a URL.
     """
     raw = raw.split("#", 1)[0]
     qpos = raw.find("?")
@@ -168,11 +193,14 @@ def _strip_markdown_suffixes(raw: str) -> str:
         return raw
     after = raw[qpos + 1 :]
     before = raw[:qpos]
-    if "=" in after or "&" in after:
+    if "=" in after:
         return before
-    basename = before.rsplit("/", 1)[-1]
-    if _QUERY_AFTER_EXT_RE.search(basename):
-        return before
+    if markdown_link:
+        if "&" in after:
+            return before
+        basename = before.rsplit("/", 1)[-1]
+        if _QUERY_AFTER_EXT_RE.search(basename):
+            return before
     return raw
 
 
@@ -214,12 +242,23 @@ def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
             yield ARTIFACT_PREFIX + rel
 
 
+_ROOT_WHATS = frozenset({"repository root", "--root", "artifact root"})
+
+
 def _resolve_path(path: Path, *, what: str) -> Path:
-    """Resolve ``path``, converting loops / OS / ValueError into GuardError."""
+    """Resolve ``path``, converting loops / OS / ValueError into GuardError.
+
+    ``RuntimeError`` / ``OSError`` (symlink loops, I/O) become
+    ``cannot resolve ...``. ``ValueError`` is this boundary's mapping:
+    ``invalid_root`` when ``what`` names a root, otherwise ``invalid_target``.
+    """
     try:
         return path.resolve()
-    except (RuntimeError, OSError, ValueError) as exc:
+    except (RuntimeError, OSError) as exc:
         raise GuardError(f"cannot resolve {what} ({path}): {exc}") from exc
+    except ValueError as extra:
+        label = "invalid_root" if what in _ROOT_WHATS else "invalid_target"
+        raise GuardError(f"{label}: cannot resolve {what} ({path}): {extra}") from extra
 
 
 def _resolved_artifact_root(root: Path) -> Path | None:
@@ -314,10 +353,7 @@ def _resolve_in_root(root: Path, target: str) -> Path:
     target is still a bad argument, not a skipped scan root.
     """
     root_resolved = _resolve_path(root, what="repository root")
-    try:
-        joined = root / target
-    except ValueError as extra:
-        raise GuardError(f"invalid target {target!r}: {extra}") from extra
+    joined = root / target
     candidate = _resolve_path(joined, what=f"target {target!r}")
     if not candidate.is_relative_to(root_resolved):
         raise GuardError(f"target {target!r} is outside repository root {root_resolved}")

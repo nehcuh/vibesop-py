@@ -400,9 +400,10 @@ def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
     assert "1 ok, 0 dangling, 0 stale" in out
 
 
-def test_markdown_query_string_validates_underlying_file(repo: Path) -> None:
+@pytest.mark.parametrize("query", ["raw", "download", "raw=1"])
+def test_markdown_query_string_validates_underlying_file(repo: Path, query: str) -> None:
     (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md?raw=1)\n")
+    (repo / "docs" / "notes.md").write_text(f"[see](.omx/artifacts/report.md?{query})\n")
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -425,13 +426,17 @@ def test_markdown_fragment_on_untracked_file_is_dangling(repo: Path) -> None:
     assert "report.md" in out
 
 
-def test_query_string_without_key_value_on_untracked_file_is_dangling(repo: Path) -> None:
-    """`report.md?raw` must validate `report.md`, not be treated as a glob.
+@pytest.mark.parametrize("query", ["raw", "download"])
+def test_query_string_without_key_value_on_untracked_file_is_dangling(
+    repo: Path, query: str
+) -> None:
+    """Markdown link `report.md?raw` / `?download` must validate `report.md`.
 
     An untracked on-disk `report.md` is dangling / exit 1, not stale/green.
+    Backticked lone flags are globs; this contract is for link destinations.
     """
     (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md?raw)\n")
+    (repo / "docs" / "notes.md").write_text(f"[see](.omx/artifacts/report.md?{query})\n")
     _commit_paths(repo, "docs/notes.md")
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
@@ -447,7 +452,7 @@ def test_query_string_without_key_value_on_untracked_file_is_dangling(repo: Path
     assert code == 1, out
     assert "DANGLING" in out
     assert ".omx/artifacts/report.md" in out
-    assert "report.md?raw" not in out
+    assert f"report.md?{query}" not in out
     assert "0 stale" in out
 
 
@@ -601,11 +606,21 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         ("[x](.omx/artifacts/report.md?raw=1)", [".omx/artifacts/report.md"]),
         ("[x](.omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
         ("[x](.omx/artifacts/report.md?download)", [".omx/artifacts/report.md"]),
+        ("[x](<.omx/artifacts/report.md?raw>)", [".omx/artifacts/report.md"]),
         ("详见 .omx/artifacts/c.md。", [".omx/artifacts/c.md"]),
         ("按 `.omx/artifacts/gate34-*` 定稿", [".omx/artifacts/gate34-*"]),
-        # A glob '?' wildcard is not a query string, even when the stem has dots.
+        # Backtick/bare: a lone '?' is a glob, even after a file extension or
+        # dotted stem. Only an explicit key=value query is stripped.
         ("`.omx/artifacts/gate7-?.md`", [".omx/artifacts/gate7-?.md"]),
         ("`.omx/artifacts/v1.2-?.md`", [".omx/artifacts/v1.2-?.md"]),
+        ("`.omx/artifacts/v1.2?.md`", [".omx/artifacts/v1.2?.md"]),
+        ("`.omx/artifacts/report.v2?.md`", [".omx/artifacts/report.v2?.md"]),
+        ("`.omx/artifacts/report.md?raw`", [".omx/artifacts/report.md?raw"]),
+        ("`.omx/artifacts/report.md?raw=1`", [".omx/artifacts/report.md"]),
+        (".omx/artifacts/v1.2?.md", [".omx/artifacts/v1.2?.md"]),
+        (".omx/artifacts/report.v2?.md", [".omx/artifacts/report.v2?.md"]),
+        ("见 .omx/artifacts/report.md?raw。", [".omx/artifacts/report.md?raw"]),
+        ("见 .omx/artifacts/report.md?foo=bar。", [".omx/artifacts/report.md"]),
         ("见 `.omx/artifacts/health-20260909/`", [".omx/artifacts/health-20260909/"]),
         # Template placeholder names no file -> skipped.
         ("`.omx/artifacts/evo-lane-<id>-handback.md`", []),
@@ -625,6 +640,48 @@ def test_extract_targets_handles_multiple_and_punctuation() -> None:
         ".omx/artifacts/b.json",
         ".omx/artifacts/c.diff",
     ]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "kind"),
+    [
+        ("[x](.omx/artifacts/report.md?raw)", ".omx/artifacts/report.md", "file"),
+        ("[x](.omx/artifacts/report.md?download)", ".omx/artifacts/report.md", "file"),
+        ("`.omx/artifacts/report.md?raw`", ".omx/artifacts/report.md?raw", "glob"),
+        ("`.omx/artifacts/gate7-?.md`", ".omx/artifacts/gate7-?.md", "glob"),
+        ("`.omx/artifacts/v1.2?.md`", ".omx/artifacts/v1.2?.md", "glob"),
+        ("`.omx/artifacts/report.v2?.md`", ".omx/artifacts/report.v2?.md", "glob"),
+        ("`.omx/artifacts/report.md?raw=1`", ".omx/artifacts/report.md", "file"),
+    ],
+)
+def test_query_stripping_is_context_aware(text: str, expected: str, kind: str) -> None:
+    """Markdown links strip lone query flags; backtick/bare keep them as globs."""
+    found = chal.extract_targets(text)
+    assert found == [expected]
+    assert chal._kind(found[0]) == kind
+
+
+def test_resolve_value_error_is_invalid_root_or_invalid_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ValueError from Path.resolve is owned by _resolve_path.
+
+    Roots map to invalid_root; every other `what` maps to invalid_target.
+    The dead `root / target` join try/except is gone — this is the boundary.
+    """
+
+    def boom(self: Path, strict: bool = False) -> Path:
+        raise ValueError("embedded NUL")
+
+    monkeypatch.setattr(Path, "resolve", boom)
+
+    with pytest.raises(chal.GuardError, match=r"invalid_root") as root_exc:
+        chal._resolve_path(tmp_path, what="repository root")
+    assert "invalid_target" not in str(root_exc.value)
+
+    with pytest.raises(chal.GuardError, match=r"invalid_target") as target_exc:
+        chal._resolve_path(tmp_path / "docs", what="target 'docs'")
+    assert "invalid_root" not in str(target_exc.value)
 
 
 def test_classify_kinds(tmp_path: Path) -> None:
