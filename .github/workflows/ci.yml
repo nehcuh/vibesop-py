@@ -40,6 +40,30 @@ jobs:
       - name: Run ruff format check
         run: uv run ruff format --check .
 
+  decision-source:
+    name: Decision Source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Check CI decision sources
+        # B1: every required job must declare deterministic | human; a
+        # model-sourced required job is a red build. Report-only
+        # routing-eval is registered as human and still listed here so
+        # coverage cannot silently drop it.
+        run: uv run python scripts/check_ci_decision_source.py
+
   type-check:
     name: Type Check
     runs-on: ubuntu-latest
