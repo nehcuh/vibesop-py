@@ -79,10 +79,13 @@ def _commit(root: Path) -> None:
 
 def _run(root: Path, *args: str) -> tuple[int, str]:
     """Run the guard as a subprocess so the real exit code is exercised."""
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--root", str(root), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env=env,
         check=False,
     )
     return proc.returncode, proc.stdout + proc.stderr
@@ -94,9 +97,12 @@ def _run(root: Path, *args: str) -> tuple[int, str]:
 
 
 def test_tracked_artifact_reference_is_green(repo: Path) -> None:
-    (repo / ".omx" / "artifacts" / "next-opt-design-v1.md").write_text("# design\n")
+    (repo / ".omx" / "artifacts" / "next-opt-design-v1.md").write_text(
+        "# design\n", encoding="utf-8"
+    )
     (repo / "docs" / "roadmap.md").write_text(
-        "> **当前锁**：`.omx/artifacts/next-opt-design-v1.md`\n"
+        "> **当前锁**：`.omx/artifacts/next-opt-design-v1.md`\n",
+        encoding="utf-8",
     )
     _commit_all(repo)
 
@@ -108,8 +114,10 @@ def test_tracked_artifact_reference_is_green(repo: Path) -> None:
 def test_untracked_artifact_reference_is_red(repo: Path) -> None:
     # The R3/R4 prereg incident: the artifact is written and cited, but only
     # the doc made it into the index (the old workflow needed `git add -f`).
-    (repo / ".omx" / "artifacts" / "r4-prereg.md").write_text("# prereg\n")
-    (repo / "docs" / "roadmap.md").write_text("see `.omx/artifacts/r4-prereg.md` for criteria\n")
+    (repo / ".omx" / "artifacts" / "r4-prereg.md").write_text("# prereg\n", encoding="utf-8")
+    (repo / "docs" / "roadmap.md").write_text(
+        "see `.omx/artifacts/r4-prereg.md` for criteria\n", encoding="utf-8"
+    )
     _commit_paths(repo, "docs/roadmap.md")
     assert (
         "r4-prereg.md"
@@ -130,8 +138,8 @@ def test_untracked_artifact_reference_is_red(repo: Path) -> None:
 
 
 def test_docs_without_artifact_references_are_green(repo: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("No artifacts here, just prose.\n")
-    (repo / "README.md").write_text("# repo\n")
+    (repo / "docs" / "notes.md").write_text("No artifacts here, just prose.\n", encoding="utf-8")
+    (repo / "README.md").write_text("# repo\n", encoding="utf-8")
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -147,7 +155,9 @@ def test_docs_without_artifact_references_are_green(repo: Path) -> None:
 def test_stale_reference_warns_by_default_and_fails_under_strict(repo: Path) -> None:
     # A historical citation whose target is gone from both index and disk:
     # not repairable by `git add`, so it must not be fatal by default.
-    (repo / "CHANGELOG.md").write_text("按 `.omx/artifacts/gate44-synthesis.md` v2.1 终稿实施。\n")
+    (repo / "CHANGELOG.md").write_text(
+        "按 `.omx/artifacts/gate44-synthesis.md` v2.1 终稿实施。\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -160,8 +170,10 @@ def test_stale_reference_warns_by_default_and_fails_under_strict(repo: Path) -> 
 
 
 def test_glob_reference_matching_a_tracked_file_is_green(repo: Path) -> None:
-    (repo / ".omx" / "artifacts" / "gate7-review-claude.md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("全部材料在 `.omx/artifacts/gate7-*`。\n")
+    (repo / ".omx" / "artifacts" / "gate7-review-claude.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(
+        "全部材料在 `.omx/artifacts/gate7-*`。\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -170,7 +182,9 @@ def test_glob_reference_matching_a_tracked_file_is_green(repo: Path) -> None:
 
 
 def test_glob_reference_predating_any_tracked_file_is_stale(repo: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/ask-grok-panel-*.md`。\n")
+    (repo / "docs" / "notes.md").write_text(
+        "见 `.omx/artifacts/ask-grok-panel-*.md`。\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -186,8 +200,8 @@ def test_glob_matching_untracked_on_disk_file_is_dangling(repo: Path) -> None:
     `(root / 'foo-*').exists()` is the wrong check: it looks for a literal
     filename containing `*`. The guard must glob under `.omx/artifacts`.
     """
-    (repo / ".omx" / "artifacts" / "foo-bar.md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    (repo / ".omx" / "artifacts" / "foo-bar.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
@@ -205,16 +219,16 @@ def test_glob_does_not_match_outside_artifact_root(tmp_path: Path) -> None:
     """On-disk glob matching must not traverse out of `.omx/artifacts`."""
     artifact_root = tmp_path / ".omx" / "artifacts"
     artifact_root.mkdir(parents=True)
-    (tmp_path / "secret.md").write_text("x\n")
+    (tmp_path / "secret.md").write_text("x\n", encoding="utf-8")
     (tmp_path / "outside").mkdir()
-    (tmp_path / "outside" / "foo-bar.md").write_text("x\n")
+    (tmp_path / "outside" / "foo-bar.md").write_text("x\n", encoding="utf-8")
     tracked: set[str] = set()
 
     assert chal.classify(".omx/artifacts/../*", tracked, tmp_path) == "stale"
     assert chal.classify(".omx/artifacts/../outside/*", tracked, tmp_path) == "stale"
     assert chal.classify(".omx/artifacts/../secret.md", tracked, tmp_path) != "ok"
 
-    (artifact_root / "foo-1.md").write_text("x\n")
+    (artifact_root / "foo-1.md").write_text("x\n", encoding="utf-8")
     assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
 
 
@@ -228,13 +242,13 @@ def test_directory_symlink_inside_artifacts_is_not_a_glob_match(
     artifact_root.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "foo-bar.md").write_text("x\n")
+    (outside / "foo-bar.md").write_text("x\n", encoding="utf-8")
     (artifact_root / "escape").symlink_to(outside, target_is_directory=True)
     tracked: set[str] = set()
 
     assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "stale"
     assert chal.classify(".omx/artifacts/escape/*", tracked, tmp_path) == "stale"
-    (artifact_root / "foo-in.md").write_text("x\n")
+    (artifact_root / "foo-in.md").write_text("x\n", encoding="utf-8")
     assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
 
 
@@ -248,7 +262,7 @@ def test_artifact_root_symlink_outside_fails_closed(
     outside = tmp_path / "outside"
     repo.mkdir()
     outside.mkdir()
-    (outside / "foo-bar.md").write_text("x\n")
+    (outside / "foo-bar.md").write_text("x\n", encoding="utf-8")
     (repo / ".omx").mkdir()
     (repo / ".omx" / "artifacts").symlink_to(outside, target_is_directory=True)
 
@@ -261,11 +275,11 @@ def test_artifact_root_symlink_outside_cli_exits_2(
 ) -> None:
     if not symlink_supported:
         pytest.skip("directory symlinks not supported on this host")
-    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
     outside = tmp_path / "outside-artifacts"
     outside.mkdir()
-    (outside / "foo-bar.md").write_text("x\n")
+    (outside / "foo-bar.md").write_text("x\n", encoding="utf-8")
     artifacts = repo / ".omx" / "artifacts"
     artifacts.rmdir()
     artifacts.symlink_to(outside, target_is_directory=True)
@@ -296,9 +310,9 @@ def test_os_walk_onerror_fails_closed(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 def test_out_of_root_relative_target_fails_closed(repo: Path, tmp_path: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("clean\n")
+    (repo / "docs" / "notes.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
-    (tmp_path / "outside.md").write_text("see `.omx/artifacts/x.md`\n")
+    (tmp_path / "outside.md").write_text("see `.omx/artifacts/x.md`\n", encoding="utf-8")
 
     code, out = _run(repo, "--targets", "../outside.md")
     assert code == 2, out
@@ -309,7 +323,7 @@ def test_out_of_root_relative_target_fails_closed(repo: Path, tmp_path: Path) ->
 
 def test_out_of_root_missing_relative_target_fails_closed(repo: Path) -> None:
     """A missing out-of-root path is still a bad --targets argument, not a skip."""
-    (repo / "docs" / "notes.md").write_text("clean\n")
+    (repo / "docs" / "notes.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
 
     code, out = _run(repo, "--targets", "../no-such-outside.md")
@@ -320,10 +334,10 @@ def test_out_of_root_missing_relative_target_fails_closed(repo: Path) -> None:
 
 
 def test_out_of_root_absolute_target_fails_closed(repo: Path, tmp_path: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("clean\n")
+    (repo / "docs" / "notes.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
     outside = tmp_path / "outside.md"
-    outside.write_text("see `.omx/artifacts/x.md`\n")
+    outside.write_text("see `.omx/artifacts/x.md`\n", encoding="utf-8")
 
     code, out = _run(repo, "--targets", str(outside))
     assert code == 2, out
@@ -331,7 +345,7 @@ def test_out_of_root_absolute_target_fails_closed(repo: Path, tmp_path: Path) ->
 
 
 def test_in_root_absolute_target_still_works(repo: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("clean\n")
+    (repo / "docs" / "notes.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
 
     code, out = _run(repo, "--targets", str((repo / "docs").resolve()))
@@ -346,7 +360,7 @@ def test_self_symlink_loop_target_fails_closed(repo: Path) -> None:
         loop.symlink_to(loop)
     except OSError:
         pytest.skip("file symlinks not supported on this host")
-    (repo / "docs" / "notes.md").write_text("clean\n")
+    (repo / "docs" / "notes.md").write_text("clean\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
 
     code, out = _run(repo, "--targets", "docs/loop.md")
@@ -375,7 +389,7 @@ def test_artifact_root_symlink_loop_cli_exits_2(repo: Path, symlink_supported: b
     """A self-loop `.omx/artifacts` must be exit 2 with no traceback."""
     if not symlink_supported:
         pytest.skip("directory symlinks not supported on this host")
-    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
     artifacts = repo / ".omx" / "artifacts"
     artifacts.rmdir()
@@ -391,8 +405,10 @@ def test_artifact_root_symlink_loop_cli_exits_2(repo: Path, symlink_supported: b
 
 
 def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(
+        "[see](.omx/artifacts/report.md#section)\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -402,8 +418,10 @@ def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
 
 @pytest.mark.parametrize("query", ["raw", "download", "raw=1"])
 def test_markdown_query_string_validates_underlying_file(repo: Path, query: str) -> None:
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text(f"[see](.omx/artifacts/report.md?{query})\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(
+        f"[see](.omx/artifacts/report.md?{query})\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     code, out = _run(repo)
@@ -412,8 +430,10 @@ def test_markdown_query_string_validates_underlying_file(repo: Path, query: str)
 
 
 def test_markdown_fragment_on_untracked_file_is_dangling(repo: Path) -> None:
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(
+        "[see](.omx/artifacts/report.md#section)\n", encoding="utf-8"
+    )
     _commit_paths(repo, "docs/notes.md")
 
     refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
@@ -435,8 +455,10 @@ def test_query_string_without_key_value_on_untracked_file_is_dangling(
     An untracked on-disk `report.md` is dangling / exit 1, not stale/green.
     Backticked lone flags are globs; this contract is for link destinations.
     """
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text(f"[see](.omx/artifacts/report.md?{query})\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(
+        f"[see](.omx/artifacts/report.md?{query})\n", encoding="utf-8"
+    )
     _commit_paths(repo, "docs/notes.md")
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
@@ -487,8 +509,8 @@ def test_untracked_file_cited_via_markdown_destination_form_is_dangling(
     miss, so a missed destination classification degrades DANGLING/exit 1
     into stale/exit 0.
     """
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
@@ -520,8 +542,8 @@ def test_untracked_file_cited_via_markdown_destination_form_is_dangling(
 def test_tracked_file_cited_via_markdown_destination_form_is_green(
     repo: Path, form: str, query: str
 ) -> None:
-    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
-    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n")
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n", encoding="utf-8")
     _commit_all(repo)
 
     refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
@@ -536,8 +558,12 @@ def test_tracked_file_cited_via_markdown_destination_form_is_green(
 
 def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
     (repo / ".omx" / "artifacts" / "health-20260909").mkdir()
-    (repo / ".omx" / "artifacts" / "health-20260909" / "summary.md").write_text("x\n")
-    (repo / "docs" / "check.md").write_text("见 `.omx/artifacts/health-20260909/`。\n")
+    (repo / ".omx" / "artifacts" / "health-20260909" / "summary.md").write_text(
+        "x\n", encoding="utf-8"
+    )
+    (repo / "docs" / "check.md").write_text(
+        "见 `.omx/artifacts/health-20260909/`。\n", encoding="utf-8"
+    )
     _commit_all(repo)
 
     # Tracked (committed) -> green.
@@ -545,8 +571,12 @@ def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
 
     # Same shape, but the artifact never made it into the index.
     (repo / ".omx" / "artifacts" / "health-20260910").mkdir()
-    (repo / ".omx" / "artifacts" / "health-20260910" / "summary.md").write_text("x\n")
-    (repo / "docs" / "check.md").write_text("见 `.omx/artifacts/health-20260910/`。\n")
+    (repo / ".omx" / "artifacts" / "health-20260910" / "summary.md").write_text(
+        "x\n", encoding="utf-8"
+    )
+    (repo / "docs" / "check.md").write_text(
+        "见 `.omx/artifacts/health-20260910/`。\n", encoding="utf-8"
+    )
     _commit_paths(repo, "docs/check.md")
     code, out = _run(repo)
     assert code == 1, out
@@ -554,9 +584,9 @@ def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
 
 
 def test_targets_restrict_the_scan(repo: Path) -> None:
-    (repo / "docs" / "clean.md").write_text("nothing here\n")
-    (repo / "README.md").write_text("see `.omx/artifacts/missing.md`\n")
-    (repo / ".omx" / "artifacts" / "missing.md").write_text("x\n")
+    (repo / "docs" / "clean.md").write_text("nothing here\n", encoding="utf-8")
+    (repo / "README.md").write_text("see `.omx/artifacts/missing.md`\n", encoding="utf-8")
+    (repo / ".omx" / "artifacts" / "missing.md").write_text("x\n", encoding="utf-8")
     _commit_paths(repo, "docs/clean.md", "README.md")
 
     code, out = _run(repo)
@@ -568,7 +598,9 @@ def test_targets_restrict_the_scan(repo: Path) -> None:
 def test_default_scan_includes_tracked_markdown_in_unknown_root(repo: Path) -> None:
     """A newly tracked *.md outside the old docs/README allowlist is in scope."""
     (repo / "knowledge" / "notes").mkdir(parents=True)
-    (repo / "knowledge" / "notes" / "new.md").write_text("see `.omx/artifacts/missing.md`\n")
+    (repo / "knowledge" / "notes" / "new.md").write_text(
+        "see `.omx/artifacts/missing.md`\n", encoding="utf-8"
+    )
     _commit_paths(repo, "knowledge/notes/new.md")
 
     code, out = _run(repo)
@@ -579,10 +611,10 @@ def test_default_scan_includes_tracked_markdown_in_unknown_root(repo: Path) -> N
 
 
 def test_default_scan_excludes_untracked_markdown_in_unknown_root(repo: Path) -> None:
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
     (repo / "knowledge").mkdir()
-    (repo / "knowledge" / "draft.md").write_text("see `.omx/artifacts/x.md`\n")
+    (repo / "knowledge" / "draft.md").write_text("see `.omx/artifacts/x.md`\n", encoding="utf-8")
 
     code, out = _run(repo)
     assert code == 0, out
@@ -591,9 +623,11 @@ def test_default_scan_excludes_untracked_markdown_in_unknown_root(repo: Path) ->
 
 
 def test_explicit_targets_narrows_unknown_root_out_of_default_scan(repo: Path) -> None:
-    (repo / "docs" / "clean.md").write_text("nothing here\n")
+    (repo / "docs" / "clean.md").write_text("nothing here\n", encoding="utf-8")
     (repo / "knowledge").mkdir()
-    (repo / "knowledge" / "notes.md").write_text("see `.omx/artifacts/missing.md`\n")
+    (repo / "knowledge" / "notes.md").write_text(
+        "see `.omx/artifacts/missing.md`\n", encoding="utf-8"
+    )
     _commit_paths(repo, "docs/clean.md", "knowledge/notes.md")
 
     default_code, default_out = _run(repo)
@@ -610,7 +644,7 @@ def test_explicit_targets_narrows_unknown_root_out_of_default_scan(repo: Path) -
 def test_default_scan_does_not_rglob_the_worktree(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
 
     def boom(self: Path, *args: object, **kwargs: object) -> list[Path]:
@@ -626,10 +660,10 @@ def test_default_scan_does_not_rglob_the_worktree(
 def test_untracked_markdown_is_not_scanned_by_default(repo: Path) -> None:
     # An uncommitted draft cannot fail the guard; the verdict equals what a
     # fresh clone would see.
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
-    (repo / "docs" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n")
-    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n")
+    (repo / "docs" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n", encoding="utf-8")
+    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n", encoding="utf-8")
 
     assert _run(repo)[0] == 0
     code, out = _run(repo, "--include-untracked")
@@ -645,11 +679,13 @@ def test_include_untracked_without_targets_uses_git_others_not_old_roots(
     Untracked markdown in an otherwise unknown root is included via
     git ls-files --others --exclude-standard, without a Python rglob.
     """
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
     (repo / "knowledge").mkdir()
-    (repo / "knowledge" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n")
-    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n")
+    (repo / "knowledge" / "draft.md").write_text(
+        "see `.omx/artifacts/not-yet.md`\n", encoding="utf-8"
+    )
+    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n", encoding="utf-8")
 
     def boom(self: Path, *args: object, **kwargs: object) -> list[Path]:
         raise AssertionError("include-untracked default must not rglob")
@@ -667,11 +703,11 @@ def test_include_untracked_without_targets_uses_git_others_not_old_roots(
 
 
 def test_include_untracked_without_targets_skips_gitignored_markdown(repo: Path) -> None:
-    (repo / ".gitignore").write_text("ignored_env/\n")
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / ".gitignore").write_text("ignored_env/\n", encoding="utf-8")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_paths(repo, ".gitignore", "docs/tracked.md")
     (repo / "ignored_env").mkdir()
-    (repo / "ignored_env" / "secret.md").write_text("see `.omx/artifacts/x.md`\n")
+    (repo / "ignored_env" / "secret.md").write_text("see `.omx/artifacts/x.md`\n", encoding="utf-8")
 
     code, out = _run(repo, "--include-untracked")
     assert code == 0, out
@@ -682,10 +718,10 @@ def test_include_untracked_without_targets_skips_gitignored_markdown(repo: Path)
 def test_include_untracked_without_targets_refused_with_tracked_list(
     repo: Path, tmp_path: Path
 ) -> None:
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
     injected = tmp_path / "ls-files.txt"
-    injected.write_text("docs/tracked.md\n")
+    injected.write_text("docs/tracked.md\n", encoding="utf-8")
 
     code, out = _run(repo, "--include-untracked", "--tracked-list", str(injected))
     assert code == 2, out
@@ -695,12 +731,14 @@ def test_include_untracked_without_targets_refused_with_tracked_list(
 
 
 def test_include_untracked_with_explicit_targets_still_walks_those_roots(repo: Path) -> None:
-    (repo / "docs" / "tracked.md").write_text("clean\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n", encoding="utf-8")
     _commit_all(repo)
-    (repo / "docs" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n")
+    (repo / "docs" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n", encoding="utf-8")
     (repo / "knowledge").mkdir()
-    (repo / "knowledge" / "other.md").write_text("see `.omx/artifacts/not-yet.md`\n")
-    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n")
+    (repo / "knowledge" / "other.md").write_text(
+        "see `.omx/artifacts/not-yet.md`\n", encoding="utf-8"
+    )
+    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n", encoding="utf-8")
 
     code, out = _run(repo, "--include-untracked", "--targets", "docs")
     assert code == 1, out
@@ -717,12 +755,12 @@ def test_missing_root_fails_closed(repo: Path) -> None:
 
 
 def test_tracked_list_injection_bypasses_git(repo: Path, tmp_path: Path) -> None:
-    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/ghost.md`\n")
-    (repo / ".omx" / "artifacts" / "ghost.md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/ghost.md`\n", encoding="utf-8")
+    (repo / ".omx" / "artifacts" / "ghost.md").write_text("x\n", encoding="utf-8")
     _commit_all(repo)
 
     injected = tmp_path / "ls-files.txt"
-    injected.write_text(".omx/artifacts/ghost.md\ndocs/notes.md\n")
+    injected.write_text(".omx/artifacts/ghost.md\ndocs/notes.md\n", encoding="utf-8")
     code, out = _run(repo, "--tracked-list", str(injected))
     assert code == 0, out
 
@@ -993,9 +1031,9 @@ def test_classify_kinds(tmp_path: Path) -> None:
     assert chal.classify(".omx/artifacts/nope.md", tracked, tmp_path) == "stale"
 
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
-    (tmp_path / ".omx" / "artifacts" / "here.md").write_text("x")
+    (tmp_path / ".omx" / "artifacts" / "here.md").write_text("x", encoding="utf-8")
     assert chal.classify(".omx/artifacts/here.md", tracked, tmp_path) == "dangling"
-    (tmp_path / ".omx" / "artifacts" / "foo-bar.md").write_text("x")
+    (tmp_path / ".omx" / "artifacts" / "foo-bar.md").write_text("x", encoding="utf-8")
     assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
     assert chal.classify(".omx/artifacts/nope-*", tracked, tmp_path) == "stale"
 
@@ -1004,7 +1042,7 @@ def test_classify_tracked_bracket_filename_is_ok_not_glob(tmp_path: Path) -> Non
     """``foo[1].md`` in the index is a file; ``[`` is not a glob metacharacter."""
     tracked = {".omx/artifacts/foo[1].md"}
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
-    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("x")
+    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("x", encoding="utf-8")
     assert chal._kind(".omx/artifacts/foo[1].md") == "file"
     assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "ok"
 
@@ -1015,8 +1053,8 @@ def test_classify_untracked_bracket_file_is_dangling_not_charclass_ok(
     """Literal untracked ``foo[1].md`` must not go green via tracked ``foo1.md``."""
     tracked = {".omx/artifacts/foo1.md"}
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
-    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
-    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("untracked")
+    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked", encoding="utf-8")
+    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("untracked", encoding="utf-8")
     assert chal._kind(".omx/artifacts/foo[1].md") == "file"
     assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "dangling"
 
@@ -1027,7 +1065,7 @@ def test_classify_bracket_filename_without_literal_file_is_stale_not_charclass(
     """``foo[1].md`` is a filename, not a character class matching ``foo1.md``."""
     tracked = {".omx/artifacts/foo1.md"}
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
-    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
+    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked", encoding="utf-8")
     assert chal._kind(".omx/artifacts/foo[1].md") == "file"
     assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "stale"
 
@@ -1037,7 +1075,7 @@ def test_glob_under_bracket_dir_does_not_match_tracked_v1(tmp_path: Path) -> Non
     tracked = {".omx/artifacts/v1/a.md"}
     art = tmp_path / ".omx" / "artifacts" / "v1"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("tracked")
+    (art / "a.md").write_text("tracked", encoding="utf-8")
     target = ".omx/artifacts/v[1]/*.md"
     assert chal._kind(target) == "glob"
     assert chal.classify(target, tracked, tmp_path) == "stale"
@@ -1047,7 +1085,7 @@ def test_glob_under_tracked_bracket_dir_is_ok(tmp_path: Path) -> None:
     tracked = {".omx/artifacts/v[1]/a.md"}
     art = tmp_path / ".omx" / "artifacts" / "v[1]"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("tracked")
+    (art / "a.md").write_text("tracked", encoding="utf-8")
     target = ".omx/artifacts/v[1]/*.md"
     assert chal._kind(target) == "glob"
     assert chal.classify(target, tracked, tmp_path) == "ok"
@@ -1057,7 +1095,7 @@ def test_glob_under_untracked_bracket_dir_is_dangling(tmp_path: Path) -> None:
     tracked: set[str] = set()
     art = tmp_path / ".omx" / "artifacts" / "v[1]"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("untracked")
+    (art / "a.md").write_text("untracked", encoding="utf-8")
     target = ".omx/artifacts/v[1]/*.md"
     assert chal._kind(target) == "glob"
     assert chal.classify(target, tracked, tmp_path) == "dangling"
@@ -1067,7 +1105,7 @@ def test_question_mark_wildcard_still_matches_under_bracket_dir(tmp_path: Path) 
     tracked = {".omx/artifacts/v[1]/a.md"}
     art = tmp_path / ".omx" / "artifacts" / "v[1]"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("tracked")
+    (art / "a.md").write_text("tracked", encoding="utf-8")
     target = ".omx/artifacts/v[1]/?.md"
     assert chal._kind(target) == "glob"
     assert chal.classify(target, tracked, tmp_path) == "ok"
@@ -1112,8 +1150,8 @@ def test_cli_glob_under_tracked_v1_is_not_false_green(repo: Path) -> None:
     """Tracked v1/a.md must not satisfy a citation to literal v[1]/*.md."""
     art = repo / ".omx" / "artifacts" / "v1"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    (art / "a.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n", encoding="utf-8")
     _commit_all(repo)
 
     refs = chal.scan(repo, None, chal.list_tracked(repo))
@@ -1131,8 +1169,8 @@ def test_cli_glob_under_tracked_v1_is_not_false_green(repo: Path) -> None:
 def test_cli_glob_under_tracked_bracket_dir_is_green(repo: Path) -> None:
     art = repo / ".omx" / "artifacts" / "v[1]"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    (art / "a.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n", encoding="utf-8")
     _commit_all(repo)
 
     refs = chal.scan(repo, None, chal.list_tracked(repo))
@@ -1146,8 +1184,8 @@ def test_cli_glob_under_tracked_bracket_dir_is_green(repo: Path) -> None:
 def test_cli_glob_under_untracked_bracket_dir_is_dangling(repo: Path) -> None:
     art = repo / ".omx" / "artifacts" / "v[1]"
     art.mkdir(parents=True)
-    (art / "a.md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    (art / "a.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n", encoding="utf-8")
     _commit_paths(repo, "docs/notes.md")
 
     code, out = _run(repo)
@@ -1157,8 +1195,8 @@ def test_cli_glob_under_untracked_bracket_dir_is_dangling(repo: Path) -> None:
 
 
 def test_cli_tracked_bracket_filename_is_green(repo: Path) -> None:
-    (repo / ".omx" / "artifacts" / "foo[1].md").write_text("x\n")
-    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/foo[1].md`\n")
+    (repo / ".omx" / "artifacts" / "foo[1].md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/foo[1].md`\n", encoding="utf-8")
     _commit_all(repo)
 
     refs = chal.scan(repo, None, chal.list_tracked(repo))
@@ -1183,7 +1221,7 @@ def test_classify_broken_symlink_is_dangling(tmp_path: Path) -> None:
 
 
 def test_scan_is_green_on_empty_reference_set(repo: Path) -> None:
-    (repo / "docs" / "a.md").write_text("nothing to see\n")
+    (repo / "docs" / "a.md").write_text("nothing to see\n", encoding="utf-8")
     _commit_all(repo)
     tracked = chal.list_tracked(repo)
     assert chal.scan(repo, ["docs"], tracked) == []
@@ -1192,6 +1230,20 @@ def test_scan_is_green_on_empty_reference_set(repo: Path) -> None:
 # --------------------------------------------------------------------------
 # Unicode paths: real git repo + Windows cp1252 locale regression
 # --------------------------------------------------------------------------
+
+
+def test_cjk_fixture_write_does_not_depend_on_locale_encoding(tmp_path: Path) -> None:
+    """Windows GHA is cp1252; CJK fixture writes must pin UTF-8.
+
+    The 8.4.0 Windows CI failures were Path.write_text() with no encoding,
+    so locale cp1252 raised UnicodeEncodeError before the guard ran.
+    """
+    text = "> **当前锁**：`.omx/artifacts/next-opt-design-v1.md`\n"
+    path = tmp_path / "roadmap.md"
+    with pytest.raises(UnicodeEncodeError):
+        path.write_text(text, encoding="cp1252")
+    path.write_text(text, encoding="utf-8")
+    assert path.read_text(encoding="utf-8") == text
 
 
 def test_unicode_artifact_filename_in_real_git_repo_is_green(repo: Path) -> None:
@@ -1273,7 +1325,7 @@ def test_list_tracked_uses_binary_git_output_and_utf8_decode(
 def test_repo_gitignore_boundary(tmp_path: Path, path: str, ignored: bool) -> None:
     root = tmp_path / "repo"
     root.mkdir()
-    (root / ".gitignore").write_text(REPO_GITIGNORE.read_text(encoding="utf-8"))
+    (root / ".gitignore").write_text(REPO_GITIGNORE.read_text(encoding="utf-8"), encoding="utf-8")
     _git(root, "init", "-q")
 
     proc = subprocess.run(

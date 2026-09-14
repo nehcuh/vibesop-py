@@ -90,10 +90,13 @@ def _commit_paths(root: Path, *paths: str) -> None:
 
 
 def _run(root: Path, *args: str) -> tuple[int, str]:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--root", str(root), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env=env,
         check=False,
     )
     return proc.returncode, proc.stdout + proc.stderr
@@ -130,11 +133,14 @@ def _tmp_leftovers(directory: Path, *keep: Path) -> list[Path]:
 
 
 def _run_in(cwd: Path, *args: str) -> tuple[int, str]:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--root", str(cwd), *args],
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env=env,
         check=False,
     )
     return proc.returncode, proc.stdout + proc.stderr
@@ -740,6 +746,8 @@ def test_committed_baseline_matches_current_stale_multiset() -> None:
     decoded = text.decode("utf-8")
     assert "generated" not in decoded.lower()
     assert str(ROOT) not in decoded
+    attrs = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "ci/artifact-links-baseline.json text eol=lf" in attrs
 
 
 def test_ci_workflow_and_registry_wire_artifact_links_job() -> None:

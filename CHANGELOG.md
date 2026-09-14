@@ -68,6 +68,10 @@ aggregation, CI `decision_source` governance, and artifact citation guards.
 - **Terminal `?` glob wildcard**: `_TRAILING_JUNK` no longer strips `?`,
   so a bare or backticked citation ending in `?` stays a glob. Markdown
   link destinations such as `.md?raw` still strip the query.
+- **Windows artifact-link tests**: CJK fixture writes pin UTF-8 so they
+  survive a cp1252 locale, and `ci/artifact-links-baseline.json` is
+  pinned `eol=lf` so Windows autocrlf cannot fail the byte-level LF
+  contract.
 
 ### Documentation
 
