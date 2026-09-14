@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.4.1] — 2026-09-15
+
+Patch: CI matrix interpreter trust, routing hot-path benchmark isolation,
+GitHub Release asset globs, and Python 3.13 symlink-loop fail-closed.
+v8.4.0 remains the previous public release.
+
+### Fixed
+
+- **CI matrix jobs named Python 3.13 actually ran 3.12**: `uv python install`
+  fetched 3.13, but `uv sync` / `uv run` obeyed repo `.python-version`
+  (`3.12`). Ubuntu evidence was 3.12.3; Windows was 3.12.10. Matrix jobs
+  now set job-level `UV_PYTHON` to `${{ matrix.python-version }}` and assert
+  observed major.minor after sync; a mismatch fails the job.
+- **Routing hot-path ran in the default test suite**:
+  `tests/benchmark/test_routing_hot_path.py` lacked `pytest.mark.benchmark`,
+  so `-m "not benchmark and not slow"` still executed it. Its 20-sample
+  "p95" is `times[int(n*0.95)]` (the max of 20) with no warmup. That budget
+  flaked v8.4.0 Release attempt-1 at 150.497ms vs 150ms. The module is now
+  marked benchmark, so general jobs exclude it and the dedicated Performance
+  Benchmark job still runs it.
+- **GitHub Release uploaded `dist/.gitignore` as `default.gitignore`**:
+  `files: dist/*` matched uv's 1-byte `dist/.gitignore` because the GitHub
+  globbers use `dot: true`. Releases now attach only `*.whl`, `*.tar.gz`,
+  and `*.publish.attestation`, attest only wheel/sdist, fail on unmatched
+  assets, and build with `--no-create-gitignore`.
+- **Python 3.13 treated artifact symlink loops as missing**: non-strict
+  `Path.resolve()` no longer raises `ELOOP`; `exists()` is False, so the
+  guard skipped loops. `_resolve_path` keeps the non-strict result for
+  `FileNotFoundError` and fail-closes on `RuntimeError`/`OSError`/`ValueError`
+  from `resolve(strict=True)`. Linux and Windows CI 3.13 jobs printed
+  `interpreter 3.13 expected 3.13`; the artifact-link suite passed 197
+  tests on both 3.12 and 3.13.
+
 ## [8.4.0] — 2026-09-14
 
 Trust & Evidence: two-sided routing evaluation, production no-match

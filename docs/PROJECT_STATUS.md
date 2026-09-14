@@ -1,6 +1,6 @@
 # VibeSOP Project Status
 
-> 核对日期：2026-09-14。本文区分源码状态、公开发行和研究进度；不以历史测试记录宣称整个工作区已验收。
+> 核对日期：2026-09-15。本文区分源码状态、公开发行和研究进度；不以历史测试记录宣称整个工作区已验收。
 
 ## 项目定位
 
@@ -10,16 +10,16 @@ VibeSOP 是**围绕可靠 AI 辅助开发的工程工具与实证研究项目**�
 
 | 对象 | 已核对状态 | 依据 |
 |---|---|---|
-| 当前源码版本 | **8.4.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
-| 当前包元数据 | **8.4.0** | 本分支 release commit；公开发行 tag/publish 尚未完成 |
-| 当前 PyPI 发行 | **8.3.0** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json)；8.4.0 待后续 publish |
-| 当前 GitHub Release | 8.3.0 | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases)；8.4.0 待后续 tag |
-| 上一公开版本 | **8.3.0**，2026-09-14 发布 | [CHANGELOG](../CHANGELOG.md) |
+| 当前源码版本 | **8.4.1** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
+| 当前包元数据 | **8.4.1** | 本分支 release commit；公开发行 tag/publish 尚未完成 |
+| 当前 PyPI 发行 | **8.4.0** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json)；8.4.1 待后续 publish |
+| 当前 GitHub Release | 8.4.0 | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases)；8.4.1 待后续 tag |
+| 上一公开版本 | **8.4.0**，2026-09-14 发布 | [CHANGELOG](../CHANGELOG.md) |
 | 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复；属于 8.3.0，不是独立软件包版本 |
 | SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |
 | 本分支 | **8.4.0 Trust & Evidence** | 分支 `codex/v84-trust-evidence`；观测工具与必选 CI 治理已进入源码与 changelog。切片、数字与后续闸见 [ROADMAP.md](ROADMAP.md) |
 
-当前**源码与包元数据是 8.4.0**。公开发行（PyPI / GitHub Release）在 tag 与 publish 完成前仍是 8.3.0。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
+当前**源码与包元数据是 8.4.1**。公开发行（PyPI / GitHub Release）在 tag 与 publish 完成前仍是 8.4.0。8.4.1 是针对 8.4.0 CI 矩阵解释器、热路径基准标记、Release 产物 glob，以及 Python 3.13 符号链接环 fail-closed 的补丁。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
 
 ## 工程能力与验证边界
 
