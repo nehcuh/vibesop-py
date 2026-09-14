@@ -100,13 +100,13 @@ class GuardError(Exception):
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that rejects duplicate mapping keys (fail closed)."""
+    """SafeLoader that rejects duplicate or unhashable mapping keys (fail closed)."""
 
 
 def _construct_unique_mapping(
     loader: yaml.SafeLoader, node: yaml.nodes.MappingNode, deep: bool = False
 ) -> dict[Any, Any]:
-    """Build a mapping and raise if any key appears more than once."""
+    """Build a mapping and raise if any key is duplicated or unhashable."""
     if not isinstance(node, yaml.nodes.MappingNode):
         raise yaml.constructor.ConstructorError(
             None,
@@ -117,6 +117,15 @@ def _construct_unique_mapping(
     mapping: dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
+        try:
+            hash(key)
+        except TypeError as exc:
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                f"unhashable mapping key {type(key).__name__}",
+                key_node.start_mark,
+            ) from exc
         if key in mapping:
             raise yaml.constructor.ConstructorError(
                 None,
@@ -162,8 +171,9 @@ class Report:
 def load_yaml(path: Path, what: str) -> dict[str, Any]:
     """Load a YAML mapping, raising :class:`GuardError` on any failure.
 
-    Invalid UTF-8 and duplicate mapping keys are input failures (exit 2),
-    not silent last-key-wins collapses.
+    Invalid UTF-8, duplicate mapping keys, and unhashable mapping keys are
+    input failures (exit 2), not silent last-key-wins collapses or an
+    uncaught ``TypeError``.
     """
     try:
         raw = path.read_bytes()
@@ -175,7 +185,7 @@ def load_yaml(path: Path, what: str) -> dict[str, Any]:
         raise GuardError(f"cannot decode {what} at {path} as UTF-8: {exc}") from exc
     try:
         doc = yaml.load(text, Loader=UniqueKeyLoader)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, TypeError) as exc:
         raise GuardError(f"cannot parse {what} at {path}: {exc}") from exc
     if not isinstance(doc, dict):
         raise GuardError(f"{what} at {path} is not a YAML mapping")
@@ -196,12 +206,14 @@ def workflow_job_specs(doc: Mapping[str, Any], path: Path) -> dict[str, Mapping[
 def registry_entries(doc: Mapping[str, Any], path: Path) -> dict[str, Any]:
     """Return the ``jobs:`` mapping of the registry, or raise if the schema fails.
 
-    ``schema_version: 1``, ``workflow: .github/workflows/ci.yml``, and a
-    non-empty ``jobs`` mapping are load-bearing. Wrong or missing values
-    are input failures (exit 2), not advisories.
+    ``schema_version`` must be the exact integer ``1`` (not ``True``,
+    ``1.0``, or ``"1"``). ``workflow: .github/workflows/ci.yml`` and a
+    non-empty ``jobs`` mapping are also load-bearing. Wrong or missing
+    values are input failures (exit 2), not advisories.
     """
     version = doc.get("schema_version")
-    if version != REQUIRED_REGISTRY_SCHEMA_VERSION:
+    # `True == 1` and `1.0 == 1` in Python; require the exact integer type.
+    if type(version) is not int or version != REQUIRED_REGISTRY_SCHEMA_VERSION:
         raise GuardError(
             f"registry at {path} must declare schema_version: "
             f"{REQUIRED_REGISTRY_SCHEMA_VERSION} (got {version!r})"

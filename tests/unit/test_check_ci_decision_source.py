@@ -143,6 +143,7 @@ def test_real_workflow_with_a_model_job_injected_is_red(tmp_path: Path) -> None:
 def test_real_registry_covers_live_workflow_jobs() -> None:
     """Live registry: routing-eval is human; every other job is deterministic."""
     doc = yaml.safe_load(REAL_REGISTRY.read_text(encoding="utf-8"))
+    assert type(doc["schema_version"]) is int
     assert doc["schema_version"] == 1
     assert doc["workflow"] == ".github/workflows/ci.yml"
     jobs = doc["jobs"]
@@ -544,6 +545,25 @@ def test_duplicate_top_level_registry_key_fails_closed(tmp_path: Path) -> None:
     assert _run(root) == 2
 
 
+def test_unhashable_yaml_mapping_key_fails_closed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A complex YAML key is a parse failure (exit 2), never an uncaught TypeError."""
+    registry = (
+        "schema_version: 1\n"
+        "workflow: .github/workflows/ci.yml\n"
+        "jobs:\n"
+        "  ? [lint]\n"
+        "  :\n"
+        "    decision_source: deterministic\n"
+    )
+    root = _tree(tmp_path, _workflow(_job("lint")), registry)
+    assert _run(root) == 2
+    err = capsys.readouterr().err
+    assert "cannot parse registry" in err
+    assert "Traceback" not in err
+
+
 @pytest.mark.parametrize(
     "registry",
     [
@@ -557,6 +577,20 @@ def test_duplicate_top_level_registry_key_fails_closed(tmp_path: Path) -> None:
         ),
         (
             "schema_version: '1'\n"
+            "workflow: .github/workflows/ci.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+        (
+            "schema_version: true\n"
+            "workflow: .github/workflows/ci.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+        (
+            "schema_version: 1.0\n"
             "workflow: .github/workflows/ci.yml\n"
             "jobs:\n"
             "  lint:\n"
