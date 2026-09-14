@@ -2,6 +2,66 @@
   "schema_version": 1,
   "nontracked": [
     {
+      "source": ".omx/artifacts/ab-jet-preview.md",
+      "target": ".omx/artifacts/ab-jet-round1-eval.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/gate32-impl-instructions.md",
+      "target": ".omx/artifacts/gate32-{claude,pi,grok}.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/gate32-impl-pi.md",
+      "target": ".omx/artifacts/gate32-{claude,pi,grok}.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/gate7-m7t1-review-packet.md",
+      "target": ".omx/artifacts/dir-review-{packet,grok,claude}.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/gate7-review-pi.md",
+      "target": ".omx/artifacts/dir-review-{packet,grok,claude}.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/gate9-pi.md",
+      "target": ".omx/artifacts/eval_driver.py",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/ab-jet-round1-eval.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/ab-jet-round1-report.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/ab-probe-20260828.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/ab-probe-kimi-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/routing-fix-kimi-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": ".omx/artifacts/validation-report-r1-r5.md",
+      "target": ".omx/artifacts/routing-precision-audit-20260829.md",
+      "count": 1
+    },
+    {
       "source": "CHANGELOG.md",
       "target": ".omx/artifacts/gate41-synthesis.md",
       "count": 1
@@ -2114,6 +2174,131 @@
     {
       "source": "docs/specs/2026-09-11-evolution-optimization-plan.md",
       "target": ".omx/artifacts/gate-findings-gold-10.json",
+      "count": 1
+    },
+    {
+      "source": "knowledge/vibesop/vibesop-faq.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/adversarial-review-1435d57d-2329b013.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/adversarial-review-5a7c6fa-fa6e3fc.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/adversarial-review-7f2de48-967e134.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/ask-claude-fail-closed-residual-20260903.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/ask-claude-pull-20260909.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/ask-claude-pull-20260910-c1c8-fix.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/ask-kimi-pull-20260909.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-claims-lock.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/gate4*-t*-measure.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/next-opt-design-v0.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-{instructions,claude,kimi,synthesis}.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260901-review-{instructions,lane-a,lane-b,lane-c,synthesis}.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260903-fix-plan.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260903-fix{A,B,C,C2}-*",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260903-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260909-dual-review-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260909-dual-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260909-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260910-fix-claude-packet.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/review-diff-1435d57d-2329b013.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/review-diff-5a7c6fa-fa6e3fc.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/review-diff-7f2de48-967e134.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/{review-diff-fa6e3fc-7f2de48.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/{review-diff-fail-closed-gates.patch,fail-closed-gates-review-prompt.md,fail-closed-gates-{kimi,claude}-review.md,windows-skill-split-synthesis.md",
       "count": 1
     }
   ]

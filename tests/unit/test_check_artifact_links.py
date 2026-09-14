@@ -565,6 +565,64 @@ def test_targets_restrict_the_scan(repo: Path) -> None:
     assert _run(repo, "--targets", "docs")[0] == 0
 
 
+def test_default_scan_includes_tracked_markdown_in_unknown_root(repo: Path) -> None:
+    """A newly tracked *.md outside the old docs/README allowlist is in scope."""
+    (repo / "knowledge" / "notes").mkdir(parents=True)
+    (repo / "knowledge" / "notes" / "new.md").write_text("see `.omx/artifacts/missing.md`\n")
+    _commit_paths(repo, "knowledge/notes/new.md")
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "knowledge/notes/new.md" in out
+    assert "stale" in out
+    assert "DANGLING" not in out
+
+
+def test_default_scan_excludes_untracked_markdown_in_unknown_root(repo: Path) -> None:
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_all(repo)
+    (repo / "knowledge").mkdir()
+    (repo / "knowledge" / "draft.md").write_text("see `.omx/artifacts/x.md`\n")
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "draft.md" not in out
+    assert "no artifact references" in out
+
+
+def test_explicit_targets_narrows_unknown_root_out_of_default_scan(repo: Path) -> None:
+    (repo / "docs" / "clean.md").write_text("nothing here\n")
+    (repo / "knowledge").mkdir()
+    (repo / "knowledge" / "notes.md").write_text("see `.omx/artifacts/missing.md`\n")
+    _commit_paths(repo, "docs/clean.md", "knowledge/notes.md")
+
+    default_code, default_out = _run(repo)
+    assert default_code == 0, default_out
+    assert "knowledge/notes.md" in default_out
+    assert "stale" in default_out
+
+    narrow_code, narrow_out = _run(repo, "--targets", "docs")
+    assert narrow_code == 0, narrow_out
+    assert "knowledge/notes.md" not in narrow_out
+    assert "no artifact references" in narrow_out
+
+
+def test_default_scan_does_not_rglob_the_worktree(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_all(repo)
+
+    def boom(self: Path, *args: object, **kwargs: object) -> list[Path]:
+        raise AssertionError("default mode must not rglob the worktree")
+
+    monkeypatch.setattr(Path, "rglob", boom)
+    tracked = chal.list_tracked(repo)
+    paths = list(chal.iter_markdown(repo, None, tracked))
+    assert paths == ["docs/tracked.md"]
+    assert chal.scan(repo, None, tracked) == []
+
+
 def test_untracked_markdown_is_not_scanned_by_default(repo: Path) -> None:
     # An uncommitted draft cannot fail the guard; the verdict equals what a
     # fresh clone would see.
@@ -577,6 +635,77 @@ def test_untracked_markdown_is_not_scanned_by_default(repo: Path) -> None:
     code, out = _run(repo, "--include-untracked")
     assert code == 1, out
     assert "draft.md" in out
+
+
+def test_include_untracked_without_targets_uses_git_others_not_old_roots(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--include-untracked with no --targets must not silently scan only docs/.
+
+    Untracked markdown in an otherwise unknown root is included via
+    git ls-files --others --exclude-standard, without a Python rglob.
+    """
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_all(repo)
+    (repo / "knowledge").mkdir()
+    (repo / "knowledge" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n")
+    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n")
+
+    def boom(self: Path, *args: object, **kwargs: object) -> list[Path]:
+        raise AssertionError("include-untracked default must not rglob")
+
+    monkeypatch.setattr(Path, "rglob", boom)
+    tracked = chal.list_tracked(repo)
+    paths = list(chal.iter_markdown(repo, None, tracked, include_untracked=True))
+    assert "docs/tracked.md" in paths
+    assert "knowledge/draft.md" in paths
+
+    code, out = _run(repo, "--include-untracked")
+    assert code == 1, out
+    assert "knowledge/draft.md" in out
+    assert "DANGLING" in out
+
+
+def test_include_untracked_without_targets_skips_gitignored_markdown(repo: Path) -> None:
+    (repo / ".gitignore").write_text("ignored_env/\n")
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_paths(repo, ".gitignore", "docs/tracked.md")
+    (repo / "ignored_env").mkdir()
+    (repo / "ignored_env" / "secret.md").write_text("see `.omx/artifacts/x.md`\n")
+
+    code, out = _run(repo, "--include-untracked")
+    assert code == 0, out
+    assert "secret.md" not in out
+    assert "no artifact references" in out
+
+
+def test_include_untracked_without_targets_refused_with_tracked_list(
+    repo: Path, tmp_path: Path
+) -> None:
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_all(repo)
+    injected = tmp_path / "ls-files.txt"
+    injected.write_text("docs/tracked.md\n")
+
+    code, out = _run(repo, "--include-untracked", "--tracked-list", str(injected))
+    assert code == 2, out
+    assert "include-untracked" in out.lower()
+    assert "tracked-list" in out.lower()
+    assert "Traceback" not in out
+
+
+def test_include_untracked_with_explicit_targets_still_walks_those_roots(repo: Path) -> None:
+    (repo / "docs" / "tracked.md").write_text("clean\n")
+    _commit_all(repo)
+    (repo / "docs" / "draft.md").write_text("see `.omx/artifacts/not-yet.md`\n")
+    (repo / "knowledge").mkdir()
+    (repo / "knowledge" / "other.md").write_text("see `.omx/artifacts/not-yet.md`\n")
+    (repo / ".omx" / "artifacts" / "not-yet.md").write_text("x\n")
+
+    code, out = _run(repo, "--include-untracked", "--targets", "docs")
+    assert code == 1, out
+    assert "docs/draft.md" in out
+    assert "knowledge/other.md" not in out
 
 
 def test_missing_root_fails_closed(repo: Path) -> None:
@@ -725,10 +854,29 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         # Bare directory mention -> skipped.
         ("`.omx/artifacts` 是落点", []),
         ("`.omx/tmp/x` 是短命目录", []),
+        # Annotation / locator / shell-escape fragments are delimiters.
+        (
+            ".omx/artifacts/ask-claude-routing-review-prompt.md(完整背景:10",
+            [".omx/artifacts/ask-claude-routing-review-prompt.md"],
+        ),
+        ("`.omx/artifacts/gate10.diff\\\\`", [".omx/artifacts/gate10.diff"]),
+        ("`.omx/artifacts/gate10.diff\\`", [".omx/artifacts/gate10.diff"]),
+        (
+            "`.omx/artifacts/m12-product-design.md:165–171`",
+            [".omx/artifacts/m12-product-design.md"],
+        ),
+        (
+            "`.omx/artifacts/m3-behavior-calibration.md).\\\\`",
+            [".omx/artifacts/m3-behavior-calibration.md"],
+        ),
+        ("`.omx/artifacts/foo.md):cmspark`", [".omx/artifacts/foo.md"]),
+        ("见 `.omx/artifacts/c.diff`)。", [".omx/artifacts/c.diff"]),
     ],
 )
 def test_extract_targets(text: str, expected: list[str]) -> None:
-    assert chal.extract_targets(text) == expected
+    found = chal.extract_targets(text)
+    assert found == expected
+    assert all(chal._is_normalized_artifact_target(target) for target in found)
 
 
 def test_extract_targets_handles_multiple_and_punctuation() -> None:
@@ -738,6 +886,20 @@ def test_extract_targets_handles_multiple_and_punctuation() -> None:
         ".omx/artifacts/b.json",
         ".omx/artifacts/c.diff",
     ]
+
+
+def test_normalized_artifact_target_is_strict_posix_path() -> None:
+    """Baseline keys are path/glob/dir strings, not scanner identity fragments."""
+    assert chal._is_normalized_artifact_target(".omx/artifacts/x.md")
+    assert chal._is_normalized_artifact_target(".omx/artifacts/dir/")
+    assert chal._is_normalized_artifact_target(".omx/artifacts/v[1]/*.md")
+    assert chal._is_normalized_artifact_target(".omx/artifacts/设计文档.md")
+    assert chal._is_normalized_artifact_target(".omx/artifacts/foo(1).md")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/x.md:12")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/y.md\\")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/foo\\..\\secret.md")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/../secret.md")
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/z.md(注:1")
 
 
 @pytest.mark.parametrize(
@@ -818,11 +980,11 @@ def test_classify_kinds(tmp_path: Path) -> None:
 
 
 def test_classify_tracked_bracket_filename_is_ok_not_glob(tmp_path: Path) -> None:
-    """``foo[1].md`` in the index is a file, even though ``[`` is a glob char."""
+    """``foo[1].md`` in the index is a file; ``[`` is not a glob metacharacter."""
     tracked = {".omx/artifacts/foo[1].md"}
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
     (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("x")
-    assert chal._kind(".omx/artifacts/foo[1].md") == "glob"
+    assert chal._kind(".omx/artifacts/foo[1].md") == "file"
     assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "ok"
 
 
@@ -834,15 +996,154 @@ def test_classify_untracked_bracket_file_is_dangling_not_charclass_ok(
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
     (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
     (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("untracked")
+    assert chal._kind(".omx/artifacts/foo[1].md") == "file"
     assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "dangling"
 
 
-def test_classify_bracket_glob_without_literal_file_still_matches(tmp_path: Path) -> None:
-    """``foo[1].md`` as a pattern (no literal file) still matches tracked ``foo1.md``."""
+def test_classify_bracket_filename_without_literal_file_is_stale_not_charclass(
+    tmp_path: Path,
+) -> None:
+    """``foo[1].md`` is a filename, not a character class matching ``foo1.md``."""
     tracked = {".omx/artifacts/foo1.md"}
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
     (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
-    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "ok"
+    assert chal._kind(".omx/artifacts/foo[1].md") == "file"
+    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "stale"
+
+
+def test_glob_under_bracket_dir_does_not_match_tracked_v1(tmp_path: Path) -> None:
+    """``.omx/artifacts/v[1]/*.md`` must not go green via tracked ``v1/a.md``."""
+    tracked = {".omx/artifacts/v1/a.md"}
+    art = tmp_path / ".omx" / "artifacts" / "v1"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("tracked")
+    target = ".omx/artifacts/v[1]/*.md"
+    assert chal._kind(target) == "glob"
+    assert chal.classify(target, tracked, tmp_path) == "stale"
+
+
+def test_glob_under_tracked_bracket_dir_is_ok(tmp_path: Path) -> None:
+    tracked = {".omx/artifacts/v[1]/a.md"}
+    art = tmp_path / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("tracked")
+    target = ".omx/artifacts/v[1]/*.md"
+    assert chal._kind(target) == "glob"
+    assert chal.classify(target, tracked, tmp_path) == "ok"
+
+
+def test_glob_under_untracked_bracket_dir_is_dangling(tmp_path: Path) -> None:
+    tracked: set[str] = set()
+    art = tmp_path / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("untracked")
+    target = ".omx/artifacts/v[1]/*.md"
+    assert chal._kind(target) == "glob"
+    assert chal.classify(target, tracked, tmp_path) == "dangling"
+
+
+def test_question_mark_wildcard_still_matches_under_bracket_dir(tmp_path: Path) -> None:
+    tracked = {".omx/artifacts/v[1]/a.md"}
+    art = tmp_path / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("tracked")
+    target = ".omx/artifacts/v[1]/?.md"
+    assert chal._kind(target) == "glob"
+    assert chal.classify(target, tracked, tmp_path) == "ok"
+    assert chal.classify(".omx/artifacts/v[1]/z.md", tracked, tmp_path) == "stale"
+
+
+def test_star_wildcard_still_matches_without_brackets(tmp_path: Path) -> None:
+    tracked = {".omx/artifacts/foo-bar.md"}
+    assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "ok"
+
+
+def test_broken_symlink_bracket_filename_is_dangling(tmp_path: Path) -> None:
+    tracked: set[str] = set()
+    art = tmp_path / ".omx" / "artifacts"
+    art.mkdir(parents=True)
+    link = art / "foo[1].md"
+    try:
+        link.symlink_to(art / "does-not-exist.md")
+    except OSError:
+        pytest.skip("symlink not supported")
+    assert not link.exists()
+    assert link.is_symlink()
+    assert chal._kind(".omx/artifacts/foo[1].md") == "file"
+    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "dangling"
+
+
+def test_broken_symlink_under_bracket_dir_glob_is_dangling(tmp_path: Path) -> None:
+    tracked: set[str] = set()
+    art = tmp_path / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    link = art / "a.md"
+    try:
+        link.symlink_to(art / "does-not-exist.md")
+    except OSError:
+        pytest.skip("symlink not supported")
+    assert not link.exists()
+    assert link.is_symlink()
+    assert chal.classify(".omx/artifacts/v[1]/*.md", tracked, tmp_path) == "dangling"
+
+
+def test_cli_glob_under_tracked_v1_is_not_false_green(repo: Path) -> None:
+    """Tracked v1/a.md must not satisfy a citation to literal v[1]/*.md."""
+    art = repo / ".omx" / "artifacts" / "v1"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    _commit_all(repo)
+
+    refs = chal.scan(repo, None, chal.list_tracked(repo))
+    assert [ref.target for ref in refs] == [".omx/artifacts/v[1]/*.md"]
+    assert refs[0].kind == "glob"
+    assert refs[0].status == "stale"
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "stale" in out
+    assert "v[1]" in out
+    assert "DANGLING" not in out
+
+
+def test_cli_glob_under_tracked_bracket_dir_is_green(repo: Path) -> None:
+    art = repo / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    _commit_all(repo)
+
+    refs = chal.scan(repo, None, chal.list_tracked(repo))
+    assert refs[0].kind == "glob"
+    assert refs[0].status == "ok"
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "1 ok, 0 dangling, 0 stale" in out
+
+
+def test_cli_glob_under_untracked_bracket_dir_is_dangling(repo: Path) -> None:
+    art = repo / ".omx" / "artifacts" / "v[1]"
+    art.mkdir(parents=True)
+    (art / "a.md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/v[1]/*.md`\n")
+    _commit_paths(repo, "docs/notes.md")
+
+    code, out = _run(repo)
+    assert code == 1, out
+    assert "DANGLING" in out
+    assert "v[1]" in out
+
+
+def test_cli_tracked_bracket_filename_is_green(repo: Path) -> None:
+    (repo / ".omx" / "artifacts" / "foo[1].md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("see `.omx/artifacts/foo[1].md`\n")
+    _commit_all(repo)
+
+    refs = chal.scan(repo, None, chal.list_tracked(repo))
+    assert refs[0].kind == "file"
+    assert refs[0].status == "ok"
+    assert _run(repo)[0] == 0
 
 
 def test_classify_broken_symlink_is_dangling(tmp_path: Path) -> None:

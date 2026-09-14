@@ -36,8 +36,13 @@ LIVE_BASELINE = ROOT / BASELINE_REL
 LIVE_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 
-# Independently observed at HEAD bb000ac3: 859 refs, 428 ok, 0 dangling, 431 stale.
-FROZEN_STALE_OCCURRENCES = 431
+# Independently observed at this checkpoint over every tracked *.md
+# by `scripts/check_artifact_links.py` (no --targets):
+# 1109 refs, 641 ok, 0 dangling, 468 stale occurrences / 460 keys.
+FROZEN_REF_TOTAL = 1109
+FROZEN_OK = 641
+FROZEN_STALE_OCCURRENCES = 468
+FROZEN_STALE_KEYS = 460
 
 
 def _git(root: Path, *args: str) -> None:
@@ -354,6 +359,28 @@ def test_write_baseline_unencodable_source_is_guard_error(tmp_path: Path) -> Non
     assert _tmp_leftovers(tmp_path) == []
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        ".omx/artifacts/x.md:12",
+        ".omx/artifacts/y.md\\",
+        ".omx/artifacts/z.md(注:1",
+        ".omx/artifacts/foo\\..\\secret.md",
+        ".omx/artifacts/../secret.md",
+        ".omx/artifacts/gate10.diff\\\\",
+    ],
+)
+def test_write_baseline_rejects_annotation_fragments_and_path_escape(
+    tmp_path: Path, target: str
+) -> None:
+    """Baseline targets stay normalized POSIX artifact paths, not scanner junk."""
+    dest = tmp_path / "baseline.json"
+    with pytest.raises(chal.GuardError, match="invalid target"):
+        chal.write_baseline(dest, {("docs/a.md", target): 1})
+    assert not dest.exists()
+    assert _tmp_leftovers(tmp_path) == []
+
+
 def test_write_baseline_unencodable_target_is_guard_error(tmp_path: Path) -> None:
     dest = tmp_path / "baseline.json"
     with pytest.raises(chal.GuardError, match="cannot write baseline"):
@@ -584,6 +611,21 @@ def test_invalid_utf8_baseline_exits_2(repo: Path) -> None:
         ),
         (
             '{"schema_version":1,"nontracked":['
+            '{"source":"docs/a.md","target":".omx/artifacts/x.md:12","count":1}]}\n',
+            "target",
+        ),
+        (
+            '{"schema_version":1,"nontracked":['
+            '{"source":"docs/a.md","target":".omx/artifacts/y.md\\\\","count":1}]}\n',
+            "target",
+        ),
+        (
+            '{"schema_version":1,"nontracked":['
+            '{"source":"docs/a.md","target":".omx/artifacts/foo\\\\..\\\\secret.md","count":1}]}\n',
+            "target",
+        ),
+        (
+            '{"schema_version":1,"nontracked":['
             '{"source":"docs/a.md","target":"/etc/passwd","count":1}]}\n',
             "target",
         ),
@@ -629,14 +671,18 @@ def test_load_baseline_rejects_bool_and_float_schema_version(tmp_path: Path) -> 
 def test_committed_baseline_matches_current_stale_multiset() -> None:
     """The frozen file is the live scan, not a hand-edited guess.
 
-    Occurrence total is pinned to the independently observed 431 at this
+    Occurrence total is pinned to the independently observed 468 at this
     checkpoint so a silent scan-set change cannot hide inside a matching pair.
     """
     tracked = chal.list_tracked(ROOT)
-    refs = chal.scan(ROOT, chal.DEFAULT_TARGETS, tracked)
+    refs = chal.scan(ROOT, None, tracked)
     dangling = [ref for ref in refs if ref.status == "dangling"]
     stale = [ref for ref in refs if ref.status == "stale"]
+    ok = [ref for ref in refs if ref.status == "ok"]
     assert dangling == []
+    assert len(refs) == FROZEN_REF_TOTAL
+    assert len(ok) == FROZEN_OK
+    assert all(chal._is_normalized_artifact_target(ref.target) for ref in refs)
     current: dict[tuple[str, str], int] = {}
     for ref in stale:
         key = (ref.source, ref.target)
@@ -644,6 +690,7 @@ def test_committed_baseline_matches_current_stale_multiset() -> None:
     baseline = chal.load_baseline(LIVE_BASELINE)
     assert baseline.as_counts() == current
     assert sum(current.values()) == FROZEN_STALE_OCCURRENCES
+    assert len(current) == FROZEN_STALE_KEYS
     text = LIVE_BASELINE.read_bytes()
     assert text.endswith(b"\n")
     assert b"\r\n" not in text

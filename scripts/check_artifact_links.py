@@ -19,27 +19,56 @@ actually in the index. A fresh clone must be able to follow every citation.
 
 What it scans
 -------------
-By default: **tracked** markdown under the given roots (`docs/`, `README.md`,
-`CHANGELOG.md`, `ROADMAP.md`). Tracked-only is deliberate for the *citing
-documents* — an uncommitted draft cannot fail the guard, so the scan set
-matches fresh-clone semantics. Use `--include-untracked` to also scan
-working-tree markdown.
+Default (no ``--targets``): every **tracked** ``*.md`` path from
+``git ls-files``. The scan set is derived from the index — exact paths,
+no recursive worktree walk — so ignored and untracked trees are not
+traversed. That includes tracked markdown under ``.omx/artifacts/``,
+``memory/``, ``knowledge/``, ``PROJECT_CONTEXT.md``, and any future
+documentation root. Tracked-only is deliberate for the *citing
+documents*: an uncommitted draft cannot fail the guard, so the default
+scan matches fresh-clone semantics.
+
+``--targets`` is a deliberate narrowed override for local/focused use:
+only those files or directories, relative to ``--root``, are scanned
+(directories are walked). Out-of-root targets still fail closed.
+
+``--include-untracked``:
+    with ``--targets``
+        also scan untracked markdown under those roots (existing walk).
+    without ``--targets``
+        also include untracked, non-ignored ``*.md`` from
+        ``git ls-files --others --exclude-standard`` (git-derived; no
+        Python walk of ignored environments). Refused with
+        ``--tracked-list`` (exit 2): an injected tracked list cannot
+        name untracked files, and walking the whole tree is not the
+        default-mode contract.
 
 Verdicts (per reference)
 ------------------------
-ok        target is in `git ls-files` (exact path, glob match, or dir prefix).
-          Tracked matching is index/fresh-clone based.
-dangling  target is NOT tracked, but an on-disk hit exists  -> exit 1
-          This is the exact incident this guard is for: the doc cites an
-          artifact that only lives on one machine. A glob such as
-          `.omx/artifacts/foo-*` with no tracked match is dangling when one
-          or more matching paths exist on disk under `.omx/artifacts`.
-          Dangling glob detection consults the working tree; a fresh clone
-          with no untracked files would classify the same glob as stale.
-stale     target is neither tracked nor on disk (e.g. a historical CHANGELOG
-          entry for a gate synthesis that was never committed, or a glob
-          with no on-disk match either)
+Two axes. **ok vs not-ok** is index/fresh-clone based and never consults
+the working tree. **dangling vs stale** is the only working-tree
+distinction, and it is *this machine's* working tree.
+
+ok        target is in `git ls-files` (exact path, glob match against
+          tracked paths, or dir prefix of a tracked path). A tracked
+          file missing from disk is still ok.
+dangling  target is not in the index, but an on-disk hit exists here
+          (regular file, broken symlink, or glob match under
+          `.omx/artifacts`) -> exit 1. This is the local-only artifact
+          incident: the doc cites a path that lives on one machine.
+stale     target is in neither the index nor this working tree
+          (historical citation, or a glob with no on-disk match either)
           -> warned, exit 0 by default; `--strict` makes it fatal.
+
+A fresh clone has no untracked files, so the citation that is
+``dangling`` on a developer machine (untracked local artifact) is
+``stale`` after a clean checkout. That is why ``--check-baseline``
+exists: CI cannot see the local file, and default stale handling would
+stay green. Dangling stays fatal even when the key is in the baseline.
+
+Glob grammar: only ``*`` and ``?`` are wildcards. Square brackets are
+literal path characters (``.omx/artifacts/v[1]/*.md`` names directory
+``v[1]``, not a character class matching ``v1``).
 
 `stale` is split out on purpose. A citation to a file that has vanished
 everywhere cannot be repaired by `git add`, so treating it as fatal would make
@@ -81,6 +110,9 @@ Field names:
     nontracked      list of unique (source, target) entries
     source          normalized repo-relative POSIX path of the citing markdown
     target          normalized ``.omx/artifacts/...`` path, glob, or dir prefix
+                    (strict POSIX-relative; colon, backslash, and ``..``
+                    rejected). Extraction stops at ASCII ``()`` / ``:`` / ``\\``
+                    so line locators and parenthetical prose never become keys.
     count           exact positive integer occurrence count
 
 Check-mode verdicts:
@@ -101,6 +133,7 @@ Usage:
     uv run python scripts/check_artifact_links.py
     uv run python scripts/check_artifact_links.py --strict
     uv run python scripts/check_artifact_links.py --root . --targets docs README.md
+    uv run python scripts/check_artifact_links.py --include-untracked
     uv run python scripts/check_artifact_links.py --tracked-list /tmp/ls-files.txt
     uv run python scripts/check_artifact_links.py --check-baseline ci/artifact-links-baseline.json
     uv run python scripts/check_artifact_links.py --write-baseline ci/artifact-links-baseline.json
@@ -139,20 +172,23 @@ _os_replace = os.replace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Roots scanned by default: the curated docs plus the top-level narratives.
-DEFAULT_TARGETS: tuple[str, ...] = ("docs", "README.md", "CHANGELOG.md", "ROADMAP.md")
-
 ARTIFACT_PREFIX = ".omx/artifacts/"
+MARKDOWN_SUFFIX = ".md"
+# Supported artifact glob wildcards. Square brackets are literal path
+# characters — ``v[1]`` is a directory name, not a character class.
+_GLOB_WILDCARDS = "*?"
 
 BASELINE_SCHEMA_VERSION = 1
 _BASELINE_TOP_KEYS: tuple[str, ...] = ("schema_version", "nontracked")
 _BASELINE_ENTRY_KEYS: tuple[str, ...] = ("source", "target", "count")
 
 # Captures `.omx/artifacts/<rest>` up to the first delimiter that cannot be
-# part of a path in prose: whitespace, backtick, quote, pipe, or the
-# CJK brackets/punctuation used in this repo's docs. Angle brackets are
-# captured too so template placeholders can be recognised and dropped.
-_REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|（）【】「」，、；：。]+)")
+# part of a path in prose: whitespace, backtick, quote, pipe, ASCII
+# parentheses / colon / backslash (line locators, parenthetical
+# annotations, shell-escaped raw captures), or the CJK brackets and
+# punctuation used in this repo's docs. Angle brackets are captured too
+# so template placeholders can be recognised and dropped.
+_REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|\\():（）【】「」，、；：。]+)")
 
 # Trailing punctuation that is prose, not path. `.md` ends in a letter, so
 # stripping a trailing dot is safe; `*` and `?` are kept for glob targets.
@@ -270,6 +306,10 @@ def extract_targets(text: str) -> list[str]:
     all three appear in this repo. Template placeholders such as
     `.omx/artifacts/evo-lane-<id>-handback.md` are skipped: they name no file.
 
+    ASCII ``(``, ``)``, ``:``, and ``\\`` end a capture the same way CJK
+    punctuation already does, so ``file:line``, parenthetical annotations,
+    and shell-escaped trailing backslashes are not part of the target.
+
     Query stripping is context-aware: Markdown link destinations and
     reference definitions treat a ``?`` after a file extension as a URL
     query; backticked and bare references only strip an explicit
@@ -335,9 +375,19 @@ def _strip_markdown_suffixes(raw: str, *, markdown_link: bool) -> str:
 def _kind(target: str) -> str:
     if target.endswith("/"):
         return "dir"
-    if any(ch in target for ch in "*?["):
+    if any(ch in target for ch in _GLOB_WILDCARDS):
         return "glob"
     return "file"
+
+
+def _fnmatch_literal_brackets(name: str, pattern: str) -> bool:
+    """fnmatch with ``[`` / ``]`` treated as literals; only ``*`` and ``?`` wildcards.
+
+    ``fnmatch`` character classes would turn ``v[1]/*.md`` into a match for
+    tracked ``v1/a.md``. Escape ``[`` as ``[[]`` so a bracket is a path
+    character. ``]`` needs no extra escape once every ``[`` is closed.
+    """
+    return fnmatch.fnmatch(name, pattern.replace("[", "[[]"))
 
 
 def _walk_onerror(err: OSError) -> None:
@@ -420,7 +470,10 @@ def _on_disk_glob_match(root: Path, pattern: str) -> bool:
     artifact_root = _resolved_artifact_root(root)
     if artifact_root is None:
         return False
-    return any(fnmatch.fnmatch(rel, pattern) for rel in _iter_on_disk_artifact_paths(artifact_root))
+    return any(
+        _fnmatch_literal_brackets(rel, pattern)
+        for rel in _iter_on_disk_artifact_paths(artifact_root)
+    )
 
 
 def _literal_on_disk(root: Path, target: str) -> bool:
@@ -445,12 +498,11 @@ def classify(target: str, tracked: set[str], root: Path) -> str:
         if any(path.startswith(target) for path in tracked):
             return "ok"
     elif kind == "glob":
-        # A literal on-disk path with glob chars is a filename, not a pattern.
-        # Otherwise ``foo[1].md`` on disk would fnmatch tracked ``foo1.md``
-        # and go green while the cited file is untracked.
+        # A literal on-disk path with * or ? is a filename, not a pattern.
+        # Otherwise ``foo-*.md`` on disk would fnmatch tracked ``foo-1.md``.
         if _literal_on_disk(root, target):
             return "dangling"
-        if any(fnmatch.fnmatch(path, target) for path in tracked):
+        if any(_fnmatch_literal_brackets(path, target) for path in tracked):
             return "ok"
         return "dangling" if _on_disk_glob_match(root, target) else "stale"
 
@@ -458,15 +510,15 @@ def classify(target: str, tracked: set[str], root: Path) -> str:
     return "dangling" if _literal_on_disk(root, target) else "stale"
 
 
-def list_tracked(root: Path) -> set[str]:
-    """Return repo-relative paths from ``git ls-files`` (NUL-separated).
+def _git_ls_files(root: Path, extra: Sequence[str] = ()) -> set[str]:
+    """Return repo-relative paths from ``git ls-files -z`` plus ``extra``.
 
     Git is invoked in binary mode (``text=False``). Decoding is UTF-8 with
     ``surrogateescape`` so a Windows cp1252 locale cannot drop CJK paths.
     """
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-z"],
+            ["git", "-C", str(root), "ls-files", "-z", *extra],
             capture_output=True,
             text=False,
             check=False,
@@ -478,6 +530,24 @@ def list_tracked(root: Path) -> set[str]:
         raise GuardError(f"git ls-files failed in {root}: {err}")
     stdout = proc.stdout.decode("utf-8", errors="surrogateescape")
     return {entry for entry in stdout.split("\0") if entry}
+
+
+def list_tracked(root: Path) -> set[str]:
+    """Return repo-relative paths from ``git ls-files`` (NUL-separated)."""
+    return _git_ls_files(root)
+
+
+def list_untracked(root: Path) -> set[str]:
+    """Untracked, non-ignored paths from ``git ls-files --others --exclude-standard``.
+
+    Git itself skips ignored directories; this is not a Python walk of
+    ``node_modules`` / ``.venv`` / other ignored trees.
+    """
+    return _git_ls_files(root, ("--others", "--exclude-standard"))
+
+
+def _is_markdown_rel(rel: str) -> bool:
+    return rel.endswith(MARKDOWN_SUFFIX)
 
 
 def read_tracked_list(path: Path) -> set[str]:
@@ -508,16 +578,28 @@ def _resolve_in_root(root: Path, target: str) -> Path:
 
 def iter_markdown(
     root: Path,
-    targets: Sequence[str],
+    targets: Sequence[str] | None,
     tracked: set[str],
     include_untracked: bool = False,
 ) -> Iterator[str]:
     """Yield repo-relative markdown paths under ``targets``.
 
-    Tracked-only by default so the scan matches fresh-clone semantics; missing
-    in-root targets are simply skipped (a root that does not exist is not an
-    error). Out-of-root targets raise ``GuardError``.
+    ``targets is None`` (default scan): exact ``*.md`` paths from the
+    tracked set, plus untracked non-ignored ``*.md`` from git when
+    ``include_untracked`` is set. No recursive worktree walk.
+
+    Explicit ``targets``: walk those files or directories. Tracked-only
+    unless ``include_untracked``. Missing in-root targets are skipped (a
+    root that does not exist is not an error). Out-of-root targets raise
+    ``GuardError``.
     """
+    if targets is None:
+        rels = {path for path in tracked if _is_markdown_rel(path)}
+        if include_untracked:
+            rels |= {path for path in list_untracked(root) if _is_markdown_rel(path)}
+        yield from sorted(rels)
+        return
+
     seen: set[str] = set()
     root_resolved = _resolve_path(root, what="repository root")
     for target in targets:
@@ -549,11 +631,15 @@ def iter_markdown(
 
 def scan(
     root: Path,
-    targets: Sequence[str],
+    targets: Sequence[str] | None,
     tracked: set[str],
     include_untracked: bool = False,
 ) -> list[ArtifactRef]:
-    """Collect every artifact reference under ``targets`` with its verdict."""
+    """Collect every artifact reference under ``targets`` with its verdict.
+
+    ``targets is None`` scans every tracked (and, if requested, untracked)
+    ``*.md`` path. Pass an explicit sequence to narrow.
+    """
     refs: list[ArtifactRef] = []
     for rel in iter_markdown(root, targets, tracked, include_untracked):
         path = root / rel
@@ -627,7 +713,13 @@ def _is_normalized_posix_rel(path: str, *, allow_trailing_slash: bool = False) -
 
 
 def _is_normalized_artifact_target(target: str) -> bool:
-    """True if ``target`` is a normalized in-repo ``.omx/artifacts/...`` path."""
+    """True if ``target`` is a normalized in-repo ``.omx/artifacts/...`` path.
+
+    Baseline keys are artifact path / glob / dir strings, not scanner
+    identity fragments. Colon, backslash, NUL, ``..``, and other
+    non-normalized POSIX forms are rejected here; extraction must not
+    emit them.
+    """
     if type(target) is not str or not target.startswith(ARTIFACT_PREFIX):
         return False
     rest = target[len(ARTIFACT_PREFIX) :]
@@ -839,7 +931,10 @@ def _report_baseline_problems(dangling: Sequence[ArtifactRef], diff: BaselineDif
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check that tracked docs only cite git-tracked .omx/artifacts/ files.",
+        description=(
+            "Check that tracked markdown only cites git-tracked .omx/artifacts/ "
+            "files. Default scan: every tracked *.md path."
+        ),
     )
     parser.add_argument(
         "--root",
@@ -850,8 +945,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--targets",
         nargs="+",
-        default=list(DEFAULT_TARGETS),
-        help="Files or directories, relative to --root, that are scanned for markdown.",
+        default=None,
+        help=(
+            "Narrow the scan to these files or directories, relative to --root. "
+            "Default: every tracked *.md path from git ls-files (no worktree walk)."
+        ),
     )
     parser.add_argument(
         "--tracked-list",
@@ -862,7 +960,12 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--include-untracked",
         action="store_true",
-        help="Also scan markdown files that are not tracked (default: tracked only).",
+        help=(
+            "Also scan untracked markdown. With --targets, walk those roots. "
+            "Without --targets, add untracked non-ignored *.md from git "
+            "ls-files --others --exclude-standard. Refused with --tracked-list "
+            "unless --targets is also set."
+        ),
     )
     parser.add_argument(
         "--strict",
@@ -957,6 +1060,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.targets is None and args.include_untracked and args.tracked_list is not None:
+        print(
+            "check_artifact_links: refusing --include-untracked without --targets "
+            "when --tracked-list is set; untracked files cannot be derived from "
+            "an injected tracked list. Pass --targets to walk specific roots.",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         root = _resolve_path(args.root, what="--root")
@@ -971,7 +1082,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             scanned = list(iter_markdown(root, args.targets, tracked, args.include_untracked))
             if not scanned:
                 print(
-                    "check_artifact_links: no markdown scanned — check --root/--targets.",
+                    "check_artifact_links: no markdown scanned — "
+                    "check --root/--targets (default is every tracked *.md).",
                     file=sys.stderr,
                 )
                 return 2
