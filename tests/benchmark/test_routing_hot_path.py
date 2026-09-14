@@ -10,6 +10,13 @@ from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.matching import RoutingContext
 from vibesop.core.routing import UnifiedRouter
 
+# Load-sensitive absolute-ms latency benchmark. Same module-wide convention as
+# test_span_emit_overhead.py: only the dedicated ``pytest -m benchmark`` job
+# runs this file; the loaded default suite (``-m "not benchmark and not slow"``)
+# does not. Unmarked, the 20-sample max-as-p95 check flaked the v8.4.0 release
+# gate at 150.497ms vs 150ms.
+pytestmark = pytest.mark.benchmark
+
 
 class TestRoutingHotPath:
     """Benchmark routing performance for common scenarios."""

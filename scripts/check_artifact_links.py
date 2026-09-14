@@ -434,20 +434,38 @@ def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
 _ROOT_WHATS = frozenset({"repository root", "--root", "artifact root"})
 
 
+def _guard_resolve_error(path: Path, *, what: str, exc: BaseException) -> GuardError:
+    if isinstance(exc, ValueError):
+        label = "invalid_root" if what in _ROOT_WHATS else "invalid_target"
+        return GuardError(f"{label}: cannot resolve {what} ({path}): {exc}")
+    return GuardError(f"cannot resolve {what} ({path}): {exc}")
+
+
 def _resolve_path(path: Path, *, what: str) -> Path:
     """Resolve ``path``, converting loops / OS / ValueError into GuardError.
 
     ``RuntimeError`` / ``OSError`` (symlink loops, I/O) become
     ``cannot resolve ...``. ``ValueError`` is this boundary's mapping:
     ``invalid_root`` when ``what`` names a root, otherwise ``invalid_target``.
+
+    Python 3.13's default ``Path.resolve()`` no longer raises on symlink
+    loops; it returns the path and ``exists()`` is False. ``strict=True``
+    still raises ``OSError`` (ELOOP). Missing paths keep the non-strict
+    result so callers can skip absent in-root targets.
     """
     try:
-        return path.resolve()
-    except (RuntimeError, OSError) as exc:
-        raise GuardError(f"cannot resolve {what} ({path}): {exc}") from exc
-    except ValueError as extra:
-        label = "invalid_root" if what in _ROOT_WHATS else "invalid_target"
-        raise GuardError(f"{label}: cannot resolve {what} ({path}): {extra}") from extra
+        resolved = path.resolve()
+    except (RuntimeError, OSError, ValueError) as exc:
+        raise _guard_resolve_error(path, what=what, exc=exc) from exc
+    # 3.13 hides ELOOP unless strict=True. FileNotFoundError is a dangling
+    # or missing path, not a loop — keep the non-strict result.
+    try:
+        path.resolve(strict=True)
+    except FileNotFoundError:
+        return resolved
+    except (RuntimeError, OSError, ValueError) as extra:
+        raise _guard_resolve_error(path, what=what, exc=extra) from extra
+    return resolved
 
 
 def _resolved_artifact_root(root: Path) -> Path | None:

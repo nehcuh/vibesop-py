@@ -1,8 +1,8 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-09-14
-> **Current release**: 8.4.0（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-> **This branch**: 8.4.0 Trust & Evidence（包元数据已升；PyPI / GitHub Release 待后续 tag/publish）
+> **Last Updated**: 2026-09-15
+> **Current release**: 8.4.1（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **This branch**: 8.4.1 CI trust patch on 8.4.0 Trust & Evidence（含 3.13 符号链接环 fail-closed；包元数据已升；PyPI / GitHub Release 待后续 tag/publish）
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -188,8 +188,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Source / package version** | 8.4.0 |
-| **Public PyPI / GitHub Release** | 8.3.0 until later tag/publish |
+| **Source / package version** | 8.4.1 |
+| **Public PyPI / GitHub Release** | 8.4.0 until later tag/publish |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |

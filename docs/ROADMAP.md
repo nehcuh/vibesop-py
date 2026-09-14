@@ -1,8 +1,8 @@
 # VibeSOP Roadmap
 
-> **当前源码 / 包元数据 Current source**: 8.4.0 Trust & Evidence
-> **公开发行 Public release**: 8.3.0（PyPI / GitHub Release 在后续 tag/publish 后对齐 8.4.0）
-> **最后更新 Last Updated**: 2026-09-14
+> **当前源码 / 包元数据 Current source**: 8.4.1 (Trust & Evidence patch)
+> **公开发行 Public release**: 8.4.0（PyPI / GitHub Release 在后续 tag/publish 后对齐 8.4.1）
+> **最后更新 Last Updated**: 2026-09-15
 > **历史稿**: [roadmap-through-8.3.md](archive/roadmap-through-8.3.md)（冻结至 8.3.0 的 804 行原稿）
 
 ---
@@ -17,9 +17,9 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 对象 | 状态 | 说明 |
 |---|---|---|
-| 当前源码 / 包元数据 | **8.4.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
-| 当前 PyPI / GitHub Release | **8.3.0** | 8.4.0 的 tag/publish 在后续发行阶段 |
-| 本分支 `codex/v84-trust-evidence` | **8.4.0 minor 发版准备** | 观测工具与必选 CI 治理已进入源码与 changelog |
+| 当前源码 / 包元数据 | **8.4.1** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
+| 当前 PyPI / GitHub Release | **8.4.0** | 8.4.1 的 tag/publish 在后续发行阶段 |
+| 本分支 `codex/v841-ci-matrix-trust` | **8.4.1 patch** | CI 矩阵解释器、热路径基准隔离、Release 产物 glob、3.13 符号链接环 fail-closed |
 
 8.4.0 作为 minor 的理由是可观察面和治理面的新增，不是补丁级修复。源码版本上升不等于 PyPI 已发布，也不等于可靠性已被证明。
 

@@ -1000,6 +1000,25 @@ def test_query_stripping_is_context_aware(text: str, expected: str, kind: str) -
     assert chal._kind(found[0]) == kind
 
 
+def test_resolve_path_fail_closes_when_nonstrict_resolve_hides_eloop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Python 3.13 Path.resolve() no longer raises on symlink loops.
+
+    Non-strict resolve returns a path; only strict=True raises OSError.
+    The guard must still fail closed, independent of host Python.
+    """
+
+    def fake_resolve(self: Path, strict: bool = False) -> Path:
+        if strict:
+            raise OSError(62, "Too many levels of symbolic links", str(self))
+        return tmp_path
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+    with pytest.raises(chal.GuardError, match=r"cannot resolve artifact root"):
+        chal._resolve_path(tmp_path / "loop", what="artifact root")
+
+
 def test_resolve_value_error_is_invalid_root_or_invalid_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

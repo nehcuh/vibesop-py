@@ -44,15 +44,21 @@ jobs:
           echo "Version verified: $TAG_VERSION"
 
       - name: Build package
-        run: uv build
+        # uv build writes dist/.gitignore ("*"). Suppress it at the source;
+        # the attest/release globs below are also structurally dotfile-proof.
+        run: uv build --no-create-gitignore
 
       - name: Attest build provenance
         # Generate SLSA build provenance for the dist artifacts (F-12). PyPI
         # package attestations (PEP 740) are emitted separately by the publish
         # action below via Trusted Publishing + id-token: write.
+        # Narrower than dist/*: v8.4.0 attested dist/.gitignore as a subject
+        # because @actions/glob matches dotfiles.
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/*
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -63,4 +69,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*
+          # softprops globs with dot:true, so bare dist/* uploaded
+          # dist/.gitignore as default.gitignore on v8.4.0.
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.publish.attestation
+          fail_on_unmatched_files: true
