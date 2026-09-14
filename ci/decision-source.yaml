@@ -47,6 +47,16 @@ jobs:
       `scripts/check_ci_decision_source.py` exit code against this registry
       and `.github/workflows/ci.yml`. No model output participates.
 
+  artifact-links:
+    name: Artifact Links
+    decision_source: deterministic
+    rationale: >-
+      `scripts/check_artifact_links.py --check-baseline
+      ci/artifact-links-baseline.json` exit code against the frozen
+      non-tracked citation multiset. Dangling is always fatal; new or
+      increased stale and baseline drift are integrity failures. No model
+      output participates.
+
   type-check:
     name: Type Check
     decision_source: deterministic

@@ -1,0 +1,2120 @@
+{
+  "schema_version": 1,
+  "nontracked": [
+    {
+      "source": "CHANGELOG.md",
+      "target": ".omx/artifacts/gate41-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "CHANGELOG.md",
+      "target": ".omx/artifacts/gate42-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "CHANGELOG.md",
+      "target": ".omx/artifacts/gate43-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "CHANGELOG.md",
+      "target": ".omx/artifacts/gate44-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/chrome-sidepanel-task-plan-panel.md",
+      "target": ".omx/artifacts/ask-claude-task-plan-panel-review-*.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/chrome-sidepanel-task-plan-panel.md",
+      "target": ".omx/artifacts/ask-grok-task-plan-panel-review-*.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-jet-round1-eval.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-jet-round1-report.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-20260828.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv1-方法论-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv1-方法论.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv1.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv2-产品-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv2-产品.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv2.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv3-工程-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv3-工程.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv3.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv4-基准-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv4-基准.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv4.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv5-战略-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv5-战略.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-adv5.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-context.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-probe-kimi-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-quant-r7-implementation.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.json",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/block0-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/block0-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/block0-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-impl-v2.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-review-architect.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-review-code-reviewer.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/c1c2-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/design-adoption-v0.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/design-adoption-v1-review-grok-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/design-adoption-v1-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/design-adoption-v1.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/design-adoption-v2-final.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-claims-lock.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-confirm-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-confirm-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-confirm-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-confirm-kimi.stdout",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-confirm-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-claude-full.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-claude.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-kimi.stdout",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-fix-verify-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-lane-a-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-lane-b-full.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-lane-b-full2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-lane-b-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-lane-c-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-merge-notes.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-new.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-old.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-plain.txt",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-lane-b.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-writer-w1-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-writer-w1.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-writer-w2-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902-writer-w2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/docs-rewrite-20260902.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/e2e-llm-routing-20260818.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm2-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm2-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-confirm3-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-brief.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-confirm-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl-v2.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-review-claude2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate41-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-confirm-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-confirm-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-impl-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-impl-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-impl-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate42-t24h-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-confirm-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-confirm-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-impl-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-impl-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-impl-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-confirm-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-confirm-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate44-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45-p0p2-architect.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45-p0p2-codereviewer.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45-p0p2-review-input.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45-p0p2-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-arch-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-arch-review.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-impl-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-impl-review.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate45p1-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-block2-impl-brief.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-block2-impl-v2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-design-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-design-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl-newfiles.txt",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/gate46-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/health-20260909",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/kimi-report-20260826",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/kimi-report-20260826.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/kimi-review-grok-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/kimi-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-20260909",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-confirm-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-confirm-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-confirm-pi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-confirm-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-design-v0.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-a-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-b-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-c-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/next-opt-review-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/p0-nullkeys-final.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/p0-nullkeys-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/p0-nullkeys-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/p0-nullkeys.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-plan.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review-grok.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review-pi.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review2-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review2-grok.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review2-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review2-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review2-pi.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review3-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review3-grok.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review3-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review3-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review3-pi.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review4-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review4-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-fix-review4-pi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-impl.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-claude2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-grok.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260827-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-grok.stderr.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260828-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260831-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-claude-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-confirm-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-fix-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-fix-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-fix-review-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-fix-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-fix.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-a-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-b-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-c-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260901-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-commit.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixA.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-kimi-prompt2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixB.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-commit.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi-prompt2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi-prompt3.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi2.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi3.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-kimi3.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-round2-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-commit.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixC2.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-kimi-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-kimi.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-fixD.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-grok-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-grok.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-grok.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260903-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate2-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate2-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate3-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate3-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate4-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate4-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate5-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-gate5-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-grok-review-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA-grok-review.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA2-grok-recheck-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixA2-grok-recheck.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixB-gate-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixB-gate-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixB-grok-review-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixB-grok-review.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixB.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixC-gate-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixC-gate-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixC.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixCD-gate-kimi-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixCD-gate-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixCD.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixCDE-grok-review-out.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-fixCDE-grok-review.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-instructions-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-instructions-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-instructions-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-regate-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-regate-instructions-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-regate-instructions-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-regate-kimi.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-review-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260910-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-instructions-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-instructions-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-instructions-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-review-lane-a.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-review-lane-b.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/pull-20260911-review-lane-c.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-diff-20260910.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-diff-20260911.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-diff-fa6e3fc-7f2de48.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-slice-ciconfig.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-slice-docs.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-slice-rootdocs.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-slice-src.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/review-slice-tests.patch",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-20260829.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv1-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv1.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv1.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv2-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv2.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv2.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv3-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv3.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv3.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv4-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv4.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv4.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv5-prompt.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv5.err",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-adv5.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-context.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-fix-kimi-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/routing-precision-audit-20260829.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/slashcmd-fix-review-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/slashcmd-fix-review-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/slashcmd-fix-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/slashcmd-fix-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/slashcmd-fix.diff",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/t1-debug-full.log",
+      "count": 1
+    },
+    {
+      "source": "docs/archive/research-artifacts.md",
+      "target": ".omx/artifacts/verification-20260909",
+      "count": 1
+    },
+    {
+      "source": "docs/decisions/2026-09-09-practice-health-roadmap.md",
+      "target": ".omx/artifacts/health-20260909/",
+      "count": 1
+    },
+    {
+      "source": "docs/decisions/2026-09-09-practice-next.md",
+      "target": ".omx/artifacts/next-20260909/",
+      "count": 1
+    },
+    {
+      "source": "docs/decisions/2026-09-09-verification-progress.md",
+      "target": ".omx/artifacts/verification-20260909/",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/2026-09-11-harness-hot-takes.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/ab-jet-round1-eval.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/ab-jet-round1-report.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/ab-probe-20260828.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/pull-20260903-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "target": ".omx/artifacts/routing-precision-audit-20260829.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/ab-jet-round1-eval.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/ab-jet-round1-report.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/ab-probe-20260828.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/pull-20260903-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "target": ".omx/artifacts/routing-precision-audit-20260829.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/archive/assets/evidence/evo-lane-A-handback.md",
+      "target": ".omx/artifacts/evo-lane-A-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/ab-jet-round1-report.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/ab-probe-20260828.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
+      "count": 1
+    },
+    {
+      "source": "docs/essays/agent-trust/article.md",
+      "target": ".omx/artifacts/pull-20260903-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-A-claude/artifacts/evo-lane-A-handback.md",
+      "target": ".omx/artifacts/evo-lane-A-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-B-pi/artifacts/evo-lane-B-handback.md",
+      "target": ".omx/artifacts/evo-lane-B-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-Cgold-kimi/artifacts/evo-lane-Cgold-handback.md",
+      "target": ".omx/artifacts/gate-findings-gold-10.json",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-D2-claude/artifacts/evo-lane-D2-handback.md",
+      "target": ".omx/artifacts/evo-lane-D2-plan.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-E-pi/artifacts/evo-lane-E-handback.md",
+      "target": ".omx/artifacts/evo-lane-*-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-E-pi/artifacts/evo-lane-E-handback.md",
+      "target": ".omx/artifacts/evo-lane-E-plan.md",
+      "count": 5
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-E-pi/artifacts/evo-lane-E-handback.md",
+      "target": ".omx/artifacts/新文件",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-A-handback.md",
+      "target": ".omx/artifacts/evo-lane-A-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-B-handback.md",
+      "target": ".omx/artifacts/evo-lane-B-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/research-survey.md",
+      "target": ".omx/artifacts/design-adoption-v2-final.md",
+      "count": 1
+    },
+    {
+      "source": "docs/research/research-survey.md",
+      "target": ".omx/artifacts/pull-20260903-review-synthesis.md",
+      "count": 2
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-C.md",
+      "target": ".omx/artifacts/evo-lane-C-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-Cgold.md",
+      "target": ".omx/artifacts/evo-lane-Cgold-handback.md",
+      "count": 2
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-Cgold.md",
+      "target": ".omx/artifacts/gate-findings-gold-10.json",
+      "count": 3
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-D1.md",
+      "target": ".omx/artifacts/evo-lane-D1-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-D2.md",
+      "target": ".omx/artifacts/evo-lane-D2-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-D2.md",
+      "target": ".omx/artifacts/evo-lane-D2-plan.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-E.md",
+      "target": ".omx/artifacts/evo-lane-E-handback.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evo-lane-E.md",
+      "target": ".omx/artifacts/evo-lane-E-plan.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evolution-direction-prompt.md",
+      "target": ".omx/artifacts/gate1-claude.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evolution-direction-prompt.md",
+      "target": ".omx/artifacts/gate1..gate45+",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evolution-direction-proposal.md",
+      "target": ".omx/artifacts/optimization-convergence-r3/r4-prereg.md",
+      "count": 1
+    },
+    {
+      "source": "docs/specs/2026-09-11-evolution-optimization-plan.md",
+      "target": ".omx/artifacts/gate-findings-gold-10.json",
+      "count": 1
+    }
+  ]
+}

@@ -55,22 +55,70 @@ Encoding
 installs) and drop CJK paths. Injected ``--tracked-list`` files and scanned
 markdown are UTF-8 strict: OSError / UnicodeDecodeError is exit 2.
 
+Frozen-debt baseline
+--------------------
+Default stale handling is still warn-only (exit 0). That is ineffective in CI:
+a citation that is dangling on a developer machine (untracked local file) is
+stale on a fresh checkout, so the default gate stays green. ``--strict`` would
+make every historical stale fatal forever.
+
+``--check-baseline PATH`` is the CI gate. PATH is a versioned JSON snapshot of
+the exact multiset of currently non-tracked (stale) citations, keyed by
+repo-relative source + target + occurrence count — never by line number,
+timestamp, absolute path, or commit SHA.
+
+Schema (``schema_version`` 1)::
+
+    {
+      "schema_version": 1,
+      "nontracked": [
+        {"source": "docs/x.md", "target": ".omx/artifacts/y.md", "count": 1}
+      ]
+    }
+
+Field names:
+    schema_version  exact integer 1 (bool/float rejected)
+    nontracked      list of unique (source, target) entries
+    source          normalized repo-relative POSIX path of the citing markdown
+    target          normalized ``.omx/artifacts/...`` path, glob, or dir prefix
+    count           exact positive integer occurrence count
+
+Check-mode verdicts:
+    dangling         always fatal, even when the key is in the baseline
+    new_stale        current stale key absent from the baseline
+    count_increase   current count > baselined count
+    baseline_drift   baselined key missing or count decreased (resolved /
+                     removed / tracked). Refresh the baseline explicitly.
+    exact match      pass (exit 0)
+
+``--write-baseline PATH`` writes the current stale multiset as sorted JSON
+with a trailing newline and no timestamps or absolute paths. It refuses if
+any dangling reference exists, so a local untracked artifact cannot be
+legitimized. ``--check-baseline`` and ``--write-baseline`` are mutually
+exclusive; ``--strict`` with ``--check-baseline`` is refused as ambiguous.
+
 Usage:
     uv run python scripts/check_artifact_links.py
     uv run python scripts/check_artifact_links.py --strict
     uv run python scripts/check_artifact_links.py --root . --targets docs README.md
     uv run python scripts/check_artifact_links.py --tracked-list /tmp/ls-files.txt
+    uv run python scripts/check_artifact_links.py --check-baseline ci/artifact-links-baseline.json
+    uv run python scripts/check_artifact_links.py --write-baseline ci/artifact-links-baseline.json
 
 Exit codes:
-    0 - no dangling references (stale ones may still be reported)
-    1 - at least one dangling reference (or a stale one under --strict)
-    2 - could not determine the tracked set / nothing was scanned (fail-closed)
+    0 - no dangling references (stale ones may still be reported); or exact
+        baseline match in check mode; or baseline written
+    1 - at least one dangling reference (or a stale one under --strict); or
+        baseline integrity drift; or write refused because of dangling refs
+    2 - could not determine the tracked set / nothing was scanned / baseline
+        missing, unreadable, or malformed / ambiguous flags (fail-closed)
 """
 
 from __future__ import annotations
 
 import argparse
 import fnmatch
+import json
 import os
 import re
 import subprocess
@@ -80,7 +128,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -88,6 +136,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TARGETS: tuple[str, ...] = ("docs", "README.md", "CHANGELOG.md", "ROADMAP.md")
 
 ARTIFACT_PREFIX = ".omx/artifacts/"
+
+BASELINE_SCHEMA_VERSION = 1
+_BASELINE_TOP_KEYS: tuple[str, ...] = ("schema_version", "nontracked")
+_BASELINE_ENTRY_KEYS: tuple[str, ...] = ("source", "target", "count")
 
 # Captures `.omx/artifacts/<rest>` up to the first delimiter that cannot be
 # part of a path in prose: whitespace, backtick, quote, pipe, or the
@@ -500,6 +552,222 @@ def scan(
     return refs
 
 
+@dataclass(frozen=True)
+class BaselineEntry:
+    """One unique (source, target) row in a schema_version 1 baseline."""
+
+    source: str
+    target: str
+    count: int
+
+
+@dataclass(frozen=True)
+class Baseline:
+    """Parsed frozen-debt baseline. ``as_counts`` is the comparison multiset."""
+
+    schema_version: int
+    nontracked: tuple[BaselineEntry, ...]
+
+    def as_counts(self) -> dict[tuple[str, str], int]:
+        return {(entry.source, entry.target): entry.count for entry in self.nontracked}
+
+
+@dataclass(frozen=True)
+class BaselineDiff:
+    """Integrity drift between current stale citations and a baseline."""
+
+    new_stale: tuple[tuple[str, str, int], ...]
+    count_increase: tuple[tuple[str, str, int, int], ...]
+    baseline_drift: tuple[tuple[str, str, int, int], ...]
+
+    def has_integrity_drift(self) -> bool:
+        return bool(self.new_stale or self.count_increase or self.baseline_drift)
+
+
+def _is_normalized_posix_rel(path: str, *, allow_trailing_slash: bool = False) -> bool:
+    """True if ``path`` is a normalized relative POSIX path (no filesystem escape)."""
+    if type(path) is not str or not path:
+        return False
+    if "\\" in path or "\0" in path or ":" in path:
+        return False
+    if path.startswith("/") or path.startswith("./"):
+        return False
+    trailing = path.endswith("/")
+    if trailing and not allow_trailing_slash:
+        return False
+    body = path[:-1] if trailing else path
+    if not body or "//" in body or "/./" in body:
+        return False
+    return all(part not in ("", ".", "..") for part in body.split("/"))
+
+
+def _is_normalized_artifact_target(target: str) -> bool:
+    """True if ``target`` is a normalized in-repo ``.omx/artifacts/...`` path."""
+    if type(target) is not str or not target.startswith(ARTIFACT_PREFIX):
+        return False
+    rest = target[len(ARTIFACT_PREFIX) :]
+    if rest == "":
+        return True
+    return _is_normalized_posix_rel(rest, allow_trailing_slash=True)
+
+
+def _no_duplicate_object_pairs(pairs: list[tuple[object, object]]) -> dict[object, object]:
+    """``object_pairs_hook`` that rejects duplicate JSON object keys."""
+    out: dict[object, object] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        out[key] = value
+    return out
+
+
+def _exact_int(value: object, *, what: str) -> int:
+    if type(value) is not int:
+        raise GuardError(f"{what} must be an exact integer, got {type(value).__name__}")
+    return value
+
+
+def _exact_str(value: object, *, what: str) -> str:
+    if type(value) is not str:
+        raise GuardError(f"{what} must be a string, got {type(value).__name__}")
+    return value
+
+
+def _expect_exact_keys(obj: dict[object, object], keys: tuple[str, ...], *, what: str) -> None:
+    if set(obj) != set(keys) or len(obj) != len(keys):
+        raise GuardError(f"{what} keys must be exactly {list(keys)}, got {list(obj)}")
+
+
+def load_baseline(path: Path) -> Baseline:
+    """Parse a schema_version 1 baseline. Fail closed on any malformation."""
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise GuardError(f"cannot read baseline at {path}: {exc}") from exc
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as extra:
+        raise GuardError(f"cannot decode baseline at {path} as UTF-8: {extra}") from extra
+    try:
+        payload = json.loads(text, object_pairs_hook=_no_duplicate_object_pairs)
+    except json.JSONDecodeError as extra:
+        raise GuardError(f"cannot parse baseline at {path} as JSON: {extra}") from extra
+    except ValueError as extra:
+        raise GuardError(f"malformed baseline at {path}: {extra}") from extra
+    if type(payload) is not dict:
+        raise GuardError(f"baseline at {path} must be a JSON object")
+    _expect_exact_keys(payload, _BASELINE_TOP_KEYS, what="baseline")
+    schema_version = _exact_int(payload["schema_version"], what="schema_version")
+    if schema_version != BASELINE_SCHEMA_VERSION:
+        raise GuardError(f"schema_version must be {BASELINE_SCHEMA_VERSION}, got {schema_version}")
+    nontracked = payload["nontracked"]
+    if type(nontracked) is not list:
+        raise GuardError("nontracked must be a JSON list")
+    entries: list[BaselineEntry] = []
+    seen: set[tuple[str, str]] = set()
+    for index, item in enumerate(nontracked):
+        if type(item) is not dict:
+            raise GuardError(f"nontracked[{index}] must be a JSON object")
+        _expect_exact_keys(item, _BASELINE_ENTRY_KEYS, what=f"nontracked[{index}]")
+        source = _exact_str(item["source"], what=f"nontracked[{index}].source")
+        target = _exact_str(item["target"], what=f"nontracked[{index}].target")
+        count = _exact_int(item["count"], what=f"nontracked[{index}].count")
+        if not _is_normalized_posix_rel(source):
+            raise GuardError(
+                f"nontracked[{index}].source is not a normalized repo-relative "
+                f"POSIX path: {source!r}"
+            )
+        if not _is_normalized_artifact_target(target):
+            raise GuardError(
+                f"nontracked[{index}].target is not a normalized .omx/artifacts/ path: {target!r}"
+            )
+        if count < 1:
+            raise GuardError(f"nontracked[{index}].count must be a positive integer, got {count}")
+        key = (source, target)
+        if key in seen:
+            raise GuardError(f"duplicate logical baseline entry {source} -> {target}")
+        seen.add(key)
+        entries.append(BaselineEntry(source=source, target=target, count=count))
+    return Baseline(schema_version=schema_version, nontracked=tuple(entries))
+
+
+def stale_counts(refs: Sequence[ArtifactRef]) -> dict[tuple[str, str], int]:
+    """Aggregate stale references into the baseline multiset (source, target)."""
+    counts: dict[tuple[str, str], int] = {}
+    for ref in refs:
+        if ref.status != "stale":
+            continue
+        key = (ref.source, ref.target)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def render_baseline(counts: Mapping[tuple[str, str], int]) -> str:
+    """Deterministic JSON: sorted entries, stable key order, trailing newline."""
+    entries = [
+        {"source": source, "target": target, "count": count}
+        for (source, target), count in sorted(counts.items())
+    ]
+    payload = {"schema_version": BASELINE_SCHEMA_VERSION, "nontracked": entries}
+    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+
+def write_baseline(path: Path, counts: Mapping[tuple[str, str], int]) -> None:
+    """Atomically write a schema_version 1 baseline. No timestamps or abs paths."""
+    for (source, target), count in counts.items():
+        if not _is_normalized_posix_rel(source):
+            raise GuardError(f"cannot write baseline: invalid source {source!r}")
+        if not _is_normalized_artifact_target(target):
+            raise GuardError(f"cannot write baseline: invalid target {target!r}")
+        if type(count) is not int or count < 1:
+            raise GuardError(f"cannot write baseline: invalid count {count!r}")
+    text = render_baseline(counts)
+    tmp = path.with_name(f".{path.name}.tmp")
+    try:
+        tmp.write_bytes(text.encode("utf-8"))
+        tmp.replace(path)
+    except OSError as extra:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+        raise GuardError(f"cannot write baseline at {path}: {extra}") from extra
+
+
+def diff_baseline(
+    current: Mapping[tuple[str, str], int],
+    baseline: Mapping[tuple[str, str], int],
+) -> BaselineDiff:
+    """Compare current stale counts to a frozen baseline (exact multiset)."""
+    new_stale: list[tuple[str, str, int]] = []
+    count_increase: list[tuple[str, str, int, int]] = []
+    baseline_drift: list[tuple[str, str, int, int]] = []
+    for key, current_count in sorted(current.items()):
+        expected = baseline.get(key)
+        if expected is None:
+            new_stale.append((key[0], key[1], current_count))
+        elif current_count > expected:
+            count_increase.append((key[0], key[1], expected, current_count))
+        elif current_count < expected:
+            baseline_drift.append((key[0], key[1], expected, current_count))
+    for key, expected in sorted(baseline.items()):
+        if key not in current:
+            baseline_drift.append((key[0], key[1], expected, 0))
+    return BaselineDiff(tuple(new_stale), tuple(count_increase), tuple(baseline_drift))
+
+
+def _report_baseline_problems(dangling: Sequence[ArtifactRef], diff: BaselineDiff) -> None:
+    for ref in dangling:
+        print(f"DANGLING {ref.render()}")
+    for source, target, count in diff.new_stale:
+        print(f"NEW_STALE {source} {target} count={count} (not in baseline)")
+    for source, target, expected, current in diff.count_increase:
+        print(f"COUNT_INCREASE {source} {target} baseline={expected} current={current}")
+    for source, target, expected, current in diff.baseline_drift:
+        print(f"BASELINE_DRIFT {source} {target} baseline={expected} current={current}")
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check that tracked docs only cite git-tracked .omx/artifacts/ files.",
@@ -532,12 +800,94 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Also fail (exit 1) on 'stale' references — the full fresh-clone invariant.",
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check-baseline",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Fail unless current non-tracked citations exactly match this frozen "
+            "JSON baseline. Dangling references are always fatal."
+        ),
+    )
+    mode.add_argument(
+        "--write-baseline",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write the current non-tracked citation multiset to PATH as sorted JSON. "
+            "Refuses if any dangling reference exists."
+        ),
+    )
     parser.add_argument("--quiet", action="store_true", help="Only print problems.")
     return parser.parse_args(argv)
 
 
+def _handle_write_baseline(
+    path: Path,
+    dangling: Sequence[ArtifactRef],
+    counts: Mapping[tuple[str, str], int],
+    *,
+    quiet: bool,
+) -> int:
+    if dangling:
+        for ref in dangling:
+            print(f"DANGLING {ref.render()}")
+        print(
+            "check_artifact_links: refusing to write baseline: "
+            f"{len(dangling)} dangling reference(s); track or remove them first.",
+            file=sys.stderr,
+        )
+        return 1
+    write_baseline(path, counts)
+    if not quiet:
+        occurrences = sum(counts.values())
+        print(f"Wrote {len(counts)} nontracked entries ({occurrences} occurrence(s)) to {path}")
+    return 0
+
+
+def _handle_check_baseline(
+    path: Path,
+    refs: Sequence[ArtifactRef],
+    dangling: Sequence[ArtifactRef],
+    counts: Mapping[tuple[str, str], int],
+    *,
+    quiet: bool,
+) -> int:
+    baseline = load_baseline(path)
+    diff = diff_baseline(counts, baseline.as_counts())
+    _report_baseline_problems(dangling, diff)
+    if dangling or diff.has_integrity_drift():
+        if not quiet:
+            print(
+                "check_artifact_links: baseline mismatch — "
+                f"{len(dangling)} dangling, {len(diff.new_stale)} new_stale, "
+                f"{len(diff.count_increase)} count_increase, "
+                f"{len(diff.baseline_drift)} baseline_drift."
+            )
+        return 1
+    if not quiet:
+        ok = sum(1 for ref in refs if ref.status == "ok")
+        stale_n = sum(1 for ref in refs if ref.status == "stale")
+        print(
+            f"check_artifact_links: {len(refs)} reference(s) — "
+            f"{ok} ok, {len(dangling)} dangling, {stale_n} stale "
+            f"(exact baseline match, {sum(counts.values())} nontracked)."
+        )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
+    if args.check_baseline is not None and args.strict:
+        print(
+            "check_artifact_links: refusing --strict with --check-baseline; "
+            "the baseline is the stale policy.",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         root = _resolve_path(args.root, what="--root")
@@ -556,15 +906,33 @@ def main(argv: Sequence[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 2
+            dangling: list[ArtifactRef] = []
+            counts: dict[tuple[str, str], int] = {}
+            if args.write_baseline is not None:
+                return _handle_write_baseline(
+                    args.write_baseline, dangling, counts, quiet=args.quiet
+                )
+            if args.check_baseline is not None:
+                return _handle_check_baseline(
+                    args.check_baseline, refs, dangling, counts, quiet=args.quiet
+                )
             if not args.quiet:
                 print(f"OK: {len(scanned)} markdown file(s) scanned, no artifact references.")
             return 0
+
+        dangling = [ref for ref in refs if ref.status == "dangling"]
+        stale = [ref for ref in refs if ref.status == "stale"]
+        counts = stale_counts(refs)
+
+        if args.write_baseline is not None:
+            return _handle_write_baseline(args.write_baseline, dangling, counts, quiet=args.quiet)
+        if args.check_baseline is not None:
+            return _handle_check_baseline(
+                args.check_baseline, refs, dangling, counts, quiet=args.quiet
+            )
     except (GuardError, OSError) as extra:
         print(f"check_artifact_links: {extra}", file=sys.stderr)
         return 2
-
-    dangling = [ref for ref in refs if ref.status == "dangling"]
-    stale = [ref for ref in refs if ref.status == "stale"]
 
     for ref in dangling:
         print(f"DANGLING {ref.render()}")
