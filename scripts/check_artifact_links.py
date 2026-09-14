@@ -8,6 +8,12 @@ collaborators). Writes landed silently, and artifacts that survived did so
 only because someone ran `git add -f` by hand. An accounting ledger in a
 gitignored path is not a ledger.
 
+Settled policy: local-only historical/research artifacts may still be retained
+under a developer-local `.git/info/exclude`. Any artifact cited by a tracked
+Markdown document must itself be tracked. This guard enforces that
+tracked-document contract even when a local exclude hides the file from
+ordinary `git status`.
+
 So: tracked markdown must only point at `.omx/artifacts/...` files that are
 actually in the index. A fresh clone must be able to follow every citation.
 
@@ -23,9 +29,12 @@ Verdicts (per reference)
 ok        target is in `git ls-files` (exact path, glob match, or dir prefix)
 dangling  target exists on disk but is NOT tracked  -> exit 1
           This is the exact incident this guard is for: the doc cites an
-          artifact that only lives on one machine.
+          artifact that only lives on one machine. A glob such as
+          `.omx/artifacts/foo-*` with no tracked match is dangling when one
+          or more matching paths exist on disk under `.omx/artifacts`.
 stale     target is neither tracked nor on disk (e.g. a historical CHANGELOG
-          entry for a gate synthesis that was never committed)
+          entry for a gate synthesis that was never committed, or a glob
+          with no on-disk match either)
           -> warned, exit 0 by default; `--strict` makes it fatal.
 
 `stale` is split out on purpose. A citation to a file that has vanished
@@ -58,6 +67,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import re
 import subprocess
 import sys
@@ -119,8 +129,29 @@ def extract_targets(text: str) -> list[str]:
         if "<" in raw or ">" in raw:
             # A placeholder such as `evo-lane-<id>-handback.md` names no file.
             continue
+        raw = _strip_markdown_suffixes(raw)
+        if not raw:
+            continue
         found.append(ARTIFACT_PREFIX + raw)
     return found
+
+
+def _strip_markdown_suffixes(raw: str) -> str:
+    """Drop a Markdown/URL fragment or query from a captured path.
+
+    `[x](.omx/artifacts/report.md#section)` must validate `report.md`.
+    A glob `?` wildcard (`gate7-?.md`) is kept; `report.md?raw=1` is not.
+    """
+    raw = raw.split("#", 1)[0]
+    qpos = raw.find("?")
+    if qpos == -1:
+        return raw
+    after = raw[qpos + 1 :]
+    pre = raw[:qpos]
+    last_seg = pre.rsplit("/", 1)[-1]
+    if "=" in after or "&" in after or ("." in last_seg and after):
+        return pre
+    return raw
 
 
 def _kind(target: str) -> str:
@@ -129,6 +160,37 @@ def _kind(target: str) -> str:
     if any(ch in target for ch in "*?["):
         return "glob"
     return "file"
+
+
+def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
+    """Yield repo-relative posix paths under a resolved `.omx/artifacts` root.
+
+    `os.walk(..., followlinks=False)` so a glob cannot traverse out of the
+    artifact directory via `..` or directory symlinks.
+    """
+    for dirpath, dirnames, filenames in os.walk(artifact_root, followlinks=False):
+        dir_path = Path(dirpath)
+        try:
+            rel_dir = dir_path.relative_to(artifact_root).as_posix()
+        except ValueError:
+            dirnames.clear()
+            continue
+        if rel_dir == ".":
+            rel_dir = ""
+        if rel_dir:
+            yield ARTIFACT_PREFIX + rel_dir
+            yield ARTIFACT_PREFIX + rel_dir + "/"
+        for name in filenames:
+            rel = f"{rel_dir}/{name}" if rel_dir else name
+            yield ARTIFACT_PREFIX + rel
+
+
+def _on_disk_glob_match(root: Path, pattern: str) -> bool:
+    """True if any path under `.omx/artifacts` matches ``pattern``."""
+    artifact_root = (root / ".omx" / "artifacts").resolve()
+    if not artifact_root.is_dir():
+        return False
+    return any(fnmatch.fnmatch(rel, pattern) for rel in _iter_on_disk_artifact_paths(artifact_root))
 
 
 def classify(target: str, tracked: set[str], root: Path) -> str:
@@ -140,6 +202,7 @@ def classify(target: str, tracked: set[str], root: Path) -> str:
     elif kind == "glob":
         if any(fnmatch.fnmatch(path, target) for path in tracked):
             return "ok"
+        return "dangling" if _on_disk_glob_match(root, target) else "stale"
     elif target in tracked:
         return "ok"
 
@@ -177,6 +240,20 @@ def read_tracked_list(path: Path) -> set[str]:
     return {line.strip() for line in text.splitlines() if line.strip()}
 
 
+def _resolve_in_root(root: Path, target: str) -> Path:
+    """Resolve ``target`` under ``root``, or raise GuardError if it escapes.
+
+    Absolute paths and ``../`` relative paths are rejected when they land
+    outside ``root``, whether or not the path exists — a missing out-of-root
+    target is still a bad argument, not a skipped scan root.
+    """
+    root_resolved = root.resolve()
+    candidate = (root / target).resolve()
+    if not candidate.is_relative_to(root_resolved):
+        raise GuardError(f"target {target!r} is outside repository root {root_resolved}")
+    return candidate
+
+
 def iter_markdown(
     root: Path,
     targets: Sequence[str],
@@ -186,11 +263,13 @@ def iter_markdown(
     """Yield repo-relative markdown paths under ``targets``.
 
     Tracked-only by default so the scan matches fresh-clone semantics; missing
-    targets are simply skipped (a root that does not exist is not an error).
+    in-root targets are simply skipped (a root that does not exist is not an
+    error). Out-of-root targets raise ``GuardError``.
     """
     seen: set[str] = set()
+    root_resolved = root.resolve()
     for target in targets:
-        candidate = root / target
+        candidate = _resolve_in_root(root, target)
         if not candidate.exists():
             continue
         if candidate.is_file():
@@ -198,7 +277,12 @@ def iter_markdown(
         else:
             paths = sorted(p for p in candidate.rglob("*.md") if p.is_file())
         for path in paths:
-            rel = path.relative_to(root).as_posix()
+            try:
+                rel = path.resolve().relative_to(root_resolved).as_posix()
+            except ValueError as extra:
+                raise GuardError(
+                    f"scanned path {path} is outside repository root {root_resolved}"
+                ) from extra
             if rel in seen:
                 continue
             if not include_untracked and rel not in tracked:
@@ -289,8 +373,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         refs = scan(root, args.targets, tracked, args.include_untracked)
-    except (GuardError, OSError, UnicodeDecodeError) as exc:
-        print(f"check_artifact_links: {exc}", file=sys.stderr)
+    except (GuardError, OSError, UnicodeDecodeError, ValueError) as extra:
+        print(f"check_artifact_links: {extra}", file=sys.stderr)
         return 2
 
     if not refs:

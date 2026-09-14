@@ -141,13 +141,17 @@ ruff.toml
 
 # OMX ephemeral (gate/experiment scratch).
 #
-# `.omx/` itself is deliberately NOT ignored: anything cited by a tracked
-# doc, or kept as acceptance evidence, MUST be addable with a plain
-# `git add` — never `git add -f`. `.omx/artifacts/` stays tracked by
-# default. Only the short-lived directories below are ignored; a new
-# artifact that lands in `.omx/artifacts/` shows up in `git status` and
-# becomes an explicit decision instead of a silent loss.
+# `.omx/` itself is deliberately NOT ignored here. Shared ignore must not
+# hide `.omx/artifacts/`: an artifact cited by a tracked Markdown document
+# must itself be tracked, and `scripts/check_artifact_links.py` enforces
+# that contract even when a developer-local `.git/info/exclude` hides the
+# file from ordinary `git status`.
 #
+# Local-only historical/research artifacts may be retained on one machine
+# via `.git/info/exclude` (not this file). Do not cite those from tracked
+# docs unless they are also tracked.
+#
+# Only the short-lived directories below are ignored in this shared file.
 # Do not add `.omx/` or `.omx/artifacts/` to this file.
 .omx/tmp/
 .omx/scratch/

@@ -175,6 +175,122 @@ def test_glob_reference_predating_any_tracked_file_is_stale(repo: Path) -> None:
     code, out = _run(repo)
     assert code == 0, out
     assert "ask-grok-panel-*.md" in out
+    assert "stale" in out
+    assert "DANGLING" not in out
+
+
+def test_glob_matching_untracked_on_disk_file_is_dangling(repo: Path) -> None:
+    """A glob with no tracked match but a real untracked file is dangling.
+
+    `(root / 'foo-*').exists()` is the wrong check: it looks for a literal
+    filename containing `*`. The guard must glob under `.omx/artifacts`.
+    """
+    (repo / ".omx" / "artifacts" / "foo-bar.md").write_text("x\n")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    _commit_paths(repo, "docs/notes.md")
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+    assert "foo-bar.md" not in tracked
+
+    code, out = _run(repo)
+    assert code == 1, out
+    assert "DANGLING" in out
+    assert "foo-*" in out
+    assert "docs/notes.md:1:" in out
+
+
+def test_glob_does_not_match_outside_artifact_root(tmp_path: Path) -> None:
+    """On-disk glob matching must not traverse out of `.omx/artifacts`."""
+    artifact_root = tmp_path / ".omx" / "artifacts"
+    artifact_root.mkdir(parents=True)
+    (tmp_path / "secret.md").write_text("x\n")
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "outside" / "foo-bar.md").write_text("x\n")
+    tracked: set[str] = set()
+
+    assert chal.classify(".omx/artifacts/../*", tracked, tmp_path) == "stale"
+    assert chal.classify(".omx/artifacts/../outside/*", tracked, tmp_path) == "stale"
+    assert chal.classify(".omx/artifacts/../secret.md", tracked, tmp_path) != "ok"
+
+    (artifact_root / "foo-1.md").write_text("x\n")
+    assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
+
+
+def test_out_of_root_relative_target_fails_closed(repo: Path, tmp_path: Path) -> None:
+    (repo / "docs" / "notes.md").write_text("clean\n")
+    _commit_all(repo)
+    (tmp_path / "outside.md").write_text("see `.omx/artifacts/x.md`\n")
+
+    code, out = _run(repo, "--targets", "../outside.md")
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "outside" in out.lower()
+    assert "no markdown scanned" not in out
+
+
+def test_out_of_root_missing_relative_target_fails_closed(repo: Path) -> None:
+    """A missing out-of-root path is still a bad --targets argument, not a skip."""
+    (repo / "docs" / "notes.md").write_text("clean\n")
+    _commit_all(repo)
+
+    code, out = _run(repo, "--targets", "../no-such-outside.md")
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "outside" in out.lower()
+    assert "no markdown scanned" not in out
+
+
+def test_out_of_root_absolute_target_fails_closed(repo: Path, tmp_path: Path) -> None:
+    (repo / "docs" / "notes.md").write_text("clean\n")
+    _commit_all(repo)
+    outside = tmp_path / "outside.md"
+    outside.write_text("see `.omx/artifacts/x.md`\n")
+
+    code, out = _run(repo, "--targets", str(outside))
+    assert code == 2, out
+    assert "Traceback" not in out
+
+
+def test_in_root_absolute_target_still_works(repo: Path) -> None:
+    (repo / "docs" / "notes.md").write_text("clean\n")
+    _commit_all(repo)
+
+    code, out = _run(repo, "--targets", str((repo / "docs").resolve()))
+    assert code == 0, out
+    assert "Traceback" not in out
+
+
+def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
+    _commit_all(repo)
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "1 ok, 0 dangling, 0 stale" in out
+
+
+def test_markdown_query_string_validates_underlying_file(repo: Path) -> None:
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md?raw=1)\n")
+    _commit_all(repo)
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "1 ok, 0 dangling, 0 stale" in out
+
+
+def test_markdown_fragment_on_untracked_file_is_dangling(repo: Path) -> None:
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
+    _commit_paths(repo, "docs/notes.md")
+
+    code, out = _run(repo)
+    assert code == 1, out
+    assert "DANGLING" in out
+    assert "report.md" in out
+    assert "#" not in out.split("report.md", 1)[1].splitlines()[0]
 
 
 def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
@@ -323,8 +439,12 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
     [
         ("`.omx/artifacts/a.md`", [".omx/artifacts/a.md"]),
         ("[x](.omx/artifacts/b.md)", [".omx/artifacts/b.md"]),
+        ("[x](.omx/artifacts/report.md#section)", [".omx/artifacts/report.md"]),
+        ("[x](.omx/artifacts/report.md?raw=1)", [".omx/artifacts/report.md"]),
         ("详见 .omx/artifacts/c.md。", [".omx/artifacts/c.md"]),
         ("按 `.omx/artifacts/gate34-*` 定稿", [".omx/artifacts/gate34-*"]),
+        # A glob '?' wildcard is not a query string.
+        ("`.omx/artifacts/gate7-?.md`", [".omx/artifacts/gate7-?.md"]),
         ("见 `.omx/artifacts/health-20260909/`", [".omx/artifacts/health-20260909/"]),
         # Template placeholder names no file -> skipped.
         ("`.omx/artifacts/evo-lane-<id>-handback.md`", []),
@@ -356,6 +476,9 @@ def test_classify_kinds(tmp_path: Path) -> None:
     (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
     (tmp_path / ".omx" / "artifacts" / "here.md").write_text("x")
     assert chal.classify(".omx/artifacts/here.md", tracked, tmp_path) == "dangling"
+    (tmp_path / ".omx" / "artifacts" / "foo-bar.md").write_text("x")
+    assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
+    assert chal.classify(".omx/artifacts/nope-*", tracked, tmp_path) == "stale"
 
 
 def test_scan_is_green_on_empty_reference_set(repo: Path) -> None:
@@ -486,3 +609,12 @@ def test_repo_gitignore_keeps_claude_directory_policy() -> None:
     """The existing `.claude/` block must stay byte-for-byte."""
     text = REPO_GITIGNORE.read_text(encoding="utf-8")
     assert "# Claude Code local state (sessions, memory, worktrees)\n.claude/\n" in text
+
+
+def test_repo_gitignore_documents_local_exclude_and_citation_contract() -> None:
+    """Shared ignore comments must match the settled artifact policy."""
+    text = REPO_GITIGNORE.read_text(encoding="utf-8")
+    assert ".git/info/exclude" in text
+    assert "check_artifact_links" in text
+    lowered = text.lower()
+    assert "cited" in lowered or "citation" in lowered
