@@ -456,6 +456,84 @@ def test_query_string_without_key_value_on_untracked_file_is_dangling(
     assert "0 stale" in out
 
 
+# Inline / reference Markdown destinations that the adjacent-`](` guard missed.
+# `{query}` is substituted with `raw` or `download`.
+_MD_DESTINATION_FORMS = (
+    "[x](./.omx/artifacts/report.md?{query})",
+    "[x]( .omx/artifacts/report.md?{query})",
+    "[x]( ./.omx/artifacts/report.md?{query})",
+    "[x](<./.omx/artifacts/report.md?{query}>)",
+    "[x]( <.omx/artifacts/report.md?{query}> )",
+    "[x]( <./.omx/artifacts/report.md?{query}> )",
+    "[x](< .omx/artifacts/report.md?{query}>)",
+    "[r]: .omx/artifacts/report.md?{query}",
+    "[r]: ./.omx/artifacts/report.md?{query}",
+    "[r]: <.omx/artifacts/report.md?{query}>",
+    "[r]: <./.omx/artifacts/report.md?{query}>",
+    "[r]:.omx/artifacts/report.md?{query}",
+    "  [r]: .omx/artifacts/report.md?{query}",
+    "   [r]: .omx/artifacts/report.md?{query}",
+)
+
+
+@pytest.mark.parametrize("form", _MD_DESTINATION_FORMS)
+@pytest.mark.parametrize("query", ["raw", "download"])
+def test_untracked_file_cited_via_markdown_destination_form_is_dangling(
+    repo: Path, form: str, query: str
+) -> None:
+    """Each Markdown destination/definition form must fail closed on untracked files.
+
+    `report.md?raw` / `?download` as a glob against on-disk `report.md` is a
+    miss, so a missed destination classification degrades DANGLING/exit 1
+    into stale/exit 0.
+    """
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n")
+    _commit_paths(repo, "docs/notes.md")
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+    assert "report.md" not in tracked
+
+    refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
+    assert [ref.target for ref in refs] == [".omx/artifacts/report.md"]
+    assert refs[0].kind == "file"
+    assert refs[0].status == "dangling"
+
+    code, out = _run(repo)
+    assert code == 1, out
+    assert "DANGLING" in out
+    assert ".omx/artifacts/report.md" in out
+    assert f"report.md?{query}" not in out
+    assert "0 stale" in out
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        "[x](./.omx/artifacts/report.md?{query})",
+        "[x]( .omx/artifacts/report.md?{query})",
+        "[r]: .omx/artifacts/report.md?{query}",
+    ],
+)
+@pytest.mark.parametrize("query", ["raw", "download"])
+def test_tracked_file_cited_via_markdown_destination_form_is_green(
+    repo: Path, form: str, query: str
+) -> None:
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text(form.format(query=query) + "\n")
+    _commit_all(repo)
+
+    refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
+    assert [ref.target for ref in refs] == [".omx/artifacts/report.md"]
+    assert refs[0].kind == "file"
+    assert refs[0].status == "ok"
+
+    code, out = _run(repo)
+    assert code == 0, out
+    assert "1 ok, 0 dangling, 0 stale" in out
+
+
 def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
     (repo / ".omx" / "artifacts" / "health-20260909").mkdir()
     (repo / ".omx" / "artifacts" / "health-20260909" / "summary.md").write_text("x\n")
@@ -607,6 +685,20 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         ("[x](.omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
         ("[x](.omx/artifacts/report.md?download)", [".omx/artifacts/report.md"]),
         ("[x](<.omx/artifacts/report.md?raw>)", [".omx/artifacts/report.md"]),
+        ("[x](./.omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
+        ("[x]( .omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
+        ("[x]( ./.omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
+        ("[x](<./.omx/artifacts/report.md?raw>)", [".omx/artifacts/report.md"]),
+        ("[x]( <.omx/artifacts/report.md?raw> )", [".omx/artifacts/report.md"]),
+        ("[x]( <./.omx/artifacts/report.md?raw> )", [".omx/artifacts/report.md"]),
+        ("[x](< .omx/artifacts/report.md?raw >)", [".omx/artifacts/report.md"]),
+        ("[r]: .omx/artifacts/report.md?raw", [".omx/artifacts/report.md"]),
+        ("[r]: ./.omx/artifacts/report.md?raw", [".omx/artifacts/report.md"]),
+        ("[r]: <.omx/artifacts/report.md?raw>", [".omx/artifacts/report.md"]),
+        ("[r]: <./.omx/artifacts/report.md?raw>", [".omx/artifacts/report.md"]),
+        ("[r]:.omx/artifacts/report.md?raw", [".omx/artifacts/report.md"]),
+        ("  [r]: .omx/artifacts/report.md?raw", [".omx/artifacts/report.md"]),
+        ("   [r]: .omx/artifacts/report.md?download", [".omx/artifacts/report.md"]),
         ("详见 .omx/artifacts/c.md。", [".omx/artifacts/c.md"]),
         ("按 `.omx/artifacts/gate34-*` 定稿", [".omx/artifacts/gate34-*"]),
         # Backtick/bare: a lone '?' is a glob, even after a file extension or
@@ -620,6 +712,12 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         (".omx/artifacts/v1.2?.md", [".omx/artifacts/v1.2?.md"]),
         (".omx/artifacts/report.v2?.md", [".omx/artifacts/report.v2?.md"]),
         ("见 .omx/artifacts/report.md?raw。", [".omx/artifacts/report.md?raw"]),
+        ("./.omx/artifacts/report.md?raw", [".omx/artifacts/report.md?raw"]),
+        ("<.omx/artifacts/report.md?raw>", [".omx/artifacts/report.md?raw"]),
+        ("[r] .omx/artifacts/report.md?raw", [".omx/artifacts/report.md?raw"]),
+        ("see [r]: .omx/artifacts/report.md?raw", [".omx/artifacts/report.md?raw"]),
+        ("    [r]: .omx/artifacts/report.md?raw", [".omx/artifacts/report.md?raw"]),
+        ("label: .omx/artifacts/report.md?raw", [".omx/artifacts/report.md?raw"]),
         ("见 .omx/artifacts/report.md?foo=bar。", [".omx/artifacts/report.md"]),
         ("见 `.omx/artifacts/health-20260909/`", [".omx/artifacts/health-20260909/"]),
         # Template placeholder names no file -> skipped.
@@ -647,7 +745,27 @@ def test_extract_targets_handles_multiple_and_punctuation() -> None:
     [
         ("[x](.omx/artifacts/report.md?raw)", ".omx/artifacts/report.md", "file"),
         ("[x](.omx/artifacts/report.md?download)", ".omx/artifacts/report.md", "file"),
+        ("[x](./.omx/artifacts/report.md?raw)", ".omx/artifacts/report.md", "file"),
+        ("[x]( .omx/artifacts/report.md?raw)", ".omx/artifacts/report.md", "file"),
+        ("[x]( ./.omx/artifacts/report.md?download)", ".omx/artifacts/report.md", "file"),
+        ("[x](<./.omx/artifacts/report.md?raw>)", ".omx/artifacts/report.md", "file"),
+        ("[x]( <.omx/artifacts/report.md?raw> )", ".omx/artifacts/report.md", "file"),
+        ("[x]( <./.omx/artifacts/report.md?download> )", ".omx/artifacts/report.md", "file"),
+        ("[x](< .omx/artifacts/report.md?raw >)", ".omx/artifacts/report.md", "file"),
+        ("[r]: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md", "file"),
+        ("[r]: ./.omx/artifacts/report.md?download", ".omx/artifacts/report.md", "file"),
+        ("[r]: <.omx/artifacts/report.md?raw>", ".omx/artifacts/report.md", "file"),
+        ("[r]: <./.omx/artifacts/report.md?raw>", ".omx/artifacts/report.md", "file"),
+        ("[r]:.omx/artifacts/report.md?raw", ".omx/artifacts/report.md", "file"),
+        ("  [r]: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md", "file"),
+        ("   [r]: .omx/artifacts/report.md?download", ".omx/artifacts/report.md", "file"),
         ("`.omx/artifacts/report.md?raw`", ".omx/artifacts/report.md?raw", "glob"),
+        ("./.omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
+        ("<.omx/artifacts/report.md?raw>", ".omx/artifacts/report.md?raw", "glob"),
+        ("[r] .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
+        ("see [r]: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
+        ("    [r]: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
+        ("label: .omx/artifacts/report.md?raw", ".omx/artifacts/report.md?raw", "glob"),
         ("`.omx/artifacts/gate7-?.md`", ".omx/artifacts/gate7-?.md", "glob"),
         ("`.omx/artifacts/v1.2?.md`", ".omx/artifacts/v1.2?.md", "glob"),
         ("`.omx/artifacts/report.v2?.md`", ".omx/artifacts/report.v2?.md", "glob"),

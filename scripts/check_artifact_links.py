@@ -125,17 +125,83 @@ class ArtifactRef:
         return f"{self.source}:{self.lineno}: {self.status}: {self.target}"
 
 
-def _is_markdown_link_destination(text: str, match: re.Match[str]) -> bool:
-    """True if ``match`` sits in a Markdown link destination after ``](``.
+_DEST_PREFIX_BEFORE_DOT_SLASH = frozenset("(<: \t")
+_LINK_DEF_INDENT = frozenset(" \t")
 
-    Covers ``[x](.omx/artifacts/report.md?raw)`` and the angle-wrapped form
-    ``[x](<.omx/artifacts/report.md?raw>)``. Backticks and bare prose are not
-    link destinations.
+
+def _rskip_ws(text: str, i: int) -> int:
+    """Walk left past ASCII spaces and tabs."""
+    while i > 0 and text[i - 1] in " \t":
+        i -= 1
+    return i
+
+
+def _skip_markdown_destination_prefix(text: str, start: int) -> int:
+    """Walk left from an ``.omx/artifacts/`` match past wrapping destination syntax.
+
+    Consumes, in this order: an optional ``./`` relative prefix, optional
+    whitespace, an optional ``<`` angle opener, and optional whitespace after
+    ``](`` or ``:``. ``./`` is skipped only when it is a path component (preceded
+    by ``(``, ``<``, ``:``, or whitespace), not the trailing ``./`` of ``../``.
     """
-    start = match.start()
-    if start > 0 and text[start - 1] == "<":
-        start -= 1
-    return start >= 2 and text[start - 2 : start] == "]("
+    i = start
+    if (
+        i >= 2
+        and text[i - 2 : i] == "./"
+        and (i == 2 or text[i - 3] in _DEST_PREFIX_BEFORE_DOT_SLASH)
+    ):
+        i -= 2
+    i = _rskip_ws(text, i)
+    if i > 0 and text[i - 1] == "<":
+        i -= 1
+        i = _rskip_ws(text, i)
+    return i
+
+
+def _is_link_reference_definition(text: str, dest_start: int) -> bool:
+    """True if ``dest_start`` follows a CommonMark link reference definition.
+
+    Requires ``[label]:`` at the beginning of the current line, with up to
+    three spaces or tabs of indentation. A 4-space indent is a code block, not
+    a definition. The label must contain a non-whitespace character.
+    """
+    i = _rskip_ws(text, dest_start)
+    if i < 2 or text[i - 1] != ":":
+        return False
+    i -= 1
+    if text[i - 1] != "]":
+        return False
+    close = i - 1
+    open_br = text.rfind("[", 0, close)
+    if open_br == -1:
+        return False
+    label = text[open_br + 1 : close]
+    if not label.strip() or "]" in label:
+        return False
+    line_prefix = text[:open_br]
+    if "\n" in line_prefix:
+        line_prefix = line_prefix.rsplit("\n", 1)[-1]
+    return len(line_prefix) <= 3 and all(ch in _LINK_DEF_INDENT for ch in line_prefix)
+
+
+def _is_markdown_link_destination(text: str, match: re.Match[str]) -> bool:
+    """True if ``match`` sits in a Markdown link destination or definition.
+
+    Inline: ``[x](.omx/artifacts/report.md?raw)``, with optional whitespace
+    after ``(``, optional ``./`` before ``.omx``, and optional ``<...>``
+    wrapping — including combinations such as ``[x]( <./.omx/...?raw> )``.
+
+    Reference definition: ``[r]: .omx/artifacts/report.md?raw`` at line start
+    with optional indent, optional ``./``, and optional angle wrapping.
+
+    Backticks, bare prose, autolinks, and mid-line ``[label]:`` are not
+    destinations. Query stripping stays context-aware; this is not
+    unconditional extension stripping.
+    """
+    opener = _skip_markdown_destination_prefix(text, match.start())
+    if opener >= 2 and text[opener - 2 : opener] == "](":
+        return True
+    return _is_link_reference_definition(text, opener)
 
 
 def extract_targets(text: str) -> list[str]:
@@ -145,10 +211,11 @@ def extract_targets(text: str) -> list[str]:
     all three appear in this repo. Template placeholders such as
     `.omx/artifacts/evo-lane-<id>-handback.md` are skipped: they name no file.
 
-    Query stripping is context-aware: Markdown link destinations treat a
-    ``?`` after a file extension as a URL query; backticked and bare
-    references only strip an explicit ``key=value`` query and otherwise keep
-    ``?`` as a glob wildcard. See ``_strip_markdown_suffixes``.
+    Query stripping is context-aware: Markdown link destinations and
+    reference definitions treat a ``?`` after a file extension as a URL
+    query; backticked and bare references only strip an explicit
+    ``key=value`` query and otherwise keep ``?`` as a glob wildcard. See
+    ``_strip_markdown_suffixes``.
     """
     found: list[str] = []
     for match in _REF_RE.finditer(text):
@@ -177,10 +244,12 @@ def _strip_markdown_suffixes(raw: str, *, markdown_link: bool) -> str:
     1. Fragment: drop everything from the first ``#``.
     2. Explicit ``key=value`` query (``report.md?raw=1``): strip from ``?``
        in every context.
-    3. Markdown link destinations only: also strip a lone query flag when
-       the pre-``?`` *basename* ends with ``.`` plus an alphanumeric
-       extension (``[x](.omx/artifacts/report.md?raw)``,
-       ``[x](.omx/artifacts/report.md?download)``), or when the query uses
+    3. Markdown link destinations and reference definitions only: also
+       strip a lone query flag when the pre-``?`` *basename* ends with
+       ``.`` plus an alphanumeric extension
+       (``[x](.omx/artifacts/report.md?raw)``,
+       ``[x](./.omx/artifacts/report.md?raw)``,
+       ``[r]: .omx/artifacts/report.md?download``), or when the query uses
        ``&``. A ``?`` that is not after an extension stays a glob
        (``gate7-?.md``).
     4. Backticked or bare references: a lone ``?`` is a glob wildcard
