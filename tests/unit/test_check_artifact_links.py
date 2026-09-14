@@ -17,6 +17,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -217,6 +218,83 @@ def test_glob_does_not_match_outside_artifact_root(tmp_path: Path) -> None:
     assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
 
 
+def test_directory_symlink_inside_artifacts_is_not_a_glob_match(
+    tmp_path: Path, symlink_supported: bool
+) -> None:
+    """A dir symlink under `.omx/artifacts` must not contribute outside files."""
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    artifact_root = tmp_path / ".omx" / "artifacts"
+    artifact_root.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "foo-bar.md").write_text("x\n")
+    (artifact_root / "escape").symlink_to(outside, target_is_directory=True)
+    tracked: set[str] = set()
+
+    assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "stale"
+    assert chal.classify(".omx/artifacts/escape/*", tracked, tmp_path) == "stale"
+    (artifact_root / "foo-in.md").write_text("x\n")
+    assert chal.classify(".omx/artifacts/foo-*", tracked, tmp_path) == "dangling"
+
+
+def test_artifact_root_symlink_outside_fails_closed(
+    tmp_path: Path, symlink_supported: bool
+) -> None:
+    """If `.omx/artifacts` itself resolves outside the repo, fail closed."""
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    repo.mkdir()
+    outside.mkdir()
+    (outside / "foo-bar.md").write_text("x\n")
+    (repo / ".omx").mkdir()
+    (repo / ".omx" / "artifacts").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(chal.GuardError, match="outside"):
+        chal.classify(".omx/artifacts/foo-*", set(), repo)
+
+
+def test_artifact_root_symlink_outside_cli_exits_2(
+    repo: Path, tmp_path: Path, symlink_supported: bool
+) -> None:
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    _commit_paths(repo, "docs/notes.md")
+    outside = tmp_path / "outside-artifacts"
+    outside.mkdir()
+    (outside / "foo-bar.md").write_text("x\n")
+    artifacts = repo / ".omx" / "artifacts"
+    artifacts.rmdir()
+    artifacts.symlink_to(outside, target_is_directory=True)
+
+    code, out = _run(repo, "--targets", "docs")
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "outside" in out.lower()
+
+
+def test_os_walk_onerror_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Listing errors during on-disk glob matching must raise GuardError."""
+    (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
+    called = {"onerror": False}
+
+    def fake_walk(*args: object, **kwargs: object) -> Iterator[tuple[str, list[str], list[str]]]:
+        onerror = kwargs.get("onerror")
+        assert onerror is not None, "os.walk must receive an onerror callback"
+        assert callable(onerror)
+        called["onerror"] = True
+        onerror(PermissionError("permission denied"))
+        yield from ()
+
+    monkeypatch.setattr(chal.os, "walk", fake_walk)
+    with pytest.raises(chal.GuardError, match="permission denied"):
+        chal.classify(".omx/artifacts/foo-*", set(), tmp_path)
+    assert called["onerror"] is True
+
+
 def test_out_of_root_relative_target_fails_closed(repo: Path, tmp_path: Path) -> None:
     (repo / "docs" / "notes.md").write_text("clean\n")
     _commit_all(repo)
@@ -261,6 +339,22 @@ def test_in_root_absolute_target_still_works(repo: Path) -> None:
     assert "Traceback" not in out
 
 
+def test_self_symlink_loop_target_fails_closed(repo: Path) -> None:
+    """Path.resolve() RuntimeError on a self-symlink must be exit 2, no traceback."""
+    loop = repo / "docs" / "loop.md"
+    try:
+        loop.symlink_to(loop)
+    except OSError:
+        pytest.skip("file symlinks not supported on this host")
+    (repo / "docs" / "notes.md").write_text("clean\n")
+    _commit_paths(repo, "docs/notes.md")
+
+    code, out = _run(repo, "--targets", "docs/loop.md")
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "cannot resolve" in out.lower() or "symlink" in out.lower()
+
+
 def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
     (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
     (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
@@ -286,11 +380,14 @@ def test_markdown_fragment_on_untracked_file_is_dangling(repo: Path) -> None:
     (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
     _commit_paths(repo, "docs/notes.md")
 
+    refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
+    assert [ref.target for ref in refs] == [".omx/artifacts/report.md"]
+    assert refs[0].status == "dangling"
+
     code, out = _run(repo)
     assert code == 1, out
     assert "DANGLING" in out
     assert "report.md" in out
-    assert "#" not in out.split("report.md", 1)[1].splitlines()[0]
 
 
 def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
@@ -443,8 +540,9 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         ("[x](.omx/artifacts/report.md?raw=1)", [".omx/artifacts/report.md"]),
         ("详见 .omx/artifacts/c.md。", [".omx/artifacts/c.md"]),
         ("按 `.omx/artifacts/gate34-*` 定稿", [".omx/artifacts/gate34-*"]),
-        # A glob '?' wildcard is not a query string.
+        # A glob '?' wildcard is not a query string, even when the stem has dots.
         ("`.omx/artifacts/gate7-?.md`", [".omx/artifacts/gate7-?.md"]),
+        ("`.omx/artifacts/v1.2-?.md`", [".omx/artifacts/v1.2-?.md"]),
         ("见 `.omx/artifacts/health-20260909/`", [".omx/artifacts/health-20260909/"]),
         # Template placeholder names no file -> skipped.
         ("`.omx/artifacts/evo-lane-<id>-handback.md`", []),

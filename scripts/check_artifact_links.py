@@ -20,18 +20,22 @@ actually in the index. A fresh clone must be able to follow every citation.
 What it scans
 -------------
 By default: **tracked** markdown under the given roots (`docs/`, `README.md`,
-`CHANGELOG.md`, `ROADMAP.md`). Tracked-only is deliberate — the verdict then
-equals fresh-clone semantics, and an uncommitted draft cannot fail the guard.
-Use `--include-untracked` to also scan working-tree markdown.
+`CHANGELOG.md`, `ROADMAP.md`). Tracked-only is deliberate for the *citing
+documents* — an uncommitted draft cannot fail the guard, so the scan set
+matches fresh-clone semantics. Use `--include-untracked` to also scan
+working-tree markdown.
 
 Verdicts (per reference)
 ------------------------
-ok        target is in `git ls-files` (exact path, glob match, or dir prefix)
-dangling  target exists on disk but is NOT tracked  -> exit 1
+ok        target is in `git ls-files` (exact path, glob match, or dir prefix).
+          Tracked matching is index/fresh-clone based.
+dangling  target is NOT tracked, but an on-disk hit exists  -> exit 1
           This is the exact incident this guard is for: the doc cites an
           artifact that only lives on one machine. A glob such as
           `.omx/artifacts/foo-*` with no tracked match is dangling when one
           or more matching paths exist on disk under `.omx/artifacts`.
+          Dangling glob detection consults the working tree; a fresh clone
+          with no untracked files would classify the same glob as stale.
 stale     target is neither tracked nor on disk (e.g. a historical CHANGELOG
           entry for a gate synthesis that was never committed, or a glob
           with no on-disk match either)
@@ -140,17 +144,18 @@ def _strip_markdown_suffixes(raw: str) -> str:
     """Drop a Markdown/URL fragment or query from a captured path.
 
     `[x](.omx/artifacts/report.md#section)` must validate `report.md`.
-    A glob `?` wildcard (`gate7-?.md`) is kept; `report.md?raw=1` is not.
+    A glob `?` wildcard (`gate7-?.md`, `v1.2-?.md`) is kept; a key/value
+    query (`report.md?raw=1`) is stripped. The rule is conservative: only
+    ``=`` / ``&`` mark a query. Dots in the filename are not evidence of a
+    URL, so ``v1.2-?.md`` stays a glob.
     """
     raw = raw.split("#", 1)[0]
     qpos = raw.find("?")
     if qpos == -1:
         return raw
     after = raw[qpos + 1 :]
-    pre = raw[:qpos]
-    last_seg = pre.rsplit("/", 1)[-1]
-    if "=" in after or "&" in after or ("." in last_seg and after):
-        return pre
+    if "=" in after or "&" in after:
+        return raw[:qpos]
     return raw
 
 
@@ -162,19 +167,26 @@ def _kind(target: str) -> str:
     return "file"
 
 
+def _walk_onerror(err: OSError) -> None:
+    """Fail closed when ``os.walk`` cannot list an artifacts subdirectory."""
+    raise GuardError(f"cannot walk .omx/artifacts: {err}") from err
+
+
 def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
     """Yield repo-relative posix paths under a resolved `.omx/artifacts` root.
 
     `os.walk(..., followlinks=False)` so a glob cannot traverse out of the
-    artifact directory via `..` or directory symlinks.
+    artifact directory via `..` or directory symlinks. Listing errors raise
+    ``GuardError`` instead of being skipped.
     """
-    for dirpath, dirnames, filenames in os.walk(artifact_root, followlinks=False):
+    for dirpath, _dirnames, filenames in os.walk(
+        artifact_root, followlinks=False, onerror=_walk_onerror
+    ):
         dir_path = Path(dirpath)
         try:
             rel_dir = dir_path.relative_to(artifact_root).as_posix()
-        except ValueError:
-            dirnames.clear()
-            continue
+        except ValueError as extra:
+            raise GuardError(f"walk escaped artifact root {artifact_root}: {dirpath}") from extra
         if rel_dir == ".":
             rel_dir = ""
         if rel_dir:
@@ -185,10 +197,44 @@ def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
             yield ARTIFACT_PREFIX + rel
 
 
+def _resolve_path(path: Path, *, what: str) -> Path:
+    """Resolve ``path``, converting symlink loops and OS errors to GuardError."""
+    try:
+        return path.resolve()
+    except (RuntimeError, OSError) as exc:
+        raise GuardError(f"cannot resolve {what} ({path}): {exc}") from exc
+
+
+def _resolved_artifact_root(root: Path) -> Path | None:
+    """Return the in-repo `.omx/artifacts` directory, or None if absent.
+
+    A missing directory is not an error (no on-disk glob hits). If the path
+    exists as a symlink loop, or resolves outside the repository, raise
+    ``GuardError`` — the guard cannot safely decide whether a glob matches.
+    """
+    raw = root / ".omx" / "artifacts"
+    try:
+        present = raw.exists() or raw.is_symlink()
+    except OSError as exc:
+        raise GuardError(f"cannot access artifact root {raw}: {exc}") from exc
+    if not present:
+        return None
+    root_resolved = _resolve_path(root, what="repository root")
+    artifact_root = _resolve_path(raw, what="artifact root")
+    if not artifact_root.is_relative_to(root_resolved):
+        raise GuardError(f"artifact root {raw} resolves outside repository root {root_resolved}")
+    try:
+        if not artifact_root.is_dir():
+            return None
+    except OSError as extra:
+        raise GuardError(f"cannot access artifact root {artifact_root}: {extra}") from extra
+    return artifact_root
+
+
 def _on_disk_glob_match(root: Path, pattern: str) -> bool:
-    """True if any path under `.omx/artifacts` matches ``pattern``."""
-    artifact_root = (root / ".omx" / "artifacts").resolve()
-    if not artifact_root.is_dir():
+    """True if any in-repo path under `.omx/artifacts` matches ``pattern``."""
+    artifact_root = _resolved_artifact_root(root)
+    if artifact_root is None:
         return False
     return any(fnmatch.fnmatch(rel, pattern) for rel in _iter_on_disk_artifact_paths(artifact_root))
 
@@ -216,15 +262,18 @@ def list_tracked(root: Path) -> set[str]:
     Git is invoked in binary mode (``text=False``). Decoding is UTF-8 with
     ``surrogateescape`` so a Windows cp1252 locale cannot drop CJK paths.
     """
-    proc = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z"],
-        capture_output=True,
-        text=False,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            capture_output=True,
+            text=False,
+            check=False,
+        )
+    except OSError as exc:
+        raise GuardError(f"git ls-files failed in {root}: {exc}") from exc
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="surrogateescape").strip()
-        raise RuntimeError(f"git ls-files failed in {root}: {err}")
+        raise GuardError(f"git ls-files failed in {root}: {err}")
     stdout = proc.stdout.decode("utf-8", errors="surrogateescape")
     return {entry for entry in stdout.split("\0") if entry}
 
@@ -247,8 +296,8 @@ def _resolve_in_root(root: Path, target: str) -> Path:
     outside ``root``, whether or not the path exists — a missing out-of-root
     target is still a bad argument, not a skipped scan root.
     """
-    root_resolved = root.resolve()
-    candidate = (root / target).resolve()
+    root_resolved = _resolve_path(root, what="repository root")
+    candidate = _resolve_path(root / target, what=f"target {target!r}")
     if not candidate.is_relative_to(root_resolved):
         raise GuardError(f"target {target!r} is outside repository root {root_resolved}")
     return candidate
@@ -267,7 +316,7 @@ def iter_markdown(
     error). Out-of-root targets raise ``GuardError``.
     """
     seen: set[str] = set()
-    root_resolved = root.resolve()
+    root_resolved = _resolve_path(root, what="repository root")
     for target in targets:
         candidate = _resolve_in_root(root, target)
         if not candidate.exists():
@@ -278,7 +327,8 @@ def iter_markdown(
             paths = sorted(p for p in candidate.rglob("*.md") if p.is_file())
         for path in paths:
             try:
-                rel = path.resolve().relative_to(root_resolved).as_posix()
+                resolved = _resolve_path(path, what="scanned path")
+                rel = resolved.relative_to(root_resolved).as_posix()
             except ValueError as extra:
                 raise GuardError(
                     f"scanned path {path} is outside repository root {root_resolved}"
@@ -359,40 +409,30 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
-    root: Path = args.root.resolve()
 
     try:
+        root = _resolve_path(args.root, what="--root")
         tracked = (
             read_tracked_list(args.tracked_list)
             if args.tracked_list is not None
             else list_tracked(root)
         )
-    except (RuntimeError, GuardError, OSError, UnicodeDecodeError) as exc:
-        print(f"check_artifact_links: cannot determine tracked set: {exc}", file=sys.stderr)
-        return 2
-
-    try:
         refs = scan(root, args.targets, tracked, args.include_untracked)
-    except (GuardError, OSError, UnicodeDecodeError, ValueError) as extra:
+        if not refs:
+            # Nothing scanned is not the same as nothing wrong.
+            scanned = list(iter_markdown(root, args.targets, tracked, args.include_untracked))
+            if not scanned:
+                print(
+                    "check_artifact_links: no markdown scanned — check --root/--targets.",
+                    file=sys.stderr,
+                )
+                return 2
+            if not args.quiet:
+                print(f"OK: {len(scanned)} markdown file(s) scanned, no artifact references.")
+            return 0
+    except (GuardError, OSError) as extra:
         print(f"check_artifact_links: {extra}", file=sys.stderr)
         return 2
-
-    if not refs:
-        # Nothing scanned is not the same as nothing wrong.
-        try:
-            scanned = list(iter_markdown(root, args.targets, tracked, args.include_untracked))
-        except OSError as exc:
-            print(f"check_artifact_links: {exc}", file=sys.stderr)
-            return 2
-        if not scanned:
-            print(
-                "check_artifact_links: no markdown scanned — check --root/--targets.",
-                file=sys.stderr,
-            )
-            return 2
-        if not args.quiet:
-            print(f"OK: {len(scanned)} markdown file(s) scanned, no artifact references.")
-        return 0
 
     dangling = [ref for ref in refs if ref.status == "dangling"]
     stale = [ref for ref in refs if ref.status == "stale"]
