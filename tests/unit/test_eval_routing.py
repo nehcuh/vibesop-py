@@ -133,6 +133,46 @@ def _run_eval_check(
     return rc, json.loads(out.read_text(encoding="utf-8"))
 
 
+def _run_eval_update(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    entries: list[dict],
+    *,
+    responses: dict[str, tuple[str | None, bool]] | None = None,
+) -> tuple[int, Path]:
+    """Hermetic --update-baseline against a missing temp baseline.
+
+    Isolates the must_not_inject hard-refuse: no prior baseline means
+    check_update_absorption returns None, and --force is unused.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    dataset = tmp_path / "eval.yaml"
+    dataset.write_text(yaml.safe_dump(entries, allow_unicode=True), encoding="utf-8")
+    baseline = tmp_path / "baseline.json"
+    monkeypatch.setattr(evr, "UnifiedRouter", _fake_router(responses or {}))
+    monkeypatch.setattr(
+        evr,
+        "_build_hermetic_router",
+        lambda: (_fake_router(responses or {})(None), {"builtin": tmp_path}, set()),
+    )
+    monkeypatch.setattr(evr, "compute_fingerprint", lambda **_kw: _CHECK_FINGERPRINT)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "eval_routing.py",
+            "--hermetic",
+            "--update-baseline",
+            "--file",
+            str(dataset),
+            "--baseline",
+            str(baseline),
+        ],
+    )
+    rc = evr.main()
+    return rc, baseline
+
+
 def test_skipped_env_excluded_from_denominator_and_errors(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -326,7 +366,8 @@ def test_two_sided_error_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert m["n_neg"] == 2
     assert m["over_inject"] == 1
     # FakeRouter reports layer "lexical" whenever primary exists.
-    assert m["no_match_by_layer"] == {"lexical": 2, "no_match": 2}
+    assert m["routing_outcomes_by_layer"] == {"lexical": 2, "no_match": 2}
+    assert "no_match_by_layer" not in m
     assert m["no_match_rate"] == 0.5
     assert m["n_near_miss"] == 0
     assert m["near_miss_over_inject"] == 0
@@ -537,6 +578,73 @@ def test_report_only_counters_do_not_change_check_exit(
     assert m1["over_reject"] == m0["over_reject"]
     assert m1["n_pos"] == m0["n_pos"]
     assert m1["n_neg"] == m0["n_neg"]
+
+
+def test_reject_only_outside_binary_denom_stays_in_total_and_no_match_rate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reject-only rows stay outside n_pos/n_neg but remain in total, so
+    no_match_rate is no_match/total — not no_match/(n_pos+n_neg)."""
+    entries = [
+        {"query": "pos hit", "expect": ["builtin/session-end"]},
+        {
+            "query": "reject only",
+            "expect": [],
+            "reject": ["builtin/session-end"],
+        },
+    ]
+    rc, m = _run_eval(
+        monkeypatch,
+        tmp_path,
+        entries,
+        resolvable=({"builtin/session-end"}, set()),
+        responses={
+            "pos hit": ("builtin/session-end", True),
+            "reject only": (None, False),
+        },
+    )
+    assert rc == 0
+    assert m["n_pos"] == 1
+    assert m["n_neg"] == 0
+    assert m["total"] == 2
+    assert m["n_pos"] + m["n_neg"] == 1
+    # 1 no-match / 2 scored; dividing by n_pos+n_neg would yield 1.0.
+    assert m["no_match_rate"] == 0.5
+    assert m["routing_outcomes_by_layer"] == {"lexical": 1, "no_match": 1}
+    assert "no_match_by_layer" not in m
+
+
+def test_near_miss_outside_must_not_inject_hard_refuse(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """category: near_miss with ok1 false is not absorbed into the
+    must_not_inject hard-refuse list; a must_not_inject fail still refuses."""
+    near_miss_entries = [
+        {"query": "nm injected", "expect": [], "category": "near_miss"},
+    ]
+    rc_nm, baseline_nm = _run_eval_update(
+        monkeypatch,
+        tmp_path / "near-miss",
+        near_miss_entries,
+        responses={"nm injected": ("builtin/session-end", True)},
+    )
+    assert rc_nm == 0
+    assert baseline_nm.exists()
+    written = json.loads(baseline_nm.read_text(encoding="utf-8"))
+    assert written["entries"][0]["category"] == "near_miss"
+    assert written["entries"][0]["ok1"] is False
+
+    hard_refuse_entries = [
+        {"query": "neg inject", "expect": [], "category": "must_not_inject"},
+    ]
+    rc_hard, baseline_hard = _run_eval_update(
+        monkeypatch,
+        tmp_path / "hard-refuse",
+        hard_refuse_entries,
+        responses={"neg inject": ("builtin/session-end", True)},
+    )
+    assert rc_hard == 1
+    assert not baseline_hard.exists()
 
 
 def test_extended_yaml_requires_packs_namespaces_valid() -> None:

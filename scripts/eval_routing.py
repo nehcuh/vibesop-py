@@ -42,7 +42,10 @@ baseline gate). Per-entry booleans, negative-label precedence first:
 - over_inject  — every negative entry with a real match (closed with n_neg)
 - near_miss_over_inject — subset of over_inject (near-miss + real match)
 - reject-only entries (empty expect, nonempty reject, no negative label)
-                 stay outside the binary denominator
+                 stay outside the binary denominator (n_pos / n_neg)
+- routing_outcomes_by_layer — one bucket per matched layer plus ``no_match``
+- no_match_rate — no_match_count / total over all scored entries
+                 (including reject-only); not divided by n_pos + n_neg
 - near_miss is NOT added to --update-baseline's must_not_inject
                  hard-refuse list
 
@@ -323,7 +326,7 @@ def main() -> int:
     over_reject = over_inject = 0
     n_near_miss = near_miss_over_inject = 0
     no_match_count = 0
-    no_match_by_layer: dict[str, int] = {}
+    routing_outcomes_by_layer: dict[str, int] = {}
     errors: list[dict] = []
     per_query: list[dict] = []
     baseline_records: list[dict] = []
@@ -397,7 +400,7 @@ def main() -> int:
             if result.has_match:
                 near_miss_over_inject += 1
         if result.has_match:
-            no_match_by_layer[layer] = no_match_by_layer.get(layer, 0) + 1
+            routing_outcomes_by_layer[layer] = routing_outcomes_by_layer.get(layer, 0) + 1
         else:
             no_match_count += 1
         baseline_records.append(
@@ -448,7 +451,7 @@ def main() -> int:
     # skipped_env entries count in neither total (denominator) nor errors;
     # guard against an all-skipped dataset dividing by zero.
     total = len(entries) - skipped_env_count
-    no_match_by_layer["no_match"] = no_match_count
+    routing_outcomes_by_layer["no_match"] = no_match_count
     no_match_rate = round(no_match_count / total, 4) if total else 0.0
     metrics = {
         "total": total,
@@ -461,7 +464,7 @@ def main() -> int:
         "n_neg": n_neg,
         "over_reject": over_reject,
         "over_inject": over_inject,
-        "no_match_by_layer": no_match_by_layer,
+        "routing_outcomes_by_layer": routing_outcomes_by_layer,
         "no_match_rate": no_match_rate,
         "n_near_miss": n_near_miss,
         "near_miss_over_inject": near_miss_over_inject,
@@ -503,7 +506,7 @@ def main() -> int:
             f"(over-inject {near_miss_over_inject})"
         )
         print(
-            f"no-match by layer: {json.dumps(no_match_by_layer)} | "
+            f"routing outcomes by layer: {json.dumps(routing_outcomes_by_layer)} | "
             f"no-match rate: {no_match_rate:.1%}"
         )
         if errors:
