@@ -42,7 +42,7 @@
 - `tests/conftest.py`: session-scoped `symlink_supported` fixture; 23 symlink tests use it.
 - 12 exec-bit assertions guarded `if sys.platform != "win32":` (line-level, coverage retained).
 - Path assertions normalized (`as_posix()` / `Path.parts`); timing flakes pinned deterministically; `skill_auditor.py:577` silent skip gains debug log; `kimi_cli.py:189` merge read → fallback helper.
-- New `tests/utils/test_symlinks.py` (8 tests) incl. mock-OSError fallback coverage (pays ROADMAP.md:592 debt).
+- New `tests/utils/test_symlinks.py` (8 tests) incl. mock-OSError fallback coverage (pays `docs/archive/roadmap-through-8.3.md:640` debt).
 
 ## Phase 4 — Test isolation + CI + docs (4 files)
 

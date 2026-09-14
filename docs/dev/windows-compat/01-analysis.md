@@ -44,7 +44,7 @@ Test-side bugs (src correct, test wrong):
 - Real src bugs:
   - `core/skills/storage.py:294` — `symlink_to(skill_path)` **missing `target_is_directory=True`** → even privileged Windows builds a broken file-type link to a directory.
   - `core/skills/storage.py:370` — pack discovery hardcodes `if not entry.is_symlink(): continue` → after copy-fallback, pack skills are **invisible to `vibe skills list`**.
-- ROADMAP already tracks the debt: `docs/ROADMAP.md:592` (symlink→copytree fallback lacks tests).
+- ROADMAP already tracks the debt: `docs/archive/roadmap-through-8.3.md:640` (symlink→copytree fallback lacks tests).
 - Junction alternative **rejected**: `Path.is_symlink()` returns False for junctions → breaks all existing checks; junction creation needs subprocess/ctypes.
 
 ## (c) Executable bit — 14 failures

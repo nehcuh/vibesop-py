@@ -25,7 +25,7 @@
 | `docs/essays/2026-09-11-wechat-never-converge*.md` | §4 主材料 | 「评审不收敛」案例与数据 |
 | `docs/essays/2026-09-11-harness-hot-takes.md` | §7 观点源 | 五条爆论作为综合发现的候选条目 |
 | `docs/research/2026-09-09-agent-skills-paper.md` | §8 对照 | arXiv 2608.14036 对照笔记 |
-| `docs/ROADMAP.md` + `docs/specs/2026-09-11-*` | §5 / §9 素材 | 演进提案 E→D→C→A→B 与 R1-R7 收口需求 |
+| `docs/archive/roadmap-through-8.3.md` + `docs/specs/2026-09-11-*` | §5 / §9 素材 | 演进提案 E→D→C→A→B 与 R1-R7 收口需求 |
 
 **目标读者**：① 三个月后的我们自己（对抗遗忘曲线，比 git log 更完整的判断脉络）；② 同在做 agent 基建的工程师；③ 公众号读者（本综述可拆分为 3-4 篇独立成文，拆分点见附录 E）。
 
@@ -445,13 +445,13 @@ timeline
 
 | # | 假设 | 判决实验 | 裁决 | 置信度与限制 |
 |---|---|---|---|---|
-| H5 | LLM 评审可以当放行闸 | S67/S78/S81 Claude 复审三连（`--tools ""` 编造不存在 API 后 APPROVE 等） | **证伪 → 机制化**：ROADMAP:35 禁令 + evo B `decision_source` 注册表把它从宣言变成闸 | 机制落在 `feat/evo-wave1`（PR #120，截至 2026-09-12 **未合入 main**） |
+| H5 | LLM 评审可以当放行闸 | S67/S78/S81 Claude 复审三连（`--tools ""` 编造不存在 API 后 APPROVE 等） | **证伪 → 机制化**：`docs/archive/roadmap-through-8.3.md:39` 禁令 + evo B `decision_source` 注册表把它从宣言变成闸 | 机制落在 `feat/evo-wave1`（PR #120，截至 2026-09-12 **未合入 main**） |
 
 **翻车不是挂掉，是自信地放行。** 三个 session 的记录（详见案例 4d）给出同一个教训：LLM 评审最危险的不是拒绝工作，而是**在没有取证能力时编造取证然后 APPROVE**——S67（2026-09-03）Claude `-p` 带 Read 工具挂死；改用 `--tools ""` 后 14 秒出稿，稿子里引用了**不存在的 SkillInjection API**，然后给出 APPROVE。产物当场标「不可靠」。这不是「模型不行换模型」的问题，而是「无工具评审的结构性失败模式 = 编造证据后自信放行」——恰好是放行闸最不能接受的失败方向（fail-dangerous，而非 fail-safe）。
 
 **同一台机器，配置对了能用。** S78（2026-09-09）用 `--bare --permission-mode dontAsk --allowedTools Read,Grep,Glob`（刻意避开 `--tools ""` 编造路径）跑同一冻结包：Claude 给出 REQUEST CHANGES，C1–C8 全部 CONFIRMED【文档，lane 自证】。所以 H5 的准确裁决不是「Claude 不能评审」，而是：**LLM 评审的可用性是「工具协议 × 产物要求」的函数，而它的失败模式不可预测（同一配置 S78 成功、S81 挂死 600s）——不可预测的东西不能当闸**。闸的要义是红灯绿灯语义确定，这一点只有确定性工具和人能做到。
 
-**从禁令到机制。** ROADMAP 第 35 行早就写着禁令「把 LLM 评审当放行闸」，但很长时间它只是一句文档——直到 2026-09-11 evo B 把它做成 CI 机制：**每个 job 必须登记 `decision_source: deterministic | human`；登记成模型输出的 required job 直接红灯**；`routing-eval` 那份给人看的 JSON 标 `human`，永不挡合并。落地记录：`feat/evo-wave1` 分支 `220ddd41`（registry + drift guard）+ `6cb371f9`（守卫接为 required job），守卫 9/9、hermetic --check 0【文档：session 记录】。为什么必须机制化？不收敛研究的话：「一旦把不可判定的 J 类输出接到 exit code 上，仓库会进入『永远修不完、永远合不了』的稳态。那不是质量，是仪式。」
+**从禁令到机制。** 冻结路线图 [`docs/archive/roadmap-through-8.3.md:39`](../archive/roadmap-through-8.3.md) 写着禁令「把 LLM 评审当放行闸」，但很长时间它只是一句文档——直到 2026-09-11 evo B 把它做成 CI 机制：**每个 job 必须登记 `decision_source: deterministic | human`；登记成模型输出的 required job 直接红灯**；`routing-eval` 那份给人看的 JSON 标 `human`，永不挡合并。落地记录：`feat/evo-wave1` 分支 `220ddd41`（registry + drift guard）+ `6cb371f9`（守卫接为 required job），守卫 9/9、hermetic --check 0【文档：session 记录】。为什么必须机制化？不收敛研究的话：「一旦把不可判定的 J 类输出接到 exit code 上，仓库会进入『永远修不完、永远合不了』的稳态。那不是质量，是仪式。」
 
 ---
 
@@ -668,7 +668,7 @@ flowchart LR
 | F4 发现不收敛，决策才收敛 | §4.1 三层证据 + 图 6 漏斗（批 C 脉冲、跨窗口再爆） |
 | F5 多路互补是覆盖率问题 | §4.5 重叠矩阵（0 条双路共判 MAJOR、C 独抓部署面）+ 案例 4e（W5.2 两道评审互补） |
 | F6 先反驳后采信 | 案例 4c（27→12 / 27→23 / 19→17，0 未核实） |
-| F10 禁令要变成机制 | §4.2（ROADMAP:35 → decision_source 注册表）+ 不声称 ⑤（产物丢失的活实证） |
+| F10 禁令要变成机制 | §4.2（`docs/archive/roadmap-through-8.3.md:39` → decision_source 注册表）+ 不声称 ⑤（产物丢失的活实证） |
 
 ---
 
@@ -685,7 +685,7 @@ flowchart LR
 
 1. 负样本误报曾达 **5/7**，且每次误报都挂着**恒定 82%** 的置信度——一个硬编码的数字在冒充分数（2026-08-29 审计【文档】）；
 2. BM25 在中文真实 query 上零召回——检索层的语言依赖坑（2026-07-29 预检【文档】）；
-3. 产品命题已改口「**找不到匹配是成功**」（`docs/ROADMAP.md:11`：技能图集是可点名方法卡，不是常驻专家编制【文档】），却长期没有任何数字在测 no-match 发生率是否合理——提案现状盘点原话：「'找不到匹配是成功'无任何数字在测」【文档，evolution-direction-proposal §2】。
+3. 产品命题已改口「**找不到匹配是成功**」（`docs/archive/roadmap-through-8.3.md:13`：技能图集是可点名方法卡，不是常驻专家编制【文档】），却长期没有任何数字在测 no-match 发生率是否合理——提案现状盘点原话：「'找不到匹配是成功'无任何数字在测」【文档，evolution-direction-proposal §2】。
 
 修复沿三步推进：**确定性纪律**（hermetic 六步中和 + 内容指纹 + 吸收守卫）→ **双向误差度量**（过灌/过拒混淆计数 + near_miss 负例 + 生产聚合）→ **语义层观测**（profile-semantic 画像）。
 
@@ -711,7 +711,7 @@ evo A 实测两条稳定度全部恰为 1.0，命中证伪 (b)。lane 按任务�
 
 **H8 展开：从口号到数字的链条**。
 
-「找不到匹配是成功」的命题链条：R1-R8 系列实验（R4 为方案评审轮，非 A/B）改口产品命题 → W1-D5「生成规则改口：no-match 是正常输出」随 8.3.0 交付（ROADMAP:11/20【文档】）→ 但度量缺位 → 方向 D 三件套补位（report-only 双向误差计数 / near_miss 负例 ≥10 条 / 生产聚合脚本）【文档，提案 §3】。
+「找不到匹配是成功」的命题链条：R1-R8 系列实验（R4 为方案评审轮，非 A/B）改口产品命题 → W1-D5「生成规则改口：no-match 是正常输出」随 8.3.0 交付（`docs/archive/roadmap-through-8.3.md:13/24`【文档】）→ 但度量缺位 → 方向 D 三件套补位（report-only 双向误差计数 / near_miss 负例 ≥10 条 / 生产聚合脚本）【文档，提案 §3】。
 
 H8 的判决实验是一条接力链，每一环解决上一环暴露的缺口：
 
@@ -876,7 +876,7 @@ flowchart TD
 
 **禁门禁的是随机/语义层**，三条独立依据【文档】：
 
-1. `docs/ROADMAP.md` 禁止清单：「把 LLM 评审当放行闸」；
+1. `docs/archive/roadmap-through-8.3.md:39` 禁止清单：「把 LLM 评审当放行闸」（现行 `docs/ROADMAP.md` 约束仍禁止以 LLM 输出作为发行闸）；
 2. `routing-benchmark.md:4-7` 先例：Routing Eval（gate38）**永久 report-only**——数字依赖本机安装的 packs 与本地技能索引，「是给人看的，永远不用于门禁」；hermetic benchmark 是它的「同入口、钉死宇宙、可进 CI」的孪生；
 3. 提案 §3-A 设计论证原话：「**任何阈值化都会把随机层做成 flaky gate**」。
 

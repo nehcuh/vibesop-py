@@ -4,6 +4,7 @@ This directory contains historical and intermediate documentation files that are
 
 ## Files
 
+- **[roadmap-through-8.3.md](roadmap-through-8.3.md)** — Frozen 804-line product roadmap through public 8.3.0 (moved from `docs/ROADMAP.md` on 2026-09-14). Claims and line numbers are preserved; only relative links were adjusted for this directory. Current direction: [docs/ROADMAP.md](../ROADMAP.md).
 - **[agent-integration-legacy.md](agent-integration-legacy.md)** - Agent integration documentation (superseded by docs/agent-integration.md)
 - **core-usecase-analysis.md** - Core use case analysis (archived 2026-04-29)
 - **DELIVERY_SUMMARY.md** - Delivery summary (archived 2026-04-29)

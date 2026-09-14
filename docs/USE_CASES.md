@@ -361,7 +361,7 @@ VibeSOP **不是**下列工具，强行用反而低效：
 | 长时间运行任务（>1 小时） | Loop v1 不支持 | CI/CD pipeline |
 | 需要图形界面 | 纯 CLI | IDE 插件 |
 | 修改 skill 内容 | VibeSOP 不生产技能内容 | 找 skill pack 作者 |
-| 数据库迁移等高风险操作 | 没有 Guard 系统（v8.1 才有） | 手动 + 人审 |
+| 数据库迁移等高风险操作 | 没有 Guard 系统（尚未实现） | 手动 + 人审 |
 
 ---
 
@@ -403,6 +403,6 @@ vibe instinct status                   # 模式学习
 - **想跨平台**：[`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) 安装指南
 - **想做 loop**：[`loop-setup-guide.md`](loop-setup-guide.md) 24 小时部署
 - **想理解原理**：[`PHILOSOPHY.md`](PHILOSOPHY.md) 设计哲学
-- **想看路线图**：[`ROADMAP.md`](ROADMAP.md) v4.x → v8.0
+- **想看路线图**：[`ROADMAP.md`](ROADMAP.md)（当前 8.3.0 / 未发布 8.4.0 候选；历史稿 [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md)）
 
 遇到具体场景不在本文档里？提个 issue，加进下一版。

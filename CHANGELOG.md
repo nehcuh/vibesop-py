@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This branch is an unreleased **8.4.0** minor candidate (Trust & Evidence).
+Public package metadata, PyPI, GitHub Release, and README badges remain
+**8.3.0**. The version bump happens only in a later release commit after
+merge readiness; see `docs/ROADMAP.md` for the exact gates.
+
+### Added
+
+- **Two-sided routing evaluation and `top_k` propagation**:
+  `scripts/eval_routing.py` reports over-reject and over-inject without
+  changing hermetic `--check` exit codes. `LazyEmbeddingMatcher` accepts
+  `MatcherPipeline`'s `top_k`. Hermetic dataset on this checkpoint:
+  55 total / 53 scored / 2 skipped; top-1 47/53; positive 31 (4 over-reject);
+  negative 20 (2 over-inject); near_miss 14 (2 over-inject); 6 known failures.
+- **14 `near_miss` negatives** in `tests/benchmark/routing_eval.yaml`,
+  report-only (not folded into `must_not_inject`). Hermetic baseline
+  refreshed to include them.
+- **Production no-match aggregator** (`scripts/aggregate_nomatch.py`):
+  windowed `route:` span rate with Wilson 95% CI; fail-soft on missing
+  input; not a CI gate.
+- **CI `decision_source` registry** (`ci/decision-source.yaml`) and
+  required drift guard (`scripts/check_ci_decision_source.py`). Every
+  `.github/workflows/ci.yml` job must declare `deterministic` or `human`;
+  model output may not gate a required job. Current registry: 10/10 jobs.
+- **Artifact citation guard** (`scripts/check_artifact_links.py`) plus an
+  exact frozen-debt baseline (`ci/artifact-links-baseline.json`). Dangling
+  refs are always fatal. Checkpoint scan: 859 refs = 428 ok + 431 historical
+  nontracked occurrences across 423 keys + 0 dangling. The baseline is
+  transitional, not a permanent waiver.
+
+### Documentation
+
+- Freeze the 804-line through-8.3 roadmap at
+  `docs/archive/roadmap-through-8.3.md`. Replace `docs/ROADMAP.md` with the
+  current 8.3.0 / unreleased-8.4.0 candidate boundary, 8.4 slices, release
+  gates, and next-optimization order A–E.
+
 ## [8.3.0] — 2026-09-14
 
 ### Documentation and positioning
