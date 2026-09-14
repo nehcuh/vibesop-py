@@ -37,8 +37,12 @@ When ``n_scored == 0`` the rate and Wilson bounds are JSON ``null`` and
 the human line says the rate is unavailable — never ``0%``.
 
 ``metadata`` may be a dict (Span.to_dict) or a JSON string (SpanWriter
-serialises it before the JSONL write). Corrupt lines are skipped and
+serialises it before the JSONL write). Corrupt lines — invalid JSON,
+non-object JSON, or a line that is not valid UTF-8 — are skipped and
 counted as ``n_corrupt``, never silently treated as match or no-match.
+The file is read as bytes and decoded per line so a truncated CJK
+append cannot ``UnicodeDecodeError`` the whole file (that exception is
+a ``ValueError`` and would otherwise hit argparse exit 2).
 
 Windowing: ``--since`` ISO8601 compares against ``started_at`` (legacy
 ``timestamp`` fallback in ``_span_fields``); naive values are read as
@@ -164,6 +168,7 @@ def aggregate(
 
     Never raises on missing/unreadable files or corrupt lines (fail-soft
     observer); a missing file is reported as ``{"error": ...}``. Invalid
+    UTF-8 lines are ``n_corrupt``, not a ``UnicodeDecodeError``. Invalid
     ``since`` is raised as ``ValueError`` *before* the file is checked, so
     bad user input is never masked by a missing path.
     """
@@ -179,9 +184,16 @@ def aggregate(
     n_route = n_nomatch = n_hit = n_unscored = n_no_ts = n_corrupt = 0
     nomatch_by_layer: Counter[str] = Counter()
     try:
-        with spans_path.open("r", encoding="utf-8") as f:
+        # Bytes + per-line UTF-8: a truncated multibyte append must not
+        # UnicodeDecodeError the whole file (UnicodeDecodeError is a
+        # ValueError, and main() would map that to argparse exit 2).
+        with spans_path.open("rb") as f:
             for raw_line in f:
-                line = raw_line.strip()
+                try:
+                    line = raw_line.decode("utf-8-sig").strip()
+                except UnicodeDecodeError:
+                    n_corrupt += 1
+                    continue
                 if not line:
                     continue
                 try:

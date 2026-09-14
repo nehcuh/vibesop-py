@@ -160,6 +160,26 @@ def test_corrupt_lines_skipped(agg: ModuleType, tmp_path: Path) -> None:
     assert report["n_corrupt"] == 2
 
 
+def test_invalid_utf8_line_is_corrupt_not_argparse_exit(agg: ModuleType, tmp_path: Path) -> None:
+    """A truncated CJK append must not UnicodeDecodeError into argparse exit 2.
+
+    UnicodeDecodeError is a ValueError; the fail-soft observer must count
+    the bad line as n_corrupt and still score the valid route span.
+    """
+    good = json.dumps(
+        _route_span("hit", metadata={"has_match": False, "skill_id": ""}),
+        ensure_ascii=False,
+    )
+    path = tmp_path / "spans.jsonl"
+    path.write_bytes(good.encode("utf-8") + b"\n\xff\xfe truncated\n")
+    code, report, _ = _run_json(agg, path)
+    assert code == 0
+    assert report["n_route"] == 1
+    assert report["n_nomatch"] == 1
+    assert report["n_corrupt"] == 1
+    assert "error" not in report
+
+
 def test_field_precedence(agg: ModuleType, tmp_path: Path) -> None:
     """has_match > string skill_id > string primary > layer fallback_llm."""
     spans = [

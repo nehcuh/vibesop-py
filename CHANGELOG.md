@@ -38,6 +38,13 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   nontracked occurrences across 423 keys + 0 dangling. The baseline is
   transitional, not a permanent waiver.
 
+### Fixed
+
+- **`aggregate_nomatch` fail-soft on invalid UTF-8**: read spans JSONL as
+  bytes and decode per line. A truncated CJK append no longer
+  `UnicodeDecodeError`s the whole file into argparse exit 2; the bad
+  line is `n_corrupt` and valid route spans still score.
+
 ### Documentation
 
 - Freeze the 804-line through-8.3 roadmap at
