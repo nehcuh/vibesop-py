@@ -520,6 +520,19 @@ class TestLazyEmbeddingMatcher:
         mock_real.match.assert_called_once()
         assert isinstance(result, list)
 
+    def test_match_forwards_pipeline_top_k(self):
+        """MatcherPipeline calls match(..., top_k=...). The lazy proxy must
+        accept that kwarg — without it enable_embedding=True TypeErrors
+        (lane A profile, 2026-09-11)."""
+        cfg = MatcherConfig()
+        lazy = LazyEmbeddingMatcher(cfg)
+        mock_real = MagicMock()
+        mock_real.match.return_value = []
+        lazy._real = mock_real
+        candidates = _make_candidates("test")
+        lazy.match("query", candidates, None, top_k=7)
+        mock_real.match.assert_called_once_with("query", candidates, None, top_k=7)
+
     def test_getattr_defers(self):
         cfg = MatcherConfig()
         lazy = LazyEmbeddingMatcher(cfg)
