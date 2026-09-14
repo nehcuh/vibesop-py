@@ -180,6 +180,94 @@ def test_invalid_utf8_line_is_corrupt_not_argparse_exit(agg: ModuleType, tmp_pat
     assert "error" not in report
 
 
+def test_corrupt_line_between_valid_spans_scores_both_and_human_shows_count(
+    agg: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A bad line between two valid route spans must not drop either span.
+
+    Human output always includes corrupt=<N> so fail-soft skips stay visible.
+    """
+    hit = json.dumps(
+        _route_span("hit", metadata={"has_match": True, "skill_id": "builtin/x"}),
+        ensure_ascii=False,
+    )
+    miss = json.dumps(
+        _route_span("miss", metadata={"has_match": False, "skill_id": ""}),
+        ensure_ascii=False,
+    )
+    path = tmp_path / "spans.jsonl"
+    path.write_bytes(hit.encode("utf-8") + b"\n\xff\xfe truncated\n" + miss.encode("utf-8") + b"\n")
+    code, report, _ = _run_json(agg, path)
+    assert code == 0
+    assert report["n_route"] == 2
+    assert report["n_hit"] == 1
+    assert report["n_nomatch"] == 1
+    assert report["n_scored"] == 2
+    assert report["n_corrupt"] == 1
+    assert "error" not in report
+
+    human_code = agg.main(["--spans", str(path)])
+    out = capsys.readouterr().out
+    assert human_code == 0
+    assert "corrupt=1" in out
+    assert "n_route=2" in out
+    assert "n_nomatch=1" in out
+
+
+def test_leading_utf8_bom_is_stripped_from_first_line_only(agg: ModuleType, tmp_path: Path) -> None:
+    """A file-level UTF-8 BOM is a signature, not payload, and must still score."""
+    good = json.dumps(
+        _route_span("hit", metadata={"has_match": True, "skill_id": "builtin/x"}),
+        ensure_ascii=False,
+    )
+    path = tmp_path / "spans.jsonl"
+    path.write_bytes(b"\xef\xbb\xbf" + good.encode("utf-8") + b"\n")
+    code, report, _ = _run_json(agg, path)
+    assert code == 0
+    assert report["n_route"] == 1
+    assert report["n_hit"] == 1
+    assert report["n_corrupt"] == 0
+
+
+def test_midfile_bom_is_not_stripped_and_counts_as_corrupt(
+    agg: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """utf-8-sig on every line would hide a mid-file BOM by stripping U+FEFF.
+
+    Only the first line may drop a BOM; a later leading U+FEFF stays in the
+    payload, JSON fails, and the line is n_corrupt. The surrounding valid
+    spans still score.
+    """
+    hit = json.dumps(
+        _route_span("hit", metadata={"has_match": True, "skill_id": "builtin/x"}),
+        ensure_ascii=False,
+    )
+    miss = json.dumps(
+        _route_span("miss", metadata={"has_match": False, "skill_id": ""}),
+        ensure_ascii=False,
+    )
+    path = tmp_path / "spans.jsonl"
+    path.write_bytes(
+        hit.encode("utf-8")
+        + b"\n\xef\xbb\xbf"
+        + miss.encode("utf-8")
+        + b"\n"
+        + hit.encode("utf-8")
+        + b"\n"
+    )
+    code, report, _ = _run_json(agg, path)
+    assert code == 0
+    assert report["n_route"] == 2  # first hit + third hit; BOM-prefixed miss is corrupt
+    assert report["n_hit"] == 2
+    assert report["n_nomatch"] == 0
+    assert report["n_corrupt"] == 1
+
+    human_code = agg.main(["--spans", str(path)])
+    out = capsys.readouterr().out
+    assert human_code == 0
+    assert "corrupt=1" in out
+
+
 def test_field_precedence(agg: ModuleType, tmp_path: Path) -> None:
     """has_match > string skill_id > string primary > layer fallback_llm."""
     spans = [
@@ -327,6 +415,7 @@ def test_human_default_one_line(
     assert "n_route=2" in lines[0]
     assert "n_nomatch=1" in lines[0]
     assert "rate=0.5" in lines[0]
+    assert "corrupt=0" in lines[0]
     assert "scoring_coverage=1.0000" in lines[0]
 
 

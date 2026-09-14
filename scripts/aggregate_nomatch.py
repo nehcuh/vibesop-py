@@ -42,7 +42,11 @@ non-object JSON, or a line that is not valid UTF-8 — are skipped and
 counted as ``n_corrupt``, never silently treated as match or no-match.
 The file is read as bytes and decoded per line so a truncated CJK
 append cannot ``UnicodeDecodeError`` the whole file (that exception is
-a ``ValueError`` and would otherwise hit argparse exit 2).
+a ``ValueError`` and would otherwise hit argparse exit 2). A UTF-8 BOM
+is stripped only from the first line of the file; a mid-file U+FEFF is
+left in place (JSON then fails and the line is ``n_corrupt``). The
+human line always includes ``corrupt=<N>`` so a fail-soft skip cannot
+silently undercount.
 
 Windowing: ``--since`` ISO8601 compares against ``started_at`` (legacy
 ``timestamp`` fallback in ``_span_fields``); naive values are read as
@@ -187,13 +191,22 @@ def aggregate(
         # Bytes + per-line UTF-8: a truncated multibyte append must not
         # UnicodeDecodeError the whole file (UnicodeDecodeError is a
         # ValueError, and main() would map that to argparse exit 2).
+        # utf-8-sig would also strip U+FEFF from every later line; only
+        # the file-level BOM (first line) is a signature to drop.
         with spans_path.open("rb") as f:
+            first_line = True
             for raw_line in f:
                 try:
-                    line = raw_line.decode("utf-8-sig").strip()
+                    decoded = raw_line.decode("utf-8")
                 except UnicodeDecodeError:
                     n_corrupt += 1
+                    first_line = False
                     continue
+                if first_line:
+                    if decoded.startswith("\ufeff"):
+                        decoded = decoded[1:]
+                    first_line = False
+                line = decoded.strip()
                 if not line:
                     continue
                 try:
@@ -277,7 +290,7 @@ def _human_line(report: dict[str, Any]) -> str:
         f"n_route={report['n_route']} n_nomatch={report['n_nomatch']} "
         f"{rate_part} {wilson_part} "
         f"(n_hit={report['n_hit']} n_scored={report['n_scored']} "
-        f"unscored={report['n_unscored']} "
+        f"unscored={report['n_unscored']} corrupt={report['n_corrupt']} "
         f"scoring_coverage={_fmt_ratio(report['scoring_coverage'])})"
     )
 
