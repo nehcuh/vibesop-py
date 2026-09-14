@@ -11,11 +11,13 @@ timestamps, absolute paths, or commit SHAs.
 
 from __future__ import annotations
 
+import errno
 import importlib.util
 import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -110,6 +112,27 @@ def _write_baseline(path: Path, entries: list[tuple[str, str, int]]) -> None:
 def _stale_repo(repo: Path, text: str = "see `.omx/artifacts/missing.md`\n") -> None:
     (repo / "docs" / "notes.md").write_text(text, encoding="utf-8")
     _commit_all(repo)
+
+
+_STALE_COUNTS: dict[tuple[str, str], int] = {("docs/a.md", ".omx/artifacts/x.md"): 1}
+
+
+def _tmp_leftovers(directory: Path, *keep: Path) -> list[Path]:
+    keep_names = {p.name for p in keep}
+    return sorted(
+        p for p in directory.iterdir() if p.name.endswith(".tmp") and p.name not in keep_names
+    )
+
+
+def _run_in(cwd: Path, *args: str) -> tuple[int, str]:
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(cwd), *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return proc.returncode, proc.stdout + proc.stderr
 
 
 # --------------------------------------------------------------------------
@@ -288,6 +311,191 @@ def test_check_baseline_with_strict_is_refused(repo: Path) -> None:
     code, out = _run(repo, "--check-baseline", str(path), "--strict")
     assert code == 2, out
     assert "strict" in out.lower()
+
+
+@pytest.mark.parametrize("dest", [".", "/", ""])
+def test_cli_write_baseline_invalid_destination_exits_2(repo: Path, dest: str) -> None:
+    """Malformed --write-baseline destinations are exit 2, not a traceback."""
+    _stale_repo(repo)
+    sentinel = repo / "docs" / "notes.md"
+    before = sentinel.read_bytes()
+    extra = [dest] if dest != "" else [""]
+    code, out = _run_in(repo, "--write-baseline", *extra)
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "cannot write baseline" in out
+    assert sentinel.read_bytes() == before
+    assert sentinel.exists()
+    assert (repo / "docs").is_dir()
+    assert Path("/").is_dir()
+    assert _tmp_leftovers(repo) == []
+    assert _tmp_leftovers(repo / "docs") == []
+    assert _tmp_leftovers(repo / "ci") == []
+
+
+@pytest.mark.parametrize("dest", [Path("."), Path("/"), Path("")])
+def test_write_baseline_invalid_destination_is_guard_error(
+    tmp_path: Path, dest: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    marker = tmp_path / "marker.txt"
+    marker.write_text("keep\n", encoding="utf-8")
+    with pytest.raises(chal.GuardError, match="cannot write baseline"):
+        chal.write_baseline(dest, _STALE_COUNTS)
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_write_baseline_unencodable_source_is_guard_error(tmp_path: Path) -> None:
+    dest = tmp_path / "baseline.json"
+    with pytest.raises(chal.GuardError, match="cannot write baseline"):
+        chal.write_baseline(dest, {("docs/\udc80.md", ".omx/artifacts/x.md"): 1})
+    assert not dest.exists()
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_write_baseline_unencodable_target_is_guard_error(tmp_path: Path) -> None:
+    dest = tmp_path / "baseline.json"
+    with pytest.raises(chal.GuardError, match="cannot write baseline"):
+        chal.write_baseline(dest, {("docs/a.md", ".omx/artifacts/\udc80.md"): 1})
+    assert not dest.exists()
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_write_baseline_does_not_follow_predictable_tmp_symlink(
+    tmp_path: Path, symlink_supported: bool
+) -> None:
+    if not symlink_supported:
+        pytest.skip("symlinks not supported")
+    dest = tmp_path / "artifact-links-baseline.json"
+    victim = tmp_path / "victim.txt"
+    victim.write_bytes(b"do-not-clobber\n")
+    predictable = dest.with_name(f".{dest.name}.tmp")
+    predictable.symlink_to(victim)
+
+    chal.write_baseline(dest, _STALE_COUNTS)
+
+    assert victim.read_bytes() == b"do-not-clobber\n"
+    assert predictable.is_symlink()
+    assert predictable.resolve() == victim.resolve()
+    assert dest.is_file()
+    assert not dest.is_symlink()
+    assert chal.load_baseline(dest).as_counts() == _STALE_COUNTS
+    assert dest.read_bytes() == chal.render_baseline(_STALE_COUNTS).encode("utf-8")
+    assert _tmp_leftovers(tmp_path, predictable) == []
+
+
+def test_write_baseline_replaces_destination_symlink_not_followed(
+    tmp_path: Path, symlink_supported: bool
+) -> None:
+    if not symlink_supported:
+        pytest.skip("symlinks not supported")
+    victim = tmp_path / "victim.json"
+    victim.write_bytes(b'{"schema_version": 1, "nontracked": []}\n')
+    dest = tmp_path / "baseline.json"
+    dest.symlink_to(victim)
+
+    chal.write_baseline(dest, _STALE_COUNTS)
+
+    assert victim.read_bytes() == b'{"schema_version": 1, "nontracked": []}\n'
+    assert not dest.is_symlink()
+    assert chal.load_baseline(dest).as_counts() == _STALE_COUNTS
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_concurrent_write_baseline_leaves_valid_content(tmp_path: Path) -> None:
+    dest = tmp_path / "baseline.json"
+    expected = chal.render_baseline(_STALE_COUNTS).encode("utf-8")
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            barrier.wait(timeout=5)
+            chal.write_baseline(dest, _STALE_COUNTS)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    assert all(not thread.is_alive() for thread in threads)
+    assert errors == []
+    assert dest.read_bytes() == expected
+    assert chal.load_baseline(dest).as_counts() == _STALE_COUNTS
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_cli_concurrent_write_baseline_does_not_clobber(repo: Path) -> None:
+    _stale_repo(repo)
+    path = repo / "ci" / "artifact-links-baseline.json"
+    cmd = [sys.executable, str(SCRIPT), "--root", str(repo), "--write-baseline", str(path)]
+
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+    barrier = threading.Barrier(2)
+    results: list[subprocess.CompletedProcess[str]] = []
+
+    def worker() -> None:
+        barrier.wait(timeout=5)
+        results.append(run())
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    assert all(not thread.is_alive() for thread in threads)
+    assert len(results) == 2
+    for proc in results:
+        out = proc.stdout + proc.stderr
+        assert proc.returncode == 0, out
+        assert "Traceback" not in out
+    baseline = chal.load_baseline(path)
+    assert baseline.as_counts() == {("docs/notes.md", ".omx/artifacts/missing.md"): 1}
+    assert path.read_bytes() == chal.render_baseline(baseline.as_counts()).encode("utf-8")
+    assert _tmp_leftovers(repo / "ci") == []
+
+
+@pytest.mark.parametrize("attr", ["write", "fsync", "replace"])
+def test_write_baseline_oserror_closes_fd_and_removes_own_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, attr: str
+) -> None:
+    dest = tmp_path / "baseline.json"
+    original = b"original-bytes\n"
+    dest.write_bytes(original)
+    created_names: list[str] = []
+    created_fds: list[int] = []
+    assert hasattr(chal, "tempfile"), "write_baseline must use tempfile.mkstemp"
+    real_mkstemp = chal.tempfile.mkstemp
+
+    def tracking_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
+        fd, name = real_mkstemp(*args, **kwargs)
+        created_fds.append(fd)
+        created_names.append(name)
+        return fd, name
+
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise OSError("injected failure")
+
+    monkeypatch.setattr(chal.tempfile, "mkstemp", tracking_mkstemp)
+    monkeypatch.setattr(chal, f"_os_{attr}", boom)
+
+    with pytest.raises(chal.GuardError, match="cannot write baseline"):
+        chal.write_baseline(dest, _STALE_COUNTS)
+
+    assert dest.read_bytes() == original
+    assert created_names
+    for name in created_names:
+        assert not os.path.lexists(name)
+    for fd in created_fds:
+        with pytest.raises(OSError) as excinfo:
+            os.fstat(fd)
+        assert excinfo.value.errno == errno.EBADF
+    assert _tmp_leftovers(tmp_path) == []
 
 
 # --------------------------------------------------------------------------

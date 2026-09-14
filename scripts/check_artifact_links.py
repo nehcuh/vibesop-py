@@ -117,18 +117,25 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fnmatch
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
+
+# Bound so tests can inject OSError without patching the process-wide os module.
+_os_write = os.write
+_os_fsync = os.fsync
+_os_replace = os.replace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -712,8 +719,59 @@ def render_baseline(counts: Mapping[tuple[str, str], int]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
 
+def _write_all(fd: int, payload: bytes) -> None:
+    """Write ``payload`` to ``fd``, looping until every byte is accepted."""
+    offset = 0
+    while offset < len(payload):
+        written = _os_write(fd, payload[offset:])
+        if written <= 0:
+            raise OSError("short write to baseline temp")
+        offset += written
+
+
+def _atomic_write_bytes(path: Path, payload: bytes) -> None:
+    """Replace ``path`` with ``payload`` via exclusive same-directory temp.
+
+    ``tempfile.mkstemp`` is ``O_CREAT|O_EXCL`` and ``O_NOFOLLOW`` when the OS
+    supports it, so a pre-existing ``.{name}.tmp`` symlink is not followed.
+    ``os.replace`` then swaps the destination itself (symlink or file) rather
+    than the symlink target. Cleanup unlinks only the temp this call created.
+    """
+    name = path.name
+    fd = -1
+    tmp_name: str | None = None
+    try:
+        if not name or name in {".", ".."}:
+            raise ValueError(f"invalid baseline destination {path}")
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{name}.",
+            suffix=".tmp",
+            dir=str(path.parent),
+        )
+        _write_all(fd, payload)
+        _os_fsync(fd)
+        os.close(fd)
+        fd = -1
+        # Same-filesystem swap of the destination inode (symlink or file).
+        _os_replace(tmp_name, path)
+        tmp_name = None
+    except (OSError, ValueError) as extra:
+        raise GuardError(f"cannot write baseline at {path}: {extra}") from extra
+    finally:
+        if fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+        if tmp_name is not None:
+            with contextlib.suppress(OSError):
+                Path(tmp_name).unlink()
+
+
 def write_baseline(path: Path, counts: Mapping[tuple[str, str], int]) -> None:
-    """Atomically write a schema_version 1 baseline. No timestamps or abs paths."""
+    """Atomically write a schema_version 1 baseline. No timestamps or abs paths.
+
+    Malformed destinations (``Path('.')``, ``Path('/')``, ``Path('')``) and
+    unencodable source/target strings become ``GuardError`` (CLI exit 2).
+    """
     for (source, target), count in counts.items():
         if not _is_normalized_posix_rel(source):
             raise GuardError(f"cannot write baseline: invalid source {source!r}")
@@ -721,18 +779,11 @@ def write_baseline(path: Path, counts: Mapping[tuple[str, str], int]) -> None:
             raise GuardError(f"cannot write baseline: invalid target {target!r}")
         if type(count) is not int or count < 1:
             raise GuardError(f"cannot write baseline: invalid count {count!r}")
-    text = render_baseline(counts)
-    tmp = path.with_name(f".{path.name}.tmp")
     try:
-        tmp.write_bytes(text.encode("utf-8"))
-        tmp.replace(path)
-    except OSError as extra:
-        try:
-            if tmp.exists():
-                tmp.unlink()
-        except OSError:
-            pass
+        payload = render_baseline(counts).encode("utf-8")
+    except UnicodeEncodeError as extra:
         raise GuardError(f"cannot write baseline at {path}: {extra}") from extra
+    _atomic_write_bytes(path, payload)
 
 
 def diff_baseline(
