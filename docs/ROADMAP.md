@@ -1,7 +1,7 @@
 # VibeSOP Roadmap
 
-> **公开发行 Public release**: 8.3.0
-> **本分支候选 Branch candidate**: 8.4.0 Trust & Evidence（未发布）
+> **当前源码 / 包元数据 Current source**: 8.4.0 Trust & Evidence
+> **公开发行 Public release**: 8.3.0（PyPI / GitHub Release 在后续 tag/publish 后对齐 8.4.0）
 > **最后更新 Last Updated**: 2026-09-14
 > **历史稿**: [roadmap-through-8.3.md](archive/roadmap-through-8.3.md)（冻结至 8.3.0 的 804 行原稿）
 
@@ -17,11 +17,11 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 对象 | 状态 | 说明 |
 |---|---|---|
-| 当前源码 / 包元数据 / PyPI / GitHub Release | **8.3.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。本分支不改这些文件里的版本字段，也不改 README 发行徽章 |
-| 本分支 `codex/v84-trust-evidence` | **未发布的 8.4.0 minor 候选** | 增加观测工具与必选 CI 治理 |
-| 版本号何时上升 | 仅在合并就绪之后的独立 release commit | 条件见下方发行闸 |
+| 当前源码 / 包元数据 | **8.4.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
+| 当前 PyPI / GitHub Release | **8.3.0** | 8.4.0 的 tag/publish 在后续发行阶段 |
+| 本分支 `codex/v84-trust-evidence` | **8.4.0 minor 发版准备** | 观测工具与必选 CI 治理已进入源码与 changelog |
 
-8.4.0 作为 minor 的理由是可观察面和治理面的新增，不是补丁级修复。候选本身不构成已发行能力。
+8.4.0 作为 minor 的理由是可观察面和治理面的新增，不是补丁级修复。源码版本上升不等于 PyPI 已发布，也不等于可靠性已被证明。
 
 ## 状态分层
 
@@ -29,23 +29,23 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 分层 | 含义 | 本文件中的位置 |
 |---|---|---|
-| **已实现但未发布** | 本分支源码已有，尚未进入任何公开发行（目标 8.4.0） | 下一节 8.4 切片 |
+| **已实现（8.4.0 源码）** | 本分支源码与包元数据已有；公开发行待 tag/publish | 下一节 8.4 切片 |
 | **计划中** | 下一轮优化，尚未当作交付 | 优先级 A–E |
 | **研究阻塞** | 预注册实验未跑完或未结算；不得改判据迁就结果 | B、C |
 
-## 8.4 候选：已实现但未发布
+## 8.4.0：Trust & Evidence
 
 数字均为 2026-09-14 本 checkpoint 在本工作区执行所得。实现可观测，不等于可靠性已被证明。
 
 ### 双向路由评测与 `top_k` 传递
 
-`scripts/eval_routing.py` 同时报告过拒（正例无真实匹配）与过灌（负例出现真实匹配）。计数 report-only，不改变 hermetic `--check` 退出码，也不把 `near_miss` 写入 `must_not_inject` 硬拒绝集。Embedding 匹配器接受 `MatcherPipeline` 的 `top_k`，避免 `enable_embedding=True` 时因签名不匹配崩溃。
+`scripts/eval_routing.py` 同时报告过拒（正例无真实匹配）与过灌（负例出现真实匹配）。双向计数 report-only，不改变 hermetic `--check` 退出码。`near_miss` 有单独计数器，不并入 `must_not_inject` 子集，但仍按 no-match 期望被 hermetic 评测计分。Embedding 匹配器接受 `MatcherPipeline` 的 `top_k`，避免 `enable_embedding=True` 时因签名不匹配崩溃。
 
 Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过。top-1 **47/53**。正例 **31**（过拒 **4**），负例 **20**（过灌 **2**），`near_miss` **14**（过灌 **2**）。已知失败 **6** 条。
 
 ### 14 条 `near_miss` 负例 / hermetic 基线
 
-评测集增加 14 条形近触发词、域外的 `near_miss` 负例，作为观察类，不是 CI 硬闸。`uv run python scripts/eval_routing.py --hermetic --check` 本 checkpoint 为绿：与基线一致，0 条新失败，6 条已知失败。
+评测集增加 14 条形近触发词、域外的 `near_miss` 负例：单独报告计数器，不并入 `must_not_inject` 子集，但仍按 no-match 期望被 hermetic 评测计分。`uv run python scripts/eval_routing.py --hermetic --check` 本 checkpoint 为绿：与基线一致，0 条新失败，6 条已知失败。
 
 ### 生产 no-match 聚合（Wilson 区间）
 
@@ -61,7 +61,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 
 ## 8.4 发行闸
 
-后续独立 release commit 把包版本升到 8.4.0 之前，须同时满足：
+包版本已在本分支 release commit 升到 8.4.0。公开发行（tag / PyPI）之前，须同时满足：
 
 1. 相关检查与适当的完整检查绿。
 2. hermetic baseline check 绿。
@@ -70,7 +70,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 5. CHANGELOG、版本元数据、状态文档同步。
 6. 独立评审 0 个 P0 / P1 / P2。
 
-本 checkpoint **没有**跑全量测试套件，因此不声称全量已绿。上面三项观测检查（hermetic、artifact baseline、decision registry）已在本工作区执行通过。
+本文件不把未执行的全量测试套件写成已绿。hermetic、artifact baseline、decision registry 三项观测检查曾在 8.4 工作区执行通过；release commit 之后须重跑。
 
 ## 下一轮优化（顺序固定；字母 A–E 仅本文件编号，不是 2026-09-11 提案 lane）
 

@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This branch is an unreleased **8.4.0** minor candidate (Trust & Evidence).
-Public package metadata, PyPI, GitHub Release, and README badges remain
-**8.3.0**. The version bump happens only in a later release commit after
-merge readiness; see `docs/ROADMAP.md` for the exact gates.
+## [8.4.0] — 2026-09-14
+
+Trust & Evidence: two-sided routing evaluation, production no-match
+aggregation, CI `decision_source` governance, and artifact citation guards.
 
 ### Added
 
@@ -22,9 +22,10 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   `MatcherPipeline`'s `top_k`. Hermetic dataset on this checkpoint:
   55 total / 53 scored / 2 skipped; top-1 47/53; positive 31 (4 over-reject);
   negative 20 (2 over-inject); near_miss 14 (2 over-inject); 6 known failures.
-- **14 `near_miss` negatives** in `tests/benchmark/routing_eval.yaml`,
-  report-only (not folded into `must_not_inject`). Hermetic baseline
-  refreshed to include them.
+- **14 `near_miss` negatives** in `tests/benchmark/routing_eval.yaml`:
+  separately reported counters, not folded into `must_not_inject`; still
+  scored as no-match expectations by the hermetic evaluation. Hermetic
+  baseline refreshed to include them.
 - **Production no-match aggregator** (`scripts/aggregate_nomatch.py`):
   windowed `route:` span rate with Wilson 95% CI; fail-soft on missing
   input; not a CI gate.
@@ -75,8 +76,11 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   tracked `.omx/artifacts/` filename currently contains them.
 - Freeze the 804-line through-8.3 roadmap at
   `docs/archive/roadmap-through-8.3.md`. Replace `docs/ROADMAP.md` with the
-  current 8.3.0 / unreleased-8.4.0 candidate boundary, 8.4 slices, release
-  gates, and next-optimization order A–E.
+  8.4.0 Trust & Evidence boundary, 8.4 slices, remaining gates, and
+  next-optimization order A–E.
+- Align package metadata, README badges, project status, and current
+  documentation headers with 8.4.0. Public PyPI / GitHub Release remain
+  8.3.0 until the later tag and publish steps.
 
 ## [8.3.0] — 2026-09-14
 

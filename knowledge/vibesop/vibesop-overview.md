@@ -21,7 +21,7 @@ tags:
 ## 版本与状态（2026-09-14 核对）
 
 - PyPI 包名 `vibesop`，CLI `vibe`，Python 3.12+，MIT。
-- 当前源码元数据 **8.3.0**；最新公开 PyPI / GitHub Release **8.2.0**。
+- 当前源码与包元数据 **8.4.0**；最新公开 PyPI / GitHub Release **8.3.0**（8.4.0 待后续 tag/publish）。
 - 提交中的 8.3.1 是内部修复批次名称，不代表实际发行。
 - SKILL.md v3.0 是技能格式版本；固定角色委员会 v2 是研究协议版本，均不等于软件包版本。
 - 最新说明与发布依据见[项目状态](../../docs/PROJECT_STATUS.md)。

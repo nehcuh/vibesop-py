@@ -403,6 +403,6 @@ vibe instinct status                   # 模式学习
 - **想跨平台**：[`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) 安装指南
 - **想做 loop**：[`loop-setup-guide.md`](loop-setup-guide.md) 24 小时部署
 - **想理解原理**：[`PHILOSOPHY.md`](PHILOSOPHY.md) 设计哲学
-- **想看路线图**：[`ROADMAP.md`](ROADMAP.md)（当前 8.3.0 / 未发布 8.4.0 候选；历史稿 [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md)）
+- **想看路线图**：[`ROADMAP.md`](ROADMAP.md)（当前源码 8.4.0 Trust & Evidence；历史稿 [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md)）
 
 遇到具体场景不在本文档里？提个 issue，加进下一版。

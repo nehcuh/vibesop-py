@@ -1,8 +1,8 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-09-14
-> **Current release**: 8.3.0（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-> **This branch**: unreleased 8.4.0 Trust & Evidence candidate（见 [ROADMAP.md](ROADMAP.md)；包版本未升）
+> **Current release**: 8.4.0（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **This branch**: 8.4.0 Trust & Evidence（包元数据已升；PyPI / GitHub Release 待后续 tag/publish）
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -57,7 +57,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[Project Context](../PROJECT_CONTEXT.md)** — Project background, goals, and scope（根目录，持续更新）
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
-- **[Roadmap](ROADMAP.md)** — Current direction: public 8.3.0, unreleased 8.4.0 Trust & Evidence candidate, next-optimization order A–E
+- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.4.0 Trust & Evidence, next-optimization order A–E
 - **[Historical roadmap through 8.3](archive/roadmap-through-8.3.md)** — Frozen 804-line v4–v8 / W1–W2 narrative
 - **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
 - **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
@@ -188,8 +188,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Public / package version** | 8.3.0 |
-| **This branch** | Unreleased 8.4.0 Trust & Evidence candidate; package metadata not bumped |
+| **Source / package version** | 8.4.0 |
+| **Public PyPI / GitHub Release** | 8.3.0 until later tag/publish |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |

@@ -1,6 +1,6 @@
 [project]
 name = "vibesop"
-version = "8.3.0"
+version = "8.4.0"
 description = "Engineering tools for AI-assisted development: skill routing, workflow verification, traces, and experience retrieval."
 readme = "README.md"
 requires-python = ">=3.12"

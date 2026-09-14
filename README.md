@@ -5,7 +5,7 @@
 > [中文](README.zh-CN.md) · [Documentation](docs/INDEX.md) · [Project status](docs/PROJECT_STATUS.md) · [Research](docs/research/README.md)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
-[![Version](https://img.shields.io/badge/Version-8.3.0-blue.svg)](https://github.com/nehcuh/vibesop-py/releases/tag/v8.3.0)
+[![Version](https://img.shields.io/badge/Version-8.4.0-blue.svg)](https://github.com/nehcuh/vibesop-py/releases/tag/v8.4.0)
 [![PyPI](https://img.shields.io/pypi/v/vibesop.svg)](https://pypi.org/project/vibesop/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -23,8 +23,8 @@ software factory. See the [project positioning](docs/POSITIONING.md).
 
 | Surface | State |
 |---|---|
-| Current release and package metadata | **8.3.0** |
-| Previous public release | **8.2.0**, published 2026-09-03 |
+| Current source and package metadata | **8.4.0** |
+| Previous public release | **8.3.0**, published 2026-09-14 |
 | Commit / changelog references to 8.3.1 | Internal repair-batch labels; no 8.3.1 release exists |
 | Skill format | SKILL.md v3.0; independent of the package version |
 | Fixed-role committee v2 | Unfinished research; separate from the installed package |
