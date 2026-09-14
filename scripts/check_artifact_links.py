@@ -423,21 +423,39 @@ def _on_disk_glob_match(root: Path, pattern: str) -> bool:
     return any(fnmatch.fnmatch(rel, pattern) for rel in _iter_on_disk_artifact_paths(artifact_root))
 
 
+def _literal_on_disk(root: Path, target: str) -> bool:
+    """True if ``root/target`` exists as a directory entry (including a broken symlink).
+
+    ``Path.exists()`` follows the symlink and is False for a dangling link;
+    ``is_symlink()`` still sees the inode. Either is an on-disk hit for the
+    dangling verdict. OSError propagates (fail closed, CLI exit 2).
+    """
+    path = root / target
+    return path.exists() or path.is_symlink()
+
+
 def classify(target: str, tracked: set[str], root: Path) -> str:
     """Return ``ok`` / ``dangling`` / ``stale`` for one normalized target."""
+    # Exact index match wins before glob metacharacters in the filename
+    # (``foo[1].md`` is a tracked file, not a character class).
+    if target in tracked:
+        return "ok"
     kind = _kind(target)
     if kind == "dir":
         if any(path.startswith(target) for path in tracked):
             return "ok"
     elif kind == "glob":
+        # A literal on-disk path with glob chars is a filename, not a pattern.
+        # Otherwise ``foo[1].md`` on disk would fnmatch tracked ``foo1.md``
+        # and go green while the cited file is untracked.
+        if _literal_on_disk(root, target):
+            return "dangling"
         if any(fnmatch.fnmatch(path, target) for path in tracked):
             return "ok"
         return "dangling" if _on_disk_glob_match(root, target) else "stale"
-    elif target in tracked:
-        return "ok"
 
     # Not in the index. Does it exist in this working tree at all?
-    return "dangling" if (root / target).exists() else "stale"
+    return "dangling" if _literal_on_disk(root, target) else "stale"
 
 
 def list_tracked(root: Path) -> set[str]:

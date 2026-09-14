@@ -44,6 +44,11 @@ merge readiness; see `docs/ROADMAP.md` for the exact gates.
   bytes and decode per line. A truncated CJK append no longer
   `UnicodeDecodeError`s the whole file into argparse exit 2; the bad
   line is `n_corrupt` and valid route spans still score.
+- **Artifact classifier vs glob metacharacters in filenames**: exact
+  index match and a literal on-disk path (including a broken symlink)
+  win before `fnmatch`. Tracked `foo[1].md` is `ok`; untracked
+  `foo[1].md` is `dangling` even when tracked `foo1.md` would match the
+  character class.
 
 ### Documentation
 

@@ -817,6 +817,49 @@ def test_classify_kinds(tmp_path: Path) -> None:
     assert chal.classify(".omx/artifacts/nope-*", tracked, tmp_path) == "stale"
 
 
+def test_classify_tracked_bracket_filename_is_ok_not_glob(tmp_path: Path) -> None:
+    """``foo[1].md`` in the index is a file, even though ``[`` is a glob char."""
+    tracked = {".omx/artifacts/foo[1].md"}
+    (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
+    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("x")
+    assert chal._kind(".omx/artifacts/foo[1].md") == "glob"
+    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "ok"
+
+
+def test_classify_untracked_bracket_file_is_dangling_not_charclass_ok(
+    tmp_path: Path,
+) -> None:
+    """Literal untracked ``foo[1].md`` must not go green via tracked ``foo1.md``."""
+    tracked = {".omx/artifacts/foo1.md"}
+    (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
+    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
+    (tmp_path / ".omx" / "artifacts" / "foo[1].md").write_text("untracked")
+    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "dangling"
+
+
+def test_classify_bracket_glob_without_literal_file_still_matches(tmp_path: Path) -> None:
+    """``foo[1].md`` as a pattern (no literal file) still matches tracked ``foo1.md``."""
+    tracked = {".omx/artifacts/foo1.md"}
+    (tmp_path / ".omx" / "artifacts").mkdir(parents=True)
+    (tmp_path / ".omx" / "artifacts" / "foo1.md").write_text("tracked")
+    assert chal.classify(".omx/artifacts/foo[1].md", tracked, tmp_path) == "ok"
+
+
+def test_classify_broken_symlink_is_dangling(tmp_path: Path) -> None:
+    """A broken symlink is an on-disk hit; exists() alone would call it stale."""
+    tracked: set[str] = set()
+    art = tmp_path / ".omx" / "artifacts"
+    art.mkdir(parents=True)
+    link = art / "missing.md"
+    try:
+        link.symlink_to(art / "does-not-exist.md")
+    except OSError:
+        pytest.skip("symlink not supported")
+    assert not link.exists()
+    assert link.is_symlink()
+    assert chal.classify(".omx/artifacts/missing.md", tracked, tmp_path) == "dangling"
+
+
 def test_scan_is_green_on_empty_reference_set(repo: Path) -> None:
     (repo / "docs" / "a.md").write_text("nothing to see\n")
     _commit_all(repo)
