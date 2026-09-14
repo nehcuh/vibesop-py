@@ -99,6 +99,12 @@ _REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|（）【】「」
 # stripping a trailing dot is safe; `*` and `?` are kept for glob targets.
 _TRAILING_JUNK = ".,;:!?)]}>。，；：！？）】、"
 
+# A pre-`?` basename ending in `.` + alphanumeric extension (`report.md`)
+# means the `?` starts a query, not a glob. `gate7-?.md` / `v1.2-?.md` do
+# not match: the `?` sits before the suffix, so the basename is `gate7-`
+# / `v1.2-`.
+_QUERY_AFTER_EXT_RE = re.compile(r"\.[A-Za-z0-9]+$")
+
 
 class GuardError(Exception):
     """The inputs could not be read — the guard cannot reach a verdict."""
@@ -143,19 +149,30 @@ def extract_targets(text: str) -> list[str]:
 def _strip_markdown_suffixes(raw: str) -> str:
     """Drop a Markdown/URL fragment or query from a captured path.
 
-    `[x](.omx/artifacts/report.md#section)` must validate `report.md`.
-    A glob `?` wildcard (`gate7-?.md`, `v1.2-?.md`) is kept; a key/value
-    query (`report.md?raw=1`) is stripped. The rule is conservative: only
-    ``=`` / ``&`` mark a query. Dots in the filename are not evidence of a
-    URL, so ``v1.2-?.md`` stays a glob.
+    ``[x](.omx/artifacts/report.md#section)`` must validate ``report.md``.
+
+    Query vs glob ``?`` (conservative syntactic rule, no filesystem check):
+
+    1. Fragment: drop everything from the first ``#``.
+    2. Key/value query: if the text after the first ``?`` contains ``=``
+       or ``&`` (``report.md?raw=1``), strip from ``?``.
+    3. Extension query: if the pre-``?`` *basename* ends with ``.`` plus
+       an alphanumeric extension (``[A-Za-z0-9]+``), the ``?`` begins a
+       query (``report.md?raw``, ``report.md?download``).
+    4. Otherwise the ``?`` is a glob wildcard (``gate7-?.md``,
+       ``v1.2-?.md``). Dots in the stem are not evidence of a URL.
     """
     raw = raw.split("#", 1)[0]
     qpos = raw.find("?")
     if qpos == -1:
         return raw
     after = raw[qpos + 1 :]
+    before = raw[:qpos]
     if "=" in after or "&" in after:
-        return raw[:qpos]
+        return before
+    basename = before.rsplit("/", 1)[-1]
+    if _QUERY_AFTER_EXT_RE.search(basename):
+        return before
     return raw
 
 
@@ -198,10 +215,10 @@ def _iter_on_disk_artifact_paths(artifact_root: Path) -> Iterator[str]:
 
 
 def _resolve_path(path: Path, *, what: str) -> Path:
-    """Resolve ``path``, converting symlink loops and OS errors to GuardError."""
+    """Resolve ``path``, converting loops / OS / ValueError into GuardError."""
     try:
         return path.resolve()
-    except (RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError, ValueError) as exc:
         raise GuardError(f"cannot resolve {what} ({path}): {exc}") from exc
 
 
@@ -215,7 +232,7 @@ def _resolved_artifact_root(root: Path) -> Path | None:
     raw = root / ".omx" / "artifacts"
     try:
         present = raw.exists() or raw.is_symlink()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise GuardError(f"cannot access artifact root {raw}: {exc}") from exc
     if not present:
         return None
@@ -226,7 +243,7 @@ def _resolved_artifact_root(root: Path) -> Path | None:
     try:
         if not artifact_root.is_dir():
             return None
-    except OSError as extra:
+    except (OSError, ValueError) as extra:
         raise GuardError(f"cannot access artifact root {artifact_root}: {extra}") from extra
     return artifact_root
 
@@ -297,7 +314,11 @@ def _resolve_in_root(root: Path, target: str) -> Path:
     target is still a bad argument, not a skipped scan root.
     """
     root_resolved = _resolve_path(root, what="repository root")
-    candidate = _resolve_path(root / target, what=f"target {target!r}")
+    try:
+        joined = root / target
+    except ValueError as extra:
+        raise GuardError(f"invalid target {target!r}: {extra}") from extra
+    candidate = _resolve_path(joined, what=f"target {target!r}")
     if not candidate.is_relative_to(root_resolved):
         raise GuardError(f"target {target!r} is outside repository root {root_resolved}")
     return candidate
@@ -319,12 +340,15 @@ def iter_markdown(
     root_resolved = _resolve_path(root, what="repository root")
     for target in targets:
         candidate = _resolve_in_root(root, target)
-        if not candidate.exists():
-            continue
-        if candidate.is_file():
-            paths = [candidate]
-        else:
-            paths = sorted(p for p in candidate.rglob("*.md") if p.is_file())
+        try:
+            if not candidate.exists():
+                continue
+            if candidate.is_file():
+                paths = [candidate]
+            else:
+                paths = sorted(p for p in candidate.rglob("*.md") if p.is_file())
+        except (OSError, ValueError) as extra:
+            raise GuardError(f"cannot access target {target!r} ({candidate}): {extra}") from extra
         for path in paths:
             try:
                 resolved = _resolve_path(path, what="scanned path")

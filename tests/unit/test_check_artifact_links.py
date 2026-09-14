@@ -355,6 +355,41 @@ def test_self_symlink_loop_target_fails_closed(repo: Path) -> None:
     assert "cannot resolve" in out.lower() or "symlink" in out.lower()
 
 
+def test_root_symlink_loop_cli_exits_2(tmp_path: Path, symlink_supported: bool) -> None:
+    """A self-loop --root must be exit 2 with no traceback."""
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    loop = tmp_path / "loop-root"
+    try:
+        loop.symlink_to(loop)
+    except OSError:
+        pytest.skip("file symlinks not supported on this host")
+
+    code, out = _run(loop)
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "cannot resolve" in out.lower() or "symlink" in out.lower()
+
+
+def test_artifact_root_symlink_loop_cli_exits_2(repo: Path, symlink_supported: bool) -> None:
+    """A self-loop `.omx/artifacts` must be exit 2 with no traceback."""
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    (repo / "docs" / "notes.md").write_text("见 `.omx/artifacts/foo-*`。\n")
+    _commit_paths(repo, "docs/notes.md")
+    artifacts = repo / ".omx" / "artifacts"
+    artifacts.rmdir()
+    try:
+        artifacts.symlink_to(artifacts, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory self-symlinks not supported on this host")
+
+    code, out = _run(repo, "--targets", "docs")
+    assert code == 2, out
+    assert "Traceback" not in out
+    assert "cannot resolve" in out.lower() or "symlink" in out.lower()
+
+
 def test_markdown_fragment_validates_underlying_file(repo: Path) -> None:
     (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
     (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md#section)\n")
@@ -388,6 +423,32 @@ def test_markdown_fragment_on_untracked_file_is_dangling(repo: Path) -> None:
     assert code == 1, out
     assert "DANGLING" in out
     assert "report.md" in out
+
+
+def test_query_string_without_key_value_on_untracked_file_is_dangling(repo: Path) -> None:
+    """`report.md?raw` must validate `report.md`, not be treated as a glob.
+
+    An untracked on-disk `report.md` is dangling / exit 1, not stale/green.
+    """
+    (repo / ".omx" / "artifacts" / "report.md").write_text("# report\n")
+    (repo / "docs" / "notes.md").write_text("[see](.omx/artifacts/report.md?raw)\n")
+    _commit_paths(repo, "docs/notes.md")
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+    assert "report.md" not in tracked
+
+    refs = chal.scan(repo, ["docs"], chal.list_tracked(repo))
+    assert [ref.target for ref in refs] == [".omx/artifacts/report.md"]
+    assert refs[0].kind == "file"
+    assert refs[0].status == "dangling"
+
+    code, out = _run(repo)
+    assert code == 1, out
+    assert "DANGLING" in out
+    assert ".omx/artifacts/report.md" in out
+    assert "report.md?raw" not in out
+    assert "0 stale" in out
 
 
 def test_directory_reference_needs_a_tracked_file_under_it(repo: Path) -> None:
@@ -538,6 +599,8 @@ def test_git_ls_files_failure_fails_closed(tmp_path: Path) -> None:
         ("[x](.omx/artifacts/b.md)", [".omx/artifacts/b.md"]),
         ("[x](.omx/artifacts/report.md#section)", [".omx/artifacts/report.md"]),
         ("[x](.omx/artifacts/report.md?raw=1)", [".omx/artifacts/report.md"]),
+        ("[x](.omx/artifacts/report.md?raw)", [".omx/artifacts/report.md"]),
+        ("[x](.omx/artifacts/report.md?download)", [".omx/artifacts/report.md"]),
         ("详见 .omx/artifacts/c.md。", [".omx/artifacts/c.md"]),
         ("按 `.omx/artifacts/gate34-*` 定稿", [".omx/artifacts/gate34-*"]),
         # A glob '?' wildcard is not a query string, even when the stem has dots.
