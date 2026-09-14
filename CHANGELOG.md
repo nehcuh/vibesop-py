@@ -9,7 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [8.3.0] — 2026-09-14
+
+### Documentation and positioning
+
+- **Project positioning and documentation**: describe VibeSOP as engineering tools
+  and empirical research for reliable AI-assisted development; retain SkillOS as
+  the skill-management subsystem. Align bilingual READMEs, status, principles,
+  architecture entry points, knowledge overview, package summary and CLI help.
+  Resolve the earlier mismatch between source version 8.3.0 and public release
+  8.2.0, remove unsupported blanket production-readiness and
+  continual-improvement claims, and keep unfinished research outside the
+  shipping-capability boundary.
+
+### Release hardening
 
 - **8.3.1 对抗复审 punch list（P1×3 + P2×4）**：
   - `LightweightRouter` 支持 `plan_annotator` 注入（构造参数 + `set_plan_annotator`），`AgentRuntime.route_step` 与 quickstart 演示接线——此前该通道从未注入 annotator，所有多意图计划（含健康计划）被 G-1 误降级为 "plan blocked" no_match；未标注计划降级时记 warning 以便诊断。
@@ -19,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Windows symlink 测试补 `symlink_supported` 守卫。
   - 单技能内容不安全/空 demote 现在携带准确 `notice`；OpenCode 插件无 `notice` 时按 `demoted_skill_id` 区分文案，不再误诊为 "plan blocked"。
   - `vibe route` 人机路径 blocked 退出码统一为 1（与 `vibe orchestrate` 一致；`--json` 保持 0 + `has_match=false`），契约已钉入 COMMAND_HANDBOOK 与测试。
-  - `vibe plan` 读取端对 ≤8.3.0 旧快照提示重跑编排重建。
+  - `vibe plan` 读取端对 8.3.0 之前的旧快照提示重跑编排重建。
 - **W1 生产剥离**：hook 解开 `AgentRouter._router` 后再剥 `disable-model-invocation`；验证步骤豁免。分解器目录与 PlanBuilder 预分配不再编入该旗。空计划 hook 信封走 no-match。
 - **验收失败不得标完成**：`blocked` / `failed` 文本与 `{status: failed}` 使顺序/对抗辅助路径失败，而不是 completed。
 - **`vibe skills outdated`**：lock URL 走 clone 同款 allowlist + `protocol.ext.allow=never` + `--`。
@@ -30,9 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vibe skills outdated` 缓存**：写失败接住 `AtomicWriteError`；原子写临时文件带 pid 唯一名。
 - **README 类型检查**：与 CI 同为 `uv run basedpyright --level error`。
 
-## [8.3.0] — 2026-09-09
-
-### Fixed
+### Cross-platform and delivery fixes
 
 - **Windows 兼容**：Kimi 配置合并正规化 CRLF，避免文本写回后二次合并失败；Node 路由测试使用 file URL 与原生 CLI 启动器，路径断言按实际序列化合同比较；发布检查测试验证可用 Git Bash，避免误用未安装发行版的 WSL 启动器。Windows 完整回归前新增边界检查，保留原有必需矩阵。
 
@@ -58,9 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **反馈与评测**：旧技能检查兼容带时区时间；导入反馈严格要求布尔结论并持久化整批记录。基准检查识别已知失败从无匹配变成错误技能的退化，回放排除已有路由决定的矛盾记录。
 
 
-### Changed
+### Behavioral changes
 
-- **计划拒绝态覆盖全部编排交接出口（8.3.1 行为变化）**：`OrchestrationResult.has_match` 对编排计划纳入 `execution_ready`（未就绪计划在任何出口都是 miss）；`vibe orchestrate` / `vibe route` 人机路径、prompt_chain、`--guided`、slash `/vibe-orchestrate` 对 blocked 计划打印阻断说明，不再渲染可执行计划或 "Plan ready"；`vibe plan list` 将未就绪计划标记为 blocked，`show` / `status` / `complete-step` 拒绝。所有落盘快照（orchestrator 主路径、CLI post-process、slash 路径）在首次持久化前完成标注，JSONL 始终携带真实 `execution_ready` / `blocked_steps`。minimal 通道同步收紧：`LightweightRouter._format_result`（`vibe route --json --minimal` 与 `AgentRuntime.route_step` 的消费源）对 blocked 计划直接输出 `no_match` + `notice_only`，不再输出带 steps 的可交接 dict。迁移行为：≤8.3.0 落盘的 JSONL 快照无 `execution_ready` 字段，升级后 `vibe plan` 读取端按 blocked 处理——历史计划如需继续执行请重跑编排重建。
+- **计划拒绝态覆盖全部编排交接出口（8.3.1 内部修复批次）**：`OrchestrationResult.has_match` 对编排计划纳入 `execution_ready`（未就绪计划在任何出口都是 miss）；`vibe orchestrate` / `vibe route` 人机路径、prompt_chain、`--guided`、slash `/vibe-orchestrate` 对 blocked 计划打印阻断说明，不再渲染可执行计划或 "Plan ready"；`vibe plan list` 将未就绪计划标记为 blocked，`show` / `status` / `complete-step` 拒绝。所有落盘快照（orchestrator 主路径、CLI post-process、slash 路径）在首次持久化前完成标注，JSONL 始终携带真实 `execution_ready` / `blocked_steps`。minimal 通道同步收紧：`LightweightRouter._format_result`（`vibe route --json --minimal` 与 `AgentRuntime.route_step` 的消费源）对 blocked 计划直接输出 `no_match` + `notice_only`，不再输出带 steps 的可交接 dict。迁移行为：8.3.0 之前落盘的 JSONL 快照无 `execution_ready` 字段，升级后 `vibe plan` 读取端按 blocked 处理——历史计划如需继续执行请重跑编排重建。
 - **W1 图书管理员（next-opt v1）**: 角色词不再自动拉 `MULTI_AGENT_SQUAD`（撤回 v7 auto-trigger）。小队只在显式并行工人意图下进入；`disable-model-invocation` 成为一等 SkillSpec 字段（EXPLICIT 可点名，其余层剥离）；负例 `must_not_inject` 进 hermetic 闸；生成规则改口为 no-match 是正常输出。详见 `.omx/artifacts/next-opt-design-v1.md`。
 
 ### Added
@@ -150,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   按 minor 而非 patch 对待）与缓解（steal tags/triggers 已剥离、
   Levenshtein 兜底层排除 demo 技能、SKILLS_GUIDE 定位为 P1 aha 而非
   P0 必须）随决策一并落地。完整裁决表见
-  `docs/decisions/_fix-s51-m1-m7.md`。
+  `docs/archive/reviews/s51/_fix-s51-m1-m7.md`。
 - **`routing.confirmation_mode` 默认值 `always` → `ambiguous_only`**：置信度
   ≥ `auto_select_threshold`（0.6）的路由自动放行，仅低置信度/编排分歧时弹出
   确认。`always` 与 PHILOSOPHY 第五信条「延续 > 启动 / 瓶颈在人不在系统」
