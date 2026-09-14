@@ -1,4 +1,4 @@
-"""Unit tests for scripts/aggregate_nomatch.py (8.4 lane B).
+"""Unit tests for scripts/aggregate_nomatch.py.
 
 All fixtures are tmp JSONL files — the real project spans file is never
 touched. Span shapes mirror production spans.jsonl: metadata is a JSON
@@ -80,6 +80,8 @@ def test_missing_file_fail_soft(
     assert "rate" not in out
     assert "wilson95_low" not in out
     assert "wilson95_high" not in out
+    assert "scoring_coverage" not in out
+    assert "nomatch_share_of_route" not in out
 
 
 def test_missing_file_human_line_exits_zero(
@@ -93,6 +95,7 @@ def test_missing_file_human_line_exits_zero(
     assert "fail-soft" in out
     assert "unavailable" in out
     assert "rate=" not in out
+    assert "0%" not in out
 
 
 def test_counts_rate_and_ci(agg: ModuleType, tmp_path: Path) -> None:
@@ -116,11 +119,22 @@ def test_counts_rate_and_ci(agg: ModuleType, tmp_path: Path) -> None:
     assert report["n_nomatch"] == 2
     assert report["n_unscored"] == 1
     assert report["n_scored"] == 4
-    assert report["rate"] == round(2 / 5, 4)
-    assert report["rate_scored"] == 0.5
-    # Wilson interval brackets the reported rate over n_route
+    # Headline rate is among scorable spans, not all route spans.
+    assert report["rate"] == 0.5
+    assert report["scoring_coverage"] == 0.8
+    assert report["nomatch_share_of_route"] == round(2 / 5, 4)
+    assert "rate_scored" not in report
+    lo, hi = agg.wilson_interval(2, 4)
+    assert report["wilson95_low"] == round(lo, 4)
+    assert report["wilson95_high"] == round(hi, 4)
     assert report["wilson95_low"] <= report["rate"] <= report["wilson95_high"]
     assert report["wilson95_low"] >= 0.0 and report["wilson95_high"] <= 1.0
+    # Wilson must not be the n_route interval (unscored-as-hits).
+    wrong_lo, wrong_hi = agg.wilson_interval(2, 5)
+    assert (report["wilson95_low"], report["wilson95_high"]) != (
+        round(wrong_lo, 4),
+        round(wrong_hi, 4),
+    )
     # miss1 carries layer=keyword; miss2 has no layer -> unknown bucket
     assert report["nomatch_by_layer"] == {"keyword": 1, "unknown": 1}
 
@@ -147,7 +161,7 @@ def test_corrupt_lines_skipped(agg: ModuleType, tmp_path: Path) -> None:
 
 
 def test_field_precedence(agg: ModuleType, tmp_path: Path) -> None:
-    """has_match > skill_id/primary > layer fallback_llm; nothing -> unscored."""
+    """has_match > string skill_id > string primary > layer fallback_llm."""
     spans = [
         # has_match wins even when skill_id disagrees (producer contract)
         _route_span("a", metadata={"has_match": True, "skill_id": ""}),
@@ -172,6 +186,23 @@ def test_field_precedence(agg: ModuleType, tmp_path: Path) -> None:
     assert report["nomatch_by_layer"] == {"fallback_llm": 1, "unknown": 3}
 
 
+def test_non_string_skill_id_falls_through_to_primary(agg: ModuleType, tmp_path: Path) -> None:
+    """A non-string skill_id must not swallow a string primary before layer."""
+    spans = [
+        _route_span("a", metadata={"skill_id": None, "primary": ""}),
+        _route_span("b", metadata={"skill_id": 0, "primary": "builtin/x"}),
+        _route_span("c", metadata={"skill_id": ["x"], "primary": None, "layer": "fallback_llm"}),
+        _route_span("d", metadata={"skill_id": {"id": "x"}, "layer": "semantic"}),
+    ]
+    path = _write_spans(tmp_path, spans)
+    _, report, _ = _run_json(agg, path)
+    assert report["n_nomatch"] == 2  # a via primary, c via layer
+    assert report["n_hit"] == 2  # b via primary, d via layer
+    assert report["n_unscored"] == 0
+    assert report["n_scored"] == 4
+    assert report["rate"] == 0.5
+
+
 def test_since_window_filters_and_drops_no_ts(agg: ModuleType, tmp_path: Path) -> None:
     spans = [
         _route_span("old", started_at="2026-08-01T00:00:00+00:00", metadata={"has_match": True}),
@@ -191,6 +222,9 @@ def test_since_window_filters_and_drops_no_ts(agg: ModuleType, tmp_path: Path) -
     assert report["n_nomatch"] == 1  # "new"
     assert report["n_hit"] == 0
     assert report["n_unscored"] == 1  # "legacy-ts" carries no scoring fields
+    assert report["n_scored"] == 1
+    assert report["rate"] == 1.0
+    assert report["scoring_coverage"] == 0.5
 
 
 def test_since_naive_treated_as_utc(agg: ModuleType, tmp_path: Path) -> None:
@@ -212,16 +246,37 @@ def test_invalid_since_is_arg_error(agg: ModuleType, tmp_path: Path) -> None:
     assert excinfo.value.code == 2
 
 
-def test_all_unscored_no_division_error(agg: ModuleType, tmp_path: Path) -> None:
+def test_invalid_since_with_missing_file_is_arg_error(agg: ModuleType, tmp_path: Path) -> None:
+    """Invalid --since must lose to argparse exit 2 even when the file is absent."""
+    with pytest.raises(SystemExit) as excinfo:
+        agg.main(["--spans", str(tmp_path / "nope.jsonl"), "--json", "--since", "not-a-date"])
+    assert excinfo.value.code == 2
+
+
+def test_all_unscored_rate_is_unavailable(
+    agg: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     path = _write_spans(tmp_path, [_route_span("u1"), _route_span("u2")])
-    code, report, _ = _run_json(agg, path)
+    code, report, raw = _run_json(agg, path)
     assert code == 0
     assert report["n_route"] == 2
     assert report["n_unscored"] == 2
-    assert report["rate"] == 0.0
-    # k=0 with n>0: lower bound is exactly 0, upper stays positive
-    assert report["wilson95_low"] == 0.0
-    assert report["wilson95_high"] > 0.0
+    assert report["n_scored"] == 0
+    assert report["rate"] is None
+    assert report["wilson95_low"] is None
+    assert report["wilson95_high"] is None
+    assert report["scoring_coverage"] == 0.0
+    assert report["nomatch_share_of_route"] == 0.0
+    parsed = json.loads(raw)
+    assert parsed["rate"] is None
+    assert parsed["wilson95_low"] is None
+    human = agg.main(["--spans", str(path)])
+    out = capsys.readouterr().out
+    assert human == 0
+    assert "rate unavailable" in out
+    assert "wilson95=unavailable" in out
+    assert "rate=" not in out
+    assert "0%" not in out
 
 
 def test_empty_file(agg: ModuleType, tmp_path: Path) -> None:
@@ -229,9 +284,12 @@ def test_empty_file(agg: ModuleType, tmp_path: Path) -> None:
     path.write_text("", encoding="utf-8")
     _, report, _ = _run_json(agg, path)
     assert report["n_route"] == 0
-    assert report["rate"] == 0.0
-    assert report["wilson95_low"] == 0.0
-    assert report["wilson95_high"] == 0.0
+    assert report["n_scored"] == 0
+    assert report["rate"] is None
+    assert report["wilson95_low"] is None
+    assert report["wilson95_high"] is None
+    assert report["scoring_coverage"] is None
+    assert report["nomatch_share_of_route"] is None
 
 
 def test_human_default_one_line(
@@ -249,6 +307,7 @@ def test_human_default_one_line(
     assert "n_route=2" in lines[0]
     assert "n_nomatch=1" in lines[0]
     assert "rate=0.5" in lines[0]
+    assert "scoring_coverage=1.0000" in lines[0]
 
 
 def test_wilson_interval_known_values(agg: ModuleType) -> None:
@@ -271,3 +330,5 @@ def test_directory_instead_of_file_is_fail_soft(agg: ModuleType, tmp_path: Path)
     assert code == 0
     assert report == {"error": "unreadable_spans", "n_route": 0}
     assert "rate" not in report
+    assert "wilson95_low" not in report
+    assert "wilson95_high" not in report

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate the production no-match rate over route spans (8.4 lane B).
+"""Aggregate the production no-match rate over route spans.
 
 Report-only observer: turns ``.vibe/observability/spans.jsonl`` into a
 windowed no-match rate with a Wilson 95% CI, so "no match is a success"
@@ -17,12 +17,24 @@ semantics (cli/main.py span block / agent_runtime.py):
 
 1. ``metadata.has_match`` is a bool → no-match iff False. Covers both
    true no-match and all-fallback routing.
-2. else ``metadata.skill_id`` (fallback key: ``primary``) is a str →
-   no-match iff empty (producers write "" on miss).
-3. else ``metadata.layer`` is a non-empty str → no-match iff
+2. else ``metadata.skill_id`` is a str → no-match iff empty (producers
+   write "" on miss). A non-string ``skill_id`` (null, number, list)
+   does not consume the slot; scoring still tries string ``primary``.
+3. else ``metadata.primary`` is a str → no-match iff empty.
+4. else ``metadata.layer`` is a non-empty str → no-match iff
    ``fallback_llm`` (RoutingLayer.value; the skill-id sentinel is the
    hyphenated ``fallback-llm``, which scoring does not invent a key for).
-4. else the span is skipped and counted as ``unscored``.
+5. else the span is skipped and counted as ``unscored``.
+
+The headline ``rate`` is the no-match rate among **scorable** route
+spans: ``n_nomatch / n_scored``. Its Wilson interval uses the same
+``n_scored`` denominator. Unscored spans are never treated as implicit
+hits. ``scoring_coverage`` is ``n_scored / n_route``. The unconditional
+share ``n_nomatch / n_route`` is reported separately as
+``nomatch_share_of_route`` (a lower bound, not the main rate).
+
+When ``n_scored == 0`` the rate and Wilson bounds are JSON ``null`` and
+the human line says the rate is unavailable — never ``0%``.
 
 ``metadata`` may be a dict (Span.to_dict) or a JSON string (SpanWriter
 serialises it before the JSONL write). Corrupt lines are skipped and
@@ -30,9 +42,11 @@ counted as ``n_corrupt``, never silently treated as match or no-match.
 
 Windowing: ``--since`` ISO8601 compares against ``started_at`` (legacy
 ``timestamp`` fallback in ``_span_fields``); naive values are read as
-UTC. A span with no usable timestamp cannot be proven inside the window
-and is dropped (counted as ``n_no_ts``); without ``--since`` every
-route span counts.
+UTC. ``--since`` is validated before the spans file is checked, so an
+invalid timestamp is argparse exit 2 even when the file is missing. A
+span with no usable timestamp cannot be proven inside the window and is
+dropped (counted as ``n_no_ts``); without ``--since`` every route span
+counts.
 
 Usage:
     uv run python scripts/aggregate_nomatch.py [--spans PATH] [--since ISO8601] [--json]
@@ -93,7 +107,10 @@ def _score_no_match(meta: dict[str, Any]) -> bool | None:
     has_match = meta.get("has_match")
     if isinstance(has_match, bool):
         return not has_match
-    primary = meta["skill_id"] if "skill_id" in meta else meta.get("primary")
+    skill_id = meta.get("skill_id")
+    if isinstance(skill_id, str):
+        return skill_id == ""
+    primary = meta.get("primary")
     if isinstance(primary, str):
         return primary == ""
     layer = meta.get("layer")
@@ -128,6 +145,17 @@ def wilson_interval(k: int, n: int, z: float | None = None) -> tuple[float, floa
     return (lo, hi)
 
 
+def _ratio(numerator: int, denominator: int) -> float | None:
+    """``numerator / denominator``, or ``None`` when the denominator is 0."""
+    if denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _round4(value: float | None) -> float | None:
+    return None if value is None else round(value, 4)
+
+
 def aggregate(
     spans_path: Path,
     since: str | None = None,
@@ -135,14 +163,18 @@ def aggregate(
     """Read spans.jsonl and return the windowed no-match report dict.
 
     Never raises on missing/unreadable files or corrupt lines (fail-soft
-    observer); a missing file is reported as ``{"error": ...}``.
+    observer); a missing file is reported as ``{"error": ...}``. Invalid
+    ``since`` is raised as ``ValueError`` *before* the file is checked, so
+    bad user input is never masked by a missing path.
     """
+    since_dt = None
+    if since:
+        since_dt = _parse_ts(since)
+        if since_dt is None:
+            raise ValueError(f"--since is not a valid ISO8601 timestamp: {since!r}")
+
     if not spans_path.exists():
         return {"error": MISSING_SPANS_ERROR, "n_route": 0}
-
-    since_dt = _parse_ts(since) if since else None
-    if since and since_dt is None:
-        raise ValueError(f"--since is not a valid ISO8601 timestamp: {since!r}")
 
     n_route = n_nomatch = n_hit = n_unscored = n_no_ts = n_corrupt = 0
     nomatch_by_layer: Counter[str] = Counter()
@@ -186,9 +218,11 @@ def aggregate(
         return {"error": "unreadable_spans", "n_route": 0}
 
     n_scored = n_nomatch + n_hit
-    rate = n_nomatch / n_route if n_route else 0.0
-    rate_scored = n_nomatch / n_scored if n_scored else 0.0
-    low, high = wilson_interval(n_nomatch, n_route)
+    rate = _ratio(n_nomatch, n_scored)
+    if n_scored > 0:
+        low, high = wilson_interval(n_nomatch, n_scored)
+    else:
+        low, high = None, None
     return {
         "spans_path": str(spans_path),
         "since": since,
@@ -199,12 +233,17 @@ def aggregate(
         "n_unscored": n_unscored,
         "n_no_ts": n_no_ts,
         "n_corrupt": n_corrupt,
-        "rate": round(rate, 4),
-        "rate_scored": round(rate_scored, 4),
-        "wilson95_low": round(low, 4),
-        "wilson95_high": round(high, 4),
+        "rate": _round4(rate),
+        "scoring_coverage": _round4(_ratio(n_scored, n_route)),
+        "nomatch_share_of_route": _round4(_ratio(n_nomatch, n_route)),
+        "wilson95_low": _round4(low),
+        "wilson95_high": _round4(high),
         "nomatch_by_layer": dict(nomatch_by_layer),
     }
+
+
+def _fmt_ratio(value: float | None) -> str:
+    return "unavailable" if value is None else f"{value:.4f}"
 
 
 def _human_line(report: dict[str, Any]) -> str:
@@ -214,13 +253,20 @@ def _human_line(report: dict[str, Any]) -> str:
             "(fail-soft, nothing to aggregate)"
         )
     window = report.get("since") or "all"
+    rate = report["rate"]
+    if rate is None:
+        rate_part = "rate unavailable"
+        wilson_part = "wilson95=unavailable"
+    else:
+        rate_part = f"rate={rate:.4f}"
+        wilson_part = f"wilson95=[{report['wilson95_low']:.4f}, {report['wilson95_high']:.4f}]"
     return (
         f"spans={report['spans_path']} window={window} "
         f"n_route={report['n_route']} n_nomatch={report['n_nomatch']} "
-        f"rate={report['rate']:.4f} wilson95=[{report['wilson95_low']:.4f}, "
-        f"{report['wilson95_high']:.4f}] "
-        f"(n_hit={report['n_hit']} unscored={report['n_unscored']} "
-        f"rate_scored={report['rate_scored']:.4f})"
+        f"{rate_part} {wilson_part} "
+        f"(n_hit={report['n_hit']} n_scored={report['n_scored']} "
+        f"unscored={report['n_unscored']} "
+        f"scoring_coverage={_fmt_ratio(report['scoring_coverage'])})"
     )
 
 
