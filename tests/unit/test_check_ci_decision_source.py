@@ -1,14 +1,15 @@
-"""Tests for scripts/check_ci_decision_source.py (Lane B / B1 registry guard).
+"""Tests for scripts/check_ci_decision_source.py (CI decision-source guard).
 
 The guard's verdict is defined against two files, so every test here builds a
 throwaway pair (a fixture workflow + a fixture registry) under ``tmp_path`` and
 runs the CLI through ``main([...])``. The real ``.github/workflows/ci.yml`` is
 only ever read — no test writes to it.
 
-The fixture cases matter more than the happy path: the whole point of B1 is
-that a job declaring a model-sourced verdict is red, so that case is asserted
-against the process exit code (the contract CI consumes) and against the
-problem code the guard emits.
+The fixture cases matter more than the happy path: the whole point of the
+guard is that a job declaring a model-sourced verdict is red, including a
+job disabled with ``if: false``, so that case is asserted against the process
+exit code (the contract CI consumes) and against the problem code the guard
+emits.
 """
 
 from __future__ import annotations
@@ -53,7 +54,14 @@ def _workflow(*jobs: str) -> str:
 
 
 def _registry(jobs: dict[str, object]) -> str:
-    return yaml.safe_dump({"schema_version": 1, "jobs": jobs}, sort_keys=False)
+    return yaml.safe_dump(
+        {
+            "schema_version": 1,
+            "workflow": ".github/workflows/ci.yml",
+            "jobs": jobs,
+        },
+        sort_keys=False,
+    )
 
 
 def _tree(tmp_path: Path, workflow: str, registry: str) -> Path:
@@ -129,12 +137,13 @@ def test_real_workflow_with_a_model_job_injected_is_red(tmp_path: Path) -> None:
     )
     assert _run(root) == 1
     report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
-    assert _codes(report) == ["model_decision_source_on_required_job"]
+    assert _codes(report) == ["invalid_decision_source"]
 
 
 def test_real_registry_covers_live_workflow_jobs() -> None:
     """Live registry: routing-eval is human; every other job is deterministic."""
     doc = yaml.safe_load(REAL_REGISTRY.read_text(encoding="utf-8"))
+    assert doc["schema_version"] == 1
     assert doc["workflow"] == ".github/workflows/ci.yml"
     jobs = doc["jobs"]
     assert jobs["routing-eval"]["decision_source"] == "human"
@@ -143,6 +152,8 @@ def test_real_registry_covers_live_workflow_jobs() -> None:
         assert source in ccds.ALLOWED_DECISION_SOURCES, job_id
         if job_id != "routing-eval":
             assert source == "deterministic", job_id
+        for dead_key in ("confirmed_by", "confirmed_at"):
+            assert dead_key not in entry, job_id
     workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     assert set(jobs) == set(workflow["jobs"])
 
@@ -196,12 +207,12 @@ def test_registry_entry_without_a_job_is_red(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Rules 3 / 4 — the decision_source domain and the model-gate ban.
+# Rule 3 — the decision_source domain. No exemptions.
 # --------------------------------------------------------------------------
 
 
 def test_model_decision_source_on_required_job_is_red(tmp_path: Path) -> None:
-    """The core B1 assertion: a live job cannot decide on model output."""
+    """A live job cannot decide on model output."""
     root = _tree(
         tmp_path,
         _workflow(_job("lint"), _job("llm-review", name="LLM Review")),
@@ -214,12 +225,12 @@ def test_model_decision_source_on_required_job_is_red(tmp_path: Path) -> None:
     )
     assert _run(root) == 1
     report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
-    assert _codes(report) == ["model_decision_source_on_required_job"]
+    assert _codes(report) == ["invalid_decision_source"]
     assert "llm-review" in report.problems[0].message
 
 
-def test_model_decision_source_on_disabled_job_is_green(tmp_path: Path) -> None:
-    """`if: false` means the job cannot gate anything, so it is exempt (advisory)."""
+def test_model_decision_source_on_disabled_job_is_red(tmp_path: Path) -> None:
+    """`if: false` is not an exemption: the domain is exact even on a skipped job."""
     root = _tree(
         tmp_path,
         _workflow(_job("lint"), _job("llm-review", condition="false")),
@@ -230,10 +241,10 @@ def test_model_decision_source_on_disabled_job_is_green(tmp_path: Path) -> None:
             }
         ),
     )
-    assert _run(root) == 0
+    assert _run(root) == 1
     report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
-    assert report.ok
-    assert any("if: false" in note for note in report.advisories)
+    assert _codes(report) == ["invalid_decision_source"]
+    assert not any("if: false" in note and "accepted" in note for note in report.advisories)
 
 
 def test_continue_on_error_is_not_an_exemption(tmp_path: Path) -> None:
@@ -245,19 +256,25 @@ def test_continue_on_error_is_not_an_exemption(tmp_path: Path) -> None:
     )
     assert _run(root) == 1
     report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
-    assert _codes(report) == ["model_decision_source_on_required_job"]
+    assert _codes(report) == ["invalid_decision_source"]
 
 
-@pytest.mark.parametrize("condition", ["${{ false }}", "1", "${{ github.event_name == 'x' }}"])
-def test_only_literal_false_disables_a_job(tmp_path: Path, condition: str) -> None:
-    """Only a real skip exempts a model-sourced value; anything else is live."""
+@pytest.mark.parametrize(
+    "condition",
+    ["false", "${{ false }}", "1", "${{ github.event_name == 'x' }}"],
+)
+def test_disabled_or_conditional_job_does_not_exempt_invalid_source(
+    tmp_path: Path, condition: str
+) -> None:
+    """Any `if:` value, including a real skip, still binds the domain."""
     root = _tree(
         tmp_path,
         _workflow(_job("llm-review", condition=condition)),
         _registry({"llm-review": {"decision_source": "model"}}),
     )
-    expected = 0 if condition == "${{ false }}" else 1
-    assert _run(root) == expected
+    assert _run(root) == 1
+    report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
+    assert _codes(report) == ["invalid_decision_source"]
 
 
 def test_job_body_without_a_mapping_still_counts_as_unregistered(tmp_path: Path) -> None:
@@ -315,7 +332,7 @@ def test_model_review_source_on_required_job_is_red(tmp_path: Path) -> None:
     )
     assert _run(root) == 1
     report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
-    assert _codes(report) == ["model_decision_source_on_required_job"]
+    assert _codes(report) == ["invalid_decision_source"]
 
 
 def test_non_mapping_registry_entry_is_red(tmp_path: Path) -> None:
@@ -351,6 +368,28 @@ def test_unknown_registry_key_is_advisory_only(tmp_path: Path) -> None:
     assert any("unknown key 'decision_soruce'" in note for note in report.advisories)
 
 
+def test_confirmed_by_is_not_a_known_key(tmp_path: Path) -> None:
+    """Dead compatibility keys are not part of the live registry contract."""
+    root = _tree(
+        tmp_path,
+        _workflow(_job("lint")),
+        _registry(
+            {
+                "lint": {
+                    "decision_source": "deterministic",
+                    "confirmed_by": "alice",
+                    "confirmed_at": "2026-01-01",
+                }
+            }
+        ),
+    )
+    assert _run(root) == 0
+    report = ccds.check(root / ".github/workflows/ci.yml", root / "ci/decision-source.yaml")
+    notes = " ".join(report.advisories)
+    assert "unknown key 'confirmed_by'" in notes
+    assert "unknown key 'confirmed_at'" in notes
+
+
 def test_quiet_prints_only_problems(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = _tree(
         tmp_path,
@@ -359,7 +398,7 @@ def test_quiet_prints_only_problems(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
     assert _run(root, "--quiet") == 1
     out = capsys.readouterr().out
-    assert out.startswith("ERROR [model_decision_source_on_required_job]")
+    assert out.startswith("ERROR [invalid_decision_source]")
     assert "note " not in out
     assert "check_ci_decision_source:" not in out
 
@@ -373,7 +412,7 @@ def test_missing_workflow_fails_closed(tmp_path: Path, capsys: pytest.CaptureFix
 
 def test_missing_registry_fails_closed(tmp_path: Path) -> None:
     root = _tree(tmp_path, _workflow(_job("lint")), _registry({"lint": {}}))
-    (root / "ci/decision-source.yaml").unlink()
+    (root / "ci" / "decision-source.yaml").unlink()
     assert _run(root) == 2
 
 
@@ -398,7 +437,11 @@ def test_non_mapping_document_fails_closed(tmp_path: Path) -> None:
 
 
 def test_registry_without_jobs_fails_closed(tmp_path: Path) -> None:
-    root = _tree(tmp_path, _workflow(_job("lint")), "schema_version: 1\n")
+    root = _tree(
+        tmp_path,
+        _workflow(_job("lint")),
+        "schema_version: 1\nworkflow: .github/workflows/ci.yml\n",
+    )
     assert _run(root) == 2
 
 
@@ -411,3 +454,141 @@ def test_explicit_paths_override_root(tmp_path: Path) -> None:
     )
     assert _run(root, "--workflow", ".github/workflows/ci.yml") == 0
     assert _run(root, "--registry", "ci/decision-source.yaml") == 0
+
+
+# --------------------------------------------------------------------------
+# Input encoding, duplicate keys, load-bearing registry schema (exit 2).
+# --------------------------------------------------------------------------
+
+
+def test_invalid_utf8_workflow_fails_closed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _tree(
+        tmp_path,
+        _workflow(_job("lint")),
+        _registry({"lint": {"decision_source": "deterministic"}}),
+    )
+    (root / ".github/workflows/ci.yml").write_bytes(b"\xff\xfe not utf-8")
+    assert _run(root) == 2
+    err = capsys.readouterr().err
+    assert "cannot decode workflow" in err
+    assert "UTF-8" in err
+
+
+def test_invalid_utf8_registry_fails_closed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _tree(
+        tmp_path,
+        _workflow(_job("lint")),
+        _registry({"lint": {"decision_source": "deterministic"}}),
+    )
+    (root / "ci" / "decision-source.yaml").write_bytes(b"schema_version: 1\n\xff\xfe")
+    assert _run(root) == 2
+    err = capsys.readouterr().err
+    assert "cannot decode registry" in err
+    assert "UTF-8" in err
+
+
+def test_duplicate_workflow_job_ids_fail_closed(tmp_path: Path) -> None:
+    """PyYAML last-key-wins would hide a duplicate job id; the guard must not."""
+    workflow = (
+        "name: CI\n"
+        "on:\n"
+        "  workflow_call:\n"
+        "jobs:\n"
+        "  lint:\n"
+        "    name: Lint\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: echo\n"
+        "  lint:\n"
+        "    name: Lint again\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - run: echo\n"
+    )
+    root = _tree(
+        tmp_path,
+        workflow,
+        _registry({"lint": {"decision_source": "deterministic"}}),
+    )
+    assert _run(root) == 2
+
+
+def test_duplicate_registry_job_keys_fail_closed(tmp_path: Path) -> None:
+    registry = (
+        "schema_version: 1\n"
+        "workflow: .github/workflows/ci.yml\n"
+        "jobs:\n"
+        "  lint:\n"
+        "    decision_source: deterministic\n"
+        "  lint:\n"
+        "    decision_source: human\n"
+    )
+    root = _tree(tmp_path, _workflow(_job("lint")), registry)
+    assert _run(root) == 2
+
+
+def test_duplicate_top_level_registry_key_fails_closed(tmp_path: Path) -> None:
+    registry = (
+        "schema_version: 1\n"
+        "workflow: .github/workflows/ci.yml\n"
+        "schema_version: 1\n"
+        "jobs:\n"
+        "  lint:\n"
+        "    decision_source: deterministic\n"
+    )
+    root = _tree(tmp_path, _workflow(_job("lint")), registry)
+    assert _run(root) == 2
+
+
+@pytest.mark.parametrize(
+    "registry",
+    [
+        "workflow: .github/workflows/ci.yml\njobs:\n  lint:\n    decision_source: deterministic\n",
+        (
+            "schema_version: 2\n"
+            "workflow: .github/workflows/ci.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+        (
+            "schema_version: '1'\n"
+            "workflow: .github/workflows/ci.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+    ],
+)
+def test_missing_or_wrong_schema_version_fails_closed(tmp_path: Path, registry: str) -> None:
+    root = _tree(tmp_path, _workflow(_job("lint")), registry)
+    assert _run(root) == 2
+
+
+@pytest.mark.parametrize(
+    "registry",
+    [
+        "schema_version: 1\njobs:\n  lint:\n    decision_source: deterministic\n",
+        (
+            "schema_version: 1\n"
+            "workflow: .github/workflows/release.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+        (
+            "schema_version: 1\n"
+            "workflow: .github/workflows/quickstart-e2e.yml\n"
+            "jobs:\n"
+            "  lint:\n"
+            "    decision_source: deterministic\n"
+        ),
+    ],
+)
+def test_missing_or_wrong_workflow_declaration_fails_closed(tmp_path: Path, registry: str) -> None:
+    root = _tree(tmp_path, _workflow(_job("lint")), registry)
+    assert _run(root) == 2

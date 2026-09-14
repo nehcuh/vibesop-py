@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard: every CI job must declare where its verdict comes from (Lane B / B1).
+"""Guard: every CI job must declare where its verdict comes from.
 
 Why this exists
 ---------------
@@ -13,10 +13,11 @@ Scope
 -----
 This first registry covers `.github/workflows/ci.yml` ONLY. Quickstart
 (`quickstart-e2e.yml`), release (`release.yml`), and CodeQL workflows are
-out of scope and must not be pointed at this checker.
+out of scope and must not be pointed at this checker. The registry must
+declare ``workflow: .github/workflows/ci.yml``; any other value is exit 2.
 
-Contract (exactly these four rules fail; everything else is advisory)
---------------------------------------------------------------------
+Contract (exactly these rules fail; everything else is advisory)
+----------------------------------------------------------------
 1. **Coverage** — every job in the workflow must be registered. A new job
    added to ci.yml without a registry entry is a red build, which is the
    point: the registry cannot silently go stale.
@@ -24,19 +25,18 @@ Contract (exactly these four rules fail; everything else is advisory)
    the workflow. A leftover entry (renamed/removed job) is red too, so the
    registry cannot silently over-claim.
 3. **Domain** — `decision_source` must be present and one of
-   `deterministic | human`.
-4. **No model gates** — any other value (e.g. `model`) is red *unless* the
-   corresponding workflow job is disabled outright with `if: false`, i.e. it
-   cannot gate anything. A job that still runs and is read by humans is not
-   exempt: `continue-on-error: true` is NOT an escape hatch here.
+   `deterministic | human`. `model` or any other value is a contract
+   violation even on a job disabled with `if: false`. A skipped job is still
+   in the workflow, still registered, and still bound by the domain.
+   `continue-on-error: true` is not an escape hatch either: the job still
+   runs and is still read.
 
 Advisories (printed, never fatal)
 ---------------------------------
 - registry annotations the script does not know about (free-form; only
   `decision_source` is enforced);
 - a recorded `name` that no longer matches the workflow's job name (job ids
-  are the identity contract; names are a review aid);
-- a non-standard `decision_source` accepted via the `if: false` exemption.
+  are the identity contract; names are a review aid).
 
 Honest limit
 ------------
@@ -52,7 +52,7 @@ Usage:
     uv run python scripts/check_ci_decision_source.py --quiet
 
 Exit codes:
-    0 - all four rules hold (advisories may still be printed)
+    0 - all contract rules hold (advisories may still be printed)
     1 - at least one rule violated
     2 - could not read/parse the workflow or the registry (fail-closed)
 """
@@ -75,7 +75,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_WORKFLOW = Path(".github/workflows/ci.yml")
 DEFAULT_REGISTRY = Path("ci/decision-source.yaml")
 
-#: The only values that may gate a required job.
+#: The only values that may appear as `decision_source`.
 ALLOWED_DECISION_SOURCES: tuple[str, ...] = ("deterministic", "human")
 
 #: Keys enforced on a registry entry.
@@ -88,21 +88,55 @@ KNOWN_ENTRY_KEYS: tuple[str, ...] = (
     "rationale",
     "notes",
     "evidence",
-    "confirmed_by",
-    "confirmed_at",
 )
 
-#: `if:` values that mean the job never runs, so it can never gate anything.
-_DISABLED_IF_VALUES = frozenset({"false", "${{ false }}"})
+#: Load-bearing registry schema. Wrong or missing values are exit 2.
+REQUIRED_REGISTRY_SCHEMA_VERSION = 1
+REQUIRED_REGISTRY_WORKFLOW = ".github/workflows/ci.yml"
 
 
 class GuardError(Exception):
     """The inputs could not be read — the guard cannot reach a verdict."""
 
 
+class UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys (fail closed)."""
+
+
+def _construct_unique_mapping(
+    loader: yaml.SafeLoader, node: yaml.nodes.MappingNode, deep: bool = False
+) -> dict[Any, Any]:
+    """Build a mapping and raise if any key appears more than once."""
+    if not isinstance(node, yaml.nodes.MappingNode):
+        raise yaml.constructor.ConstructorError(
+            None,
+            None,
+            f"expected a mapping node, but found {node.id}",
+            node.start_mark,
+        )
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None,
+                None,
+                f"duplicate mapping key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
+
+
 @dataclass(frozen=True)
 class Problem:
-    """One contract violation (rule 1-4)."""
+    """One contract violation (coverage / anti-drift / domain)."""
 
     code: str
     message: str
@@ -126,13 +160,21 @@ class Report:
 
 
 def load_yaml(path: Path, what: str) -> dict[str, Any]:
-    """Load a YAML mapping, raising :class:`GuardError` on any failure."""
+    """Load a YAML mapping, raising :class:`GuardError` on any failure.
+
+    Invalid UTF-8 and duplicate mapping keys are input failures (exit 2),
+    not silent last-key-wins collapses.
+    """
     try:
-        text = path.read_text(encoding="utf-8")
+        raw = path.read_bytes()
     except OSError as exc:
         raise GuardError(f"cannot read {what} at {path}: {exc}") from exc
     try:
-        doc = yaml.safe_load(text)
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GuardError(f"cannot decode {what} at {path} as UTF-8: {exc}") from exc
+    try:
+        doc = yaml.load(text, Loader=UniqueKeyLoader)
     except yaml.YAMLError as exc:
         raise GuardError(f"cannot parse {what} at {path}: {exc}") from exc
     if not isinstance(doc, dict):
@@ -152,25 +194,28 @@ def workflow_job_specs(doc: Mapping[str, Any], path: Path) -> dict[str, Mapping[
 
 
 def registry_entries(doc: Mapping[str, Any], path: Path) -> dict[str, Any]:
-    """Return the ``jobs:`` mapping of the registry, or raise if it is absent."""
+    """Return the ``jobs:`` mapping of the registry, or raise if the schema fails.
+
+    ``schema_version: 1``, ``workflow: .github/workflows/ci.yml``, and a
+    non-empty ``jobs`` mapping are load-bearing. Wrong or missing values
+    are input failures (exit 2), not advisories.
+    """
+    version = doc.get("schema_version")
+    if version != REQUIRED_REGISTRY_SCHEMA_VERSION:
+        raise GuardError(
+            f"registry at {path} must declare schema_version: "
+            f"{REQUIRED_REGISTRY_SCHEMA_VERSION} (got {version!r})"
+        )
+    workflow = doc.get("workflow")
+    if workflow != REQUIRED_REGISTRY_WORKFLOW:
+        raise GuardError(
+            f"registry at {path} must declare workflow: {REQUIRED_REGISTRY_WORKFLOW} "
+            f"(got {workflow!r}); this guard covers ci.yml only"
+        )
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict) or not jobs:
         raise GuardError(f"registry at {path} declares no `jobs:` mapping")
     return {str(job_id): body for job_id, body in jobs.items()}
-
-
-def job_is_disabled(job: Mapping[str, Any]) -> bool:
-    """True when the job can never run (``if: false``).
-
-    Only an outright skip counts. `continue-on-error: true` does not: the job
-    still runs, still produces a verdict, and humans still read it.
-    """
-    condition = job.get("if")
-    if condition is False:
-        return True
-    if isinstance(condition, str):
-        return condition.strip().lower() in _DISABLED_IF_VALUES
-    return False
 
 
 def normalize_decision_source(value: Any) -> str:
@@ -185,7 +230,7 @@ def compare(
     workflow_path: Path,
     registry_path: Path,
 ) -> Report:
-    """Apply the four contract rules and collect advisories."""
+    """Apply the contract rules and collect advisories."""
     report = Report(
         workflow_jobs=list(workflow_jobs),
         registered_jobs=list(entries),
@@ -271,21 +316,12 @@ def compare(
         if source in ALLOWED_DECISION_SOURCES:
             continue
 
-        # Rule 4 — a non-deterministic source may only sit on a job that never runs.
-        if job_is_disabled(job):
-            report.advisories.append(
-                f"job '{job_id}' declares decision_source '{source}' but is disabled "
-                "with `if: false` — accepted: a skipped job gates nothing"
-            )
-            continue
-
         report.problems.append(
             Problem(
-                "model_decision_source_on_required_job",
-                f"job '{job_id}' declares decision_source '{source}' but is a live job in "
-                f"{workflow_path} — only {', '.join(ALLOWED_DECISION_SOURCES)} may gate a "
-                "required job (ROADMAP: no LLM review as a merge gate); disable it with "
-                "`if: false` or make the verdict deterministic",
+                "invalid_decision_source",
+                f"job '{job_id}' declares decision_source '{source}' — "
+                f"only {' | '.join(ALLOWED_DECISION_SOURCES)} are valid; "
+                "any other value is a contract violation even if the job is disabled",
             )
         )
 
@@ -310,8 +346,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Check that every job in .github/workflows/ci.yml declares a "
-            "decision_source in the registry and that no model-sourced value "
-            "gates a live job. Scope is ci.yml ONLY — quickstart-e2e.yml, "
+            "decision_source in the registry and that every value is "
+            "deterministic or human. Scope is ci.yml ONLY — quickstart-e2e.yml, "
             "release.yml, and CodeQL workflows are out of scope."
         ),
     )
