@@ -42,6 +42,7 @@ def test_verify_covers_installer_platforms() -> None:
 
 def test_grok_verify_checks_vibe_on_path() -> None:
     assert "vibe_on_path" in PLATFORM_CONFIGS["grok-build"]["checks"]
+    assert "claude_hook_compat_off" in PLATFORM_CONFIGS["grok-build"]["checks"]
 
 
 def test_claude_verify_checks_hook_command_safety() -> None:

@@ -24,6 +24,7 @@ import shlex
 import shutil
 import string
 import sys
+import tomllib
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,7 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
             "rules_routing": "rules/routing.md exists",
             "route_hook_json": "hooks/vibesop-route.json exists",
             "tool_seq_hook_json": "hooks/vibesop-tool-seq.json exists",
+            "claude_hook_compat_off": "[compat.claude] hooks = false (no Claude bash leak)",
             "vibe_on_path": "vibe executable is on PATH",
         },
     },
@@ -593,6 +595,46 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
             result["detail"] = (
                 f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
             )
+
+        elif check_id == "claude_hook_compat_off":
+            from vibesop.adapters.grok_build import claude_hook_compat_is_disabled
+
+            claude_settings = Path.home() / ".claude" / "settings.json"
+            leaked = False
+            if claude_settings.is_file():
+                try:
+                    settings = json.loads(claude_settings.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                    settings = None
+                if isinstance(settings, dict):
+                    leaked = any(
+                        classify_vibesop_hook_command(cmd)
+                        for cmd in collect_settings_hook_commands(settings)
+                    )
+            if not leaked:
+                result["pass"] = True
+                result["detail"] = "No Claude VibeSOP bash hooks to inherit"
+            else:
+                disabled = False
+                toml_path = config_dir / "config.toml"
+                if toml_path.is_file():
+                    try:
+                        disabled = claude_hook_compat_is_disabled(
+                            tomllib.loads(toml_path.read_text(encoding="utf-8"))
+                        )
+                    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+                        disabled = False
+                result["pass"] = disabled
+                result["detail"] = (
+                    "[compat.claude] hooks = false"
+                    if disabled
+                    else (
+                        "Grok loads ~/.claude/settings.json hooks; Windows "
+                        "/bin/bash cannot run bash C:/.../vibesop-tool-seq.sh. "
+                        "Set [compat.claude] hooks = false in ~/.grok/config.toml "
+                        "and restart Grok."
+                    )
+                )
 
         elif check_id == "vibe_on_path":
             vibe = shutil.which("vibe")

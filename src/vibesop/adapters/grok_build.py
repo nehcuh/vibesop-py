@@ -16,16 +16,101 @@ from __future__ import annotations
 
 import json
 import logging
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import RenderResult
+from vibesop.utils.encoding import read_text_with_fallback
 
 if TYPE_CHECKING:
     from vibesop.adapters.models import Manifest
 
 logger = logging.getLogger(__name__)
+
+_COMPAT_CLAUDE_TABLE = "[compat.claude]"
+_HOOKS_FALSE = "hooks = false"
+
+
+def claude_hook_compat_is_disabled(doc: dict[str, Any]) -> bool:
+    """True only when ``compat.claude.hooks`` is explicitly false.
+
+    Grok defaults every compat cell to true, so a missing key still loads
+    ``~/.claude/settings.json`` hooks.
+    """
+    compat = doc.get("compat")
+    if not isinstance(compat, dict):
+        return False
+    claude = compat.get("claude")
+    if not isinstance(claude, dict):
+        return False
+    return claude.get("hooks") is False
+
+
+def apply_compat_claude_hooks_disabled(text: str) -> str:
+    """Return TOML with ``[compat.claude] hooks = false``, preserving the rest.
+
+    Grok merges Claude Code ``settings.json`` hooks by default. Those commands
+    are ``bash C:/.../vibesop-*.sh``. On Windows Grok spawns ``/bin/bash``
+    (WSL), which cannot see the NTFS path, so PostToolUse fails with
+    ``/bin/bash: C:/Users/.../vibesop-tool-seq.sh: No such file or directory``.
+    Native Grok JSON hooks already replace the VibeSOP Claude scripts.
+    """
+    raw = text.lstrip("\ufeff")
+    if not raw.strip():
+        return f"{_COMPAT_CLAUDE_TABLE}\n{_HOOKS_FALSE}\n"
+
+    try:
+        doc = tomllib.loads(raw)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"not valid TOML ({exc})") from exc
+
+    if claude_hook_compat_is_disabled(doc):
+        return raw if raw.endswith("\n") else raw + "\n"
+
+    lines = raw.splitlines()
+    dotted_i: int | None = None
+    header_i: int | None = None
+    for i, line in enumerate(lines):
+        body = line.split("#", 1)[0].strip()
+        if body == _COMPAT_CLAUDE_TABLE:
+            header_i = i
+        if body.startswith("compat.claude.hooks") and "=" in body:
+            key = body.split("=", 1)[0].strip()
+            if key == "compat.claude.hooks":
+                dotted_i = i
+
+    if dotted_i is not None and header_i is None:
+        lines[dotted_i] = "compat.claude.hooks = false"
+        out = "\n".join(lines)
+        return out if out.endswith("\n") else out + "\n"
+
+    if header_i is None:
+        stripped = raw.rstrip()
+        return f"{stripped}\n\n{_COMPAT_CLAUDE_TABLE}\n{_HOOKS_FALSE}\n"
+
+    end = len(lines)
+    for j in range(header_i + 1, len(lines)):
+        if lines[j].lstrip().startswith("["):
+            end = j
+            break
+    hooks_i: int | None = None
+    for j in range(header_i + 1, end):
+        body = lines[j].split("#", 1)[0].strip()
+        if body.startswith("hooks") and "=" in body and body.split("=", 1)[0].strip() == "hooks":
+            hooks_i = j
+            break
+    if hooks_i is not None:
+        lines[hooks_i] = _HOOKS_FALSE
+    else:
+        lines.insert(header_i + 1, _HOOKS_FALSE)
+    out = "\n".join(lines)
+    result = out if out.endswith("\n") else out + "\n"
+    merged = tomllib.loads(result)
+    if not claude_hook_compat_is_disabled(merged):
+        raise ValueError("merge did not set compat.claude.hooks = false")
+    return result
 
 
 class GrokBuildAdapter(PlatformAdapter):
@@ -107,6 +192,8 @@ class GrokBuildAdapter(PlatformAdapter):
                 tool_seq_file = hooks_dir / "vibesop-tool-seq.json"
                 tool_seq_file.write_text(self._render_tool_seq_hook_json(), encoding="utf-8")
                 result.add_file(tool_seq_file)
+
+            self._merge_claude_hook_compat(output_dir, result)
 
             result.success = True
 
@@ -267,3 +354,36 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
             },
         }
         return json.dumps(hook_config, indent=2) + "\n"
+
+    def _merge_claude_hook_compat(self, output_dir: Path, result: RenderResult) -> None:
+        """Disable Claude hook scan when deploying onto a Grok home directory.
+
+        Dist renders skip this: ``config.toml`` is Grok's user config, not a
+        VibeSOP fragment, and must not appear as a standalone file in
+        ``.vibe/dist/grok-build/``.
+        """
+        try:
+            if output_dir.resolve() != self.config_dir.resolve():
+                return
+        except OSError:
+            return
+        config_path = output_dir / "config.toml"
+        existing = ""
+        if config_path.is_file():
+            try:
+                existing = read_text_with_fallback(config_path)
+            except OSError as exc:
+                result.add_warning(f"Could not read {config_path}: {exc}")
+                return
+        try:
+            merged = apply_compat_claude_hooks_disabled(existing)
+        except ValueError as exc:
+            result.add_warning(
+                f"Could not set [compat.claude] hooks = false in {config_path}: {exc}"
+            )
+            return
+        existing_norm = existing if not existing or existing.endswith("\n") else existing + "\n"
+        if config_path.is_file() and merged == existing_norm:
+            return
+        self.write_file_atomic(config_path, merged, validate_security=False, base_dir=output_dir)
+        result.add_file(config_path)
