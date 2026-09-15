@@ -105,6 +105,22 @@ from vibesop.core.routing.benchmark import (  # noqa: E402
 from vibesop.core.routing.unified import UnifiedRouter  # noqa: E402
 
 
+def _dataset_identity(eval_file: Path) -> str:
+    """Canonical portable identity for the eval dataset.
+
+    A repo-relative POSIX path when the resolved file lives under ROOT
+    (the default dataset is exactly ``tests/benchmark/routing_eval.yaml``);
+    the resolved absolute string only for an external dataset. Consumers can
+    therefore compare identities across machines without embedding the
+    checkout location.
+    """
+    resolved = eval_file.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def _classify_two_sided(
     entry: dict[str, Any], expect: list[str], reject: list[str]
 ) -> tuple[bool, bool, bool]:
@@ -310,6 +326,7 @@ def main() -> int:
     baseline_path = args.baseline.resolve()
 
     eval_file = args.file if args.file.is_absolute() else ROOT / args.file
+    dataset_identity = _dataset_identity(eval_file)
     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
 
     skill_roots: dict[str, Path] | None = None
@@ -469,6 +486,12 @@ def main() -> int:
         "n_near_miss": n_near_miss,
         "near_miss_over_inject": near_miss_over_inject,
     }
+    # Provenance (P1-4, additive): consumers of --json/--json-out can verify
+    # which dataset produced the numbers, whether the hermetic universe was
+    # pinned, and when the run happened. Existing checks/exits are unchanged.
+    metrics["dataset"] = dataset_identity
+    metrics["hermetic"] = bool(args.hermetic)
+    metrics["generated_at"] = datetime.now(UTC).isoformat()
 
     if args.record and errors:
         log = ROOT / "memory" / "routing-errors.jsonl"
@@ -483,7 +506,7 @@ def main() -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(
             json.dumps(
-                {**metrics, "dataset": str(eval_file), "per_query": per_query},
+                {**metrics, "per_query": per_query},
                 ensure_ascii=False,
                 indent=2,
             ),

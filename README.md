@@ -5,26 +5,30 @@
 > [中文](README.zh-CN.md) · [Documentation](docs/INDEX.md) · [Project status](docs/PROJECT_STATUS.md) · [Research](docs/research/README.md)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
-[![Version](https://img.shields.io/badge/Version-8.4.1-blue.svg)](https://github.com/nehcuh/vibesop-py/releases/tag/v8.4.1)
+[![Version](https://img.shields.io/badge/Version-8.5.0-blue.svg)](https://github.com/nehcuh/vibesop-py/releases)
 [![PyPI](https://img.shields.io/pypi/v/vibesop.svg)](https://pypi.org/project/vibesop/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-VibeSOP provides tools for selecting skills, planning tasks, checking delivery,
-recording execution evidence, and retrieving past experience across AI coding
-agents. The repository also contains experiments on when skills, specifications,
-orchestration, review, and memory improve the work—and when they add overhead.
+VibeSOP is a **multi-agent AI engineering workflow** system. It routes requests
+to the right skill or agent, verifies delivery against explicit criteria, and
+records observable execution evidence. Around that core it provides skill
+selection, governance over what may gate a release, and experience/knowledge
+accumulation across AI coding agents. The repository also contains experiments on
+when skills, specifications, orchestration, review, and memory improve the
+work—and when they add overhead.
 
-**SkillOS describes the skill-management subsystem.** The project now includes
-workflow engineering and empirical research as well. Reliability is the objective;
-the presence of these tools does not establish an automatic or proven end-to-end
-software factory. See the [project positioning](docs/POSITIONING.md).
+**SkillOS is the skill-management subsystem**, not the whole project. VibeSOP
+also covers routing, verification, observability, governance, and
+experience/knowledge accumulation. Reliability is the objective; the presence of
+these tools does not establish an automatic or proven end-to-end software
+factory. See the [project positioning](docs/POSITIONING.md).
 
 ## Version and availability
 
 | Surface | State |
 |---|---|
-| Current source and package metadata | **8.4.1** |
-| Previous public release | **8.4.0**, published 2026-09-14 |
+| Current source and package metadata | **8.5.0** (source candidate; tag/publish pending) |
+| Previous public release | **8.4.1**, published 2026-09-15 |
 | Commit / changelog references to 8.3.1 | Internal repair-batch labels; no 8.3.1 release exists |
 | Skill format | SKILL.md v3.0; independent of the package version |
 | Fixed-role committee v2 | Unfinished research; separate from the installed package |
@@ -120,6 +124,26 @@ retrieval is explicit (`--cross-project`) and requires a populated pool.
 A blocked plan needs its reported problem resolved; it must not be treated as a
 completed or ready-to-run task. See the
 [verification contract](docs/architecture/verification-contract.md).
+
+### Routing evidence (source candidate 8.5.0)
+
+`vibe observe routing` reports no-match, near-miss, and decision-source
+evidence from local route spans. It is report-only: it never edits the eval
+dataset, thresholds, or routing policy. Generate a hermetic eval payload, then
+observe spans against it:
+
+```sh
+# 1. Produce a fresh hermetic eval payload (near-miss over-injection evidence).
+uv run python scripts/eval_routing.py --hermetic --json --json-out /tmp/eval-routing.json
+
+# 2. Observe local route spans against it (reads .vibe/observability/spans.jsonl
+#    by default; exit 4 means not enough scorable spans yet).
+uv run vibe observe routing --eval-json /tmp/eval-routing.json --json
+```
+
+Spans come from real `vibe route` runs. See the
+[operator runbook](docs/observe-routing.md) for metric definitions, thresholds,
+exit codes, and cron/CI wrappers.
 
 For commands and realistic scenarios, see the [CLI reference](docs/user/CLI_REFERENCE.md),
 [command handbook](docs/user/COMMAND_HANDBOOK.md), and [use cases](docs/USE_CASES.en.md).

@@ -1,6 +1,6 @@
 # VibeSOP Architecture
 
-> **Version**: 8.4.0
+> **Version**: 8.5.0
 > **入口说明更新**: 2026-09-14。本文保留技能子系统的详细与历史描述；当前完整模块图和执行边界以 [架构导览](../dev/architecture-overview.md) 为准，源码/发行状态见 [PROJECT_STATUS.md](../PROJECT_STATUS.md)。
 
 ## Three-Pillar Architecture (v5.5.0+)
