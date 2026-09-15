@@ -708,3 +708,27 @@ def test_json_stdout_metrics_carry_provenance(
     assert payload["dataset"] == str(dataset)
     assert payload["hermetic"] is False
     assert datetime.fromisoformat(payload["generated_at"]).tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
+# Portable eval producer identity (8.5 provenance contract)
+# ---------------------------------------------------------------------------
+
+
+def test_dataset_identity_repo_relative_under_root() -> None:
+    """The default dataset yields exactly the canonical portable identity."""
+    default = evr.ROOT / "tests" / "benchmark" / "routing_eval.yaml"
+    assert evr._dataset_identity(default) == "tests/benchmark/routing_eval.yaml"
+
+
+def test_dataset_identity_collapses_repo_relative_path() -> None:
+    weird = evr.ROOT / "tests" / "benchmark" / ".." / "benchmark" / "routing_eval.yaml"
+    assert evr._dataset_identity(weird) == "tests/benchmark/routing_eval.yaml"
+
+
+def test_dataset_identity_external_is_resolved_absolute(tmp_path: Path) -> None:
+    external = tmp_path / "eval.yaml"
+    external.write_text("[]", encoding="utf-8")
+    identity = evr._dataset_identity(external)
+    assert identity == str(external.resolve())
+    assert not identity.startswith(str(evr.ROOT))

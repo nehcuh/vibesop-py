@@ -27,6 +27,7 @@ from typing import Annotated
 import typer
 
 from vibesop.core.observability.route_observe import (
+    DEFAULT_EVAL_DATASET,
     ObserveThresholds,
     observe_routing,
     render_human,
@@ -67,6 +68,20 @@ def routing_cmd(
             "--eval-json", help="eval_routing.py JSON payload for near-miss over-injection"
         ),
     ] = None,
+    expected_eval_dataset: Annotated[
+        str,
+        typer.Option(
+            "--expected-eval-dataset",
+            help="expected portable eval dataset identity to match exactly",
+        ),
+    ] = DEFAULT_EVAL_DATASET,
+    max_eval_age_hours: Annotated[
+        float,
+        typer.Option(
+            "--max-eval-age-hours",
+            help="reject eval payloads generated more than this many hours ago",
+        ),
+    ] = ObserveThresholds.max_eval_age_hours,
     min_samples: Annotated[
         int, typer.Option("--min-samples", help="minimum scorable route spans for a verdict")
     ] = ObserveThresholds.min_samples,
@@ -136,6 +151,7 @@ def routing_cmd(
         unknown_warn=unknown_warn,
         unknown_crit=unknown_crit,
         max_corrupt=max_corrupt,
+        max_eval_age_hours=max_eval_age_hours,
     )
 
     try:
@@ -145,6 +161,7 @@ def routing_cmd(
             until=until,
             project_id=project_id,
             eval_json=eval_json,
+            expected_eval_dataset=expected_eval_dataset,
             thresholds=thresholds,
             strict_payloads=strict_payloads,
             require_inputs=require_inputs,

@@ -41,6 +41,11 @@ from vibesop.core.observability.route_observe import (
 ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = ROOT / "scripts" / "aggregate_nomatch.py"
 
+#: Fixed observer clock for eval-provenance tests. Payloads default to one
+#: hour before it so they are fresh under the 24h default max age.
+_NOW = datetime(2026, 9, 15, 9, 0, tzinfo=UTC)
+_EVAL_GENERATED_AT = "2026-09-15T08:00:00+00:00"
+
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -103,7 +108,7 @@ def _eval_payload(
     n_neg: int = 50,
     dataset: str = "tests/benchmark/routing_eval.yaml",
     hermetic: bool = True,
-    generated_at: str = "2026-09-01T00:00:00+00:00",
+    generated_at: str = _EVAL_GENERATED_AT,
 ) -> dict[str, Any]:
     return {
         "n_near_miss": n_near_miss,
@@ -456,24 +461,176 @@ def test_near_miss_valid_payload_and_provenance(tmp_path: Path) -> None:
     path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
     eval_path = tmp_path / "eval.json"
     eval_path.write_text(json.dumps(_eval_payload()), encoding="utf-8")
-    result = observe_routing(path, eval_json=eval_path)
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
     near = result.report["metrics"]["near_miss"]
     assert near["rate"] == 0.15
     assert near["state"] == WARN
     assert near["source"] == "eval_json"
     assert near["provenance"]["dataset"] == "tests/benchmark/routing_eval.yaml"
+    assert near["provenance"]["expected_dataset"] == "tests/benchmark/routing_eval.yaml"
+    assert near["provenance"]["dataset_matches"] is True
     assert near["provenance"]["hermetic"] is True
+    assert near["provenance"]["age_seconds"] == 3600.0
+    assert near["provenance"]["future_skew_seconds"] == 0.0
+    assert near["provenance"]["max_age_hours"] == 24.0
+    assert result.report["inputs"]["expected_eval_dataset"] == "tests/benchmark/routing_eval.yaml"
+    assert result.report["thresholds"]["max_eval_age_hours"] == 24.0
     assert result.report["overall_state"] == WARN
     assert result.exit_code == 1
 
 
-def test_near_miss_non_hermetic_recommends_rerun(tmp_path: Path) -> None:
+def test_near_miss_healthy_golden(tmp_path: Path) -> None:
+    """A matching, fresh, hermetic eval below the warn rate is healthy."""
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(
+        json.dumps(_eval_payload(n_near_miss=20, over_inject=2, n_neg=50)),
+        encoding="utf-8",
+    )
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    near = result.report["metrics"]["near_miss"]
+    assert near["state"] == HEALTHY
+    assert near["rate"] == 0.1
+    assert result.report["overall_state"] == HEALTHY
+    assert result.exit_code == 0
+
+
+def test_dataset_identity_normalizes_separators_and_leading_dot(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(
+        json.dumps(_eval_payload(dataset="./tests\\benchmark\\routing_eval.yaml")),
+        encoding="utf-8",
+    )
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.fault is False
+    assert result.report["metrics"]["near_miss"]["provenance"]["dataset_matches"] is True
+
+
+def test_near_miss_non_hermetic_is_provenance_fault(tmp_path: Path) -> None:
+    """Non-hermetic evidence is rejected outright, not merely recommended against."""
     path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
     eval_path = tmp_path / "eval.json"
     eval_path.write_text(json.dumps(_eval_payload(hermetic=False)), encoding="utf-8")
-    result = observe_routing(path, eval_json=eval_path)
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.fault is True
+    assert result.exit_code == 3
+    assert result.report["overall_state"] == "fault"
+    assert result.report["outcome"] == {"kind": "fault", "reason": "invalid_eval_provenance"}
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
     assert result.report["metrics"]["near_miss"]["provenance"]["hermetic"] is False
-    assert any("--hermetic" in rec for rec in result.report["recommendations"])
+
+
+def test_dataset_mismatch_is_provenance_fault(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(_eval_payload(dataset="other/eval.yaml")), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+    assert result.report["metrics"]["near_miss"]["provenance"]["dataset_matches"] is False
+
+
+def test_expected_dataset_can_be_overridden(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(_eval_payload(dataset="custom/eval.yaml")), encoding="utf-8")
+    result = observe_routing(
+        path, eval_json=eval_path, expected_eval_dataset="custom/eval.yaml", now=_NOW
+    )
+    assert result.fault is False
+    assert result.report["metrics"]["near_miss"]["provenance"]["dataset_matches"] is True
+    assert result.report["inputs"]["expected_eval_dataset"] == "custom/eval.yaml"
+
+
+def test_basename_match_is_rejected(tmp_path: Path) -> None:
+    """Matching only the basename must never satisfy the dataset identity."""
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(
+        json.dumps(_eval_payload(dataset="elsewhere/routing_eval.yaml")), encoding="utf-8"
+    )
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+
+
+def test_eval_stale_over_boundary_is_provenance_fault(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    stale = (_NOW - timedelta(hours=24, seconds=1)).isoformat()
+    eval_path.write_text(json.dumps(_eval_payload(generated_at=stale)), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+    assert result.report["metrics"]["near_miss"]["provenance"]["age_seconds"] == 86401.0
+
+
+def test_eval_accepted_exactly_at_max_age_boundary(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    boundary = (_NOW - timedelta(hours=24)).isoformat()
+    eval_path.write_text(json.dumps(_eval_payload(generated_at=boundary)), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.fault is False
+    assert result.report["metrics"]["near_miss"]["provenance"]["age_seconds"] == 86400.0
+
+
+def test_eval_future_beyond_skew_is_provenance_fault(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    future = (_NOW + timedelta(minutes=5, seconds=1)).isoformat()
+    eval_path.write_text(json.dumps(_eval_payload(generated_at=future)), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+    assert result.report["metrics"]["near_miss"]["provenance"]["future_skew_seconds"] == 301.0
+
+
+def test_eval_accepted_exactly_at_future_skew_boundary(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    future = (_NOW + timedelta(minutes=5)).isoformat()
+    eval_path.write_text(json.dumps(_eval_payload(generated_at=future)), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.fault is False
+    assert result.report["metrics"]["near_miss"]["provenance"]["future_skew_seconds"] == 300.0
+
+
+def test_naive_generated_at_is_provenance_fault(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(
+        json.dumps(_eval_payload(generated_at="2026-09-15T08:00:00")), encoding="utf-8"
+    )
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+
+
+def test_provenance_freshness_independent_of_span_window(tmp_path: Path) -> None:
+    """--since/--until filter spans only; eval freshness uses the injected now."""
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(_eval_payload()), encoding="utf-8")
+    result = observe_routing(
+        path,
+        eval_json=eval_path,
+        since="2027-01-01T00:00:00",  # excludes every span; eval is still fresh
+        now=_NOW,
+    )
+    assert result.fault is False
+    assert result.report["metrics"]["near_miss"]["provenance"]["age_seconds"] == 3600.0
+
+
+def test_provenance_fault_not_suppressed_by_report_only(tmp_path: Path) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(_eval_payload(hermetic=False)), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, report_only=True, now=_NOW)
+    assert result.fault is True
+    assert result.exit_code == 3
+    assert result.report["overall_state"] == "fault"
 
 
 def test_near_miss_below_min_rows_is_insufficient(tmp_path: Path) -> None:
@@ -482,7 +639,7 @@ def test_near_miss_below_min_rows_is_insufficient(tmp_path: Path) -> None:
     eval_path.write_text(
         json.dumps(_eval_payload(n_near_miss=4, over_inject=1, n_neg=5)), encoding="utf-8"
     )
-    result = observe_routing(path, eval_json=eval_path)
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
     near = result.report["metrics"]["near_miss"]
     assert near["state"] == INSUFFICIENT
     assert near["reason"] == "eval_rows_below_min"
@@ -512,18 +669,36 @@ def test_require_inputs_escalates_missing_eval_to_fault(tmp_path: Path) -> None:
         lambda p: p.update({"dataset": ""}),
         lambda p: p.update({"hermetic": "yes"}),
         lambda p: p.update({"generated_at": "not-a-date"}),
-        lambda p: p.update({"n_near_miss": "20"}),
-        lambda p: p.update({"near_miss_over_inject": 999}),
-        lambda p: p.update({"n_neg": 1}),
+        lambda p: p.update({"generated_at": None}),
     ],
 )
-def test_invalid_eval_payload_is_fault(tmp_path: Path, mutate: Any) -> None:
+def test_invalid_eval_provenance_is_fault(tmp_path: Path, mutate: Any) -> None:
     path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
     payload = _eval_payload()
     mutate(payload)
     eval_path = tmp_path / "eval.json"
     eval_path.write_text(json.dumps(payload), encoding="utf-8")
-    result = observe_routing(path, eval_json=eval_path)
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
+    assert result.exit_code == 3
+    assert result.fault is True
+    assert result.report["error"]["kind"] == "invalid_eval_provenance"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p.update({"n_near_miss": "20"}),
+        lambda p: p.update({"near_miss_over_inject": 999}),
+        lambda p: p.update({"n_neg": 1}),
+    ],
+)
+def test_invalid_eval_counts_is_fault(tmp_path: Path, mutate: Any) -> None:
+    path = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
+    payload = _eval_payload()
+    mutate(payload)
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = observe_routing(path, eval_json=eval_path, now=_NOW)
     assert result.exit_code == 3
     assert result.fault is True
     assert result.report["error"]["kind"] == "invalid_eval_payload"
@@ -690,6 +865,70 @@ def test_cli_registered_under_main_app() -> None:
     assert result.exit_code == 0
     assert "--spans" in result.stdout
     assert "--eval-json" in result.stdout
+    assert "--expected-eval-dataset" in result.stdout
+    assert "--max-eval-age-hours" in result.stdout
+
+
+def test_cli_provenance_fault_exit_3_even_report_only(tmp_path: Path, runner: CliRunner) -> None:
+    spans = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(60, 40))
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(json.dumps(_eval_payload(hermetic=False)), encoding="utf-8")
+    result = runner.invoke(
+        observe_cmd.app,
+        [
+            "routing",
+            "--spans",
+            str(spans),
+            "--eval-json",
+            str(eval_path),
+            "--expected-eval-dataset",
+            "tests/benchmark/routing_eval.yaml",
+            "--report-only",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 3
+    payload = json.loads(result.stdout)
+    assert payload["overall_state"] == "fault"
+    assert payload["error"]["kind"] == "invalid_eval_provenance"
+    assert payload["inputs"]["expected_eval_dataset"] == "tests/benchmark/routing_eval.yaml"
+
+
+def test_cli_matching_fresh_eval_is_healthy(tmp_path: Path, runner: CliRunner) -> None:
+    from datetime import datetime
+
+    spans = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    fresh = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text(
+        json.dumps(_eval_payload(n_near_miss=20, over_inject=2, n_neg=50, generated_at=fresh)),
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        observe_cmd.app,
+        [
+            "routing",
+            "--spans",
+            str(spans),
+            "--eval-json",
+            str(eval_path),
+            "--expected-eval-dataset",
+            "tests/benchmark/routing_eval.yaml",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["metrics"]["near_miss"]["state"] == "healthy"
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "nan", "inf"])
+def test_cli_invalid_max_eval_age_hours_exit_2(tmp_path: Path, runner: CliRunner, bad: str) -> None:
+    spans = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(1, 1))
+    result = runner.invoke(
+        observe_cmd.app,
+        ["routing", "--spans", str(spans), "--max-eval-age-hours", bad],
+    )
+    assert result.exit_code == 2
 
 
 # ---------------------------------------------------------------------------
@@ -707,7 +946,7 @@ def test_observe_never_writes_policy_or_inputs(tmp_path: Path) -> None:
         name: (tmp_path / name).read_bytes()
         for name in ("spans.jsonl", "eval.json", "decision-source.yaml")
     }
-    observe_routing(path, eval_json=eval_path)
+    observe_routing(path, eval_json=eval_path, now=_NOW)
     after = {
         name: (tmp_path / name).read_bytes()
         for name in ("spans.jsonl", "eval.json", "decision-source.yaml")

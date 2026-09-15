@@ -56,7 +56,7 @@ import json
 import math
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import NormalDist
 from typing import Any
@@ -87,6 +87,13 @@ _ROUTING_LAYER_SET: frozenset[str] = frozenset(ROUTING_LAYER_VALUES)
 
 _SEVERITY: dict[str, int] = {HEALTHY: 0, INSUFFICIENT: 1, WARN: 2, CRITICAL: 3}
 
+#: Canonical portable identity of the default eval dataset (see
+#: ``scripts/eval_routing.py``).
+DEFAULT_EVAL_DATASET = "tests/benchmark/routing_eval.yaml"
+#: An eval payload may sit at most this far ahead of the observer clock.
+FUTURE_SKEW_TOLERANCE = timedelta(minutes=5)
+FUTURE_SKEW_TOLERANCE_SECONDS = 300
+
 
 @dataclass(frozen=True)
 class ObserveThresholds:
@@ -102,6 +109,8 @@ class ObserveThresholds:
     unknown_warn: float = 0.05
     unknown_crit: float = 0.10
     max_corrupt: int = 0
+    #: Eval provenance freshness bound, in hours, relative to the injected now.
+    max_eval_age_hours: float = 24.0
 
 
 @dataclass(frozen=True)
@@ -172,6 +181,35 @@ def _parse_ts(value: Any) -> datetime | None:
 def _span_ts(record: dict[str, Any]) -> datetime | None:
     """``started_at`` first, legacy ``timestamp`` fallback."""
     return _parse_ts(record.get("started_at")) or _parse_ts(record.get("timestamp"))
+
+
+def _parse_aware_ts(value: Any) -> datetime | None:
+    """Parse ISO8601 that *must* carry a timezone offset.
+
+    Distinct from :func:`_parse_ts` (spans window, where a naive value is
+    read as UTC): an eval ``generated_at`` without an offset is
+    unverifiable provenance and is rejected rather than guessed.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return None if dt.tzinfo is None else dt
+
+
+def _normalize_dataset_identity(value: str) -> str:
+    """Canonical comparison form for a dataset identity.
+
+    ``\\`` separators become ``/`` and a leading ``./`` is dropped. This is
+    a full-string normalization used for exact matching only — never a
+    basename match.
+    """
+    normalized = value.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
 
 
 def _decode_metadata(record: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -503,6 +541,9 @@ def validate_thresholds(thresholds: ObserveThresholds) -> None:
         raise ValueError("--min-samples-near-miss must be >= 1")
     if thresholds.max_corrupt < 0:
         raise ValueError("--max-corrupt must be >= 0")
+    max_age = thresholds.max_eval_age_hours
+    if not math.isfinite(max_age) or max_age <= 0:
+        raise ValueError("--max-eval-age-hours must be a finite value > 0")
 
 
 def _file_mtime(path: Path | None) -> float | None:
@@ -596,38 +637,87 @@ def _decision_source_metric(scan: _ScanResult, thresholds: ObserveThresholds) ->
     }
 
 
-def _provenance_error(payload: dict[str, Any]) -> ObserveError | None:
-    """Fail-closed provenance check for an eval payload (P1-4)."""
-    for key, expected in (("dataset", str), ("hermetic", bool), ("generated_at", str)):
+def _eval_provenance(
+    payload: dict[str, Any],
+    *,
+    eval_path: str,
+    expected_dataset: str,
+    max_age_hours: float,
+    now: datetime,
+) -> tuple[dict[str, Any], ObserveError | None]:
+    """Validate an eval payload's provenance and build its machine block.
+
+    Fail-closed: a missing/wrong-typed key, empty dataset, naive or
+    non-ISO8601 ``generated_at``, non-hermetic run, dataset-identity
+    mismatch, a timestamp more than 5 minutes in the future, or one older
+    than ``max_age_hours`` is an :data:`invalid_eval_provenance` fault.
+
+    The returned provenance dict is always populated with the expected
+    identity, the max age, and the observed future skew so even a fault
+    report stays diagnosable. Freshness is computed against the injected
+    ``now`` and is deliberately independent of the ``--since``/``--until``
+    span window: the eval payload is a separate static-dataset run.
+    """
+    prov: dict[str, Any] = {
+        "dataset": payload.get("dataset"),
+        "expected_dataset": expected_dataset,
+        "dataset_matches": None,
+        "hermetic": payload.get("hermetic"),
+        "generated_at": payload.get("generated_at"),
+        "age_seconds": None,
+        "future_skew_seconds": None,
+        "max_age_hours": max_age_hours,
+        "future_skew_tolerance_seconds": FUTURE_SKEW_TOLERANCE_SECONDS,
+    }
+
+    def _err(message: str) -> ObserveError:
+        return ObserveError(kind="invalid_eval_provenance", path=eval_path, message=message)
+
+    for key, expected_type in (("dataset", str), ("hermetic", bool), ("generated_at", str)):
         if key not in payload:
-            return ObserveError(
-                kind="invalid_eval_payload",
-                path="eval_json",
-                message=f"eval payload is missing required provenance key {key!r}",
-            )
-        if not isinstance(payload[key], expected):
-            return ObserveError(
-                kind="invalid_eval_payload",
-                path="eval_json",
-                message=f"eval payload provenance key {key!r} has wrong type",
-            )
+            return prov, _err(f"eval payload is missing required provenance key {key!r}")
+        if not isinstance(payload[key], expected_type):
+            return prov, _err(f"eval payload provenance key {key!r} has wrong type")
     if not payload["dataset"]:
-        return ObserveError(
-            kind="invalid_eval_payload",
-            path="eval_json",
-            message="eval payload provenance key 'dataset' is empty",
+        return prov, _err("eval payload provenance key 'dataset' is empty")
+
+    generated = _parse_aware_ts(payload["generated_at"])
+    if generated is None:
+        return prov, _err(
+            "eval payload provenance key 'generated_at' must be timezone-aware ISO8601"
         )
-    if _parse_ts(payload["generated_at"]) is None:
-        return ObserveError(
-            kind="invalid_eval_payload",
-            path="eval_json",
-            message="eval payload provenance key 'generated_at' is not ISO8601",
+    prov["dataset_matches"] = _normalize_dataset_identity(
+        payload["dataset"]
+    ) == _normalize_dataset_identity(expected_dataset)
+    prov["age_seconds"] = round((now - generated).total_seconds(), 3)
+    prov["future_skew_seconds"] = round(max(0.0, (generated - now).total_seconds()), 3)
+
+    if payload["hermetic"] is not True:
+        return prov, _err("eval payload is not hermetic (hermetic must be exactly true)")
+    if not prov["dataset_matches"]:
+        return prov, _err(
+            f"eval payload dataset {payload['dataset']!r} does not match expected "
+            f"{expected_dataset!r} after separator/leading-./ normalization"
         )
-    return None
+    if (generated - now) > FUTURE_SKEW_TOLERANCE:
+        return prov, _err(
+            "eval payload generated_at is more than 5 minutes in the future "
+            f"(future_skew_seconds={prov['future_skew_seconds']})"
+        )
+    if (now - generated) > timedelta(hours=max_age_hours):
+        return prov, _err(
+            "eval payload generated_at is older than max age "
+            f"({max_age_hours} hours; age_seconds={prov['age_seconds']})"
+        )
+    return prov, None
 
 
 def _near_miss_metric(
-    eval_json: Path | None, thresholds: ObserveThresholds
+    eval_json: Path | None,
+    thresholds: ObserveThresholds,
+    *,
+    expected_eval_dataset: str,
+    now: datetime,
 ) -> tuple[dict[str, Any], ObserveError | None]:
     """Build the near_miss metric, returning a fault when a payload is invalid."""
     if eval_json is None:
@@ -696,9 +786,14 @@ def _near_miss_metric(
                 message="eval JSON root is not an object",
             ),
         )
-    prov_error = _provenance_error(payload)
+    provenance, prov_error = _eval_provenance(
+        payload,
+        eval_path=str(eval_json),
+        expected_dataset=expected_eval_dataset,
+        max_age_hours=thresholds.max_eval_age_hours,
+        now=now,
+    )
     if prov_error is not None:
-        prov_error = ObserveError(prov_error.kind, str(eval_json), prov_error.message)
         return (
             {
                 "n": None,
@@ -706,9 +801,9 @@ def _near_miss_metric(
                 "over_inject": None,
                 "rate": None,
                 "state": INSUFFICIENT,
-                "reason": "invalid_eval_payload",
+                "reason": "invalid_eval_provenance",
                 "source": None,
-                "provenance": None,
+                "provenance": provenance,
             },
             prov_error,
         )
@@ -732,7 +827,7 @@ def _near_miss_metric(
                 "state": INSUFFICIENT,
                 "reason": "invalid_eval_payload",
                 "source": None,
-                "provenance": None,
+                "provenance": provenance,
             },
             ObserveError(
                 kind="invalid_eval_payload",
@@ -753,7 +848,7 @@ def _near_miss_metric(
                 "state": INSUFFICIENT,
                 "reason": "invalid_eval_payload",
                 "source": None,
-                "provenance": None,
+                "provenance": provenance,
             },
             ObserveError(
                 kind="invalid_eval_payload",
@@ -778,11 +873,7 @@ def _near_miss_metric(
         "state": state,
         "reason": reason,
         "source": "eval_json",
-        "provenance": {
-            "dataset": payload["dataset"],
-            "hermetic": payload["hermetic"],
-            "generated_at": payload["generated_at"],
-        },
+        "provenance": provenance,
     }
     return metric, None
 
@@ -822,9 +913,10 @@ def _recommendations(
             "supply --eval-json from scripts/eval_routing.py --hermetic --json "
             "to evaluate near-miss over-injection"
         )
-    elif near_miss.get("provenance") and not near_miss["provenance"].get("hermetic"):
+    elif near_miss.get("provenance") and near_miss["provenance"].get("hermetic") is False:
         recs.append(
-            "re-run scripts/eval_routing.py with --hermetic; the eval payload was non-hermetic"
+            "re-run scripts/eval_routing.py with --hermetic; non-hermetic evidence "
+            "is rejected as invalid_eval_provenance"
         )
     recs.append(
         "this report is report-only: do not change hermetic --check exit codes or routing policy from it alone"
@@ -839,6 +931,7 @@ def observe_routing(
     until: str | None = None,
     project_id: str | None = None,
     eval_json: Path | None = None,
+    expected_eval_dataset: str = DEFAULT_EVAL_DATASET,
     thresholds: ObserveThresholds | None = None,
     strict_payloads: bool = False,
     require_inputs: bool = False,
@@ -858,7 +951,15 @@ def observe_routing(
     generated_at = (now or datetime.now(UTC)).astimezone(UTC)
 
     scan = _scan(spans_path, since_dt=since_dt, until_dt=until_dt, project_id=project_id)
-    near_miss, eval_error = _near_miss_metric(eval_json, resolved)
+    # Freshness is evaluated against the injected ``now`` and is intentionally
+    # independent of the --since/--until span window: the eval payload is a
+    # separate static-dataset run, not a stream filtered by that window.
+    near_miss, eval_error = _near_miss_metric(
+        eval_json,
+        resolved,
+        expected_eval_dataset=expected_eval_dataset,
+        now=generated_at,
+    )
 
     fault: ObserveError | None = None
     if scan.error_kind in ("unreadable_input", "io_error"):
@@ -867,7 +968,11 @@ def observe_routing(
             path=str(spans_path),
             message="spans file exists but could not be read",
         )
-    elif eval_error is not None and eval_error.kind in ("invalid_eval_payload", "io_error"):
+    elif eval_error is not None and eval_error.kind in (
+        "invalid_eval_payload",
+        "invalid_eval_provenance",
+        "io_error",
+    ):
         fault = eval_error
     elif require_inputs and ((scan.error_kind == "missing_input") or (eval_error is not None)):
         missing_path = (
@@ -946,6 +1051,8 @@ def observe_routing(
             "spans_mtime": _file_mtime(spans_path),
             "eval_json_path": str(eval_json) if eval_json is not None else None,
             "eval_json_mtime": _file_mtime(eval_json),
+            "expected_eval_dataset": expected_eval_dataset,
+            "future_skew_tolerance_seconds": FUTURE_SKEW_TOLERANCE_SECONDS,
             "registry_path": None,
         },
         "counts": {
@@ -980,6 +1087,7 @@ def observe_routing(
             "unknown_warn": resolved.unknown_warn,
             "unknown_crit": resolved.unknown_crit,
             "max_corrupt": resolved.max_corrupt,
+            "max_eval_age_hours": resolved.max_eval_age_hours,
         },
         "recommendations": _recommendations(scan, no_match, decision_source, near_miss, resolved),
     }
