@@ -1,7 +1,7 @@
 # Online Routing Evidence Operations (`vibe observe routing`)
 
-> **Applies to**: source candidate 8.5.0 (the [`vibesop.observe.routing`](../src/vibesop/core/observability/route_observe.py) v1 contract).
-> **Status**: report-only operator tooling. Public release 8.4.1 does not contain it; 8.5.0 is not published until it is tagged and pushed.
+> **Applies to**: VibeSOP 8.5.0 (the [`vibesop.observe.routing`](../src/vibesop/core/observability/route_observe.py) v1 contract).
+> **Status**: report-only operator tooling, included in the public 8.5.0 release.
 > **Last updated**: 2026-09-15
 
 `vibe observe routing` turns local routing telemetry into three operational

@@ -10,16 +10,18 @@ VibeSOP 是**多代理 AI 工程工作流**系统：把请求路由到合适的�
 
 | 对象 | 已核对状态 | 依据 |
 |---|---|---|
-| 当前源码版本 | **8.5.0**（source candidate） | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
-| 当前包元数据 | **8.5.0**（source candidate） | 本分支 release commit；公开发行 tag/publish 尚未完成 |
-| 当前 PyPI 发行 | **8.4.1** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json)；8.5.0 待后续 publish |
-| 当前 GitHub Release | **8.4.1** | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases)（公开 tag 指向 8.4.1）；8.5.0 待后续 tag |
+| 当前源码版本 | **8.5.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
+| 当前包元数据 | **8.5.0** | wheel/sdist 均由 tag `v8.5.0` 的 Release workflow 构建 |
+| 当前 PyPI 发行 | **8.5.0** | [PyPI 项目](https://pypi.org/project/vibesop/8.5.0/) |
+| 当前 GitHub Release | **8.5.0** | [GitHub Release v8.5.0](https://github.com/nehcuh/vibesop-py/releases/tag/v8.5.0) |
 | 上一公开版本 | **8.4.1**，2026-09-15 发布 | [CHANGELOG](../CHANGELOG.md) |
 | 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复；属于 8.3.0，不是独立软件包版本 |
 | SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |
-| 本分支 | **8.5.0 online routing evidence** | 分支 `codex/v85-online-evidence-loop`；只读观测器 `vibe observe routing` 与 `vibesop.observe.routing` v1 进入源码与 changelog。切片、数字与后续闸见 [ROADMAP.md](ROADMAP.md) |
+| 8.5.0 发布依据 | **已完成** | [PR #124](https://github.com/nehcuh/vibesop-py/pull/124)；merge `fb16f19b`；tag `v8.5.0`；[Release workflow](https://github.com/nehcuh/vibesop-py/actions/runs/34922545572) |
 
-当前**源码与包元数据是 8.5.0 source candidate**。公开发行（PyPI / GitHub Release）在 tag 与 publish 完成前仍是 **8.4.1**；不得把 8.5.0 写成已发布。8.5.0 新增只读的在线路由证据观测器（`vibe observe routing`，`vibesop.observe.routing` v1，覆盖 no_match / near_miss / decision_source）以及 eval provenance fail-closed 校验；它不写路由注册表、评测集或阈值。8.4.1 是针对 8.4.0 CI 矩阵解释器、热路径基准标记、Release 产物 glob，以及 Python 3.13 符号链接环 fail-closed 的补丁。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
+当前**源码、包元数据、PyPI 与 GitHub Release 均为 8.5.0**。8.5.0 新增只读的在线路由证据观测器（`vibe observe routing`，`vibesop.observe.routing` v1，覆盖 no_match / near_miss / decision_source）以及 eval provenance fail-closed 校验；它不写路由注册表、评测集或阈值。8.4.1 是针对 8.4.0 CI 矩阵解释器、热路径基准标记、Release 产物 glob，以及 Python 3.13 符号链接环 fail-closed 的补丁。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
+
+公开产物已交叉核验：PyPI 与 GitHub Release 的 wheel SHA-256 均为 `252a5e64c37d43693bb1218a85e480b8f287c0914d0153b41212bfb286ba7b0f`，sdist SHA-256 均为 `c326fcbdf84564171fa5c3c295814b979fb66d3c2375a24a3bec88e5fee4c996`；两个制品均通过 GitHub build provenance 验证。从 PyPI 隔离安装后，`vibe --version` 返回 `VibeSOP v8.5.0`，`vibe observe routing --help` 正常加载。
 
 ## 工程能力与验证边界
 
@@ -31,7 +33,7 @@ VibeSOP 是**多代理 AI 工程工作流**系统：把请求路由到合适的�
 | 持续任务 | loop 存储、调度及显式执行路径 | 任意任务均能无需监督地安全完成 |
 | 8.3.0 文档与发行 | 同步定位、发行说明、入口文档与 CLI 介绍 | 未完成研究自动成为已发行产品能力 |
 | 8.4.0 Trust & Evidence | 双向路由评测、near_miss 负例、no-match 聚合、decision_source 注册表、全量 tracked markdown 产物引用守卫（1109 refs / 0 dangling / 468 stale occurrences across 460 keys）；详见路线图 | 源码已升版本即 PyPI 已发布；评测数字即可靠性证明 |
-| 8.5.0 online routing evidence（source candidate） | 只读观测器 `vibe observe routing` + `vibesop.observe.routing` v1：半开窗口与 project 过滤、覆盖率/最小样本闸、Wilson 区间、decision-source 层分类、可选 hermetic eval provenance 校验、严格退出码；`scripts/aggregate_nomatch.py` 保持 8.4.0 兼容；无策略写入。指标口径与运维步骤见 [runbook](observe-routing.md) | 公开 PyPI/GitHub Release 仍为 8.4.1；该命令不自动修改路由策略、评测集或阈值 |
+| 8.5.0 online routing evidence（已发行） | 只读观测器 `vibe observe routing` + `vibesop.observe.routing` v1：半开窗口与 project 过滤、覆盖率/最小样本闸、Wilson 区间、decision-source 层分类、可选 hermetic eval provenance 校验、严格退出码；`scripts/aggregate_nomatch.py` 保持 8.4.0 兼容；无策略写入。指标口径与运维步骤见 [runbook](observe-routing.md) | 该命令不自动修改路由策略、评测集或阈值 |
 
 历史测试结果保留在对应变更、验收凭据和研究报告中。当前可信度应按具体功能、执行路径与最近实际验证判断，不再使用“全部计划完成”“全项目 production-ready”作为总括。
 

@@ -378,6 +378,6 @@ vibe instinct status                   # pattern learning
 - **Want cross-platform**: [`QUICKSTART_USERS.md`](QUICKSTART_USERS.md) install guide
 - **Want loops**: [`loop-setup-guide.md`](loop-setup-guide.md) 24-hour deployment
 - **Want the philosophy**: [`PHILOSOPHY.md`](PHILOSOPHY.md) design rationale
-- **Want the roadmap**: [`ROADMAP.md`](ROADMAP.md) (current source 8.5.0 source candidate; historical copy [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md))
+- **Want the roadmap**: [`ROADMAP.md`](ROADMAP.md) (current source and public package 8.5.0; historical copy [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md))
 
 Specific scenario not covered here? Open an issue; we'll add it to the next revision.
