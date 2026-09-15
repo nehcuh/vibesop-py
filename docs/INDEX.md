@@ -46,7 +46,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[多专家组织对照：正式报告](experiments/multi-expert-formal/REPORT.md)** — 主 360 + 探索性敏感性 144（2026-09-13 结算；8 次控制器中断计 0）。执行索引：[experiments/README.md](experiments/README.md)。
 - **[企业 AI 编程实践方法论](enterprise-agent-methodology.md)** — Agent = LLM + Harness：设计院 / 施工队 / 监理 / 档案馆；专家是点名的方法卡，不是常驻编制；放行权在确定性闸和人，不在评委打分
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
-  - 19 built-in skills + community packs explained (superpowers, gstack, omx)
+  - 22 built-in skills + community packs explained (superpowers, gstack, omx)
   - 4-stage routing cascade详解
   - Priority decision mechanism and scenario-based selection
 - **[Quick Start - Users](QUICKSTART_USERS.md)** — User-facing installation and basic usage
@@ -193,7 +193,7 @@ These files remain in the project root for discoverability and tool integration:
 | **Source / public package version** | 8.5.0（2026-09-15 发布） |
 | **Public PyPI / GitHub Release** | 8.5.0（2026-09-15） |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
-| **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
+| **Skills Supported** | 22 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
 | **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
 | **Routing Model** | 4-Stage Cascade |

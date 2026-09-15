@@ -71,6 +71,30 @@
   expect:
   - builtin/skill-craft
   category: skill_mgmt
+- query: 拉取最新代码并使用多路独立对抗进行复审
+  expect:
+  - builtin/adversarial-review
+  category: review
+- query: pull latest and run multi-lane independent adversarial review
+  expect:
+  - builtin/adversarial-review
+  category: review
+- query: 对抗合成器给出 REQUEST CHANGES，这些是真的问题还是看法
+  expect:
+  - builtin/review-arbitration
+  category: review
+- query: classify adversarial REQUEST CHANGES findings as D T or J
+  expect:
+  - builtin/review-arbitration
+  category: review
+- query: babysit 到合并 main
+  expect:
+  - builtin/babysit-main
+  category: ci
+- query: watch CI until this origin/main push is green
+  expect:
+  - builtin/babysit-main
+  category: ci
 - query: 评估一下这些技能的使用质量和效果
   expect:
   - builtin/slash-evaluate

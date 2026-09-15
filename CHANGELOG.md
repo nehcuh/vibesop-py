@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Three builtin review/landing skills** (instinct → `core/skills/`):
+  `adversarial-review` (ff-only pull + frozen five-lens adversarial panel),
+  `review-arbitration` (D/T/J on synthesizer REQUEST CHANGES; consult not a
+  merge gate), and `babysit-main` (job-level CI + Quickstart E2E on
+  `origin/main`; not PR auto-merge). Builtin count 19 → 22.
+
 ## [8.5.0] — 2026-09-15
 
 Minor: report-only online routing-evidence observer and its versioned machine

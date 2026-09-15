@@ -822,3 +822,52 @@ skills:
       - Grep
       - Bash
     safety_level: trusted_builtin
+
+  - id: adversarial-review
+    namespace: builtin
+    entrypoint: skills/adversarial-review/SKILL.md
+    intent: Fast-forward pull origin/main, freeze the review-surface patch, then run five independent finder lenses with refute-first verification and a synthesizer.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Grep
+      - Bash
+    safety_level: trusted_builtin
+
+  - id: review-arbitration
+    namespace: builtin
+    entrypoint: skills/review-arbitration/SKILL.md
+    intent: Classify confirmed adversarial findings as D, T, or J and let a human arbitrator sign COMMENT versus REQUEST CHANGES. The synthesizer is consult, not a merge gate.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Grep
+    safety_level: trusted_builtin
+
+  - id: babysit-main
+    namespace: builtin
+    entrypoint: skills/babysit-main/SKILL.md
+    intent: After commit and push to origin/main, watch job-level CI plus Quickstart E2E for that SHA until green. Not PR babysit and not auto-merge.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
