@@ -21,6 +21,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from vibesop.cli.commands import observe_cmd
@@ -908,12 +909,15 @@ def test_cli_human_block_is_not_json(tmp_path: Path, runner: CliRunner) -> None:
 def test_cli_registered_under_main_app() -> None:
     from vibesop.cli.main import app
 
-    result = CliRunner().invoke(app, ["observe", "routing", "--help"])
+    # Rich styles the two option-prefix hyphens separately when color is
+    # enabled, so assert against the visible help text rather than raw ANSI.
+    result = CliRunner().invoke(app, ["observe", "routing", "--help"], color=True)
     assert result.exit_code == 0
-    assert "--spans" in result.stdout
-    assert "--eval-json" in result.stdout
-    assert "--expected-eval-dataset" in result.stdout
-    assert "--max-eval-age-hours" in result.stdout
+    help_text = unstyle(result.stdout)
+    assert "--spans" in help_text
+    assert "--eval-json" in help_text
+    assert "--expected-eval-dataset" in help_text
+    assert "--max-eval-age-hours" in help_text
 
 
 def test_cli_provenance_fault_exit_3_even_report_only(tmp_path: Path, runner: CliRunner) -> None:
