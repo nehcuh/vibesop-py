@@ -94,7 +94,7 @@ contract. v8.4.1 remains the previous public release.
 - Updated both READMEs (positioning broadened beyond SkillOS to the multi-agent
   AI engineering workflow, plus a runnable `vibe observe routing` example),
   `docs/INDEX.md`, `docs/PROJECT_STATUS.md`, `docs/ROADMAP.md` (operational-
-  evidence slice marked implemented in the 8.5.0 source candidate), and the CLI
+  evidence slice marked implemented for 8.5.0), and the CLI
   reference/handbook.
 
 ### Tests

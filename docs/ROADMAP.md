@@ -1,7 +1,7 @@
 # VibeSOP Roadmap
 
-> **当前源码 / 包元数据 Current source**: 8.5.0 source candidate（online routing evidence）
-> **公开发行 Public release**: 8.4.1（PyPI / GitHub Release 已对齐 8.4.1；8.5.0 待后续 tag/publish）
+> **当前源码 / 包元数据 Current source**: 8.5.0（online routing evidence）
+> **公开发行 Public release**: 8.5.0（PyPI / GitHub Release，2026-09-15）
 > **最后更新 Last Updated**: 2026-09-15
 > **历史稿**: [roadmap-through-8.3.md](archive/roadmap-through-8.3.md)（冻结至 8.3.0 的 804 行原稿）
 
@@ -17,9 +17,9 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 对象 | 状态 | 说明 |
 |---|---|---|
-| 当前源码 / 包元数据 | **8.5.0** source candidate | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
-| 当前 PyPI / GitHub Release | **8.4.1** | 8.5.0 的 tag/publish 在后续发行阶段 |
-| 本分支 `codex/v85-online-evidence-loop` | **8.5.0 online routing evidence** | 只读观测器 `vibe observe routing`、`vibesop.observe.routing` v1、eval provenance fail-closed |
+| 当前源码 / 包元数据 | **8.5.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
+| 当前 PyPI / GitHub Release | **8.5.0** | 2026-09-15 发布；tag `v8.5.0` |
+| 8.5.0 online routing evidence | **已公开发行** | 只读观测器 `vibe observe routing`、`vibesop.observe.routing` v1、eval provenance fail-closed |
 
 8.5.0 作为 minor 的理由是新增公开的 operator CLI / 机器契约 / library 面（并在 `scripts/aggregate_nomatch.py` 保持 8.4.0 兼容），不是补丁级修复。源码版本上升不等于 PyPI 已发布，也不等于可靠性已被证明。
 
@@ -29,7 +29,7 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 分层 | 含义 | 本文件中的位置 |
 |---|---|---|
-| **已实现（8.4.0–8.5.0 源码）** | 本分支源码与包元数据已有；8.5.0 公开发行待 tag/publish | 8.4.0 / 8.5.0 切片 |
+| **已实现并发行（8.4.0–8.5.0）** | 源码、包元数据、PyPI 与 GitHub Release 已对齐 8.5.0 | 8.4.0 / 8.5.0 切片 |
 | **计划中** | 下一轮优化，尚未当作交付 | 优先级 A–E |
 | **研究阻塞** | 预注册实验未跑完或未结算；不得改判据迁就结果 | B、C |
 
@@ -59,7 +59,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 
 `scripts/check_artifact_links.py` 检查 tracked 文档对 `.omx/artifacts/` 的引用。默认扫描 `git ls-files` 中每一个 tracked `*.md`（含 `.omx/artifacts/`、`memory/`、`knowledge/`），与 fresh-clone 集合一致。dangling 一律失败。历史未跟踪引用冻结在 `ci/artifact-links-baseline.json`，精确匹配才过。提取在 ASCII `()` / `:` / `\\` 处截断，基线 key 必须是正规化 POSIX 产物路径/glob/目录，不是 `file:line` 或注解碎片。本 checkpoint： **1109** 条引用 = **641** ok + **468** 条历史非跟踪出现（**460** 个 key）+ **0** dangling，基线精确匹配。该基线是过渡账本，不是永久免责。
 
-## 8.5.0：Online routing evidence（source candidate）
+## 8.5.0：Online routing evidence（已发行）
 
 数字均为 2026-09-15 本 checkpoint 在本工作区执行所得。该切片 report-only，尚未接门禁。
 
@@ -84,9 +84,9 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 
 运维口径、阈值、退出表、JSON 契约与 cron/CI 包装见 [observe-routing.md](observe-routing.md)。本切片报告**不写**路由注册表、评测集、阈值或策略文件。
 
-## 8.5.0 发行闸（source candidate）
+## 8.5.0 发行闸（已完成）
 
-8.4.0 / 8.4.1 已公开发行。当前包版本在本分支 release commit 升到 8.5.0 source candidate；公开发行（tag / PyPI）之前，须同时满足：
+8.5.0 已于 2026-09-15 公开发行。下列发行闸条件均已满足：
 
 1. 相关检查与适当的完整检查绿。
 2. hermetic baseline check 绿。
@@ -95,13 +95,13 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 5. CHANGELOG、版本元数据、状态文档同步。
 6. 独立评审 0 个 P0 / P1 / P2。
 
-本文件不把未执行的全量测试套件写成已绿。hermetic、artifact baseline、decision registry 三项观测检查曾在本 checkpoint 工作区执行通过；release commit 之后须重跑。
+[PR #124](https://github.com/nehcuh/vibesop-py/pull/124) merge `fb16f19b` 的检查已通过；tag `v8.5.0` 触发的 [Release workflow](https://github.com/nehcuh/vibesop-py/actions/runs/34922545572) 成功执行 CI Gate，并构建、证明来源和发布 wheel/sdist。公开状态与产物依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 下一轮优化（顺序固定；字母 A–E 仅本文件编号，不是 2026-09-11 提案 lane）
 
-### A. 在线消费证据（先 report-only）— 8.5.0 source candidate 已实现
+### A. 在线消费证据（先 report-only）— 8.5.0 已发行
 
-区分五件事，不要合成一句「用过了」：选择、投递/注入、实际消费/阅读、执行、机器验收。8.5.0 source candidate 先交付 report-only 的 `vibe observe routing`：no_match / near_miss / decision_source 与 `vibesop.observe.routing` v1。后续仍不接门禁，不把信号折成总分。
+区分五件事，不要合成一句「用过了」：选择、投递/注入、实际消费/阅读、执行、机器验收。8.5.0 先交付 report-only 的 `vibe observe routing`：no_match / near_miss / decision_source 与 `vibesop.observe.routing` v1。后续仍不接门禁，不把信号折成总分。
 
 ### 后续里程碑（8.5.0 不含，保持原计划）
 

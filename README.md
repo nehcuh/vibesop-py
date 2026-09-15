@@ -27,7 +27,7 @@ factory. See the [project positioning](docs/POSITIONING.md).
 
 | Surface | State |
 |---|---|
-| Current source and package metadata | **8.5.0** (source candidate; tag/publish pending) |
+| Current source and public package | **8.5.0**, published 2026-09-15 |
 | Previous public release | **8.4.1**, published 2026-09-15 |
 | Commit / changelog references to 8.3.1 | Internal repair-batch labels; no 8.3.1 release exists |
 | Skill format | SKILL.md v3.0; independent of the package version |
@@ -125,7 +125,7 @@ A blocked plan needs its reported problem resolved; it must not be treated as a
 completed or ready-to-run task. See the
 [verification contract](docs/architecture/verification-contract.md).
 
-### Routing evidence (source candidate 8.5.0)
+### Routing evidence (8.5.0)
 
 `vibe observe routing` reports no-match, near-miss, and decision-source
 evidence from local route spans. It is report-only: it never edits the eval

@@ -17,7 +17,7 @@ VibeSOP 是一个**多代理 AI 工程工作流**系统：把请求路由到合�
 
 | 对象 | 状态 |
 |---|---|
-| 当前源码与包元数据 | **8.5.0**（源码候选，尚未 tag/publish） |
+| 当前源码与公开软件包 | **8.5.0**，发布于 2026-09-15 |
 | 上一公开版本 | **8.4.1**，发布于 2026-09-15 |
 | 提交与日志中的 8.3.1 | 内部修复批次标签；尚不存在 8.3.1 公开发行 |
 | 技能格式 | SKILL.md v3.0，与软件包版本独立 |
@@ -100,7 +100,7 @@ vibe doctor
 
 `recall` 需要已有 trace 和相应 embedding 依赖。跨项目检索需要显式使用 `--cross-project`，并有可用的项目 pool。被阻断的计划应先解决报告中的问题，不能当作已完成或可执行计划。详见[验证交付合同](docs/architecture/verification-contract.md)。
 
-### 路由证据（源码候选 8.5.0）
+### 路由证据（8.5.0）
 
 `vibe observe routing` 从本地 route span 报告 no-match、near-miss 与 decision-source 证据。它是 report-only：不会改动评测集、阈值或路由策略。先生成 hermetic 评测载荷，再对它观测 span：
 

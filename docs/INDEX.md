@@ -1,9 +1,9 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-09-15
-> **Current source / package metadata**: 8.5.0 source candidate（尚未 tag/publish；发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-> **Latest public release**: 8.4.1
-> **This branch**: 8.5.0 online routing-evidence observer（`vibe observe routing` + `vibesop.observe.routing` v1）；含 eval provenance fail-closed；PyPI / GitHub Release 仍为 8.4.1
+> **Current source / public package**: 8.5.0（2026-09-15 发布；发行依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **Latest public release**: 8.5.0
+> **Current release**: 8.5.0 online routing-evidence observer（`vibe observe routing` + `vibesop.observe.routing` v1）；含 eval provenance fail-closed
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -190,8 +190,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Source / package version** | 8.5.0 source candidate（tag/publish 前不计入公开版） |
-| **Public PyPI / GitHub Release** | 8.4.1 |
+| **Source / public package version** | 8.5.0（2026-09-15 发布） |
+| **Public PyPI / GitHub Release** | 8.5.0（2026-09-15） |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
