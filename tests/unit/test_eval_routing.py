@@ -732,3 +732,13 @@ def test_dataset_identity_external_is_resolved_absolute(tmp_path: Path) -> None:
     identity = evr._dataset_identity(external)
     assert identity == str(external.resolve())
     assert not identity.startswith(str(evr.ROOT))
+
+
+def test_default_dataset_identity_is_bound_to_observer_contract() -> None:
+    """Cross-module contract: the eval producer's portable identity for its
+    default dataset is exactly the observer's DEFAULT_EVAL_DATASET, so the two
+    modules cannot drift apart as duplicated literals."""
+    from vibesop.core.observability.route_observe import DEFAULT_EVAL_DATASET
+
+    default = evr.ROOT / "tests" / "benchmark" / "routing_eval.yaml"
+    assert evr._dataset_identity(default) == DEFAULT_EVAL_DATASET

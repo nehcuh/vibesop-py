@@ -263,6 +263,53 @@ def test_directory_spans_is_fault_exit_3(tmp_path: Path) -> None:
     assert result.report["error"]["kind"] == "unreadable_input"
 
 
+def test_unreadable_spans_metric_reasons_match_error_kind(tmp_path: Path) -> None:
+    """Unreadable is not missing: the metric reasons carry the exact kind."""
+    result = observe_routing(tmp_path)
+    assert result.report["error"]["kind"] == "unreadable_input"
+    assert result.report["outcome"]["reason"] == "unreadable_input"
+    assert result.report["metrics"]["no_match"]["reason"] == "unreadable_input"
+    assert result.report["metrics"]["decision_source"]["reason"] == "unreadable_input"
+
+
+def test_require_inputs_both_missing_exposes_both_paths(tmp_path: Path) -> None:
+    """--require-inputs with missing spans and a missing requested eval names
+    both paths deterministically while the primary error stays the spans one."""
+    spans = tmp_path / "missing-spans.jsonl"
+    eval_path = tmp_path / "missing-eval.json"
+    result = observe_routing(spans, eval_json=eval_path, require_inputs=True)
+    assert result.exit_code == 3
+    assert result.fault is True
+    assert result.report["error"] == {
+        "kind": "missing_input",
+        "path": str(spans),
+        "message": "--require-inputs: a requested input is missing",
+    }
+    assert result.report["errors"] == [
+        {
+            "kind": "missing_input",
+            "path": str(spans),
+            "message": "spans file does not exist",
+        },
+        {
+            "kind": "missing_input",
+            "path": str(eval_path),
+            "message": "eval JSON path does not exist",
+        },
+    ]
+    assert [err["path"] for err in result.report["errors"]] == [str(spans), str(eval_path)]
+
+
+def test_require_inputs_single_missing_has_no_errors_array(tmp_path: Path) -> None:
+    """A single missing requested input keeps the primary error only."""
+    spans = _write_jsonl(tmp_path / "spans.jsonl", _scored_run(70, 30))
+    eval_path = tmp_path / "missing-eval.json"
+    result = observe_routing(spans, eval_json=eval_path, require_inputs=True)
+    assert result.exit_code == 3
+    assert result.report["error"]["path"] == str(eval_path)
+    assert "errors" not in result.report
+
+
 # ---------------------------------------------------------------------------
 # Corrupt / strict payloads
 # ---------------------------------------------------------------------------

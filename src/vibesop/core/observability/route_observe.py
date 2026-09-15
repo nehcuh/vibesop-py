@@ -136,8 +136,10 @@ class _ScanResult:
     """Internal tally over one spans file. Counts partitions:
 
     - ``n_route == n_hit + n_nomatch + n_unscored``
-    - ``n_scored == n_hit + n_nomatch``
-    - ``n_no_ts`` / ``n_corrupt`` / ``n_unparsed_metadata`` are outside both.
+    - ``n_scored == n_hit + n_nomatch`` (so ``n_scored <= n_route``)
+    - ``n_unparsed_metadata`` is a subset of ``n_unscored`` and therefore
+      counts inside ``n_route`` as well.
+    - only ``n_no_ts`` / ``n_corrupt`` are outside ``n_route``.
     """
 
     spans_path: str
@@ -234,12 +236,6 @@ def _decode_metadata(record: dict[str, Any]) -> tuple[dict[str, Any], bool]:
             return decoded, True
         return {}, False
     return {}, False
-
-
-def _parse_metadata(record: dict[str, Any]) -> dict[str, Any]:  # pyright: ignore[reportUnusedFunction]
-    """Shipped helper preserved for compatibility: dict passes through,
-    JSON string is decoded, anything else (or undecodable) is empty."""
-    return _decode_metadata(record)[0]
 
 
 def _score_no_match(meta: dict[str, Any]) -> bool | None:
@@ -569,7 +565,7 @@ def _no_match_metric(scan: _ScanResult, thresholds: ObserveThresholds) -> dict[s
     state = HEALTHY
     reason: str | None = None
     if scan.error is not None:
-        state, reason = INSUFFICIENT, "missing_input"
+        state, reason = INSUFFICIENT, (scan.error_kind or scan.error)
     elif scan.n_route == 0:
         state, reason = INSUFFICIENT, "no_route_spans"
     elif d == 0:
@@ -612,7 +608,7 @@ def _decision_source_metric(scan: _ScanResult, thresholds: ObserveThresholds) ->
     state = HEALTHY
     reason: str | None = None
     if scan.error is not None:
-        state, reason = INSUFFICIENT, "missing_input"
+        state, reason = INSUFFICIENT, (scan.error_kind or scan.error)
     elif scan.n_route == 0:
         state, reason = INSUFFICIENT, "no_route_spans"
     elif d == 0:
@@ -985,6 +981,22 @@ def observe_routing(
             path=missing_path,
             message="--require-inputs: a requested input is missing",
         )
+    # Under ``--require-inputs`` every missing requested input is a fault. If
+    # both the spans file and a supplied eval file are missing, name both paths
+    # deterministically instead of exposing only the first.
+    missing_inputs: list[ObserveError] = []
+    if require_inputs:
+        if scan.error_kind == "missing_input":
+            missing_inputs.append(
+                ObserveError(
+                    kind="missing_input",
+                    path=str(spans_path),
+                    message="spans file does not exist",
+                )
+            )
+        if eval_error is not None and eval_error.kind == "missing_input":
+            missing_inputs.append(eval_error)
+
     if strict_payloads and fault is None and (scan.n_corrupt > 0 or scan.n_unparsed_metadata > 0):
         fault = ObserveError(
             kind="payload_rejected",
@@ -1107,6 +1119,12 @@ def observe_routing(
             "path": report_error.path,
             "message": report_error.message,
         }
+    # Additive (schema v1) multi-input detail: only present when more than one
+    # requested input is missing, so the primary ``error`` field is unchanged.
+    if len(missing_inputs) > 1:
+        report["errors"] = [
+            {"kind": err.kind, "path": err.path, "message": err.message} for err in missing_inputs
+        ]
     return ObserveResult(report=report, exit_code=exit_code, fault=fault is not None)
 
 
@@ -1123,6 +1141,8 @@ def render_human(report: dict[str, Any]) -> str:
     if "error" in report:
         err = report["error"]
         lines.append(f"error: {err['kind']} path={err['path']} message={err['message']}")
+    for extra in report.get("errors", []):
+        lines.append(f"error: {extra['kind']} path={extra['path']} message={extra['message']}")
     counts = report["counts"]
     lines.append("counts: " + " ".join(f"{key}={value}" for key, value in counts.items()))
     coverage = report["coverage"]

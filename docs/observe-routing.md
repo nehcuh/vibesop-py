@@ -67,9 +67,14 @@ Counts partition as:
 
 ```
 n_route   = n_hit + n_nomatch + n_unscored
-n_scored  = n_hit + n_nomatch
-n_no_ts, n_corrupt, n_unparsed_metadata   # outside both
+n_scored  = n_hit + n_nomatch          # n_scored <= n_route
+n_unparsed_metadata <= n_unscored      # subset; also inside n_route
+n_no_ts, n_corrupt                     # outside n_route
 ```
+
+An unparsed `metadata` payload is both `n_unparsed_metadata` and `n_unscored`,
+so it counts once inside `n_route`; only dropped window spans (`n_no_ts`) and
+corrupt JSONL lines (`n_corrupt`) are outside `n_route`.
 
 ---
 
@@ -251,7 +256,8 @@ A provenance fault is **never** suppressed by `--report-only`.
 | `registry` | null | Reserved; the observer never reads or writes the routing registry. |
 | `thresholds` | object | The effective threshold values for this run. |
 | `recommendations` | string[] | Deterministic, human-readable next steps. |
-| `recommendations` + `error` | object | `error` is present only on a fault/missing input: `{kind, path, message}`. |
+| `error` | object | Present only on a fault or missing input: `{kind, path, message}`. |
+| `errors` | object[] | Optional additive detail: present only when more than one requested input is missing under `--require-inputs`; lists every missing input path in a fixed order (spans first, then eval). The primary `error` is unchanged. |
 
 The report is deterministic for a fixed clock and input. It never includes raw
 query text, skill ids, or span metadata at the top level.
@@ -313,8 +319,15 @@ If you *do* want the step to fail the build, drop `--report-only` and map
 - **No spans file** → `insufficient_data` (`4`) with `error.kind: missing_input`,
   `metrics.no_match.reason: missing_input`, and `no_match.rate: null`. Exit `4`
   is the expected first-run result, not an error.
+- **Spans path exists but cannot be read** (for example a directory, or an I/O
+  error) → `fault` (`3`) with `error.kind: unreadable_input`; both
+  `metrics.no_match.reason` and `metrics.decision_source.reason` carry
+  `unreadable_input`, never a generic `missing_input`.
 - **`--require-inputs`** → the same missing file becomes a fault (`3`), so an
-  automated pipeline cannot mistake "no data yet" for green.
+  automated pipeline cannot mistake "no data yet" for green. When the spans
+  file and a supplied `--eval-json` are **both** missing, the report adds an
+  `errors` array naming both paths in a fixed order (`[spans, eval]`) while the
+  primary `error` field still points at the spans file.
 - **Spans file exists but has no `route:` spans** → `insufficient_data`
   (`no_route_spans`).
 - **Route spans exist but none are scorable** → `insufficient_data`
