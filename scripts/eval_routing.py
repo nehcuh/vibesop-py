@@ -469,6 +469,12 @@ def main() -> int:
         "n_near_miss": n_near_miss,
         "near_miss_over_inject": near_miss_over_inject,
     }
+    # Provenance (P1-4, additive): consumers of --json/--json-out can verify
+    # which dataset produced the numbers, whether the hermetic universe was
+    # pinned, and when the run happened. Existing checks/exits are unchanged.
+    metrics["dataset"] = str(eval_file)
+    metrics["hermetic"] = bool(args.hermetic)
+    metrics["generated_at"] = datetime.now(UTC).isoformat()
 
     if args.record and errors:
         log = ROOT / "memory" / "routing-errors.jsonl"

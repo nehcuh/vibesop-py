@@ -51,6 +51,7 @@ from vibesop.cli.commands import (
     loop_cmd,
     market_cmd,
     matcher_cmd,
+    observe_cmd,
     optimize_cmd,
     plan_cmd,
     pool_cmd,
@@ -182,6 +183,7 @@ def _default_callback(  # pyright: ignore[reportUnusedFunction]
 app.add_typer(plan_cmd.app, name="plan")
 app.add_typer(matcher_cmd.app, name="matcher")
 app.add_typer(deviation_cmd.app, name="deviation")
+app.add_typer(observe_cmd.app, name="observe")
 app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(snapshot_cmd.app, name="snapshot")
