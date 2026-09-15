@@ -9,9 +9,9 @@
 [![PyPI](https://img.shields.io/pypi/v/vibesop.svg)](https://pypi.org/project/vibesop/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-VibeSOP 提供跨代理的技能选择、任务计划、交付检查、执行证据记录和历史经验检索工具。这个仓库也通过实验研究：技能、规格、编排、评审与记忆何时改善工作，何时只是增加成本。
+VibeSOP 是一个**多代理 AI 工程工作流**系统：把请求路由到合适的技能或代理，按明确标准验证交付，并记录可观测的执行证据。围绕这条主线，它提供技能选择、发布放行的治理，以及跨代理的经验/知识积累。这个仓库也通过实验研究：技能、规格、编排、评审与记忆何时改善工作，何时只是增加成本。
 
-**SkillOS 继续描述技能管理子系统。** 整个项目还包含工作流工程与实证研究。“可靠”是目标；拥有这些模块不等于全过程已经自动接通，也不等于一条通用自动开发流水线已被证明有效。详见[项目定位](docs/POSITIONING.md)。
+**SkillOS 是技能管理子系统，不是整个项目。** VibeSOP 还覆盖路由、验证、观测、治理与经验/知识积累。“可靠”是目标；拥有这些模块不等于全过程已经自动接通，也不等于一条通用自动开发流水线已被证明有效。详见[项目定位](docs/POSITIONING.md)。
 
 ## 版本与可用范围
 
@@ -99,6 +99,21 @@ vibe doctor
 ```
 
 `recall` 需要已有 trace 和相应 embedding 依赖。跨项目检索需要显式使用 `--cross-project`，并有可用的项目 pool。被阻断的计划应先解决报告中的问题，不能当作已完成或可执行计划。详见[验证交付合同](docs/architecture/verification-contract.md)。
+
+### 路由证据（源码候选 8.5.0）
+
+`vibe observe routing` 从本地 route span 报告 no-match、near-miss 与 decision-source 证据。它是 report-only：不会改动评测集、阈值或路由策略。先生成 hermetic 评测载荷，再对它观测 span：
+
+```sh
+# 1. 生成新的 hermetic 评测载荷（near-miss 过灌证据）。
+uv run python scripts/eval_routing.py --hermetic --json --json-out /tmp/eval-routing.json
+
+# 2. 对本地 route span 观测（默认读 .vibe/observability/spans.jsonl；
+#    退出 4 表示可计分 span 还不足）。
+uv run vibe observe routing --eval-json /tmp/eval-routing.json --json
+```
+
+span 来自真实的 `vibe route` 调用。指标口径、阈值、退出码与 cron/CI 包装见[运维手册](docs/observe-routing.md)。
 
 完整命令与实际场景见 [CLI 参考](docs/user/CLI_REFERENCE.md)、[命令手册](docs/user/COMMAND_HANDBOOK.md)和[使用场景](docs/USE_CASES.md)。
 

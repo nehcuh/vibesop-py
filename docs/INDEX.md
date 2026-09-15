@@ -1,8 +1,9 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-09-15
-> **Current release**: 8.4.1（发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-> **This branch**: 8.4.1 CI trust patch on 8.4.0 Trust & Evidence（含 3.13 符号链接环 fail-closed；包元数据已升；PyPI / GitHub Release 待后续 tag/publish）
+> **Current source / package metadata**: 8.5.0 source candidate（尚未 tag/publish；发行状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **Latest public release**: 8.4.1
+> **This branch**: 8.5.0 online routing-evidence observer（`vibe observe routing` + `vibesop.observe.routing` v1）；含 eval provenance fail-closed；PyPI / GitHub Release 仍为 8.4.1
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -57,7 +58,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[Project Context](../PROJECT_CONTEXT.md)** — Project background, goals, and scope（根目录，持续更新）
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
-- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.4.0 Trust & Evidence, next-optimization order A–E
+- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.5.0 online routing-evidence observer, next-optimization order A–E（A 已实现）
 - **[Historical roadmap through 8.3](archive/roadmap-through-8.3.md)** — Frozen 804-line v4–v8 / W1–W2 narrative
 - **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
 - **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
@@ -93,6 +94,7 @@ These files remain in the project root for discoverability and tool integration:
 
 - **[命令手册](user/COMMAND_HANDBOOK.md)** — 分层场景 + Docker 录制输出（每天用 / 装配 / 少碰）。**日常以这篇为准。**
 - **[CLI Reference](user/CLI_REFERENCE.md)** — Complete flag encyclopedia (not layered; prefer the handbook + `vibe man`)
+- **[Online Routing Evidence Operations](observe-routing.md)** — `vibe observe routing` operator runbook: inputs, metric numerators/denominators, thresholds, exit codes, JSON contract, cron/CI wrappers, and limitations
 - **[Getting Started](user/getting-started.md)** — Step-by-step first-time user guide
 - **[Session Intelligent Routing](user/session-intelligent-routing.md)** — Multi-turn conversation and context-aware routing
 - **[Workflows](user/workflows.md)** — Cross-cutting workflow definitions and usage
@@ -188,8 +190,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Source / package version** | 8.4.1 |
-| **Public PyPI / GitHub Release** | 8.4.0 until later tag/publish |
+| **Source / package version** | 8.5.0 source candidate（tag/publish 前不计入公开版） |
+| **Public PyPI / GitHub Release** | 8.4.1 |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 19 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |

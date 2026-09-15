@@ -21,6 +21,7 @@ Complete reference for all VibeSOP CLI commands (v8.0.0+).
   - [`vibe sequence`](#vibe-sequence)
   - [`vibe conversation`](#vibe-conversation)
   - [`vibe data purge`](#vibe-data-purge)
+  - [`vibe observe routing`](#vibe-observe-routing-850)
 - [Skills Management](#skills-management)
   - [`vibe skills`](#vibe-skills)
   - [`vibe skills distill`](#vibe-skills-distill-suggestion-id)
@@ -391,6 +392,62 @@ vibe data purge --analytics --traces
 
 # Reset pack install locks after a force-push review
 vibe data purge --pack-locks --yes
+```
+
+---
+
+### `vibe observe routing` (8.5.0)
+
+Report-only health observer over local routing telemetry. It reads route spans
+(`.vibe/observability/spans.jsonl` by default) plus an optional `eval_routing.py`
+JSON payload, and emits the versioned `vibesop.observe.routing` v1 machine
+contract. It never writes the routing registry, eval dataset, thresholds, or
+any policy file. Full operator runbook: [observe-routing.md](../observe-routing.md).
+
+```bash
+vibe observe routing [options]
+```
+
+**Options:**
+- `--spans PATH` - spans JSONL (default: `<cwd>/.vibe/observability/spans.jsonl`)
+- `--since ISO` - inclusive ISO8601 lower bound on span `started_at` (naive = UTC)
+- `--until ISO` - exclusive ISO8601 upper bound on span `started_at`
+- `--project-id ID` - keep only spans whose `project_id` matches exactly
+- `--eval-json PATH` - `eval_routing.py` JSON payload for `near_miss` over-injection
+- `--expected-eval-dataset ID` - exact portable dataset identity (default `tests/benchmark/routing_eval.yaml`)
+- `--max-eval-age-hours N` - reject evals older than `N` hours (default `24.0`; >5m future is also rejected)
+- `--min-samples N` - minimum scorable route spans for a verdict (default `100`)
+- `--min-samples-near-miss N` - minimum eval near-miss rows (default `10`)
+- `--min-coverage F` - minimum `n_scored/n_route` (default `0.80`)
+- `--nomatch-warn F` / `--nomatch-crit F` - no-match rate thresholds (default `0.40` / `0.60`, inclusive)
+- `--near-miss-warn F` / `--near-miss-crit F` - near-miss over-injection thresholds (default `0.15` / `0.30`)
+- `--unknown-warn F` / `--unknown-crit F` - unknown-layer share thresholds (default `0.05` / `0.10`)
+- `--max-corrupt N` - corrupt lines tolerated before the verdict floors at warn (default `0`)
+- `--strict-payloads` - turn corrupt/unparsed payloads into a fault (exit 3)
+- `--require-inputs` - turn missing inputs into a fault (exit 3)
+- `--report-only` - always exit 0 for verdicts (usage `2` and faults `3` stay non-zero)
+- `--json`, `-j` - emit the versioned machine JSON on stdout
+
+**Exit codes (labels, not a severity ordering; not Nagios-compatible):**
+
+| Code | Meaning |
+|---|---|
+| `0` | healthy (or a verdict suppressed by `--report-only`) |
+| `1` | warn (or corrupt-payload floor) |
+| `2` | usage: invalid window/threshold |
+| `3` | critical, or any fault (unreadable spans, invalid eval payload/provenance, `--require-inputs`, `--strict-payloads`) |
+| `4` | insufficient_data: missing input, no route/scorable spans, below coverage or min-samples |
+
+**Examples:**
+```bash
+# Generate a fresh hermetic eval payload, then observe local spans against it.
+uv run python scripts/eval_routing.py --hermetic --json --json-out /tmp/eval-routing.json
+uv run vibe observe routing --eval-json /tmp/eval-routing.json --json
+
+# Windowed, project-scoped, fail-loud if inputs are missing.
+vibe observe routing \
+  --since 2026-09-01T00:00:00 --until 2026-09-15T00:00:00 \
+  --project-id vibesop-py --require-inputs --json
 ```
 
 ---
@@ -2210,6 +2267,7 @@ vibe import-rules <file> [options]
 | `vibe inspect <target>` | Inspect config/route/skill |
 | `vibe version` | Show version |
 | `vibe dashboard` | Start web dashboard for routing history & health |
+| `vibe observe routing` | Report no-match / near-miss / decision-source routing evidence (report-only) |
 | `vibe loop create <name>` | Create an autonomous scheduled loop |
 | `vibe loop list [--all]` | List loops (default: current project only) |
 | `vibe loop tick` | Single polling cycle (called by cron/launchd) |

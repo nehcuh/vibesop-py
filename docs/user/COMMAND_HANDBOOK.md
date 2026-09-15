@@ -193,6 +193,7 @@ docker 录制：[`skills-list.txt`](cli-recordings/skills-list.txt) → `Skills:
 
 | 命令 | 场景 | 别把它当成 |
 |---|---|---|
+| `vibe observe routing` | 生产 no-match / near-miss / decision-source 证据（report-only） | 自动改阈值/评测集的闸；口径见[运维手册](../observe-routing.md) |
 | `vibe trace list/show` | 路由到底走了哪一层 | 质量门 |
 | `vibe instinct`（只读子命令） | 看养成的习惯候选 | 自动注入开关 |
 | `vibe conversation` | 对话镜像是否落盘 | 技能本身 |
