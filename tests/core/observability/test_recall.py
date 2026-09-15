@@ -13,6 +13,7 @@ Contract:
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,7 +33,23 @@ def _unit_vec(angle: float, dim: int = 384) -> np.ndarray:
 
 
 def _fake_embedding(query: str) -> np.ndarray:
-    h = hash(query) & 0xFFFF
+    """Process-stable fake embedding.
+
+    Do not use ``hash()``: PYTHONHASHSEED randomizes it per process, so
+    distinct strings can land on the same angle and flip top-k order
+    (ubuntu-3.12 CI flake: ``t2`` beating exact-match ``t1``).
+    """
+    known = {
+        "alpha": 0.0,
+        "beta": np.pi / 2,
+        "gamma": np.pi,
+        "zeta": 2.5,
+        "hello": 0.4,
+    }
+    if query in known:
+        return _unit_vec(known[query])
+    digest = hashlib.sha256(query.encode("utf-8")).digest()
+    h = int.from_bytes(digest[:2], "big")
     return _unit_vec((h % 360) * (np.pi / 180.0))
 
 
