@@ -13,7 +13,7 @@ VibeSOP 是**多代理 AI 工程工作流**系统：把请求路由到合适的�
 | 当前源码版本 | **8.5.0**（source candidate） | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
 | 当前包元数据 | **8.5.0**（source candidate） | 本分支 release commit；公开发行 tag/publish 尚未完成 |
 | 当前 PyPI 发行 | **8.4.1** | [PyPI 元数据](https://pypi.org/pypi/vibesop/json)；8.5.0 待后续 publish |
-| 当前 GitHub Release | **8.4.1** | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases) 与 tag `v8.4.1`；8.5.0 待后续 tag |
+| 当前 GitHub Release | **8.4.1** | [GitHub Releases](https://github.com/nehcuh/vibesop-py/releases)（公开 tag 指向 8.4.1）；8.5.0 待后续 tag |
 | 上一公开版本 | **8.4.1**，2026-09-15 发布 | [CHANGELOG](../CHANGELOG.md) |
 | 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复；属于 8.3.0，不是独立软件包版本 |
 | SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |

@@ -9,6 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.5.0] — 2026-09-15
+
+Minor: report-only online routing-evidence observer and its versioned machine
+contract. v8.4.1 remains the previous public release.
+
+### Added
+
+- **`vibe observe routing` online routing-evidence observer**: reads route
+  spans (`.vibe/observability/spans.jsonl` by default) plus an optional
+  `eval_routing.py` JSON payload and reports three signals — `no_match` (Wilson
+  95% interval over scorable spans, gated by `scoring_coverage >= 0.80` and
+  `n_scored >= 100`), `near_miss` over-injection from the eval (gated by
+  `n_near_miss >= 10`; `not_requested` when no eval is supplied), and
+  `decision_source` unknown-layer share (`metadata.layer` vs `RoutingLayer`,
+  denominator `n_scored`). Half-open `[since, until)` span window, exact
+  `--project-id` filter, naive timestamps read as UTC, and deterministic
+  human/JSON output. Report-only: it never writes the routing registry, eval
+  dataset, thresholds, or any policy file. Exit codes `0` healthy / `1` warn /
+  `2` usage / `3` critical-or-fault / `4` insufficient_data are labels, not a
+  severity ordering (not Nagios-compatible). `--report-only` suppresses verdicts
+  only; usage and faults stay non-zero. `--require-inputs` and
+  `--strict-payloads` escalate missing inputs and corrupt/unparsed payloads to
+  faults. Operator runbook: `docs/observe-routing.md`.
+- **`vibesop.observe.routing` v1 machine contract**: one JSON report with
+  `schema`/`schema_version`, `overall_state`, `exit_code`, `outcome`, `window`,
+  `filters`, `inputs`, `counts`, `coverage`, `metrics`, `thresholds`, and
+  `recommendations`; `registry` is reserved and always `null`.
+- **`eval_routing.py` provenance keys**: `--json` on stdout now carries
+  `dataset`, `hermetic`, and `generated_at`; `--json-out` gains `hermetic` and
+  `generated_at` so consumers can reject a stale or non-hermetic payload. The
+  `--json-out` `dataset` value changes (see Compatibility). Existing `--check`
+  exit codes are unchanged.
+
+### Changed
+
+- **`scripts/aggregate_nomatch.py` is now a thin 8.4.0-compatible facade** over
+  `vibesop.core.observability.route_observe`: parsing, field-first scoring, the
+  Wilson interval, byte-level decode with BOM/CRLF handling, and fail-soft file
+  errors live in the library. The script's CLI and output contract (missing
+  file → exit 0 + `{"error": "missing_spans", "n_route": 0}`) are unchanged.
+- **`eval_routing.py --json-out.dataset` is no longer an absolute path**: the
+  value was previously `str(eval_file)` (the resolved checkout path) and is now
+  the portable repo-relative POSIX identity (`tests/benchmark/routing_eval.yaml`
+  for the default dataset), falling back to the resolved absolute string only
+  for a dataset outside the repo root. `--json` on stdout also now emits this
+  identity plus `hermetic` and `generated_at`. This is **not** a purely additive
+  JSON change — see Compatibility.
+
+### Fixed
+
+- **Eval provenance fails closed**: a supplied `--eval-json` is rejected with
+  an `invalid_eval_provenance` fault (exit 3) when `dataset`/`hermetic`/
+  `generated_at` are missing or wrong-typed, `hermetic` is not exactly `true`,
+  the dataset identity does not match `--expected-eval-dataset` (separator/
+  leading-`./` normalized, never basename), or `generated_at` is naive/
+  non-ISO8601, more than 5 minutes in the future, or older than
+  `--max-eval-age-hours` (default 24h). Freshness is measured against the
+  observer clock and is independent of the span window. Invalid near-miss
+  counts also fault. `--report-only` does not suppress provenance faults.
+
+### Compatibility
+
+- `vibe observe routing` and `vibesop.observe.routing` v1 are new public
+  surfaces (SemVer minor). `scripts/aggregate_nomatch.py` remains source- and
+  CLI-compatible with 8.4.0.
+- `scripts/eval_routing.py` adds `--json`/`--json-out` provenance keys, but the
+  change is **not purely additive**: the existing `--json-out` `dataset` value
+  changes from an absolute checkout path to the portable repo-relative identity
+  (absolute only for datasets outside the repo root). Consumers that
+  string-compared the old absolute path must switch to the portable identity or
+  compare against `--expected-eval-dataset`. All other metric keys, the
+  `--check`/`--update-baseline` exit codes, and the baseline fingerprint are
+  unchanged. No routing policy, registry, or eval-dataset schema changes.
+
+### Documentation
+
+- New operator runbook `docs/observe-routing.md`: inputs/producers, metric
+  numerators/denominators, default thresholds and inclusive comparisons,
+  sample/coverage gates, corruption and window/project behavior, eval
+  provenance, the complete exit table, JSON contract, cron/CI wrappers,
+  first-run and legacy-span behavior, the append/rotation limitation, and the
+  no-policy-mutation contract.
+- Updated both READMEs (positioning broadened beyond SkillOS to the multi-agent
+  AI engineering workflow, plus a runnable `vibe observe routing` example),
+  `docs/INDEX.md`, `docs/PROJECT_STATUS.md`, `docs/ROADMAP.md` (operational-
+  evidence slice marked implemented in the 8.5.0 source candidate), and the CLI
+  reference/handbook.
+
+### Tests
+
+- Focused `tests/unit/test_route_observe.py` and `tests/unit/test_eval_routing.py`
+  cover the compatibility facade, golden schema, coverage false-green
+  protection, layer classification, threshold and window/project boundaries,
+  eval provenance, faults, CRLF/BOM/invalid-UTF-8 payloads, and no-write
+  guarantees.
+
 ## [8.4.1] — 2026-09-15
 
 Patch: CI matrix interpreter trust, routing hot-path benchmark isolation,

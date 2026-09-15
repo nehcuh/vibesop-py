@@ -5,7 +5,7 @@
 > [English](README.md) · [文档总索引](docs/INDEX.md) · [项目状态](docs/PROJECT_STATUS.md) · [研究](docs/research/README.md)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
-[![Version](https://img.shields.io/badge/Version-8.4.1-blue.svg)](https://github.com/nehcuh/vibesop-py/releases/tag/v8.4.1)
+[![Version](https://img.shields.io/badge/Version-8.5.0-blue.svg)](https://github.com/nehcuh/vibesop-py/releases)
 [![PyPI](https://img.shields.io/pypi/v/vibesop.svg)](https://pypi.org/project/vibesop/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -17,8 +17,8 @@ VibeSOP 是一个**多代理 AI 工程工作流**系统：把请求路由到合�
 
 | 对象 | 状态 |
 |---|---|
-| 当前源码与包元数据 | **8.4.1** |
-| 上一公开版本 | **8.4.0**，发布于 2026-09-14 |
+| 当前源码与包元数据 | **8.5.0**（源码候选，尚未 tag/publish） |
+| 上一公开版本 | **8.4.1**，发布于 2026-09-15 |
 | 提交与日志中的 8.3.1 | 内部修复批次标签；尚不存在 8.3.1 公开发行 |
 | 技能格式 | SKILL.md v3.0，与软件包版本独立 |
 | 固定角色委员会 v2 | 尚未完成的研究，与安装包分开 |

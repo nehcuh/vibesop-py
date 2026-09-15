@@ -29,7 +29,7 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 分层 | 含义 | 本文件中的位置 |
 |---|---|---|
-| **已实现（8.4.0 源码）** | 本分支源码与包元数据已有；公开发行待 tag/publish | 下一节 8.4 切片 |
+| **已实现（8.4.0–8.5.0 源码）** | 本分支源码与包元数据已有；8.5.0 公开发行待 tag/publish | 8.4.0 / 8.5.0 切片 |
 | **计划中** | 下一轮优化，尚未当作交付 | 优先级 A–E |
 | **研究阻塞** | 预注册实验未跑完或未结算；不得改判据迁就结果 | B、C |
 
@@ -71,7 +71,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 - `near_miss` — 可选 `--eval-json`（来自 `scripts/eval_routing.py --hermetic`）；未提供时为 `not_requested`，不伪装成绿。
 - `decision_source` — `metadata.layer` 对 `RoutingLayer` 枚举分类；`unknown_share` 以 `n_scored` 为分母，非枚举值进入 `non_enum_layers`。
 
-半开窗口 `[since, until)`、`project_id` 精确过滤、时间戳 UTC 归一（`started_at` 优先，回退 `legacy timestamp`）。退出码 `0/1/2/3/4` 是标签而非严重度排序，非 Nagios 兼容；`--report-only` 只抑制 verdict，绝不抑制 usage(2)/fault(3)；`--require-inputs` 把缺失输入升级为 fault；`--strict-payloads` 把损坏/未解析载荷升级为 fault。
+半开窗口 `[since, until)`、`project_id` 精确过滤、时间戳 UTC 归一（`started_at` 优先，回退 `timestamp`）。退出码 `0/1/2/3/4` 是标签而非严重度排序，非 Nagios 兼容；`--report-only` 只抑制 verdict，绝不抑制 usage(2)/fault(3)；`--require-inputs` 把缺失输入升级为 fault；`--strict-payloads` 把损坏/未解析载荷升级为 fault。
 
 ### eval provenance fail-closed
 
@@ -80,13 +80,13 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 ### 兼容与后台改动
 
 - `scripts/aggregate_nomatch.py` 成为 8.4.0 兼容 facade：解析/评分/Wilson 区间/字节级解码/BOM-CRLF 处理/文件错误均移到 library，CLI 契约不变（缺文件 fail-soft exit 0 + 错误字段）。
-- `scripts/eval_routing.py` 的 `--json` / `--json-out` 增量添加 `dataset` / `hermetic` / `generated_at`；既有 `--check` 退出码与基線闸不变。
+- `scripts/eval_routing.py` 的 `--json` 新增 `dataset` / `hermetic` / `generated_at`，`--json-out` 新增 `hermetic` / `generated_at`；但既有 `--json-out.dataset` 取值由绝对路径改为可移植的仓库相对身份，因此不是纯增量变更。既有 `--check` 退出码与基线闸不变。
 
 运维口径、阈值、退出表、JSON 契约与 cron/CI 包装见 [observe-routing.md](observe-routing.md)。本切片报告**不写**路由注册表、评测集、阈值或策略文件。
 
-## 8.4 发行闸
+## 8.5.0 发行闸（source candidate）
 
-包版本已在本分支 release commit 升到 8.4.0。公开发行（tag / PyPI）之前，须同时满足：
+8.4.0 / 8.4.1 已公开发行。当前包版本在本分支 release commit 升到 8.5.0 source candidate；公开发行（tag / PyPI）之前，须同时满足：
 
 1. 相关检查与适当的完整检查绿。
 2. hermetic baseline check 绿。
@@ -95,7 +95,7 @@ Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过
 5. CHANGELOG、版本元数据、状态文档同步。
 6. 独立评审 0 个 P0 / P1 / P2。
 
-本文件不把未执行的全量测试套件写成已绿。hermetic、artifact baseline、decision registry 三项观测检查曾在 8.4 工作区执行通过；release commit 之后须重跑。
+本文件不把未执行的全量测试套件写成已绿。hermetic、artifact baseline、decision registry 三项观测检查曾在本 checkpoint 工作区执行通过；release commit 之后须重跑。
 
 ## 下一轮优化（顺序固定；字母 A–E 仅本文件编号，不是 2026-09-11 提案 lane）
 
