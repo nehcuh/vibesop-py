@@ -941,6 +941,9 @@ def test_extract_targets_does_not_rewrite_trailing_dotdot() -> None:
     ]
     # A prose period after a real filename is still junk, not a path segment.
     assert chal.extract_targets("see `.omx/artifacts/foo.md`.") == [".omx/artifacts/foo.md"]
+    # Ellipsis placeholders in specs are not a file named "...".
+    assert chal.extract_targets("指向 `.omx/artifacts/...` 的链接") == []
+    assert chal.extract_targets("见 `.omx/artifacts/foo.md...`") == [".omx/artifacts/foo.md"]
 
 
 def test_scan_fail_closes_on_trailing_dotdot_citation(tmp_path: Path) -> None:

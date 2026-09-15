@@ -204,11 +204,14 @@ def _rstrip_trailing_junk(raw: str) -> str:
     """Strip prose punctuation without rewriting a ``..`` path segment.
 
     ``str.rstrip(_TRAILING_JUNK)`` treats ``.`` as junk, so ``foo/..``
-    becomes the directory prefix ``foo/`` and a bare ``..`` vanishes.
-    CHANGELOG 8.4.0 forbids rewriting ``../`` citations.
+    becomes the directory prefix ``foo/``. CHANGELOG 8.4.0 forbids that.
+    Ellipsis is still prose: specs write ``.omx/artifacts/...`` as a
+    placeholder, not a filename named ``...``.
     """
+    while raw.endswith("..."):
+        raw = raw[:-3]
     while raw and raw[-1] in _TRAILING_JUNK:
-        if raw[-1] == "." and len(raw) >= 2 and raw[-2] == ".":
+        if raw == ".." or raw.endswith("/.."):
             break
         raw = raw[:-1]
     return raw
