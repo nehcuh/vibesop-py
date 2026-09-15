@@ -199,6 +199,21 @@ _REF_RE = re.compile(rf"{re.escape(ARTIFACT_PREFIX)}([^\s`'\"|\\():（）【】�
 # and the CJK delimiter set) are omitted here.
 _TRAILING_JUNK = ".,;!]}>！？"
 
+
+def _rstrip_trailing_junk(raw: str) -> str:
+    """Strip prose punctuation without rewriting a ``..`` path segment.
+
+    ``str.rstrip(_TRAILING_JUNK)`` treats ``.`` as junk, so ``foo/..``
+    becomes the directory prefix ``foo/`` and a bare ``..`` vanishes.
+    CHANGELOG 8.4.0 forbids rewriting ``../`` citations.
+    """
+    while raw and raw[-1] in _TRAILING_JUNK:
+        if raw[-1] == "." and len(raw) >= 2 and raw[-2] == ".":
+            break
+        raw = raw[:-1]
+    return raw
+
+
 # Markdown *link destinations* only: a pre-`?` basename ending in `.` plus
 # an alphanumeric extension (`report.md`) means the `?` starts a query
 # (`report.md?raw`, `report.md?download`). `gate7-?.md` / `v1.2-?.md` do
@@ -329,7 +344,7 @@ def extract_targets(text: str) -> list[str]:
     """
     found: list[str] = []
     for match in _REF_RE.finditer(text):
-        raw = match.group(1).rstrip(_TRAILING_JUNK).strip("<>")
+        raw = _rstrip_trailing_junk(match.group(1)).strip("<>")
         if not raw:
             continue
         if "<" in raw or ">" in raw:

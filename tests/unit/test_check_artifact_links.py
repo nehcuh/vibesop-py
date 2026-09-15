@@ -926,6 +926,35 @@ def test_extract_targets_handles_multiple_and_punctuation() -> None:
     ]
 
 
+def test_extract_targets_does_not_rewrite_trailing_dotdot() -> None:
+    """CHANGELOG 8.4.0: a citation containing ``../`` is not rewritten.
+
+    ``str.rstrip`` of ``_TRAILING_JUNK`` (which includes ``.``) used to turn
+    ``foo/..`` into the directory prefix ``foo/`` and drop a bare ``..``.
+    """
+    assert chal.extract_targets("bad `.omx/artifacts/foo/..`") == [".omx/artifacts/foo/.."]
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/foo/..")
+    assert chal.extract_targets("bad `.omx/artifacts/..`") == [".omx/artifacts/.."]
+    assert not chal._is_normalized_artifact_target(".omx/artifacts/..")
+    assert chal.extract_targets("bad `.omx/artifacts/foo/../x.md`") == [
+        ".omx/artifacts/foo/../x.md"
+    ]
+    # A prose period after a real filename is still junk, not a path segment.
+    assert chal.extract_targets("see `.omx/artifacts/foo.md`.") == [".omx/artifacts/foo.md"]
+
+
+def test_scan_fail_closes_on_trailing_dotdot_citation(tmp_path: Path) -> None:
+    """``foo/..`` must GuardError at source:line, not classify as dir/ok."""
+    (tmp_path / ".omx" / "artifacts" / "foo").mkdir(parents=True)
+    (tmp_path / ".omx" / "artifacts" / "foo" / "bar.md").write_text("x\n", encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "notes.md").write_text("bad `.omx/artifacts/foo/..`\n", encoding="utf-8")
+    tracked = {".omx/artifacts/foo/bar.md", "docs/notes.md"}
+    with pytest.raises(chal.GuardError, match=r"foo/\.\."):
+        chal.scan(tmp_path, ["docs/notes.md"], tracked)
+
+
 def test_normalized_artifact_target_is_strict_posix_path() -> None:
     """Baseline keys are path/glob/dir strings, not scanner identity fragments.
 
