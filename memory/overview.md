@@ -1,12 +1,16 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-07 (S75 — 喷气机 R5/R6 预览恢复 + 起停脚本)
+**Last Updated**: 2026-09-15 (S85 — VibeSOP 8.5.0 配置分发)
 
 ---
 
 ## Goals
 
-### Current Week (September 4-10, 2026)
+### Current Week (September 11-17, 2026)
+
+1. **VibeSOP 8.5.0 配置分发** ✅ (Completed - Sep 15) — CMspark 项目层与全局 Claude/Grok/Kimi/Pi/OpenCode 配置已刷新；额外 skill 保留，五个平台验证通过。
+
+### Previous Week (September 4-10, 2026)
 
 1. **CLI 可发现性：help/man 三入口** ✅ (Completed - Sep 7，`987cf95`+`7cf81fc`+`67d14c4` push CI 10/10 绿 + E2E + CodeQL)
    - `vibe -h`/`--help`/`vibe help [COMMAND...]`（嵌套路径+相似建议）+ `vibe man [COMMAND...]`（终端手册 + `--roff` 喂系统 man）；dashboard/skills feedback 的 `-h` 冲突自动退化为仅 `--help`，零破坏

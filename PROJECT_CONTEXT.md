@@ -14,6 +14,16 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-09-15 S85 END · VibeSOP 8.5.0 配置分发
+
+**Workspace**：VibeSOP main `dfed8ab4`，工作树 clean；受保护 `.experiment/worktree` 保持 HEAD `bacd55e1` 与 183 项现场变更。
+
+**完成**：当前仓库生成的 8.5.0 配置已构建到 CMspark `.vibe/dist/{claude-code,grok-build,kimi-cli,opencode,pi}`；CMspark `.claude`/`.grok` 及全局 Claude/Grok/Kimi/Pi/OpenCode 配置均已刷新。额外 skill、自有 workflow、本地设置保留。五个平台 `vibe verify` 全部通过；Cursor 未配置，未改。
+
+**关键决定**：平台目录刷新前暂存 `skills/` 以避免 orphan symlink 清理；Pi 全局构建意外改写调用目录 `AGENTS.md`，已恢复并复核 clean。
+
+**Next**：重启相关 Agent；如需把 CMspark `.grok/rules/` 与 `vibesop-*` hooks 纳入版本控制，再单独审阅。
+
 ### 2026-09-07 S75 [vibesop-py] 喷气机 R5/R6 预览恢复 + 起停备忘
 
 **Session Summary**:
@@ -29,16 +39,4 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 1. 人评分数仍待用户；再看 `./scripts/ab-jet-preview.sh start`
 2. Dependabot 9 PR（#102-114）非 major 批量合
 3. gate43 T+14 到期日即今日，cron one-shot 勿在本 session 提前跑
-
-### 2026-09-07 S70 [vibesop-py] CLI help/man 三入口 + -h 全树支持（已 push CI 全绿）
-
-**Session Summary**:
-- Ship：`vibe -h`/`--help`/`vibe help [COMMAND...]` 三入口 + `vibe man [COMMAND...]`（`--roff`）。root Typer 全树继承 `-h`；dashboard/skills feedback 已占用 `-h` 则只留 `--help`。
-- 3 commits 已 push（`987cf95` + `7cf81fc` + `67d14c4`）；CI 10/10 + E2E + CodeQL 绿。
-
-**Key Decisions**:
-- Typer≥0.26 vendored `typer._click` 不是 click 子类——反射一律 duck typing
-
-**Next Steps**:
-1. 本机 `uv tool install --reinstall --force .` 后 dogfood help/man
 <!-- handoff:end -->

@@ -1,6 +1,14 @@
 
 ## Current Session
 
+### S85 END (2026-09-15) [vibesop-py] VibeSOP 8.5.0 配置分发到 CMspark 与全局
+
+- 以当前 main `dfed8ab4` / VibeSOP 8.5.0 为源，通过官方 `vibe build` 校验并生成 Claude、Grok、Kimi、OpenCode、Pi 五个平台配置。
+- CMspark 的 `.vibe/dist/` 五个平台产物、项目级 `.claude/` 与 `.grok/` 已刷新；全局 `~/.claude`、`~/.grok`、`~/.kimi-code`、`~/.pi/agent`、`~/.config/opencode` 已刷新。额外/第三方 skill 和 CMspark 自有 workflow 保留。
+- 五个平台独立 `vibe verify` 全部通过；Cursor 未配置且未改动。Pi 构建曾触碰当前目录 `AGENTS.md`，已恢复，主仓库最终 clean；受保护 experiment worktree HEAD 与现场变更数量未变。
+- Next：重启相关 Agent 使配置生效；若要共享 CMspark 的 `.grok/rules/` 与 `vibesop-*` hooks，再单独决定是否纳入版本控制。
+- Recorded: yes — 平台目录刷新前暂存并恢复额外 skill，避免 orphan symlink 清理；Pi 的 cwd `AGENTS.md` 副作用已写入 project-knowledge。
+
 ### S84 (2026-09-12) [vibesop-py] 研究综述：骨架 → 全章填充 → grok 逐章复审 → 全文终审闭环 ✅
 
 - 用户要求：为项目全部实验/研究写综述；骨架先行（案例/图/对比类比/外部参考占位），后分章填充；多路子代理填充，每章完成后 grok 复审确认。

@@ -40,6 +40,12 @@
 
 **Solution**: 刷新签入的 `.pi/` 生成物用外科补丁（对模板）。不要在本仓根对 pi 跑 `vibe build`。grok-build 默认输出 `.vibe/dist/`，不碰 `.grok/`，除非显式 `--output .grok`。
 
+### 直接刷新已有平台目录会把额外 symlink skill 当 orphan 清理（2026-09-15 S85）
+
+**Issue**: `vibe build <target> --output <existing-platform-dir>` 会按当前 manifest 做 orphan 清理；平台目录中未列入本次 manifest 的 VibeSOP/第三方 symlink skill 可能被解除，即使它们不是用户想删除的扩展。Pi 目标还会无条件写当前工作目录的 `AGENTS.md`。
+
+**Solution**: 先用临时输出目录构建并校验；刷新已有目录时暂存 `skills/`，执行官方 renderer 以获得 settings/config 合并语义，再只恢复 manifest 外的额外 skill。Pi 全局部署后立即复查并恢复调用目录的 `AGENTS.md`，最终用 `git status` 和每个平台 `vibe verify` 收口。
+
 ### 无人值守 `claude -p`：`--tools ""` 在 2.1.220 会直接报错；stdin 无权限模式会挂死 (2026-09-03)
 
 **Issue**: 旧解法 `claude -p --tools ""` 现在报 `option '--tools' argument missing`。把 30KB prompt 喂 stdin 且不给权限模式时，进程零输出挂到超时（工具权限提示无人点）。
