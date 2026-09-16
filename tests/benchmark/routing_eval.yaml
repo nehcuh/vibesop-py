@@ -73,19 +73,19 @@
   category: skill_mgmt
 - query: 拉取最新代码并使用多路独立对抗进行复审
   expect:
-  - builtin/adversarial-review
+  - builtin/adversarial-panel
   category: review
 - query: pull latest and run multi-lane independent adversarial review
   expect:
-  - builtin/adversarial-review
+  - builtin/adversarial-panel
   category: review
 - query: 对抗合成器给出 REQUEST CHANGES，这些是真的问题还是看法
   expect:
-  - builtin/review-arbitration
+  - builtin/adversarial-arbitration
   category: review
 - query: classify adversarial REQUEST CHANGES findings as D T or J
   expect:
-  - builtin/review-arbitration
+  - builtin/adversarial-arbitration
   category: review
 - query: babysit 到合并 main
   expect:

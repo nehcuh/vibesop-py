@@ -339,8 +339,8 @@ Query: "debub"  # 拼写错误
 | `experience-evolution` | 捕获可重用的经验和模式 | 重复工作模式 |
 | `instinct` | 记录/评审/演化 instinct，自动从会话提取模式 | 会话结束时 |
 | `deep-diagnosis-optimization` | 多代理深度诊断编排 | 深度诊断任务 |
-| `adversarial-review` | 拉取最新后冻结评审面，五路独立对抗 + 先驳回核验 | 拉取最新 / 多路独立对抗复审 |
-| `review-arbitration` | 对抗合成器 REQUEST CHANGES 按 D/T/J 仲裁（会诊不是门禁） | 合成器 REQUEST CHANGES / 真问题还是看法 |
+| `adversarial-panel` | 拉取最新后冻结评审面，五路独立对抗 + 先驳回核验 | 拉取最新 / 多路独立对抗复审 |
+| `adversarial-arbitration` | 对抗合成器 REQUEST CHANGES 按 D/T/J 仲裁（会诊不是门禁） | 合成器 REQUEST CHANGES / 真问题还是看法 |
 | `babysit-main` | 已在 main 上 push 后盯 job 级 CI + Quickstart E2E 到绿 | babysit / baybsit / 盯到合并 main |
 | `autonomous-experiment` | 自主实验循环 | 优化和迭代任务 |
 | `skill-craft` | 自动检测模式生成技能 | 检测到重复模式 |

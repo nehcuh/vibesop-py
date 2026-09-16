@@ -2,10 +2,10 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "af3736695b9747f58038fc4bd6b425be48f22dd564654a0e736d2d97ec57bb2c",
+    "sha": "47cc8ba87fd8078d47e61364518193fae3f88e7eba2e939e5ef6bcf2804c83c1",
     "inputs": {
-      "registry.yaml": "45b5be3669b770a1a7b91cab61b2feef7301eb3fcc6faed9c6d536fb48a4132f",
-      "dataset": "3bd983c33b7b94a73062eea89d66e03adbc77c74eb417c551536ebc71fdf3aae",
+      "registry.yaml": "37332e6286efb20ddf12e4732ea98e5ddda230759a0bc896db00bb13721bf277",
+      "dataset": "e5ab313c2f121393733f0c68f243d4e0aedb20931901449765cd509321dd8fa1",
       "posture": {
         "enable_embedding": false,
         "enable_ai_triage": false,
@@ -18,15 +18,15 @@
         "home_env": "tmp"
       },
       "skills:builtin": {
-        "adversarial-review/SKILL.md": "012c1ef734b77c69840fad97342561c79452366dc2f8f167a5b34f979240aad7",
+        "adversarial-arbitration/SKILL.md": "1a8cd0f2956fe252ca27d5be80f6f4908070e7b3dcd978d6676891eb1324fa80",
+        "adversarial-panel/SKILL.md": "f4f21a94abd135ba36663604905d6e9cee2ede21e4a2f03845e3577743f3bb56",
         "autonomous-experiment/SKILL.md": "c7c87ae2bb489e3db0e5879a5e735ffa167e3fd899b0d203d1efed510557d938",
-        "babysit-main/SKILL.md": "0ac8870041b55fb81f4e2f5557d789f3dfde8885b02a58a6b44258fd7ec20a3e",
+        "babysit-main/SKILL.md": "704739930997866bdcdea721fb1a368cae6a7acb4fe88ba00608d918f6bfaccb",
         "code-review/SKILL.md": "e851866cfc71ece1256853c3f6afafa0b390ad560678756cc4dab71f053d4e1c",
         "commit-message/SKILL.md": "63ba1c61aa15983078ba4dba3dd62d12476431713b7be8f8b58ec06b7f51b8c4",
         "deep-diagnosis-optimization/SKILL.md": "da943e589e460988fa55e2e35b9ba4a3c406f15bc37180cb73f34c9e2a723ea5",
         "experience-evolution/SKILL.md": "d1ac91aa722f689d71a1b3b28c60e899dfd7f724be64b996ad2e879ea7a0d309",
         "instinct/SKILL.md": "b788cd5765111e505337cf4ecaabd233752ac8d246bc04665ec92b6ae3528b38",
-        "review-arbitration/SKILL.md": "8af1cffdabf5993afddf1fcf41fd68831a611181049bfccf0b61bf2de1734456",
         "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
         "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
         "skill-craft/SKILL.md": "eab483c40cfd0a8595cd57c1534dd1efae49126765c5ac45e742abb4d4a0ab72",
@@ -238,10 +238,10 @@
     {
       "query": "拉取最新代码并使用多路独立对抗进行复审",
       "expect": [
-        "builtin/adversarial-review"
+        "builtin/adversarial-panel"
       ],
       "reject": [],
-      "primary": "builtin/adversarial-review",
+      "primary": "builtin/adversarial-panel",
       "layer": "keyword",
       "ok1": true,
       "category": "review"
@@ -249,10 +249,10 @@
     {
       "query": "pull latest and run multi-lane independent adversarial review",
       "expect": [
-        "builtin/adversarial-review"
+        "builtin/adversarial-panel"
       ],
       "reject": [],
-      "primary": "builtin/adversarial-review",
+      "primary": "builtin/adversarial-panel",
       "layer": "keyword",
       "ok1": true,
       "category": "review"
@@ -260,10 +260,10 @@
     {
       "query": "对抗合成器给出 REQUEST CHANGES，这些是真的问题还是看法",
       "expect": [
-        "builtin/review-arbitration"
+        "builtin/adversarial-arbitration"
       ],
       "reject": [],
-      "primary": "builtin/review-arbitration",
+      "primary": "builtin/adversarial-arbitration",
       "layer": "keyword",
       "ok1": true,
       "category": "review"
@@ -271,10 +271,10 @@
     {
       "query": "classify adversarial REQUEST CHANGES findings as D T or J",
       "expect": [
-        "builtin/review-arbitration"
+        "builtin/adversarial-arbitration"
       ],
       "reject": [],
-      "primary": "builtin/review-arbitration",
+      "primary": "builtin/adversarial-arbitration",
       "layer": "keyword",
       "ok1": true,
       "category": "review"

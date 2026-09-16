@@ -1,11 +1,11 @@
 ---
-id: builtin/adversarial-review
-name: adversarial-review
+id: builtin/adversarial-panel
+name: adversarial-panel
 description: >-
-  Use when the user asks to pull latest commits and run multi-lane independent
-  adversarial review (拉取最新, 多路独立对抗, 独立对抗复审, adversarial review).
+  Use when the user asks to pull latest commits and run a multi-lane
+  independent adversarial panel (拉取最新, 多路独立对抗, 独立对抗复审).
   Not a full-repo diagnose-fix-merge.
-tags: [adversarial review, multi-lane review, pull latest, frozen diff,
+tags: [adversarial panel, multi-lane panel, pull latest, frozen diff,
        拉取最新, 多路独立对抗, 独立对抗, 对抗复审, 对抗评审,
        five lenses, refute-first]
 triggers:
@@ -14,6 +14,7 @@ triggers:
   - "拉取最新"
   - "pull latest and adversarial review"
   - "multi-lane independent adversarial review"
+  - "/adversarial-panel"
   - "/adversarial-review"
 version: 1.0.0
 allowed-tools:
@@ -22,7 +23,7 @@ allowed-tools:
   - Bash
   - Agent
 intent: >-
-  Fast-forward pull origin/main, freeze the review-surface patch, then run five
+  Fast-forward pull origin/main, freeze the shipping-surface patch, then run five
   independent finder lenses with refute-first verification and a synthesizer.
 namespace: builtin
 type: prompt
@@ -40,7 +41,7 @@ If routing selected `deep-diagnosis-optimization` but the user named
 
 - Full-repo audit, batch fixes, CI-green, merge → `deep-diagnosis-optimization`
 - Walk the agent's own uncommitted diff before push → `code-review`
-- Synthesizer already returned REQUEST CHANGES → `review-arbitration`
+- Synthesizer already returned REQUEST CHANGES → `adversarial-arbitration`
 
 ## Steps
 
@@ -83,7 +84,7 @@ During review, do not edit `src/`.
 
 Report confirmed / rejected / unverified. Do not start `fix-from-review`
 and do not treat REQUEST CHANGES as a merge gate — hand off to
-`review-arbitration` when the user (or the synthesizer) asks whether
+`adversarial-arbitration` when the user (or the synthesizer) asks whether
 findings are real defects.
 
 ## Anti-Patterns

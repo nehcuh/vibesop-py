@@ -2,7 +2,7 @@
 id: builtin/babysit-main
 name: babysit-main
 description: >-
-  Use when the user asks to babysit a push until origin/main CI is green
+  Use when the user asks to babysit until origin/main CI is green
   (babysit, baybsit, 盯 CI, 合到 main, watch CI until green on main).
   Already on main — not a pull-request merge skill.
 tags: [babysit, baybsit, origin/main, watch CI, job-level CI, Quickstart E2E,
@@ -20,7 +20,7 @@ allowed-tools:
   - Read
   - Bash
 intent: >-
-  After commit and push to origin/main, watch job-level CI plus Quickstart E2E
+  After commit and land on origin/main, watch job-level CI plus Quickstart E2E
   for that SHA until green. Not PR babysit and not auto-merge.
 namespace: builtin
 type: prompt
@@ -38,7 +38,7 @@ and do not treat a GitHub API EOF as red.
 
 - Full diagnose → fix batches → merge → `deep-diagnosis-optimization`
 - Feature branch that still needs a PR decision → finishing-a-development-branch
-- Review not yet arbitrated → `review-arbitration`
+- Review not yet arbitrated → `adversarial-arbitration`
 
 ## Steps
 

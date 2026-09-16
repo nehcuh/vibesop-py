@@ -1,12 +1,11 @@
 ---
-id: builtin/review-arbitration
-name: review-arbitration
+id: builtin/adversarial-arbitration
+name: adversarial-arbitration
 description: >-
-  Use when an adversarial-review synthesizer returns REQUEST CHANGES, or the
+  Use when an adversarial-panel synthesizer votes to block merge, or the
   user asks whether confirmed findings are real defects versus opinions
   (真问题还是看法, D/T/J, 会诊, 合成器).
-tags: [REQUEST CHANGES, review arbitration, D/T/J, 真问题, 看法, 会诊,
-       合成器, 对抗合成, decidable, taste, COMMENT]
+tags: [D/T/J, 真问题, 看法, 会诊, 合成器, 对抗合成, decidable, taste, COMMENT, 仲裁]
 triggers:
   - "REQUEST CHANGES"
   - "对抗合成器"
@@ -14,6 +13,7 @@ triggers:
   - "真问题还是看法"
   - "D/T/J"
   - "classify review findings"
+  - "/adversarial-arbitration"
   - "/review-arbitration"
 version: 1.0.0
 allowed-tools:
@@ -21,7 +21,7 @@ allowed-tools:
   - Grep
 intent: >-
   Classify confirmed adversarial findings as D, T, or J and let a human
-  arbitrator sign COMMENT versus REQUEST CHANGES. The synthesizer is consult,
+  arbitrator sign COMMENT versus block-merge. The synthesizer is consult,
   not a merge gate.
 namespace: builtin
 type: prompt
@@ -38,7 +38,7 @@ authorization to block merge or to start `fix-from-review`.
 
 ## When NOT to use
 
-- No synthesizer output yet → `adversarial-review` first
+- No synthesizer output yet → `adversarial-panel` first
 - User already named which D-class bugs to fix → implement those only
 - Ordinary pre-push walkthrough of your own diff → `code-review`
 
