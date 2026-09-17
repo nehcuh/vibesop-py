@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-15 (S85 — VibeSOP 8.5.0 配置分发)
+**Last Updated**: 2026-09-17 (S86 — hook 无匹配横幅静默)
 
 ---
 
@@ -9,6 +9,7 @@
 ### Current Week (September 11-17, 2026)
 
 1. **VibeSOP 8.5.0 配置分发** ✅ (Completed - Sep 15) — CMspark 项目层与全局 Claude/Grok/Kimi/Pi/OpenCode 配置已刷新；额外 skill 保留，五个平台验证通过。
+2. **Hook 无匹配横幅静默** ✅ (Completed - Sep 16–17) — 消费项目 miss 不再刷 `🤖 No matching skill found`；grok-build 空信封；已 `uv tool install --no-cache` + `vibe build grok-build --output ~/.grok`。需重启 Grok。
 
 ### Previous Week (September 4-10, 2026)
 

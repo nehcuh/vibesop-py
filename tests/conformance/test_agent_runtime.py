@@ -150,9 +150,26 @@ class TestAgentRuntimeHookResponse:
             mode="single",
             skill_id="fallback-llm",
         )
-        resp = result.to_hook_response(no_match_message=True)
+        resp = result.to_hook_response(
+            no_match_message=True, hook_event_name="UserPromptSubmit"
+        )
         data = json.loads(resp)
-        assert "No matching skill found" in data["systemMessage"]
+        assert "systemMessage" not in data
+        ctx = data["hookSpecificOutput"]["additionalContext"]
+        assert "No matching skill found" in ctx
+        assert "🤖" not in resp
+        assert data["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+
+    def test_no_match_grok_is_silent(self):
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="fallback-llm",
+        )
+        resp = result.to_hook_response(
+            platform="grok-build", no_match_message=True
+        )
+        assert resp == "{}"
 
     def test_no_match_without_message(self):
         result = AgentRuntimeResult(

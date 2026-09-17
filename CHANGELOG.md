@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **No-match hook banner no longer shown to the user**: unmatched turns
+  used to inject `systemMessage: "🤖 VibeSOP: No matching skill found.
+  Proceeding in normal mode."`. Consumer projects miss on most prompts,
+  so the banner fired constantly (observed on `llm-safety` after
+  `vibe build`). The fingerprint now lives in agent-only
+  `hookSpecificOutput.additionalContext`. Grok UserPromptSubmit discards
+  allow-hook stdout and would still paint `systemMessage` in the UI, so
+  `grok-build` returns an empty envelope; the routing rule treats a
+  silent turn as a successful miss and tells the agent not to re-run
+  `vibe route` or announce the miss.
+
 ### Added
 
 - **Three builtin review/landing skills** (instinct → `core/skills/`):

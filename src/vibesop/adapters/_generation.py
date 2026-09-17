@@ -74,10 +74,10 @@ def render_route_hook(
         include_additional_context:  When ``True`` the rendered script
             attaches the full skill content as ``additionalContext`` in
             the hook output (used by Claude Code and Kimi CLI).
-        no_match_message:  When ``True`` the rendered script produces a
-            user-facing fallback message when no skill matches (``"🤖
-            VibeSOP: No matching skill found.  Proceeding in normal
-            mode."``).
+        no_match_message:  When ``True`` the rendered script emits an
+            agent-only no-match fingerprint in ``additionalContext``
+            (``"VibeSOP: No matching skill found. Proceeding in normal
+            mode."``). Never a user-visible ``systemMessage`` banner.
 
     Returns:
         Rendered shell script text.

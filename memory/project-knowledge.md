@@ -2,6 +2,14 @@
 
 ## Technical Pitfalls
 
+### Hook no-match 不能写进 `systemMessage` — 消费项目会每轮刷横幅 (2026-09-16 S86)
+
+**Issue**: `to_hook_response` 在 miss 时返回 `systemMessage: "🤖 VibeSOP: No matching skill found..."`. Claude Code / Grok 把 `systemMessage` 当用户可见横幅。消费项目（如 `llm-safety`）大多数 prompt 本来就不该匹配 VibeSOP 技能，应用 `vibe build` 后每轮都弹这句，看起来像坏了。Grok 的 UserPromptSubmit 还有额外限制：allow-hook 的 stdout / `additionalContext` 会被丢掉，横幅对用户可见、对模型没有指纹，agent 还会按 routing.md 再跑一遍 `vibe route`。
+
+**Solution**: no-match 指纹只放 `hookSpecificOutput.additionalContext`（agent-only）。`platform=grok-build` 直接返回 `{}`。Grok routing rule 把「本轮没有 `VibeSOP routed` / `[ACTIVE SKILL` / `NEXT STEP`」当成成功 miss：不要向用户宣告，也不要再跑 `vibe route`。命中技能仍可用 `systemMessage`（`VibeSOP routed:`）。PATH 上的 `vibe` 必须装到含此修复的工作树，hook 才会静默。
+
+**Files**: `src/vibesop/agent/runtime/agent_runtime.py` (`to_hook_response`), `src/vibesop/adapters/grok_build.py` (`_render_routing_rule`)
+
 ### Typer ≥0.26 运行时对象不是 click 子类 — 反射命令树必须 duck typing (2026-09-07 S70)
 
 **Issue**: 写 `vibe help`/`vibe man` 时按 click 常识写 `isinstance(cmd, click.Group)` 判组、`isinstance(param, click.Option)` 判选项，全部 False。Typer ≥0.26 运行在自带 `typer._click` 兼容层上（`TyperGroup` MRO = TyperGroup→Command(ABC)→object，与 `click.Group` 无继承关系），但 `pyproject` 只锁 `typer>=0.15,<1.0`——老版本又是真 click 类。同一份代码要兼容两种运行时。

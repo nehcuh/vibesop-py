@@ -249,13 +249,18 @@ class GrokBuildAdapter(PlatformAdapter):
 Routing is automatic when the `vibesop-route` hook is installed. If this
 turn's hook injection — the `systemMessage`/`additionalContext` the hook
 adds to the turn context — contains `VibeSOP routed:`, `[ACTIVE SKILL:`,
-`NEXT STEP (MANDATORY): read`, or `VibeSOP: No matching skill found`,
-routing has already run for this turn: follow that result and do NOT
-re-run `vibe route`.
+or `NEXT STEP (MANDATORY): read`, routing has already run: follow that
+result and do NOT re-run `vibe route`.
 
-If no such injection is present on this turn (hook not installed or
-failed), call `vibe route` to look up whether a skill applies.
-No match is a successful outcome — proceed in normal mode; do not invent a skill:
+A no-match is silent. Grok UserPromptSubmit discards allow-hook stdout
+(no `additionalContext`), and VibeSOP does not emit a user-visible
+`VibeSOP: No matching skill found` banner — that banner is noise on
+consumer projects where most turns do not match a skill. If this turn
+has no match injection, proceed in normal mode. Do not tell the user
+that no skill matched, and do not re-run `vibe route` to confirm a miss.
+
+Only call `vibe route` when the hook is missing or failed (no evidence
+it ran this turn):
 
 ```bash
 vibe route "<user_request>"

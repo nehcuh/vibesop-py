@@ -1,6 +1,16 @@
 
 ## Current Session
 
+### S86 END (2026-09-16~17) [vibesop-py] 消费项目无匹配横幅噪音
+
+- 用户：`../llm-safety` 应用 VibeSOP 后每轮提示 `🤖 VibeSOP: No matching skill found. Proceeding in normal mode.`
+- 根因：hook miss 写进用户可见 `systemMessage`；消费项目大多数 prompt 不该命中技能。Grok UserPromptSubmit 丢掉 allow-hook stdout，横幅对人可见、对模型无指纹。
+- 修：no-match 改 agent-only `additionalContext`；`grok-build` 空信封；routing rule 把静默当 miss。
+- 已安装并部署 [executed]：`uv tool install --reinstall --force --no-cache .`；`vibe build grok-build --output ~/.grok`。Claude 未全量 build `~/.claude`（184 extra skills）。
+- 验收：grok miss → `{}`；claude miss → 仅 `additionalContext`；session-end 命中仍有 `VibeSOP routed:`。
+- Next：重启 Grok（Claude 同理）后在 llm-safety 确认闲聊不再弹横幅。未 commit 的 `.pi/` 与 `.grok/hooks/` 是 S85 遗留，本 commit 不带。
+- Recorded: yes — hook no-match 不能写 `systemMessage` → project-knowledge.md
+
 ### S85 END (2026-09-15) [vibesop-py] VibeSOP 8.5.0 配置分发到 CMspark 与全局
 
 - 以当前 main `dfed8ab4` / VibeSOP 8.5.0 为源，通过官方 `vibe build` 校验并生成 Claude、Grok、Kimi、OpenCode、Pi 五个平台配置。
@@ -473,7 +483,7 @@
 
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
-- **Grok 真实会话 probe**（active）— S49 重部署 `~/.grok` rules+hooks：route.json timeout 30 无 matcher、route.sh 含 `uv tool dir` 就绪。next_action: 真实 Grok 会话里确认 route span 落盘与 matcher 行为（`vibe route --hook` 命令形态仍待验）。updated: 2026-08-27
+- **Grok 真实会话 probe**（active）— S86 重装 `vibe` 并 `vibe build grok-build --output ~/.grok`：`--hook` 已存在；miss 空信封、命中仍 `VibeSOP routed`。next_action: 重启 Grok 后在 llm-safety 确认闲聊无横幅，并看 route span 是否落盘。updated: 2026-09-17
 - **gate42/43 cron 验收**（active）— gate43 T+14 到期日=2026-09-07。next_action: 到期自动跑，勿在本 session 提前执行。updated: 2026-09-07
 - **R5 第二轮人评**（active）— 预览已恢复：`./scripts/ab-jet-preview.sh start`（8801/8802/8803）。用户已截图，分数未回。禁止 `docker rm vibesop-ab-treat/ctrl`。updated: 2026-09-07
 

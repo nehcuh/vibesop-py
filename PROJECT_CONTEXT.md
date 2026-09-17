@@ -14,29 +14,23 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-09-17 S86 END · Hook 无匹配横幅静默
+
+**Workspace**：VibeSOP main，ahead origin/main 1（S85 chore）+ 本 commit。`.pi/` 与 `.grok/hooks/` 仍是 S85 工作树脏项，未纳入。
+
+**完成**：`to_hook_response` miss 不再写用户可见 `systemMessage`。Claude/Kimi 指纹进 `additionalContext`；`grok-build` 返回 `{}`。Grok routing rule 把静默当成功 miss。已 `uv tool install --reinstall --force --no-cache .` + `vibe build grok-build --output ~/.grok`。现场：grok miss `{}`，claude miss 无 🤖，session-end 命中仍 `VibeSOP routed:`。
+
+**关键决定**：不对 `~/.claude` 全量 build（184 extra skills，避免 orphan 清理）；Claude hook 走 tool 环境 Python，重装即可。Grok UserPromptSubmit 会丢掉 allow-hook stdout，所以不能靠 additionalContext 当指纹。
+
+**Next**：重启 Grok（Claude 同理）后在 llm-safety 确认闲聊不再弹横幅。
+
 ### 2026-09-15 S85 END · VibeSOP 8.5.0 配置分发
 
-**Workspace**：VibeSOP main `dfed8ab4`，工作树 clean；受保护 `.experiment/worktree` 保持 HEAD `bacd55e1` 与 183 项现场变更。
+**Workspace**：VibeSOP main `dfed8ab4`，工作树当时 clean。
 
-**完成**：当前仓库生成的 8.5.0 配置已构建到 CMspark `.vibe/dist/{claude-code,grok-build,kimi-cli,opencode,pi}`；CMspark `.claude`/`.grok` 及全局 Claude/Grok/Kimi/Pi/OpenCode 配置均已刷新。额外 skill、自有 workflow、本地设置保留。五个平台 `vibe verify` 全部通过；Cursor 未配置，未改。
+**完成**：8.5.0 配置构建到 CMspark `.vibe/dist/` 五平台；CMspark `.claude`/`.grok` 及全局 Claude/Grok/Kimi/Pi/OpenCode 已刷新。五个平台 `vibe verify` 通过。
 
-**关键决定**：平台目录刷新前暂存 `skills/` 以避免 orphan symlink 清理；Pi 全局构建意外改写调用目录 `AGENTS.md`，已恢复并复核 clean。
+**关键决定**：刷新前暂存 `skills/` 以免 orphan symlink 清理；Pi 全局构建会改写调用目录 `AGENTS.md`。
 
-**Next**：重启相关 Agent；如需把 CMspark `.grok/rules/` 与 `vibesop-*` hooks 纳入版本控制，再单独审阅。
-
-### 2026-09-07 S75 [vibesop-py] 喷气机 R5/R6 预览恢复 + 起停备忘
-
-**Session Summary**:
-- 主机 `/tmp/ab-jet-out` 已被清。R5 grok 双臂从容器 grok 会话 `rewind_points.jsonl` 的 `after_snapshots` 还原（treatment 8 文件/1987 行，control 9 文件/2491 行，对上 R5 报告）；R6 27B 仍在 `vibesop-ab-treat:/work`。
-- 用户截图后要求停服务。8801–8803 与 `vibesop-ab-{treat,ctrl,base}` 已 `docker stop`（未 rm）。
-- 静态缓存 `.vibe/experiments/ab-jet-preview/`（gitignored）；再起：`./scripts/ab-jet-preview.sh start`。备忘 `.omx/artifacts/ab-jet-preview.md`。
-
-**Key Decisions**:
-- 实验产物不要放 `/tmp`；容器可写层 + grok after_snapshots 才是源。禁止 `docker rm` 那三个 ab 容器。
-- 预览默认只绑 127.0.0.1；R7/R8 量化台端口 8811+ 不要混。
-
-**Next Steps**:
-1. 人评分数仍待用户；再看 `./scripts/ab-jet-preview.sh start`
-2. Dependabot 9 PR（#102-114）非 major 批量合
-3. gate43 T+14 到期日即今日，cron one-shot 勿在本 session 提前跑
+**Next**：重启相关 Agent；CMspark `.grok/rules/` 与 hooks 是否入库另审。
 <!-- handoff:end -->

@@ -101,6 +101,9 @@ class TestGrokRoutingRule:
         assert "hook injection" in text
         for fp in FINGERPRINTS:
             assert fp in text
+        # Silent miss: do not banner the user or re-route to confirm
+        assert "no-match is silent" in text.lower() or "A no-match is silent" in text
+        assert "Do not tell the user" in text
         # CLI fallback preserved
         assert 'vibe route "<user_request>"' in text
         assert "skill_file" in text

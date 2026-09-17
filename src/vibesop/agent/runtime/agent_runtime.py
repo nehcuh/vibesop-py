@@ -25,6 +25,12 @@ from vibesop.core.observability import ObservabilityTracer, get_tracer
 
 logger = logging.getLogger(__name__)
 
+# Agent-only no-match fingerprint. Must stay out of `systemMessage`:
+# consumer projects miss on most turns, and hosts (Claude Code, Grok)
+# surface systemMessage to the user as a banner. Grok UserPromptSubmit
+# also discards allow-hook stdout, so grok-build emits an empty envelope.
+NO_MATCH_FINGERPRINT = "VibeSOP: No matching skill found. Proceeding in normal mode."
+
 
 def _source_file_from_route(primary: Any) -> str | None:
     """Pull the discovered SKILL.md path off a SkillRoute-like object."""
@@ -198,7 +204,7 @@ class AgentRuntimeResult:
 
     def to_hook_response(
         self,
-        platform: str = "generic",  # noqa: ARG002  # interface-conforming param
+        platform: str = "generic",
         hook_event_name: str = "",
         include_additional_context: bool = True,
         no_match_message: bool = True,
@@ -210,12 +216,15 @@ class AgentRuntimeResult:
         hookSpecificOutput.additionalContext.
 
         Args:
-            platform: Platform identifier (claude-code, opencode, kimi-cli).
+            platform: Platform identifier (claude-code, grok-build, kimi-cli).
             hook_event_name: Hook event name for hookSpecificOutput.
             include_additional_context: When True, attach skill content/plan
                 as additionalContext in hookSpecificOutput.
-            no_match_message: When True, produce a fallback message when
-                no skill matches.
+            no_match_message: When True, emit an agent-only no-match
+                fingerprint in additionalContext. Never a user-visible
+                systemMessage. grok-build stays silent (empty envelope)
+                because UserPromptSubmit discards allow-hook stdout and
+                would otherwise paint a banner on every miss.
 
         Returns:
             JSON string in the platform hook response format.
@@ -266,18 +275,17 @@ class AgentRuntimeResult:
                 notice_resp["hookSpecificOutput"] = notice_ho
             return json.dumps(notice_resp, ensure_ascii=False)
 
-        # No match — fallback
+        # No match — fallback. Agent fingerprint only: never systemMessage.
+        # Consumer projects (e.g. llm-safety) miss on most turns; a banner
+        # on every miss is noise. Grok UserPromptSubmit discards allow-hook
+        # stdout and still surfaces systemMessage in the UI — stay silent.
         if not self.skill_id or self.skill_id == "fallback-llm":
-            if no_match_message:
-                return json.dumps(
-                    {
-                        "systemMessage": (
-                            "🤖 VibeSOP: No matching skill found. Proceeding in normal mode."
-                        )
-                    },
-                    ensure_ascii=False,
-                )
-            return "{}"
+            if not no_match_message or platform in {"grok-build", "grok"}:
+                return "{}"
+            ho: dict[str, Any] = {"additionalContext": NO_MATCH_FINGERPRINT}
+            if hook_event_name:
+                ho["hookEventName"] = hook_event_name
+            return json.dumps({"hookSpecificOutput": ho}, ensure_ascii=False)
 
         # Single skill match — build full response
         conf_pct = int(self.confidence * 100)
@@ -1133,7 +1141,8 @@ class AgentRuntime:
             platform: Platform identifier (claude-code, opencode, kimi-cli).
             hook_event_name: Hook event name for hookSpecificOutput.
             include_additional_context: Attach skill content as additionalContext.
-            no_match_message: Produce fallback message when no skill matches.
+            no_match_message: Emit an agent-only no-match fingerprint
+                (empty envelope on grok-build).
             session_id: Session identifier; None mints a process UUID (see
                 ``handle_query`` for seeding semantics).
             conversation_id: Conversation ID for multi-turn continuity.

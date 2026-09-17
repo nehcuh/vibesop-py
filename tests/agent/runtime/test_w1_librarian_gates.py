@@ -50,6 +50,9 @@ def test_orchestrate_empty_plan_is_no_match_envelope() -> None:
     assert "Execution plan injected" not in payload
     assert "[VibeSOP Execution Plan]" not in payload
     assert "No matching skill found" in payload
+    assert "systemMessage" not in payload
+    grok = result.to_hook_response(platform="grok-build")
+    assert grok == "{}"
 
 
 def test_disabled_skill_ids_unwraps_agent_router() -> None:
