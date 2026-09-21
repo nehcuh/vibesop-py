@@ -216,7 +216,7 @@ class TestRuntimeSpecGapContract:
     @staticmethod
     def _route_span(span_file: Path) -> dict:
         spans = []
-        with span_file.open() as f:
+        with span_file.open(encoding="utf-8") as f:
             for raw in f:
                 if raw.strip():
                     spans.append(json.loads(raw))
