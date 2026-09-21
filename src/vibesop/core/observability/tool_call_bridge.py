@@ -97,6 +97,12 @@ are kept in ``.vibe/observability/tool_call_bridge_state.json`` and never
 produce a second span. Outcome lines are deduped by ``span_id`` against
 the outcomes file itself, so state-file loss cannot duplicate outcomes.
 
+Third step (F2 lane, report-only): the same assembly run ends by refreshing
+``.vibe/observability/skill_consumption.jsonl`` — the five-segment skill
+consumption ledger (selected/read/applicable/executed/accepted). It does its
+own single scan and upserts by ``span_id``; see ``skill_consumption.py`` for
+the contract and the honest-null rules. It changes no bridge output.
+
 Privacy: tool_call spans carry ONLY the tool name — never arguments,
 paths, or responses (same rule as the capture side).
 """
@@ -164,6 +170,8 @@ class BridgeStats:
     ambiguous: int = 0
     outcomes_recorded: int = 0
     hit_outcomes_recorded: int = 0
+    #: Rows written/updated in the F2 consumption ledger (last assembly step).
+    consumption_rows: int = 0
     notes: list[str] = field(default_factory=list)
 
 
@@ -266,6 +274,9 @@ def _run(entries: list[ToolEvent], root: Path, stats: BridgeStats) -> None:
     _save_state(root / ".vibe" / "observability" / STATE_FILENAME, state)
     _derive_outcomes(route_spans, root, stats)
     _derive_hit_outcomes(route_spans, root, stats)
+    # Last: the consumption ledger's read-proxy must see every tool_call span
+    # this run just bridged (F2 lane — report-only, see skill_consumption.py).
+    _derive_consumption(root, stats)
 
 
 def _bridge_events(
@@ -513,6 +524,27 @@ def _derive_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeSta
         for line in new_lines:
             f.write(line + "\n")
     stats.outcomes_recorded += len(new_lines)
+
+
+def _derive_consumption(root: Path, stats: BridgeStats) -> None:
+    """Refresh the F2 skill-consumption ledger from the assembled spans.
+
+    Report-only factual accounting (``skill_consumption.record_consumption``):
+    it derives the five-segment consumption row for every routing attempt and
+    upserts ``.vibe/observability/skill_consumption.jsonl``. Never raises —
+    telemetry must not break assembly — and writes nothing when the derivation
+    is unchanged.
+
+    Deliberately NOT gated on ``entries``: a manual re-run with nothing new to
+    bridge still refreshes rows whose tool calls landed since the last pass.
+    """
+    from vibesop.core.observability.skill_consumption import record_consumption
+
+    try:
+        stats.consumption_rows = record_consumption(root)
+    except Exception:
+        logger.debug("skill-consumption ledger refresh failed", exc_info=True)
+        stats.notes.append("skill-consumption ledger refresh failed; see debug log")
 
 
 def _derive_hit_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeStats) -> None:

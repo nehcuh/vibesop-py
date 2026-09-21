@@ -16,6 +16,12 @@ file.
 Usage:
     vibe observe routing [--spans PATH] [--since ISO] [--until ISO]
                          [--project-id ID] [--eval-json PATH] [--json]
+
+Sibling: ``vibe observe consumption`` reads the F2 skill-consumption ledger
+(``.vibe/observability/skill_consumption.jsonl``), which answers a different
+question — *what happened to a routed skill* (selected/read/…), not *how
+healthy routing evidence is*. The two share no thresholds and no verdicts;
+this module stays the routing-evidence observer.
 """
 
 from __future__ import annotations
@@ -31,6 +37,13 @@ from vibesop.core.observability.route_observe import (
     ObserveThresholds,
     observe_routing,
     render_human,
+)
+from vibesop.core.observability.skill_consumption import (
+    LEDGER_FILENAME,
+    consumption_report,
+)
+from vibesop.core.observability.skill_consumption import (
+    render_human as render_consumption_human,
 )
 
 app = typer.Typer(
@@ -175,4 +188,76 @@ def routing_cmd(
         print(_json.dumps(result.report, ensure_ascii=False))
     else:
         print(render_human(result.report))
+    raise typer.Exit(result.exit_code)
+
+
+@app.command("consumption")
+def consumption_cmd(
+    ledger: Annotated[
+        Path | None,
+        typer.Option(
+            "--ledger",
+            help=(
+                f"consumption ledger JSONL (default: <cwd>/.vibe/observability/{LEDGER_FILENAME})"
+            ),
+        ),
+    ] = None,
+    route_span_id: Annotated[
+        str | None, typer.Option("--route-span-id", help="exact route span id to print")
+    ] = None,
+    session: Annotated[
+        str | None, typer.Option("--session", help="filter rows by exact session_id")
+    ] = None,
+    task_id: Annotated[
+        str | None, typer.Option("--task-id", help="filter rows by exact task_id")
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="inclusive ISO8601 lower bound on the route timestamp"),
+    ] = None,
+    until: Annotated[
+        str | None,
+        typer.Option("--until", help="exclusive ISO8601 upper bound on the route timestamp"),
+    ] = None,
+    limit: Annotated[
+        int, typer.Option("--limit", help="maximum rows to print (counts stay over all matches)")
+    ] = 20,
+    as_json: Annotated[
+        bool, typer.Option("--json", "-j", help="emit the versioned machine JSON on stdout")
+    ] = False,
+) -> None:
+    """Print the five-segment skill-consumption ledger (report-only).
+
+    Factual accounting only: ``selected`` is derived from route spans, while
+    ``read`` / ``applicable`` / ``executed`` / ``accepted`` are honest nulls
+    (``state: null`` + ``reason``) because no producer records them. Two
+    clearly-labelled proxies ship inside ``read`` and are never a verdict.
+
+    Exit codes: 0 report emitted (a missing ledger is NOT an error — empty
+    structure, exit 0), 2 usage error, 3 unreadable ledger. There is no
+    healthy/warn verdict: this ledger is not a gate and carries no rates.
+    """
+    import json as _json
+
+    if ledger is None:
+        ledger = Path.cwd() / ".vibe" / "observability" / LEDGER_FILENAME
+
+    try:
+        result = consumption_report(
+            ledger,
+            span_id=route_span_id,
+            session_id=session,
+            task_id=task_id,
+            since=since,
+            until=until,
+            limit=limit,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise typer.Exit(2) from exc
+
+    if as_json:
+        print(_json.dumps(result.report, ensure_ascii=False))
+    else:
+        print(render_consumption_human(result.report))
     raise typer.Exit(result.exit_code)
