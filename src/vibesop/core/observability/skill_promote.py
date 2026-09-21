@@ -1959,6 +1959,13 @@ def _render_skill_md(
     so the human editor gets guided TODO slots instead of an empty
     shell — the review value of a skill is its acceptance bar and
     boundaries, which the trace cannot synthesize.
+    F9 (论文笔记建议#4): the skeleton also carries the four promotion
+    elements — Prerequisites / Counterexamples / Verification /
+    Source Outcomes — as TODO-placeholder H2 sections between Steps and
+    the Acceptance Checklist. The headings are the single canonical
+    structure shared with skill-craft's generation template; the
+    promote verifier reports each element left unfilled as a
+    descriptive WARN code (never FAIL, never blocks activate).
 
     The metrics block records provenance (``cluster_id``, ``gold_rate``,
     ``span_count``) so future audits can trace why this skill was
@@ -2182,6 +2189,28 @@ Steps below appeared in ≥70% of cluster spans (core steps). Treat as a
 starting point — edit, reorder, or replace based on domain knowledge.
 
 {steps_block}
+
+## Prerequisites
+
+<!-- F9 four promotion elements (论文笔记建议#4): 前提 / 反例 / 验证方法 /
+     来源成败. These headings are the SINGLE canonical structure shared with
+     skill-craft's generation template — do not rename one side without the
+     other. The promote verifier reports each missing element as a WARN code
+     (never FAIL, never blocks activate). -->
+
+- TODO: state the conditions under which this pattern holds（前提：什么条件下这个模式才成立 — 环境 / 输入形状 / 前置状态）
+
+## Counterexamples
+
+- TODO: name a real case where this pattern failed or did not apply（反例：这个模式不成立 / 失败过的真实案例）
+
+## Verification
+
+- TODO: how this pattern was or can be verified（验证方法：用什么命令 / 测量 / artifact 证明它有效，挂路径）
+
+## Source Outcomes
+
+- TODO: record the success and failure of the source executions this skill was distilled from（来源成败：来源执行的成功与失败各是什么，含 cluster provenance）
 
 ## Acceptance Checklist
 

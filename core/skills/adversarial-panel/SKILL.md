@@ -60,9 +60,15 @@ If routing selected `deep-diagnosis-optimization` but the user named
   unless the user named them.
 - Write a frozen patch file. Finders read that file, not a moving tree.
 
-### 3. Retarget the workflow to this pull
+### 3. Retarget the review to this pull
 
-- Registered Grok workflow: `adversarial-review`.
+- Self-bootstrap is the primary path: this skill needs NO machine-local
+  files — a fresh clone runs the 5+N panel in step 4 as-is.
+- On Grok, a registered machine-local workflow
+  (`.grok/workflows/adversarial-review`, intentionally untracked) MAY be
+  used as a convenience launcher with `args.base`, `args.head`,
+  `args.patch`. If it is absent (fresh clone, non-Grok platform), skip
+  it and spawn the same 5+N panel yourself — behavior is equivalent.
 - If lens briefs still name an older CHANGELOG version, pass `args.theme`,
   `args.must_read`, and current `[Unreleased]` / latest version sections.
   Do not review 8.3.0 when HEAD is 8.5.0.
@@ -75,8 +81,9 @@ concurrency, tests, claims-consistency**.
 Then one skeptic per finding. Default **refute**. `real=true` only with
 evidence inspected in the current tree.
 
-On Grok: launch the registered workflow with `args.base`, `args.head`,
-`args.patch`. Elsewhere: spawn the same 5+N panel yourself.
+On Grok with the machine-local workflow present: launch it with
+`args.base`, `args.head`, `args.patch`. Everywhere else (its default
+state on a fresh clone): spawn the same 5+N panel yourself.
 
 During review, do not edit `src/`.
 

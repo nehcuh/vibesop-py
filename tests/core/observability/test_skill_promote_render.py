@@ -565,3 +565,59 @@ class TestAgentPromptPrefixPredicate:
         # the tag marks machine wrappers, not missing data.
         assert not _has_agent_prompt_prefix("")
         assert not _has_agent_prompt_prefix("   ")
+
+
+class TestPromotionElementsSkeleton:
+    """F9 four promotion elements (论文笔记建议#4): the draft body carries
+    Prerequisites / Counterexamples / Verification / Source Outcomes as
+    TODO-placeholder H2 sections — the SINGLE canonical structure shared
+    with skill-craft's generation template."""
+
+    _HEADINGS = (
+        "## Prerequisites",
+        "## Counterexamples",
+        "## Verification",
+        "## Source Outcomes",
+    )
+
+    def test_four_element_sections_present_in_order(self) -> None:
+        content = _render_skill_md(_make_candidate(), "custom/x-f9")
+        for heading in self._HEADINGS:
+            assert heading in content
+        # Order: Steps → four elements → Acceptance Checklist → Metrics.
+        assert content.index("## Steps") < content.index("## Prerequisites")
+        assert content.index("## Prerequisites") < content.index("## Counterexamples")
+        assert content.index("## Counterexamples") < content.index("## Verification")
+        assert content.index("## Verification") < content.index("## Source Outcomes")
+        assert content.index("## Source Outcomes") < content.index("## Acceptance Checklist")
+
+    def test_element_sections_ship_todo_placeholders(self) -> None:
+        """Unfilled elements must read as TODO so the verifier reports
+        them missing until human review (WARN, never FAIL)."""
+        content = _render_skill_md(_make_candidate(), "custom/x-f9")
+        for heading in self._HEADINGS:
+            section = content.split(heading, 1)[1]
+            next_heading = section.find("\n## ")
+            section = section if next_heading == -1 else section[:next_heading]
+            assert "TODO:" in section, f"{heading} lacks a TODO placeholder"
+
+    def test_global_scope_also_gets_elements(self) -> None:
+        """The four elements carry no queries / project identifiers, so
+        the M12 privacy boundary does not mask them."""
+        candidate = _make_candidate(project_distribution={"p/a": 2, "p/b": 3})
+        content = _render_skill_md(candidate, "custom/x-f9", scope="global")
+        for heading in self._HEADINGS:
+            assert heading in content
+
+    def test_skill_craft_template_shares_canonical_headings(self) -> None:
+        """Anti-drift pin: skill-craft's generation template must carry
+        the same four H2 headings with TODO placeholders — rename only
+        in lockstep with _render_skill_md."""
+        from pathlib import Path
+
+        skill_craft = (
+            Path(__file__).resolve().parents[3] / "core" / "skills" / "skill-craft" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        for heading in self._HEADINGS:
+            assert heading in skill_craft, f"skill-craft template missing {heading}"
+        assert "promotion-element-missing" in skill_craft
