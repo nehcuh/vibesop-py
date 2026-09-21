@@ -1,5 +1,25 @@
 # VibeSOP Project Knowledge
 
+## Research Findings (F-series)
+
+综述 F1–F10 的可操作面。评审线 F4/F5/F6 已在 `adversarial-panel` / `adversarial-arbitration`；其余条目 2026-09-21 由 tmux 三路落地后写入。
+
+### F1 spec 缺口可操作面：report-only 注释 + task-briefing（2026-09-21, lane claude）
+
+注入层 `skill_injector.assess_spec_gap()`：query ≥150 字符且验收/边界/交付物三族信号 ≥2 族 → `spec_gap=low`，信封加 report-only 注释，注入正文不变；异常 fail-open 到 `unknown`。hook JSON 增 `specGap`；span metadata 记 `spec_gap`。新建 builtin `task-briefing`（窄触发：任务书 / task brief / 显式点名），教 agent 粗任务先写满目标/交付/验收/非目标。启发式只注释不闸；「写满=冗余」是五次平手的条件结论，不是「技能无用」。R8 盲评未结算前不得引用「粗=显形」。hermetic 指纹因 registry+技能树追加会变，行为零翻转。
+
+### F2 消费分账：命中 ≠ 读到，读文件 ≠ 读技能（2026-09-21, lane pi）
+
+论文建议 #3 落成 `vibesop.observability.skill_consumption` v1：`.vibe/observability/skill_consumption.jsonl`（每 route span 一行，装配期 upsert）。五段里本轮只有 `selected` 有事实；`read` / `applicable` / `executed` / `accepted` 诚实置空（`state: null` + `reason`）。两枚代理永不得升为 `read.state`：`injection_attempted`、`read_like_tool_calls`（R6 的 10 次读全给了 TASK.md）。CLI：`vibe observe consumption`，raw counts，账本缺失 fail-soft exit 0。不把分账当成功率。`read` 收据和 `accepted` 对齐仍缺生产者。
+
+### F9 晋升四要素已制度化（2026-09-21, lane kimi）
+
+promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexamples / Verification / Source Outcomes。verifier 缺项 WARN `promotion-element-missing: <element>`，只报不拦，badge 仍只量触发召回（灯不是闸）。T+7 −75.2% / T+14 +264% 证据已入库；T+21 仍挂账，反弹未终裁前不得宣称治理成功。
+
+### F10 账本入库是机制（2026-09-21, lane kimi）
+
+`gate43-t7/t14-echo-measure.md` 已 `git add -f` 入库。`adversarial-panel` 第 3 步不再依赖未跟踪的 `.grok/workflows/`：无 Grok workflow 时 5+N 自举。凡被 tracked 文档引用的产物必须 tracked。
+
 ## Technical Pitfalls
 
 ### Hook no-match 不能写进 `systemMessage` — 消费项目会每轮刷横幅 (2026-09-16 S86)

@@ -1,6 +1,24 @@
 
 ## Current Session
 
+### S89 (2026-09-21) [vibesop-py] F1/F2/F9 设计先行 + tmux 三路落地
+
+- 用户：用其他 tmux 面板分别调 claude / pi / kimi，先产品设计再开发。
+- 三路均 Status: DONE：claude `5254a442` / pi `449026d4` / kimi `d72deba8`。文件零重叠，已 merge 进 main（ahead origin 7 + 待提交 specs/记忆）。
+- F1：`task-briefing` + `spec_gap` report-only。F2：消费分账，仅 `selected` 有事实。F9/F10：晋升四要素 WARN + gate43 入库 + panel 5+N 自举。
+- F 系已写入 `memory/project-knowledge.md`。
+- 未做：push、R8 盲评、T+21 活体、hermetic 基线刷新（F1 指纹结构性漂移）。
+- Recorded: yes — F1/F2/F9/F10 → project-knowledge
+
+### S88 (2026-09-21) [vibesop-py] 论文/F 系发现是否沉淀为技能与记忆
+
+- 拉取：rebase onto `8657c3ac`（今日合入 `.omx/artifacts/skill-distillation-review-20260921.md`）；HEAD `f57f7faa`，ahead 2（S85/S86 本地未推）。
+- 路由命中 adversarial-panel（88%）；override：用户要的是拉完后调研沉淀，不是五路对抗复审。独立核验 09-21 评审 + 综述 F1-F10 / E1-E26 / 论文笔记。
+- 结论：部分沉淀。F4/F5/F6/F10 已成内置技能 + `ci/decision-source.yaml`；F1/F2/F3/F7/F8/F9 主结论仍在文档层。`memory/project-knowledge.md` 无 F 系条目。论文笔记建议 #3/#4 未进技能模板。
+- 与 09-21 评审差：本机磁盘有 `gate43-t{7,14}-echo-measure.md`（未 tracked）；无 t21；`.grok/workflows/` 目录亦不存在。
+- Next：R8 盲评结算、T+21 复检、F 系进 warm 层、promote 模板补前提/反例、gate43 测量入库。
+- Recorded: no（调研，未改 src）
+
 ### S86 END (2026-09-16~17) [vibesop-py] 消费项目无匹配横幅噪音
 
 - 用户：`../llm-safety` 应用 VibeSOP 后每轮提示 `🤖 VibeSOP: No matching skill found. Proceeding in normal mode.`
