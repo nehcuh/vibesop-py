@@ -112,6 +112,12 @@ class AgentRuntimeResult:
     # can tell "matched but broken" apart from "no skill matched"), error
     # reporting.
     demoted_skill_id: str = ""
+    # F1 report-only annotation ("low"|"unknown"): whether the routed query
+    # already read like a complete requirements document. Computed by
+    # ``SkillInjector.assess_spec_gap``; never alters injection behavior.
+    # Serialized as hook JSON ``specGap``; old clients treat a missing key
+    # as "unknown".
+    spec_gap: str = "unknown"
 
     @property
     def has_match(self) -> bool:
@@ -196,6 +202,9 @@ class AgentRuntimeResult:
                 "plan": self.plan,
                 "decisionMessage": self.decision_message,
                 "skillContent": self.skill_content[:3000] if self.skill_content else "",
+                # F1 report-only annotation; additive key — old clients
+                # ignore it, and its absence must be read as "unknown".
+                "specGap": self.spec_gap,
                 "slashResult": self.slash_result,
                 "errors": self.errors,
             },
@@ -829,8 +838,14 @@ class AgentRuntime:
                             result.skill_id
                         )
                         injection = self.injector.inject_single_skill(
-                            result.skill_id, platform, source_file=source_file
+                            result.skill_id,
+                            platform,
+                            source_file=source_file,
+                            spec_query=query,
                         )
+                        # F1 report-only annotation (single-mode injections only;
+                        # orchestrate plan envelopes deliberately untouched).
+                        result.spec_gap = injection.spec_gap
                         if not injection.has_content:
                             demoted_id = result.skill_id
                             logger.warning(
@@ -985,6 +1000,14 @@ class AgentRuntime:
                 # cross-reference convention ("change one, re-read the
                 # other") was honored — both predicates re-checked.
                 _task_span.metadata["has_match"] = matched
+                # F1 spec-gap annotation on the span (always written for
+                # single-mode routes so F2 consumption accounting gets a
+                # denominator; inert to every existing predicate — none of
+                # them read this key). Orchestrate/miss-before-injection
+                # paths keep the dataclass default "unknown" and skip the
+                # key entirely (mode != "single").
+                if result.mode == "single":
+                    _task_span.metadata["spec_gap"] = result.spec_gap
                 # Demoted routes are misses by the span predicate (correct —
                 # the user got no skill), but they are a DIFFERENT miss: the
                 # router matched and the body was broken. Record the id so

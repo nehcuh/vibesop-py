@@ -871,3 +871,19 @@ skills:
       - Read
       - Bash
     safety_level: trusted_builtin
+
+  - id: task-briefing
+    namespace: builtin
+    entrypoint: skills/task-briefing/SKILL.md
+    intent: Turn a coarse request into a complete task brief (goal, deliverables, acceptance criteria, non-goals) before execution or delegation. Explicit briefing intent only.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin

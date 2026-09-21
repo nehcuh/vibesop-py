@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -27,6 +28,73 @@ logger = logging.getLogger(__name__)
 # share one constant — a drifted literal would silently disable the gate and
 # let the placeholder text be injected as if it were skill content.
 CONTENT_NOT_FOUND_MARKER = "*Skill content not found"
+
+# ── F1 spec-gap annotation (report-only) ─────────────────────────────────────
+# Values for ``InjectionResult.spec_gap`` / hook JSON ``specGap``:
+#   "low"     — the query already reads like a complete requirements document
+#               (length + dual signal families); the injected skill is likely
+#               redundant (F1: five ties on spec-complete tasks). Advisory
+#               only — the skill body is injected unchanged either way.
+#   "unknown" — everything else, including every heuristic failure (fail-open).
+SPEC_GAP_LOW = "low"
+SPEC_GAP_UNKNOWN = "unknown"
+
+# Minimum stripped query length before "low" is even considered. Short
+# queries cannot carry a complete spec; calibration anchors are the R6/R7
+# task briefs (multi-hundred-char) vs chit-chat (<50).
+SPEC_GAP_MIN_QUERY_CHARS = 150
+
+# Three independent signal families; ≥2 of 3 must hit (conjunction for
+# precision — a false "low" would nudge the agent away from a skill it
+# needed, while a false "unknown" merely keeps the status quo).
+_SPEC_GAP_ACCEPTANCE_RE = re.compile(
+    r"验收|接受标准|acceptance|退出码|exit code|测试通过|tests? pass|pytest|全绿|CI green|可验证",
+)
+_SPEC_GAP_SCOPE_RE = re.compile(
+    r"不要|不得|禁止|不做|仅限|仅在|do not|don't|must not|non-goal|out of scope|超出",
+)
+_SPEC_GAP_ARTIFACT_RE = re.compile(
+    # Path-like token with a dot (extension) — a bare "and/or" must not count.
+    r"[\w.-]*/[\w/.-]*\.\w+|输出|产出|交付|deliverable|handback|commit|push|\bPR\b|文件",
+)
+
+
+def assess_spec_gap(query: str | None) -> str:
+    """Report-only heuristic: does *query* already look like a complete spec?
+
+    Returns ``SPEC_GAP_LOW`` only when the stripped query reaches
+    ``SPEC_GAP_MIN_QUERY_CHARS`` AND at least 2 of the 3 signal families
+    (acceptance/verification, scope boundary/non-goals, concrete artifacts)
+    match. Everything else — including any internal error — returns
+    ``SPEC_GAP_UNKNOWN`` (fail-open: the heuristic must never suppress or
+    alter injection). Not a gate; callers only annotate.
+    """
+    try:
+        if not isinstance(query, str) or len(query.strip()) < SPEC_GAP_MIN_QUERY_CHARS:
+            return SPEC_GAP_UNKNOWN
+        families = (
+            _SPEC_GAP_ACCEPTANCE_RE,
+            _SPEC_GAP_SCOPE_RE,
+            _SPEC_GAP_ARTIFACT_RE,
+        )
+        hits = sum(1 for rx in families if rx.search(query))
+        return SPEC_GAP_LOW if hits >= 2 else SPEC_GAP_UNKNOWN
+    except Exception:
+        return SPEC_GAP_UNKNOWN
+
+
+def _spec_gap_envelope_note() -> str:
+    """The report-only note prepended to the envelope when spec_gap is low.
+
+    Wording constraints (design doc §4): advisory, never instructs the agent
+    to skip the skill, and defers to the skill when unsure.
+    """
+    return (
+        "[VibeSOP report-only] spec_gap: low — this task brief already reads "
+        "like a complete requirements document. The skill below is injected "
+        "in full; follow the brief where it is more specific than the skill. "
+        "When unsure, follow the skill as usual."
+    )
 
 
 class PlatformType(StrEnum):
@@ -64,6 +132,9 @@ class InjectionResult:
         truncated: Whether content was truncated for length
         content_missing: True when no SKILL.md body could be loaded
         refused_unsafe: True when a body was found but the runtime scan refused it
+        spec_gap: Report-only F1 annotation ("low"|"unknown") — whether the
+            routed query already read like a complete requirements document.
+            Never gates injection; missing value means "unknown".
     """
 
     method: InjectionMethod
@@ -73,6 +144,7 @@ class InjectionResult:
     content_missing: bool = False
     refused_unsafe: bool = False
     resolved_path: str = ""
+    spec_gap: str = SPEC_GAP_UNKNOWN
 
     @property
     def has_content(self) -> bool:
@@ -123,6 +195,7 @@ class SkillInjector:
         skill_id: str,
         platform: PlatformType,
         source_file: str | Path | None = None,
+        spec_query: str | None = None,
     ) -> InjectionResult:
         """Inject a single skill's content.
 
@@ -131,11 +204,17 @@ class SkillInjector:
             platform: Target platform
             source_file: Discovered SKILL.md path from the candidate, if any.
                 Preferred over path-guessing.
+            spec_query: The routed user query, for the report-only F1
+                spec-gap annotation. When it reads like a complete
+                requirements document (``assess_spec_gap`` → "low"), a
+                report-only note is prepended to the envelope. Injection
+                content and behavior are identical either way.
 
         Returns:
             InjectionResult with platform-specific payload
         """
         self._last_resolved = None
+        spec_gap = assess_spec_gap(spec_query)
         skill_content = self._load_skill_content(skill_id, source_file=source_file)
         resolved = self._last_resolved.as_posix() if self._last_resolved is not None else ""
 
@@ -155,6 +234,7 @@ class SkillInjector:
                 skill_id=skill_id,
                 content_missing=True,
                 resolved_path="",
+                spec_gap=spec_gap,
             )
 
         # Runtime security gate: re-scan the loaded content before injecting.
@@ -176,9 +256,15 @@ class SkillInjector:
                 skill_id=skill_id,
                 refused_unsafe=True,
                 resolved_path=resolved,
+                spec_gap=spec_gap,
             )
 
         truncated = False
+
+        if spec_gap == SPEC_GAP_LOW:
+            # Report-only F1 note, prepended so truncation can never cut it.
+            # Notices above return early — this only annotates a real body.
+            skill_content = f"{_spec_gap_envelope_note()}\n\n{skill_content}"
 
         if skill_content and len(skill_content) > self.MAX_INJECT_LENGTH:
             skill_content = skill_content[: self.MAX_INJECT_LENGTH]
@@ -197,6 +283,7 @@ class SkillInjector:
         else:
             result = self._inject_generic(skill_id, skill_content, truncated)
         result.resolved_path = resolved
+        result.spec_gap = spec_gap
         return result
 
     def inject_execution_plan(
@@ -872,8 +959,12 @@ You MUST follow this skill's workflow. Do not skip steps.
 
 
 __all__ = [
+    "SPEC_GAP_LOW",
+    "SPEC_GAP_MIN_QUERY_CHARS",
+    "SPEC_GAP_UNKNOWN",
     "InjectionMethod",
     "InjectionResult",
     "PlatformType",
     "SkillInjector",
+    "assess_spec_gap",
 ]
