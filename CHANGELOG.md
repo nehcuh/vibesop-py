@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `adversarial-arbitration` (D/T/J on synthesizer REQUEST CHANGES; consult not a
   merge gate), and `babysit-main` (job-level CI + Quickstart E2E on
   `origin/main`; not PR auto-merge). Builtin count 19 → 22.
+- **`task-briefing` skill + report-only `spec_gap`**: long queries with
+  acceptance/boundary/deliverable signals get an advisory envelope comment
+  (`specGap` on the hook JSON). Injection body is unchanged; failures
+  fail-open to `unknown`. Builtin count 22 → 23.
+- **`vibe observe consumption`**: five-segment skill ledger (selected / read /
+  applicable / executed / accepted). This round only `selected` has facts;
+  the rest stay `null` plus a reason. Missing ledger is fail-soft exit 0.
+- **Promote four-element skeleton**: Prerequisites / Counterexamples /
+  Verification / Source Outcomes on promote drafts and the skill-craft
+  template. Verifier emits `promotion-element-missing:*` WARN and never
+  blocks activate.
+- **gate43 echo ledger**: `gate43-t{7,14,21}-echo-measure.md` tracked;
+  `scripts/measure_gate43_echo.py` reproduces the locked t7 predicates.
+  T+21 post window is 2.57 echo-pairs/day (T+7 3.57; T+14 spike 13.00).
+  Hermetic routing baseline refreshed after the new skill/registry hashes
+  (no `ok1` absorption).
 
 ## [8.5.0] — 2026-09-15
 

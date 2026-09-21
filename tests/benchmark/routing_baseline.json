@@ -2,9 +2,9 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "47cc8ba87fd8078d47e61364518193fae3f88e7eba2e939e5ef6bcf2804c83c1",
+    "sha": "9520a4049cb91da2e780f9bc2a241c4fb8169069df0ea974ba22ef316a03c34a",
     "inputs": {
-      "registry.yaml": "37332e6286efb20ddf12e4732ea98e5ddda230759a0bc896db00bb13721bf277",
+      "registry.yaml": "4aee8ecde75431bcbe9b3c668404f8c10f634c796271dc47e0dc49b360064cc2",
       "dataset": "e5ab313c2f121393733f0c68f243d4e0aedb20931901449765cd509321dd8fa1",
       "posture": {
         "enable_embedding": false,
@@ -19,7 +19,7 @@
       },
       "skills:builtin": {
         "adversarial-arbitration/SKILL.md": "1a8cd0f2956fe252ca27d5be80f6f4908070e7b3dcd978d6676891eb1324fa80",
-        "adversarial-panel/SKILL.md": "f4f21a94abd135ba36663604905d6e9cee2ede21e4a2f03845e3577743f3bb56",
+        "adversarial-panel/SKILL.md": "f7fd9f0d137805d17ae3f018797422cc7d95e4ed309ce72d516f51d283be5dbc",
         "autonomous-experiment/SKILL.md": "c7c87ae2bb489e3db0e5879a5e735ffa167e3fd899b0d203d1efed510557d938",
         "babysit-main/SKILL.md": "704739930997866bdcdea721fb1a368cae6a7acb4fe88ba00608d918f6bfaccb",
         "code-review/SKILL.md": "e851866cfc71ece1256853c3f6afafa0b390ad560678756cc4dab71f053d4e1c",
@@ -29,7 +29,7 @@
         "instinct/SKILL.md": "b788cd5765111e505337cf4ecaabd233752ac8d246bc04665ec92b6ae3528b38",
         "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
         "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
-        "skill-craft/SKILL.md": "eab483c40cfd0a8595cd57c1534dd1efae49126765c5ac45e742abb4d4a0ab72",
+        "skill-craft/SKILL.md": "2a044b6499e12640a4ce6e55f1c5a65ae6e871476e8bada50712a14381445cd0",
         "slash-analyze/SKILL.md": "f36b7380f537b51a2ca91c489a4096b0d2fb21d6654e550157a0615ed1c58196",
         "slash-evaluate/SKILL.md": "03ec2764a2fa5d1f338b9235ba148f6d76e997539240960bf9f9188076499f1f",
         "slash-help/SKILL.md": "385a269b499f9a87db72c03296c24f681de05c90ff80e7008e580e58cdbaffd7",
@@ -38,6 +38,7 @@
         "slash-orchestrate/SKILL.md": "3a42b575cc20a09e75499f86cb747d29c5b82ea1fe4c3e59e5c759956ac585cf",
         "slash-route/SKILL.md": "d1fed7e4dc165ecf54a9cf60ad4901f63b53f21c5e40c608ebc253aa5bc20d55",
         "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
+        "task-briefing/SKILL.md": "d6dc89a7c3df27764499a4f0a8f1d86a37c0b17b0cb3197aa90e94d2066bc5a8",
         "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279",
         "verify-result/SKILL.md": "d05ffc4c5864c84be2c5ff74cf4e98a062f1b6ab3afb7c9e8b74346dd8e91b36"
       },

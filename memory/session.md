@@ -7,7 +7,7 @@
 - 三路均 Status: DONE：claude `5254a442` / pi `449026d4` / kimi `d72deba8`。文件零重叠，已 merge 进 main（ahead origin 7 + 待提交 specs/记忆）。
 - F1：`task-briefing` + `spec_gap` report-only。F2：消费分账，仅 `selected` 有事实。F9/F10：晋升四要素 WARN + gate43 入库 + panel 5+N 自举。
 - F 系已写入 `memory/project-knowledge.md`。
-- 未做：push、R8 盲评、T+21 活体、hermetic 基线刷新（F1 指纹结构性漂移）。
+- 收尾（S90）：hermetic `--update-baseline` 后 `--check` exit 0（指纹只变 registry/panel/skill-craft/task-briefing，无 ok1 吸收）。T+21 回声 2.57 对/天，T+7/T+14 数字复现，不回滚。R8 盲评**未结算**（产物在、编排者不能当盲评人）。
 - Recorded: yes — F1/F2/F9/F10 → project-knowledge
 
 ### S88 (2026-09-21) [vibesop-py] 论文/F 系发现是否沉淀为技能与记忆

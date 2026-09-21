@@ -14,7 +14,7 @@
 
 ### F9 晋升四要素已制度化（2026-09-21, lane kimi）
 
-promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexamples / Verification / Source Outcomes。verifier 缺项 WARN `promotion-element-missing: <element>`，只报不拦，badge 仍只量触发召回（灯不是闸）。T+7 −75.2% / T+14 +264% 证据已入库；T+21 仍挂账，反弹未终裁前不得宣称治理成功。
+promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexamples / Verification / Source Outcomes。verifier 缺项 WARN `promotion-element-missing: <element>`，只报不拦，badge 仍只量触发召回（灯不是闸）。T+7 −75.2% / T+14 +264%（9-06 单日）/ T+21 **2.57 对/天**（回到 T+7 量级，不回滚）。T+21 窗 hook 流量 31.7/天（T+14 为 113），不得把安静窗写成疗效。双 hook × 跨 session CLI 仍能造对。
 
 ### F10 账本入库是机制（2026-09-21, lane kimi）
 
