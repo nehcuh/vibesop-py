@@ -1,6 +1,21 @@
 
 ## Current Session
 
+### S91 END (2026-09-21) [vibesop-py] 公司内部介绍 7 页 PPT + session-end
+
+- 用户：按「方法论误区 → 问题 → 解法 → 为何不用内置查看器 → 记忆/多层语义/流程化」做内部介绍，后要求几页 PPT、不要啰嗦。
+- 交付：7 页 `docs/VibeSOP-内部介绍.pptx`（封面 / 五条误区 / 技能与多专家对照数字 / 五件事+四层分工 / 查看器差异 / 三亮点 / 三句话+试用）。
+- 口径：R8 盲评未结算；委员会 0/72 主因阶段额度；记忆只承诺可检索。未入库 `docs/VibeSOP-CMspark-部门分享-17页.pptx`（非本会话产物）。
+- Next：上场时第 3 页口头补阶段额度与 R8 未结算。
+- Recorded: yes — PowerPoint `active presentation` 会导成另一份已打开的 VibeSOP 稿
+
+### S91 (2026-09-21) [vibesop-py] 公司内部介绍叙事
+
+- 用户：按「方法论误区 → 要解决的问题 → 怎么解 → 为何不用各家内置查看器 → 记忆/多层语义/流程化」准备内部介绍。
+- 材料：`docs/research/research-survey.md` F1–F10、R1–R8、多专家 360/144、task-memory、POSITIONING、enterprise-agent-methodology。
+- 交付：7 页 PPT `docs/VibeSOP-内部介绍.pptx`。口径：R8 盲评未结算；记忆只承诺可检索；多专家结论限定任务集。
+- Recorded: no（介绍材料，未改 src）
+
 ### S89 (2026-09-21) [vibesop-py] F1/F2/F9 设计先行 + tmux 三路落地
 
 - 用户：用其他 tmux 面板分别调 claude / pi / kimi，先产品设计再开发。

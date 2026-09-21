@@ -22,6 +22,14 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### macOS 用 PowerPoint 导 PDF 时 `active presentation` 可能是另一份已打开的 VibeSOP 稿 (2026-09-21 S91)
+
+**Issue**: 本机无 `soffice`，`qlmanage -t` 只出一张缩略图。改用 AppleScript `save thePres in … as save as PDF`。`open POSIX file` 之后取 `active presentation`，会落到自动恢复的另一份 VibeSOP 稿（本机是 23 页《把经验留给机器》），PDF 页数和正文全错，mtime 却是新的。覆盖同一路径再 `open` 也会吃 Office 缓存，导出仍是旧字。
+
+**Solution**: ① 按 `name of presentation` 含目标文件名选取，禁止默认 `active presentation`。② 先关掉名称不含目标的窗口（`saving no`）。③ 覆盖后换新文件名再打开。④ 导出后立刻 `pdfinfo` 核页数 + `pdftotext` 核第 N 页正文，再 `pdftoppm`。本机 `cp` 是 `cp -i`，覆盖用 `/bin/cp -f`。`check_overlaps.py` 会把卡片上的正文报成 100% overlap，那是假阳。
+
+**Files**: `docs/VibeSOP-内部介绍.pptx`
+
 ### Hook no-match 不能写进 `systemMessage` — 消费项目会每轮刷横幅 (2026-09-16 S86)
 
 **Issue**: `to_hook_response` 在 miss 时返回 `systemMessage: "🤖 VibeSOP: No matching skill found..."`. Claude Code / Grok 把 `systemMessage` 当用户可见横幅。消费项目（如 `llm-safety`）大多数 prompt 本来就不该匹配 VibeSOP 技能，应用 `vibe build` 后每轮都弹这句，看起来像坏了。Grok 的 UserPromptSubmit 还有额外限制：allow-hook 的 stdout / `additionalContext` 会被丢掉，横幅对用户可见、对模型没有指纹，agent 还会按 routing.md 再跑一遍 `vibe route`。

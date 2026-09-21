@@ -14,23 +14,23 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-09-21 S91 END · 内部介绍 7 页 PPT
+
+**Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是 S85 遗留脏项，未纳入。
+
+**完成**：内部介绍叙事压成 7 页 `docs/VibeSOP-内部介绍.pptx`（误区 → 对照数字 → 五件事/四层分工 → 查看器差异 → 三亮点 → 三句话）。口径：R8 盲评未结算；委员会 0/72 主因阶段额度；记忆只承诺可检索。
+
+**关键决定**：不把 `docs/VibeSOP-CMspark-部门分享-17页.pptx` 当本会话产物入库。macOS 无 soffice 时用 PowerPoint 导 PDF，必须按 presentation **name** 选取，不能信 `active presentation`。
+
+**Next**：上场第 3 页口头补阶段额度与 R8 未结算。R8 盲评仍待独立盲评人。
+
 ### 2026-09-17 S86 END · Hook 无匹配横幅静默
 
-**Workspace**：VibeSOP main，ahead origin/main 1（S85 chore）+ 本 commit。`.pi/` 与 `.grok/hooks/` 仍是 S85 工作树脏项，未纳入。
+**Workspace**：VibeSOP main。`.pi/` 与 `.grok/hooks/` 仍是 S85 工作树脏项，未纳入。
 
-**完成**：`to_hook_response` miss 不再写用户可见 `systemMessage`。Claude/Kimi 指纹进 `additionalContext`；`grok-build` 返回 `{}`。Grok routing rule 把静默当成功 miss。已 `uv tool install --reinstall --force --no-cache .` + `vibe build grok-build --output ~/.grok`。现场：grok miss `{}`，claude miss 无 🤖，session-end 命中仍 `VibeSOP routed:`。
+**完成**：`to_hook_response` miss 不再写用户可见 `systemMessage`。Claude/Kimi 指纹进 `additionalContext`；`grok-build` 返回 `{}`。Grok routing rule 把静默当成功 miss。已 `uv tool install --reinstall --force --no-cache .` + `vibe build grok-build --output ~/.grok`。
 
-**关键决定**：不对 `~/.claude` 全量 build（184 extra skills，避免 orphan 清理）；Claude hook 走 tool 环境 Python，重装即可。Grok UserPromptSubmit 会丢掉 allow-hook stdout，所以不能靠 additionalContext 当指纹。
+**关键决定**：不对 `~/.claude` 全量 build（184 extra skills）。Grok UserPromptSubmit 会丢掉 allow-hook stdout。
 
 **Next**：重启 Grok（Claude 同理）后在 llm-safety 确认闲聊不再弹横幅。
-
-### 2026-09-15 S85 END · VibeSOP 8.5.0 配置分发
-
-**Workspace**：VibeSOP main `dfed8ab4`，工作树当时 clean。
-
-**完成**：8.5.0 配置构建到 CMspark `.vibe/dist/` 五平台；CMspark `.claude`/`.grok` 及全局 Claude/Grok/Kimi/Pi/OpenCode 已刷新。五个平台 `vibe verify` 通过。
-
-**关键决定**：刷新前暂存 `skills/` 以免 orphan symlink 清理；Pi 全局构建会改写调用目录 `AGENTS.md`。
-
-**Next**：重启相关 Agent；CMspark `.grok/rules/` 与 hooks 是否入库另审。
 <!-- handoff:end -->
