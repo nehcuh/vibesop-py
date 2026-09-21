@@ -38,13 +38,15 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 
 # Independently observed at this checkpoint over every tracked *.md
 # by `scripts/check_artifact_links.py` (no --targets):
-# 1143 refs, 684 ok, 0 dangling (fresh clone), 459 stale occurrences / 451 keys.
+# 1146 refs, 684 ok, 0 dangling (fresh clone), 462 stale occurrences / 454 keys.
 # Re-observed 2026-09-21 after distill landing docs + T+21 measure: +35 ok
 # citations; stale multiset unchanged.
-FROZEN_REF_TOTAL = 1143
+# Re-observed 2026-09-21 after merging the local session memory: +3 stale
+# citations from memory/session.md; ok citations unchanged.
+FROZEN_REF_TOTAL = 1146
 FROZEN_OK = 684
-FROZEN_STALE_OCCURRENCES = 459
-FROZEN_STALE_KEYS = 451
+FROZEN_STALE_OCCURRENCES = 462
+FROZEN_STALE_KEYS = 454
 
 
 def _git(root: Path, *args: str) -> None:
@@ -722,7 +724,7 @@ def test_load_baseline_rejects_bool_and_float_schema_version(tmp_path: Path) -> 
 def test_committed_baseline_matches_current_stale_multiset() -> None:
     """The frozen file is the live scan, not a hand-edited guess.
 
-    Occurrence total is pinned to the independently observed 468 at this
+    Occurrence total is pinned to the independently observed 462 at this
     checkpoint so a silent scan-set change cannot hide inside a matching pair.
     """
     tracked = chal.list_tracked(ROOT)

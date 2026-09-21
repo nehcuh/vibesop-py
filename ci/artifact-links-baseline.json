@@ -2153,6 +2153,11 @@
     },
     {
       "source": "memory/session.md",
+      "target": ".omx/artifacts/adversarial-review-60fd0487-dfed8ab4.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
       "target": ".omx/artifacts/adversarial-review-7f2de48-967e134.md",
       "count": 1
     },
@@ -2233,12 +2238,22 @@
     },
     {
       "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20260915-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
       "target": ".omx/artifacts/review-diff-1435d57d-2329b013.patch",
       "count": 1
     },
     {
       "source": "memory/session.md",
       "target": ".omx/artifacts/review-diff-5a7c6fa-fa6e3fc.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/review-diff-60fd0487-dfed8ab4.patch",
       "count": 1
     },
     {
