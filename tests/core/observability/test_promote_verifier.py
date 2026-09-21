@@ -7,6 +7,8 @@ Coverage map (定稿验收口径):
 - global scope verdict 不含原始 query (只计数 + query 哈希);
 - verdict store 容量裁剪 (200 条 / 90 天) + 坏行跳过 + from_dict 容忍缺键;
 - activate 复用/重算选择逻辑 (latest_for_cluster prefer_complete);
+- F9 晋升四要素: 缺项报 promotion-element-missing WARN 码, 永不进 badge 闸
+  (gate36-r2);
 - trigger 语义抽取钉住生产口径 (修订 B: lowercase+剥撇号、无空白折叠、
   无长度下限、first-hit-wins) 且 has_explicit_guard_signal 委托后行为不变.
 
@@ -204,6 +206,7 @@ class TestVerifyDraftBadges:
         assert verdict.embedding["index"]["margin_mode"] == "catalog"
         assert set(verdict.pipelines) == {
             "trigger_lint",
+            "promotion_elements",
             "shadow_replay",
             "hijack",
             "embedding_recall",
@@ -555,6 +558,124 @@ class TestPromoteVerdictStore:
         rows = store.for_cluster(candidate.cluster_id)
         assert len(rows) == 1
         assert rows[0].phase == "promote"
+
+
+class TestPromotionElements:
+    """F9 four promotion elements (gate36-r2): descriptive WARN codes only.
+
+    The badge keeps measuring trigger recall — missing elements ride in
+    ``warnings`` as ``promotion-element-missing: <element>`` codes and
+    NEVER turn a PASS into WARN or block anything (灯不是闸).
+    """
+
+    _FOUR = ("prerequisites", "counterexamples", "verification", "source_outcomes")
+
+    def test_fresh_rendered_draft_reports_all_four_missing(self, tmp_path: Path) -> None:
+        """A fresh promote draft ships TODO placeholders in all four
+        sections → all four WARN codes fire (the intended
+        'not yet human-reviewed' signal)."""
+        from vibesop.core.observability.skill_promote import _render_skill_md
+
+        candidate = _mk_candidate()
+        draft = tmp_path / "SKILL.md"
+        draft.write_text(
+            _render_skill_md(candidate, "custom/login-fix-cccccccc"), encoding="utf-8"
+        )
+        verdict = verify_draft(candidate, draft, installed_candidates=[])
+        assert verdict.promotion_elements["missing"] == list(self._FOUR)
+        for key in self._FOUR:
+            assert f"promotion-element-missing: {key}" in verdict.warnings
+            assert verdict.promotion_elements["checks"][key] is False
+
+    def test_minimal_draft_missing_sections_still_passes_badge(self, tmp_path: Path) -> None:
+        """Badge scope is trigger recall, not content completeness: a
+        trigger-perfect draft with NO element sections keeps its PASS
+        while the WARN codes run alongside."""
+        candidate = _mk_candidate(
+            queries=[
+                "fix the login redirect loop",
+                "fix the login redirect loop again please",
+            ]
+        )
+        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
+        model = _FakeModel()
+        verdict = verify_draft(
+            candidate,
+            draft,
+            installed_candidates=[],
+            index_profiles=_fake_catalog(model, "deploy the staging environment"),
+            embedding_model=model,
+        )
+        assert verdict.badge == "PASS"
+        assert len(verdict.promotion_elements["missing"]) == 4
+        assert any(w.startswith("promotion-element-missing:") for w in verdict.warnings)
+        # The new codes must NOT leak into the badge gate (lint warnings).
+        assert all(
+            not w.startswith("promotion-element-missing:")
+            for w in verdict.lint["warnings"]
+        )
+
+    def test_filled_elements_clear_the_codes(self, tmp_path: Path) -> None:
+        candidate = _mk_candidate()
+        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
+        draft.write_text(
+            draft.read_text(encoding="utf-8")
+            + "\n## Prerequisites\n\n- holds when the IdP returns a 302 loop\n"
+            + "\n## Counterexamples\n\n- SPA hash-router logins never matched\n"
+            + "\n## Verification\n\n- `pytest tests/auth -q` green; see .omx/artifacts/x.md\n"
+            + "\n## Source Outcomes\n\n- 4/5 source executions succeeded, 1 timed out\n",
+            encoding="utf-8",
+        )
+        verdict = verify_draft(candidate, draft, installed_candidates=[])
+        assert verdict.promotion_elements["missing"] == []
+        assert all(verdict.promotion_elements["checks"].values())
+        assert not any(
+            w.startswith("promotion-element-missing:") for w in verdict.warnings
+        )
+
+    def test_todo_only_or_comment_only_section_counts_missing(self, tmp_path: Path) -> None:
+        candidate = _mk_candidate()
+        draft = _write_draft(tmp_path, ["fix the login redirect loop"])
+        draft.write_text(
+            draft.read_text(encoding="utf-8")
+            + "\n## Prerequisites\n\n<!-- guidance comment -->\n- TODO: fill me\n"
+            + "\n## Counterexamples\n\n### subsections do not count as content\n"
+            + "\n## Verification\n\n- measured with a real command\n"
+            + "\n## Source Outcomes\n\n\n",
+            encoding="utf-8",
+        )
+        verdict = verify_draft(candidate, draft, installed_candidates=[])
+        checks = verdict.promotion_elements["checks"]
+        assert checks["prerequisites"] is False
+        # The ### line is prose, not a TODO/comment — it IS substantive.
+        assert checks["counterexamples"] is True
+        assert checks["verification"] is True
+        assert checks["source_outcomes"] is False
+
+    def test_unreadable_draft_warns_instead_of_raising(self, tmp_path: Path) -> None:
+        candidate = _mk_candidate()
+        verdict = verify_draft(
+            candidate, tmp_path / "nonexistent" / "SKILL.md", installed_candidates=[]
+        )
+        assert len(verdict.promotion_elements["missing"]) == 4
+
+    def test_from_dict_tolerates_missing_promotion_elements(self) -> None:
+        """Old gate36-r1 rows carry no promotion_elements key."""
+        verdict = PromoteVerdict.from_dict(
+            {
+                "cluster_id": "c" * 40,
+                "skill_id": "custom/x",
+                "scope": "project",
+                "phase": "promote",
+                "badge": "PASS",
+                "degraded": False,
+                "draft_sha256": "d" * 64,
+                "trigger_set_sha256": "t" * 64,
+                "ruleset_version": "gate36-r1",
+            }
+        )
+        assert verdict.promotion_elements == {}
+        assert verdict.ruleset_version == "gate36-r1"
 
 
 class TestConfigPin:

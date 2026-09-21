@@ -14,6 +14,15 @@ NOT "内容质量" (is the SKILL.md body any good?). Lane C's objection
 (verifier issuing a false pass to an empty shell) is absorbed by making
 that scope explicit in every badge rendering (CLI + dashboard).
 
+F9 (gate36-r2): content completeness is reported SEPARATELY as the
+``promotion_elements`` group — the four promotion elements
+(Prerequisites / Counterexamples / Verification / Source Outcomes) each
+get a ``promotion-element-missing: <element>`` WARN code when their
+canonical H2 section is absent or still TODO-only. These codes ride in
+``warnings`` but NEVER enter the badge gate: trigger-perfect drafts can
+still PASS while the WARN codes say "human review incomplete". Never
+FAIL, never blocks activate (gate34: 过滤自动化、不过滤人审).
+
 Trigger-side semantics (修订 B): the containment rule is the PRODUCTION
 one, extracted as ``triage_service.query_matches_triggers`` from
 ``has_explicit_guard_signal`` (lowercase + apostrophe-stripped, NO
@@ -66,6 +75,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -98,7 +108,9 @@ __all__ = [
 # Bumped whenever the verdict semantics change, so a future ≥30-verdict
 # threshold discussion never mixes rulesets (修订 B: 攒 ≥30 条后的阈值
 # 讨论才不吃非生产数字).
-RULESET_VERSION = "gate36-r1"
+# gate36-r2: added the descriptive ``promotion_elements`` group (F9 four
+# promotion elements, WARN codes only — badge semantics unchanged).
+RULESET_VERSION = "gate36-r2"
 
 # Index-line gates mirror the RoutingConfig defaults used by the
 # SEMANTIC_INDEX embedding fallback (_layers.py): absolute floor
@@ -112,6 +124,17 @@ MAX_VERDICTS = 200
 VERDICT_TTL_DAYS = 90
 
 _MAX_HIJACK_ENTRIES = 20
+
+# F9 four promotion elements (论文笔记建议#4: 前提 / 反例 / 验证方法 /
+# 来源成败). The H2 titles are the SINGLE canonical structure shared by
+# ``skill_promote._render_skill_md`` and skill-craft's generation
+# template — rename only in lockstep across all three.
+_PROMOTION_ELEMENTS: tuple[tuple[str, str], ...] = (
+    ("prerequisites", "Prerequisites"),
+    ("counterexamples", "Counterexamples"),
+    ("verification", "Verification"),
+    ("source_outcomes", "Source Outcomes"),
+)
 
 Scope = Literal["project", "global"]
 
@@ -204,6 +227,7 @@ class PromoteVerdict:
     created_at: datetime | None = None
     pipelines: list[str] = field(default_factory=list)
     lint: dict[str, Any] = field(default_factory=dict)
+    promotion_elements: dict[str, Any] = field(default_factory=dict)
     shadow: dict[str, Any] = field(default_factory=dict)
     embedding: dict[str, Any] = field(default_factory=dict)
     hijack: dict[str, Any] = field(default_factory=dict)
@@ -368,6 +392,67 @@ def _redact_query(text: str, scope: Scope) -> dict[str, str]:
     return {"query": sanitize_body_text(text)}
 
 
+def _substantive_lines(lines: list[str]) -> list[str]:
+    """Real content lines: no blanks, no HTML comments (incl. multi-line
+    ``<!-- … -->`` blocks like the renderer's F9 guidance banner), no
+    ``TODO`` placeholders."""
+    out: list[str] = []
+    in_comment = False
+    for line in lines:
+        stripped = line.strip()
+        if in_comment:
+            if "-->" not in stripped:
+                continue
+            in_comment = False
+            stripped = stripped.split("-->", 1)[1].strip()
+        while stripped.startswith("<!--"):
+            if "-->" in stripped[len("<!--") :]:
+                stripped = stripped.split("-->", 1)[1].strip()
+            else:
+                in_comment = True
+                stripped = ""
+                break
+        if not stripped:
+            continue
+        if re.match(r"^(?:[-*+]\s*)?TODO\b", stripped):
+            continue
+        out.append(stripped)
+    return out
+
+
+def _check_promotion_elements(draft_text: str) -> dict[str, Any]:
+    """F9 four promotion elements — descriptive WARN only, never gates the badge.
+
+    An element counts as present iff its canonical H2 section exists AND
+    holds at least one substantive line (non-blank, not an HTML comment,
+    not a ``TODO`` placeholder). A freshly rendered promote draft ships
+    TODO placeholders in all four sections, so it reports all four
+    missing — that is the intended "not yet human-reviewed" signal.
+    The badge keeps measuring trigger recall only; these WARN codes run
+    alongside it (灯不是闸 — never FAIL, never blocks activate).
+    """
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in draft_text.splitlines():
+        heading = re.match(r"^## (?!#)(.+?)\s*$", line)
+        if heading:
+            current = heading.group(1)
+            sections.setdefault(current, [])
+        elif current is not None:
+            sections[current].append(line)
+    checks: dict[str, bool] = {}
+    missing: list[str] = []
+    warn_codes: list[str] = []
+    for key, title in _PROMOTION_ELEMENTS:
+        lines = sections.get(title)
+        present = bool(lines) and bool(_substantive_lines(lines))
+        checks[key] = present
+        if not present:
+            missing.append(key)
+            warn_codes.append(f"promotion-element-missing: {key}")
+    return {"checks": checks, "missing": missing, "warnings": warn_codes}
+
+
 def verify_draft(
     candidate: ClusterCandidate,
     draft_path: Path | str,
@@ -453,6 +538,13 @@ def verify_draft(
     if not denominator:
         lint_warnings.append("capture denominator is empty (all cluster queries are agent-echo)")
     warnings.extend(lint_warnings)
+
+    # --- 1b) promotion elements (F9; descriptive WARN codes, never the badge)
+    pipelines.append("promotion_elements")
+    promotion_elements = _check_promotion_elements(
+        draft_bytes.decode("utf-8", errors="replace") if draft_bytes else ""
+    )
+    warnings.extend(promotion_elements["warnings"])
 
     # --- 2) shadow replay (dynamic, trigger containment) ---------------
     pipelines.append("shadow_replay")
@@ -553,6 +645,7 @@ def verify_draft(
         created_at=datetime.now(UTC),
         pipelines=pipelines,
         lint={"checks": lint_checks, "warnings": lint_warnings},
+        promotion_elements=promotion_elements,
         shadow=shadow,
         embedding=embedding,
         hijack=hijack,

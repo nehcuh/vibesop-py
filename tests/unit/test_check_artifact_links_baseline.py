@@ -38,11 +38,14 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 
 # Independently observed at this checkpoint over every tracked *.md
 # by `scripts/check_artifact_links.py` (no --targets):
-# 1109 refs, 641 ok, 0 dangling, 468 stale occurrences / 460 keys.
-FROZEN_REF_TOTAL = 1109
-FROZEN_OK = 641
-FROZEN_STALE_OCCURRENCES = 468
-FROZEN_STALE_KEYS = 460
+# 1108 refs, 649 ok, 0 dangling, 459 stale occurrences / 451 keys.
+# Re-observed 2026-09-21 after the gate43-t7/t14 echo-measure landing
+# (distill F9 lane): the 9 gate43 citations flipped stale/dangling → ok,
+# shrinking the frozen multiset by exactly those entries.
+FROZEN_REF_TOTAL = 1108
+FROZEN_OK = 649
+FROZEN_STALE_OCCURRENCES = 459
+FROZEN_STALE_KEYS = 451
 
 
 def _git(root: Path, *args: str) -> None:

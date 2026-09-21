@@ -688,16 +688,6 @@
     },
     {
       "source": "docs/archive/research-artifacts.md",
-      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/archive/research-artifacts.md",
-      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/archive/research-artifacts.md",
       "target": ".omx/artifacts/gate44-confirm-claude.md",
       "count": 1
     },
@@ -1953,16 +1943,6 @@
     },
     {
       "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
-      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
-      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
       "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
       "count": 1
     },
@@ -1998,16 +1978,6 @@
     },
     {
       "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
-      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
-      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
       "target": ".omx/artifacts/pull-20260903-fixC-grok.md",
       "count": 1
     },
@@ -2039,16 +2009,6 @@
     {
       "source": "docs/essays/agent-trust/article.md",
       "target": ".omx/artifacts/ab-routing-hygiene-20260911.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/article.md",
-      "target": ".omx/artifacts/gate43-t14-echo-measure.md",
-      "count": 1
-    },
-    {
-      "source": "docs/essays/agent-trust/article.md",
-      "target": ".omx/artifacts/gate43-t7-echo-measure.md",
       "count": 1
     },
     {
@@ -2219,11 +2179,6 @@
     {
       "source": "memory/session.md",
       "target": ".omx/artifacts/docs-rewrite-20260902-claims-lock.md",
-      "count": 1
-    },
-    {
-      "source": "memory/session.md",
-      "target": ".omx/artifacts/gate4*-t*-measure.md",
       "count": 1
     },
     {
