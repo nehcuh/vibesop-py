@@ -49,9 +49,8 @@ Wave 1.5（grok）
 | F2 pi | `src/vibesop/core/observability/` 下新建消费模块；接线 `tool_call_bridge.py` / `route_observe.py`（最小）；CLI 子命令；对应测试；本 lane 设计/handback | skill_injector 主体、promote 模板、registry.yaml |
 | F9 kimi | `src/vibesop/core/observability/skill_promote.py` 的 SKILL.md 渲染；`promote_verifier.py`（只加 WARN 项）；`core/skills/skill-craft/SKILL.md` 模板段；`core/skills/adversarial-panel/SKILL.md` 第 3 步（workflow 名）；tracked `.grok/workflows/` **或** 改技能不再依赖未跟踪 workflow；`git add -f` gate43-t7/t14；`scripts/check_artifact_links.py` 仅当守卫需要；对应测试；本 lane 设计/handback | skill_injector、registry.yaml、F1/F2 新模块 |
 
-`.omx/artifacts/evo-lane-*` 命名本轮改为：
-
-`.omx/artifacts/distill-lane-<id>-handback.md`
+本轮 handback 命名改为 `distill-lane-<id>-handback.md`（例如
+`.omx/artifacts/distill-lane-f1-handback.md`）。
 
 设计文档写在**本 worktree**：
 

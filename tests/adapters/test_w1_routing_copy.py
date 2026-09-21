@@ -22,4 +22,5 @@ def test_adapter_templates_do_not_mandate_best_skill() -> None:
 def test_grok_rules_state_no_match_is_success() -> None:
     text = (ROOT / ".grok" / "rules" / "routing.md").read_text(encoding="utf-8")
     assert "find the best skill" not in text
-    assert "successful outcome" in text or "正常" in text
+    assert "no-match is silent" in text.lower()
+    assert "proceed in normal mode" in text.lower()

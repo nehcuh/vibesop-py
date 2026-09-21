@@ -152,7 +152,9 @@ def poisson_ci(k: int) -> tuple[float, float]:
     return (max(0.0, lo), hi)
 
 
-def summarise(found: list[dict[str, Any]], start: datetime | None, end: datetime, days: float) -> dict[str, Any]:
+def summarise(
+    found: list[dict[str, Any]], start: datetime | None, end: datetime, days: float
+) -> dict[str, Any]:
     windowed = [p for p in found if in_window(p["anchor"], start, end)]
     echo = [p for p in windowed if p["echo"]]
     dts = sorted(p["dt"].total_seconds() for p in echo)
@@ -175,7 +177,9 @@ def summarise(found: list[dict[str, Any]], start: datetime | None, end: datetime
     }
 
 
-def rails(spans: list[dict[str, Any]], start: datetime, end: datetime, days: float) -> dict[str, Any]:
+def rails(
+    spans: list[dict[str, Any]], start: datetime, end: datetime, days: float
+) -> dict[str, Any]:
     window = [s for s in spans if start < s["ts"] <= end]
     hooks = [s for s in window if not s["is_cli"]]
     clis = [s for s in window if s["is_cli"]]

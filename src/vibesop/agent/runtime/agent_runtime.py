@@ -262,10 +262,10 @@ class AgentRuntimeResult:
             }
             if include_additional_context:
                 ctx = f"[VibeSOP Execution Plan]\n{plan_text}"
-                ho: dict[str, Any] = {"additionalContext": ctx}
+                plan_ho: dict[str, Any] = {"additionalContext": ctx}
                 if hook_event_name:
-                    ho["hookEventName"] = hook_event_name
-                response["hookSpecificOutput"] = ho
+                    plan_ho["hookEventName"] = hook_event_name
+                response["hookSpecificOutput"] = plan_ho
             return json.dumps(response, ensure_ascii=False)
 
         # Notice-only (unsafe refusal, or a leftover empty notice): tell the
@@ -291,10 +291,10 @@ class AgentRuntimeResult:
         if not self.skill_id or self.skill_id == "fallback-llm":
             if not no_match_message or platform in {"grok-build", "grok"}:
                 return "{}"
-            ho: dict[str, Any] = {"additionalContext": NO_MATCH_FINGERPRINT}
+            miss_ho: dict[str, Any] = {"additionalContext": NO_MATCH_FINGERPRINT}
             if hook_event_name:
-                ho["hookEventName"] = hook_event_name
-            return json.dumps({"hookSpecificOutput": ho}, ensure_ascii=False)
+                miss_ho["hookEventName"] = hook_event_name
+            return json.dumps({"hookSpecificOutput": miss_ho}, ensure_ascii=False)
 
         # Single skill match — build full response
         conf_pct = int(self.confidence * 100)

@@ -578,9 +578,7 @@ class TestPromotionElements:
 
         candidate = _mk_candidate()
         draft = tmp_path / "SKILL.md"
-        draft.write_text(
-            _render_skill_md(candidate, "custom/login-fix-cccccccc"), encoding="utf-8"
-        )
+        draft.write_text(_render_skill_md(candidate, "custom/login-fix-cccccccc"), encoding="utf-8")
         verdict = verify_draft(candidate, draft, installed_candidates=[])
         assert verdict.promotion_elements["missing"] == list(self._FOUR)
         for key in self._FOUR:
@@ -610,10 +608,7 @@ class TestPromotionElements:
         assert len(verdict.promotion_elements["missing"]) == 4
         assert any(w.startswith("promotion-element-missing:") for w in verdict.warnings)
         # The new codes must NOT leak into the badge gate (lint warnings).
-        assert all(
-            not w.startswith("promotion-element-missing:")
-            for w in verdict.lint["warnings"]
-        )
+        assert all(not w.startswith("promotion-element-missing:") for w in verdict.lint["warnings"])
 
     def test_filled_elements_clear_the_codes(self, tmp_path: Path) -> None:
         candidate = _mk_candidate()
@@ -629,9 +624,7 @@ class TestPromotionElements:
         verdict = verify_draft(candidate, draft, installed_candidates=[])
         assert verdict.promotion_elements["missing"] == []
         assert all(verdict.promotion_elements["checks"].values())
-        assert not any(
-            w.startswith("promotion-element-missing:") for w in verdict.warnings
-        )
+        assert not any(w.startswith("promotion-element-missing:") for w in verdict.warnings)
 
     def test_todo_only_or_comment_only_section_counts_missing(self, tmp_path: Path) -> None:
         candidate = _mk_candidate()

@@ -150,9 +150,7 @@ class TestAgentRuntimeHookResponse:
             mode="single",
             skill_id="fallback-llm",
         )
-        resp = result.to_hook_response(
-            no_match_message=True, hook_event_name="UserPromptSubmit"
-        )
+        resp = result.to_hook_response(no_match_message=True, hook_event_name="UserPromptSubmit")
         data = json.loads(resp)
         assert "systemMessage" not in data
         ctx = data["hookSpecificOutput"]["additionalContext"]
@@ -166,9 +164,7 @@ class TestAgentRuntimeHookResponse:
             mode="single",
             skill_id="fallback-llm",
         )
-        resp = result.to_hook_response(
-            platform="grok-build", no_match_message=True
-        )
+        resp = result.to_hook_response(platform="grok-build", no_match_message=True)
         assert resp == "{}"
 
     def test_no_match_without_message(self):

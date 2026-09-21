@@ -116,8 +116,9 @@ Checklist 是「技能描述的工作」的验收条，Verification 是「这个
   Verification / Source Outcomes（前提、反例、验证方法、来源成败；论文笔记建议#4 落地）。
 - promote verifier 新增描述性 WARN 码 `promotion-element-missing: <element>`：
   只报不拦，badge 仍只量触发召回（灯不是闸，gate34「过滤自动化、不过滤人审」）。
-- 治理证据纪律不变：T+7 −75.2% / T+14 +264% 反弹（`.omx/artifacts/gate43-t{7,14}-echo-measure.md`
-  已入库）；T+21 复检仍挂账，反弹未终裁前不得宣称治理成功。
+- 治理证据纪律不变：T+7 −75.2% / T+14 +264% 反弹（`.omx/artifacts/gate43-t7-echo-measure.md`、
+  `.omx/artifacts/gate43-t14-echo-measure.md` 已入库）；T+21 见
+  `.omx/artifacts/gate43-t21-echo-measure.md`。不得宣称回声已根治。
 
 ### F10 账本入库是机制 → gate43 测量已 tracked + workflow 悬空已修（2026-09-21, lane kimi）
 - `gate43-t7/t14-echo-measure.md` 从成稿机磁盘抢救入库（git add -f）；

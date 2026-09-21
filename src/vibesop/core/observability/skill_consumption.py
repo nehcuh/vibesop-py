@@ -639,53 +639,77 @@ def _segment_state(segment: Any) -> str | None:
 
 def _segments(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Raw per-segment counts over the matched rows (no rates, ever)."""
-    selected = {"yes": 0, "no": 0, "unknown": 0, "reasons": {}}
-    read = {
-        "unknown": 0,
-        "reasons": {},
-        "injection_attempted": 0,
-        "injection_unknown": 0,
-        "read_like_tool_calls": 0,
-        "rows_with_read_like_tool_calls": 0,
-    }
-    tail: dict[str, dict[str, Any]] = {
-        "applicable": {"unknown": 0, "reasons": {}},
-        "executed": {"unknown": 0, "reasons": {}},
-        "accepted": {"unknown": 0, "reasons": {}},
+    selected_yes = 0
+    selected_no = 0
+    selected_unknown = 0
+    selected_reasons: dict[str, int] = {}
+    read_unknown = 0
+    read_reasons: dict[str, int] = {}
+    injection_attempted = 0
+    injection_unknown = 0
+    read_like_tool_calls = 0
+    rows_with_read_like_tool_calls = 0
+    tail_unknown: dict[str, int] = {"applicable": 0, "executed": 0, "accepted": 0}
+    tail_reasons: dict[str, dict[str, int]] = {
+        "applicable": {},
+        "executed": {},
+        "accepted": {},
     }
     for row in rows:
         sel_state = _segment_state(row.get("selected"))
         if sel_state == "yes":
-            selected["yes"] += 1
+            selected_yes += 1
         elif sel_state == "no":
-            selected["no"] += 1
+            selected_no += 1
         else:
-            selected["unknown"] += 1
+            selected_unknown += 1
             reason = _reason_of(row.get("selected"))
-            selected["reasons"][reason] = selected["reasons"].get(reason, 0) + 1
+            selected_reasons[reason] = selected_reasons.get(reason, 0) + 1
 
         read_seg = row.get("read") if isinstance(row.get("read"), dict) else {}
         if _segment_state(read_seg) is None:
-            read["unknown"] += 1
+            read_unknown += 1
             reason = _reason_of(read_seg)
-            read["reasons"][reason] = read["reasons"].get(reason, 0) + 1
+            read_reasons[reason] = read_reasons.get(reason, 0) + 1
         evidence = read_seg.get("evidence") if isinstance(read_seg.get("evidence"), dict) else {}
         injection = evidence.get("injection_attempted")
         if injection is True:
-            read["injection_attempted"] += 1
+            injection_attempted += 1
         elif injection is None:
-            read["injection_unknown"] += 1
+            injection_unknown += 1
         calls = evidence.get("read_like_tool_calls")
         if isinstance(calls, int) and not isinstance(calls, bool) and calls > 0:
-            read["read_like_tool_calls"] += calls
-            read["rows_with_read_like_tool_calls"] += 1
+            read_like_tool_calls += calls
+            rows_with_read_like_tool_calls += 1
 
-        for name, bucket in tail.items():
+        for name in tail_unknown:
             if _segment_state(row.get(name)) is None:
-                bucket["unknown"] += 1
+                tail_unknown[name] += 1
                 reason = _reason_of(row.get(name))
-                bucket["reasons"][reason] = bucket["reasons"].get(reason, 0) + 1
-    return {"selected": selected, "read": read, **tail}
+                bucket = tail_reasons[name]
+                bucket[reason] = bucket.get(reason, 0) + 1
+    return {
+        "selected": {
+            "yes": selected_yes,
+            "no": selected_no,
+            "unknown": selected_unknown,
+            "reasons": selected_reasons,
+        },
+        "read": {
+            "unknown": read_unknown,
+            "reasons": read_reasons,
+            "injection_attempted": injection_attempted,
+            "injection_unknown": injection_unknown,
+            "read_like_tool_calls": read_like_tool_calls,
+            "rows_with_read_like_tool_calls": rows_with_read_like_tool_calls,
+        },
+        "applicable": {
+            "unknown": tail_unknown["applicable"],
+            "reasons": tail_reasons["applicable"],
+        },
+        "executed": {"unknown": tail_unknown["executed"], "reasons": tail_reasons["executed"]},
+        "accepted": {"unknown": tail_unknown["accepted"], "reasons": tail_reasons["accepted"]},
+    }
 
 
 def _reason_of(segment: Any) -> str:
