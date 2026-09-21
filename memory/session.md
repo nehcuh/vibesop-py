@@ -19,6 +19,32 @@
 - Next：R8 盲评结算、T+21 复检、F 系进 warm 层、promote 模板补前提/反例、gate43 测量入库。
 - Recorded: no（调研，未改 src）
 
+### S87 (2026-09-16) [vibesop-py] 三条 instinct → 独立内置技能
+
+- 用户：把「拉取最新+多路独立对抗」「对抗合成器 REQUEST CHANGES」「babysit 到合并 main」做成独立内置技能并 babysit 到 main。
+- 路由 `builtin/skill-craft`（88%）。不走 instinct evolve（新本能 0 次使用，过不了 10 次门）。
+- 新增：`core/skills/adversarial-review/`、`review-arbitration/`、`babysit-main/`；registry + 文档 19→22；routing_eval 各补 CN/EN。
+- 不入库 session.md / `.omx/` / `.grok/workflows/`。
+- 完成 [executed]：hermetic 6 条新 query 全中（keyword ≥0.66）；生产 `vibe route` 三条均为 88% 对应技能。registry_sync + eval_routing 39 passed；`--hermetic --check` exit 0。
+- Commit [executed]：`88998cbe` feat(skills): add adversarial-review, review-arbitration, babysit-main。已 push origin/main。未入库 session.md。
+- CI 35037044450 红 [executed]：4 个 Test job。`test_demo_skills`：`review-arbitration` 的 review/changes 词污染 IDF，`look over my changes` 落到 fallback；`review my changes` 被 levenshtein 抢走。
+- 修：改名为 `adversarial-panel` + `adversarial-arbitration`，frontmatter 去掉 review/changes。demo 22 passed；生产路由仍 88%。
+- Follow-up commit [executed]：`ff82b942` 已 push。CI + Quickstart E2E + Push on main 全绿。HEAD=`ff82b942` = origin/main。
+
+### S86 (2026-09-15) [vibesop-py] Windows Grok 调 Claude bash hook 失败
+
+- 用户：Grok on Windows `failed with exit code 1: /bin/bash: C:/Users/HuChen/.claude/hooks/vibesop-tool-seq.sh: No such file or directory`
+- 路由 `builtin/systematic-debugging` 88%。
+- 复现 [executed]：文件在 NTFS 上存在；`cmd bash C:/Users/.../vibesop-tool-seq.sh` 得到**同一句** `/bin/bash: ... No such file`（WSL bash 看不到 C:/）。Git Bash 同命令 exit 0。
+- 根因：Grok 默认扫描 `~/.claude/settings.json`（`compat.claude.hooks=true`）。Claude 适配器写的是 `bash C:/.../vibesop-tool-seq.sh`。Grok 原生 JSON hook 已经是 `vibe sequence record-tool`，但兼容层仍会再跑 Claude 那条。
+- 修：`GrokBuildAdapter` 部署到 `~/.grok` 时合并 `[compat.claude] hooks = false`；`vibe verify grok-build` 增加 `claude_hook_compat_off`。本机 config.toml 已合并。需重启 Grok。
+- C1 TDD [executed]：`_rstrip_trailing_junk` 不再把 `foo/..` 改写成 `foo/`；scan GuardError。定向 100 passed；全量 artifact-link 271 passed（baseline 1 fail 是工作区未跟踪 `.omx/artifacts/` glob dangling，与 C1 无关）。
+- kimi-gated-fix override：本机 `kimi -p` 带工具会挂死（S78）；发现已经 5 finder + refute-first + D/T/J 仲裁。主会话 TDD 控编辑。
+- Commits [executed]：`8e88f47e` C1；`b57c266a` Grok Claude hook. 已 push `origin/main`。CI run 34986434614 Artifact Links 红：`.omx/artifacts/...` 被当成文件名（ellipsis）。跟进 `4bbe36c1` 先剥 `...` 再保护 `..` 段。再盯 CI。
+- `4bbe36c1` Artifact Links/Win/3.13 绿；仅 Ubuntu 3.12 红：`test_recall` 用 `hash()` 假 embedding，PYTHONHASHSEED 碰撞。`c1f9d8ac` 钉死角度。HEAD=`c1f9d8ac`。
+- 完成 [executed]：CI 全绿、Quickstart E2E 绿。HEAD=`c1f9d8ac` = origin/main。
+- Recorded: no
+
 ### S86 END (2026-09-16~17) [vibesop-py] 消费项目无匹配横幅噪音
 
 - 用户：`../llm-safety` 应用 VibeSOP 后每轮提示 `🤖 VibeSOP: No matching skill found. Proceeding in normal mode.`
@@ -28,6 +54,22 @@
 - 验收：grok miss → `{}`；claude miss → 仅 `additionalContext`；session-end 命中仍有 `VibeSOP routed:`。
 - Next：重启 Grok（Claude 同理）后在 llm-safety 确认闲聊不再弹横幅。未 commit 的 `.pi/` 与 `.grok/hooks/` 是 S85 遗留，本 commit 不带。
 - Recorded: yes — hook no-match 不能写 `systemMessage` → project-knowledge.md
+
+### S85 (2026-09-15) [vibesop-py] 拉取 8.5.0 + 多路独立对抗复审
+
+- 路由选中 `builtin/deep-diagnosis-optimization` (88%)。Override：用户点名「拉取 + 多路独立对抗复审」，不是全仓深诊-修批-合入。走已注册 workflow `adversarial-review`（5 finder + refute-first verifier）。S76 同款覆盖。
+- 本地 `memory/session.md` 与即将拉取的 origin 重叠，已 stash：`S84 session.md before 8.5.0 pull`（未 pop；origin 的 S84 是研究综述）。S67 stash 仍未 pop。
+- Pull: `60fd0487` (8.3.1 punch list) → `dfed8ab4` (v8.5.0)，ff-only。49 commits，460 files +104984/−4010。
+- 评审面（src/scripts/tests/ci/.github/pyproject/CHANGELOG/observe-routing）：34 files +12211/−39。研究/essay/experiments 不进 finder 主补丁。
+- Frozen: `.omx/artifacts/review-diff-60fd0487-dfed8ab4.patch`
+- Instructions: `.omx/artifacts/pull-20260915-review-instructions.md`
+- Theme: Trust & Evidence / CI 3.13 pin / observe routing report-only + eval provenance
+- Workflow launched: `/workflow` handle `adversarial-review` (5 finder + verify + synthesize). 评审期间不改 src/
+- 完成 [executed]：finders 5/5，13→9 确认 / 4 驳回 / 0 未核实。合成器 **REQUEST CHANGES**（HIGH C1/C3/C6）。
+- 用户点名按论文区分真问题 vs 看法。人仲裁 D/T/J：C1 真（窄 fail-closed 改写 `foo/..`）；C3 是看法（exists 跟随当安全侧信道）；C6/C7/C8/C9 是测试覆盖偏好；R3 是未承诺的 B2。仲裁终裁 **COMMENT**，不挡 8.5.0。
+- 产物：`.omx/artifacts/adversarial-review-60fd0487-dfed8ab4.md` + `-arbitration.md`
+- 未启动 `fix-from-review`（等用户点名；若修只修 C1）。
+- Recorded: no
 
 ### S85 END (2026-09-15) [vibesop-py] VibeSOP 8.5.0 配置分发到 CMspark 与全局
 
@@ -53,10 +95,19 @@
 - 守卫 9/9、相关单测绿、hermetic --check 0。`.git/info/exclude` 的 `.omx/` 等合入后再删。
 - Recorded: no
 
+### S83 (2026-09-10) [cmspark] Windows 编程接力选择工作区失败
+
+- 用户在 vibesop-py 会话报「编程接力选择工作区失败，Windows 有、macOS 无」。代码在 cmspark，不在 vibesop-py。
+- 根因与修复见 cmspark `memory/session.md` S110。本仓未改 src/。
+- Recorded: no
+
 ### S82 (2026-09-10) [vibesop-py] 提交 C1–C12 定点修并 babysit 到 main CI 绿
 
 - 用户：提交 + babysit 到合并主分支。已在 main。不走 PR babysit（skill 禁止自动 merge）；直接 commit + push origin/main，盯 job 级 CI。
 - 不入库 `.omx/`、`.grok/workflows/`、`examples/datasets/`。
+- Commit `408d37f7` 已 push `origin/main`（`gh auth git-credential`；裸 `git push` HTTPS 挂死）。
+- CI run 34427499667 / Quickstart E2E 34427499709 盯 job 级。
+- 完成 [executed]：CI 10/10 job 绿、Quickstart E2E ubuntu+windows 绿、CodeQL 3/3 绿。HEAD=`408d37f7` = origin/main。
 - Recorded: no
 
 ### S81 (2026-09-10) [vibesop-py] Claude 复审 C1–C8 delta + 修 C9–C12
