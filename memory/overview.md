@@ -1,12 +1,16 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-17 (S86 — hook 无匹配横幅静默)
+**Last Updated**: 2026-09-24 (S94 — JEV 技能判断对照，不接入)
 
 ---
 
 ## Goals
 
-### Current Week (September 11-17, 2026)
+### Current Week (September 18-24, 2026)
+
+1. **JEV 能否替换技能判断** — 测完，不接入。构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。延迟约 1.15s，不比现有 deepseek triage 快。
+
+### Previous Week (September 11-17, 2026)
 
 1. **VibeSOP 8.5.0 配置分发** ✅ (Completed - Sep 15) — CMspark 项目层与全局 Claude/Grok/Kimi/Pi/OpenCode 配置已刷新；额外 skill 保留，五个平台验证通过。
 2. **Hook 无匹配横幅静默** ✅ (Completed - Sep 16–17) — 消费项目 miss 不再刷 `🤖 No matching skill found`；grok-build 空信封；已 `uv tool install --no-cache` + `vibe build grok-build --output ~/.grok`。需重启 Grok。
@@ -143,6 +147,9 @@
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
+
+**Recent Changes** (2026-09-24):
+- JEV `jev-1.13.0` 对照完成，不替换路由。构造集优于关键词层；真实会话过注入。记录在 `memory/project-knowledge.md`，原始 jsonl 留在 `/tmp`。
 
 **Recent Changes** (2026-09-07):
 - ✅ 喷气机 R5/R6 预览可再起：`.vibe/experiments/ab-jet-preview/` 缓存 + `scripts/ab-jet-preview.sh`；R5 从 grok `after_snapshots` 还原（/tmp 已失）

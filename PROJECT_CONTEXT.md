@@ -14,6 +14,16 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-09-24 S94 END · JEV 不替换技能路由
+
+**Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是既有脏项，未纳入。
+
+**完成**：官方 `jev-1.13.0` choice 对过构造评测和本项目 Grok 真实会话。构造集 58/59 对关键词路由 53/59；真实会话 17/27 对 23/27。延迟中位数约 1.15s，与 deepseek triage 的 988ms 同级。送入的是截断后的 description/intent，约 1800 token。
+
+**关键决定**：不把 JEV 接进路由。判断用 choice；不要用 noul 当注入闸门。密钥和 `/tmp/jev-*-eval/` 原始记录不入库。
+
+**Next**：若再比较，对照现有 AI triage，并单独计真实会话里不该注入的句子。
+
 ### 2026-09-21 S91 END · 内部介绍 7 页 PPT
 
 **Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是 S85 遗留脏项，未纳入。
@@ -23,14 +33,4 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 **关键决定**：不把 `docs/VibeSOP-CMspark-部门分享-17页.pptx` 当本会话产物入库。macOS 无 soffice 时用 PowerPoint 导 PDF，必须按 presentation **name** 选取，不能信 `active presentation`。
 
 **Next**：上场第 3 页口头补阶段额度与 R8 未结算。R8 盲评仍待独立盲评人。
-
-### 2026-09-17 S86 END · Hook 无匹配横幅静默
-
-**Workspace**：VibeSOP main。`.pi/` 与 `.grok/hooks/` 仍是 S85 工作树脏项，未纳入。
-
-**完成**：`to_hook_response` miss 不再写用户可见 `systemMessage`。Claude/Kimi 指纹进 `additionalContext`；`grok-build` 返回 `{}`。Grok routing rule 把静默当成功 miss。已 `uv tool install --reinstall --force --no-cache .` + `vibe build grok-build --output ~/.grok`。
-
-**关键决定**：不对 `~/.claude` 全量 build（184 extra skills）。Grok UserPromptSubmit 会丢掉 allow-hook stdout。
-
-**Next**：重启 Grok（Claude 同理）后在 llm-safety 确认闲聊不再弹横幅。
 <!-- handoff:end -->

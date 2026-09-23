@@ -22,6 +22,14 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### 官方 JEV 在构造评测上赢、在真实会话上过注入 (2026-09-24 S94)
+
+**Issue**: TypeSafe `jev-1.13.0` 的 choice 对 `tests/benchmark/routing_eval.yaml` 是 58/59，hermetic 关键词路由 53/59。同一目录拿到本项目 Grok 历史会话（27 条、标签先于系统写死：只有用户自己点名流程才注入；只读评审稿不注入）变成 JEV 17/27、关键词路由 23/27。JEV 把只读复审打成 `code-review`，把「babysit 到主分支」打成 `slash-orchestrate`。同一次请求里的 noul「要不要注入」和 choice 不一致（构造集 36 条选对的正例里 23 条 noul<0.5）。公开规格上下文是请求合计 64k、state 加最长一道题 32k；我们只送了 description/intent（截到 400 字），实测约 1800 input token，没有顶满窗口。速度也没有优势：本机 JEV 中位数 1146–1179ms，历史 AI triage（deepseek-v4-flash）中位数 988ms；厂商 70–500ms 是短 state、美国西海岸的数字。关键词已命中的 route span 有约 17% 低于 100ms，每条都改走 JEV 会把这截拉到 1 秒以上。
+
+**Solution**: 不要用构造评测集单独决定换路由。判技能注入时用 choice，不要用那句 noul 当闸门。目录放 criteria（description/intent），不要塞整篇 SKILL.md。接入前若还要比，对照对象是现有 triage span，并在真实会话上单独计「不该注入」。密钥不入库。原始记录留在 `/tmp/jev-skill-eval/` 与 `/tmp/jev-real-eval/`。
+
+**Files**: `tests/benchmark/routing_eval.yaml`；`.vibe/observability/spans.jsonl`
+
 ### macOS 用 PowerPoint 导 PDF 时 `active presentation` 可能是另一份已打开的 VibeSOP 稿 (2026-09-21 S91)
 
 **Issue**: 本机无 `soffice`，`qlmanage -t` 只出一张缩略图。改用 AppleScript `save thePres in … as save as PDF`。`open POSIX file` 之后取 `active presentation`，会落到自动恢复的另一份 VibeSOP 稿（本机是 23 页《把经验留给机器》），PDF 页数和正文全错，mtime 却是新的。覆盖同一路径再 `open` 也会吃 Office 缓存，导出仍是旧字。
@@ -407,6 +415,10 @@ with self._path.open("a") as f:
 **Known limitation**（defer Phase B+1）: AtomicWriter rename 换 inode — flock 锁的是旧 inode，rename 后新 inode 不受保护。Fix 是 sibling lock file（`reflections.jsonl.lock`），更大重构。
 
 ## Reusable Patterns
+
+### 路由判断模型要拆「构造集」和「真实会话」两套分母 (2026-09-24 S94)
+
+构造集富集技能句和近义干扰，语义判断容易显得全面胜过关键词。本仓库真实会话大多是「接着把事情做完」或「你是只读评审、不要改文件」。标签必须在跑系统之前写死，而且「不该注入」要单独计。速度对照现有 triage span 的 `duration_ms`，不要拿厂商短 state 延迟或整段 route span 直接比。
 
 ### 实验复盘类科普文的叙事模式：「借口排雷记」+ 选题直觉先行 (2026-09-03 S68)
 

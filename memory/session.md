@@ -1,6 +1,30 @@
 
 ## Current Session
 
+### S94 END (2026-09-24) [vibesop-py] JEV 技能判断收工
+
+- 本会话测了官方 JEV 能否改进技能选择：构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。速度中位数约 1.15s，不比 deepseek triage（988ms）快。上下文约 1800 token，未顶满 32k/64k。
+- 决定：不替换现有路由。choice 才是可用原语；noul 不能当注入闸门。目录只用 description/intent。
+- Next：若再比，对照现有 triage，并单独计真实会话的误注入。密钥不入库。
+- Recorded: yes — JEV 构造集/真实会话分裂与延迟口径 → project-knowledge.md
+
+### S93 (2026-09-23) [vibesop-py] 真实会话验证集，Docker 隔离对照
+
+- 73 个本项目 Grok 会话，抽出 `<user_query>`。去掉当前实验会话和已在 routing_eval 里的句子后，合格 79 条（短 26 / 中 4 / 长 49）。seed 7 抽 28 条，1 条残句剔除，27 条计分。标签在跑系统前写死：只有用户自己点名的流程才算该注入；「你是只读评审、不要改文件」算不注入。
+- 容器 `vibesop-val-base:py3.12`，仓库只读，HOME 指到容器内空目录，telemetry 关掉。对照是 hermetic 关键词路由（无嵌入、无 AI triage）对官方 `jev-1.13.0` choice。
+- [executed] JEV 17/27，关键词路由 23/27。3 条该注入：路由 3/3，JEV 2/3（babysit 那条选成 slash-orchestrate）。24 条不该注入：路由 20/24，JEV 15/24，主要是把只读复审打成 code-review。
+- 和构造评测集相反：真实会话大多是「直接干活」或「只读评审稿」，JEV 在这批上注入偏多。记录在 `/tmp/jev-real-eval/`，未进仓库。
+- Recorded: yes — S94 写入 project-knowledge.md
+
+### S92 (2026-09-23) [vibesop-py] 官方 JEV 技能判断试点
+
+- 用户：有 TypeSafe JEV key，问技能选择能否比先前开源实现有提升。仓库内无上次开源实验记录。
+- 试点 [executed]：`jev-1.13.0` choice，目录=23 内置 + 2 benchpack 的 description/intent（不含 triggers）+ none。评测集 `tests/benchmark/routing_eval.yaml`，计分同 `eval_routing.py`。密钥未入库。原始记录在 `/tmp/jev-skill-eval/`。
+- 可计分 59 条：JEV 58/59，hermetic 关键词路由 53/59。JEV 独对 5（3 条中文语义正例从 fallback-llm 拉回，2 条 near-miss 不再误注入 session-end / instinct），hermetic 独对 0，同错 1（供应链审计，JEV 选 task-briefing，confidence 0.24）。
+- 同一次调用里的 noul「要不要注入」与 choice 不一致（36 条正例里 23 条 noul<0.5 但 choice 正确）。不要用这句 noul 当闸门。
+- 未比 LLM triage，未覆盖已安装的外部技能包。延迟 p50 1179ms，61 次共 115809 input tokens。
+- Recorded: yes — S94 写入 project-knowledge.md
+
 ### S91 END (2026-09-21) [vibesop-py] 公司内部介绍 7 页 PPT + session-end
 
 - 用户：按「方法论误区 → 问题 → 解法 → 为何不用内置查看器 → 记忆/多层语义/流程化」做内部介绍，后要求几页 PPT、不要啰嗦。
