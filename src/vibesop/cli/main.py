@@ -866,12 +866,17 @@ def route(
     # Survives where contextvars cannot (sub-agent CLIs, separate `vibe`
     # invocations). None when query normalises to empty.
     _cli_task_id = _derive_task_id(decision.query)
+    # "effective_query" mirrors the hook path (agent_runtime.handle_query):
+    # the unwrapped text the router actually matched, next to the raw input.
+    from vibesop.core.routing.unified import _unwrap_user_query as _unwrap
+
     with _cli_tracer.trace(
         f"route:{_cli_trace_name}",
         agent_id="vibe-cli",
         task_id=_cli_task_id,
         metadata={
             "query": decision.query[:200],
+            "effective_query": _unwrap(decision.query)[:200],
             "platform": "vibe-cli",
             "mode": decision.mode.value,
             "source": "cli",

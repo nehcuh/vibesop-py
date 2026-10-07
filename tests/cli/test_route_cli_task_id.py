@@ -541,3 +541,40 @@ class TestRouteCliFallbackSentinel:
         assert metadata.get("has_match") is False
         assert metadata.get("skill_id") == ""
         assert "top_skills" not in metadata
+
+
+class TestRouteCliEffectiveQuery:
+    """Routing-audit 2026-10 — CLI spans record raw + unwrapped query.
+
+    Mirrors the hook-path tests in ``test_agent_runtime.py``:
+    ``metadata["query"]`` = raw CLI arg; ``metadata["effective_query"]`` =
+    text after whole-query ``<user_query>`` unwrap (what the router matched).
+    """
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_wrapped_query_records_raw_and_effective(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        mock_stdin.isatty.return_value = False
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "<user_query>\ncmspark screenshot permission popup\n</user_query>"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        route_spans = _read_route_spans(fresh_tracer)
+        assert len(route_spans) == 1
+        metadata = route_spans[0].get("metadata") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        assert metadata.get("query") == query
+        assert metadata.get("effective_query") == "cmspark screenshot permission popup"

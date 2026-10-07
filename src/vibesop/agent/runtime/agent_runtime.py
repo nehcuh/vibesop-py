@@ -610,13 +610,25 @@ class AgentRuntime:
         from vibesop.core.observability.task_id import derive_task_id
 
         _task_id = derive_task_id(query)
+        # Routing-audit 2026-10: metadata["query"] keeps the raw hook input
+        # (pre-unwrap) so task_id/query stay join-consistent; the unwrapped
+        # text the matchers actually saw goes in "effective_query". Without
+        # this key, audits cannot tell wrapper pollution in the router's
+        # input from wrapper pollution in the observation only.
+        from vibesop.core.routing.unified import _unwrap_user_query as _unwrap
+
+        _effective_query = _unwrap(query)[:200]
         try:
             with tracer.trace(
                 f"route:{trace_name}",
                 task_id=_task_id,
                 session_id=session_id,
                 agent_id=platform,
-                metadata={"query": query[:200], "platform": platform},
+                metadata={
+                    "query": query[:200],
+                    "effective_query": _effective_query,
+                    "platform": platform,
+                },
             ) as _task_span:
                 # Generate conversation ID if not provided
                 if not conversation_id:

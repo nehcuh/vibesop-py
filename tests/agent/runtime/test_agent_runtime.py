@@ -370,6 +370,64 @@ class TestAgentRuntimeLayerMetadata:
         assert "layer" not in metadata
 
 
+class TestAgentRuntimeEffectiveQuery:
+    """Routing-audit 2026-10 — spans record both raw and unwrapped query.
+
+    ``metadata["query"]`` keeps the raw hook input (pre-unwrap, join-
+    consistent with task_id derivation); ``metadata["effective_query"]``
+    carries the text the router actually matched after stripping a
+    whole-query ``<user_query>`` wrapper. Without it, audits cannot tell
+    wrapper pollution in the router's input from pollution in the
+    observation only.
+    """
+
+    @pytest.fixture
+    def fresh_tracer(self, tmp_path, monkeypatch):
+        import vibesop.core.observability.tracer as tracer_mod
+        from vibesop.agent.runtime import agent_runtime as ar_module
+        from vibesop.core.observability.tracer import ObservabilityTracer
+
+        span_file = tmp_path / "spans.jsonl"
+        fresh = ObservabilityTracer(storage_path=span_file, enabled=True)
+        monkeypatch.setattr(tracer_mod, "_tracer", fresh)
+        monkeypatch.setattr(ar_module, "_obs_tracer", None, raising=False)
+        return span_file
+
+    def _route_spans(self, span_file) -> list[dict]:
+        import json
+
+        spans = []
+        with span_file.open() as f:
+            for raw in f:
+                if raw.strip():
+                    span = json.loads(raw)
+                    meta = span.get("metadata")
+                    if isinstance(meta, str):
+                        span["metadata"] = json.loads(meta)
+                    spans.append(span)
+        return [s for s in spans if str(s.get("name", "")).startswith("route:")]
+
+    def test_wrapped_query_records_raw_and_effective(self, fresh_tracer, tmp_path) -> None:
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime.handle_query("<user_query>\nreview my code\n</user_query>")
+
+        spans = self._route_spans(fresh_tracer)
+        assert len(spans) == 1
+        metadata = spans[0].get("metadata") or {}
+        assert metadata.get("query") == "<user_query>\nreview my code\n</user_query>"
+        assert metadata.get("effective_query") == "review my code"
+
+    def test_plain_query_effective_equals_raw(self, fresh_tracer, tmp_path) -> None:
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime.handle_query("review my code")
+
+        spans = self._route_spans(fresh_tracer)
+        assert len(spans) == 1
+        metadata = spans[0].get("metadata") or {}
+        assert metadata.get("query") == "review my code"
+        assert metadata.get("effective_query") == "review my code"
+
+
 class TestRouterMatchedSpanVerdict:
     """M12 hook-path miss blind-spot fix — spans carry the router's real
     verdict (``router_matched``), so ``is_route_miss_span`` can see
