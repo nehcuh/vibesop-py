@@ -33,4 +33,22 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 **关键决定**：不把 JEV 接进路由。判断用 choice；不要用 noul 当注入闸门。密钥和 `/tmp/jev-*-eval/` 原始记录不入库。
 
 **Next**：若再比较，对照现有 AI triage，并单独计真实会话里不该注入的句子。
+
+### 2026-09-22 S90 END · Jev 弃用 + sub-1B 本地判据验证首轮
+
+**Workspace**：仓库外工作区 `../jev-local-verify/`。本会话未改仓库逻辑。
+
+**完成**：Jev 正式弃用（不开源、端点硬编码）。Qwen3-0.6B 本地验证：schema 59/59、top-1 45.8% vs 基线 89.8%、oracle 并集 96.6%；LFM2.5-230M 塌缩。
+
+**关键决定**：效果证实前不改仓库逻辑。下一步是 held-out 融合对比。
+
+### 2026-09-21 S91 END · 内部介绍 7 页 PPT
+
+**Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是 S85 遗留脏项，未纳入。
+
+**完成**：内部介绍叙事压成 7 页 `docs/VibeSOP-内部介绍.pptx`（误区 → 对照数字 → 五件事/四层分工 → 查看器差异 → 三亮点 → 三句话）。口径：R8 盲评未结算；委员会 0/72 主因阶段额度；记忆只承诺可检索。
+
+**关键决定**：不把 `docs/VibeSOP-CMspark-部门分享-17页.pptx` 当本会话产物入库。macOS 无 soffice 时用 PowerPoint 导 PDF，必须按 presentation **name** 选取，不能信 `active presentation`。
+
+**Next**：上场第 3 页口头补阶段额度与 R8 未结算。R8 盲评仍待独立盲评人。
 <!-- handoff:end -->

@@ -14,6 +14,8 @@
 ### Previous Week (September 18-24, 2026)
 
 1. **JEV 能否替换技能判断** — 测完，不接入。构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。延迟约 1.15s，不比现有 deepseek triage 快。
+2. **Jev 线关闭 + sub-1B 开源替代验证** ✅ (首轮完成 - Sep 21–22) — Jev 不采用（不开源、端点硬编码）；Qwen3-0.6B 本地验证：机制成立（schema 59/59）、整替不成立（45.8% vs 89.8%）、fallback 层互补 oracle 96.6%。工作区 `../jev-local-verify/`。
+3. **sub-1B 融合验证**（待用户决策）— 冻结 held-out 30–50 题跑 {fallback / 直答 / 仲裁} 对比；证实前不改仓库逻辑。
 
 ### Previous Week (September 11-17, 2026)
 

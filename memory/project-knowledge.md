@@ -74,6 +74,17 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 **Files**: `docs/VibeSOP-内部介绍.pptx`
 
+### LM Studio 手动导入模型三坑 (2026-09-22 S90)
+
+1. **`.part` 残留永久卡索引**：把 `.gguf` 手动放进 `models/<publisher>/<repo>/` 时，若该路径曾有过失败下载（存在 `downloading_*.part`），扫描器会持续跳过该目录，`lms server stop/start` 与删除 `.part` 均无效。解法：换一个**全新的** publisher/repo 目录名再重启 server，立即可见。
+2. **HF CDN 本机不通**：`lms get` 对 huggingface.co 直链超时（报错却 exit 0，别信退出码）。ModelScope 官方仓（Qwen/LiquidAI 都在）`resolve/master/<file>` 直连可用，`curl -L --retry 5` 下载后手动放置。
+3. **Qwen3 原版混合思考模型 + 结构化输出 = 空 content**：思考块吃掉 max_tokens。系统提示末尾加 `/no_think` 且 `max_tokens ≥256` 即解；不要只调大预算（会输出思考正文破坏 grammar 合规统计）。
+
+### Windows GBK 控制台两坑：检查脚本崩、管道吞退出码 (2026-09-22 S90)
+
+1. 仓内检查脚本输出含 emoji（`check_docs.py` 打 ❌）时，GBK 控制台直接 `UnicodeEncodeError` 崩溃。统一 `PYTHONIOENCODING=utf-8` 再跑；同类修复见 `0fbe1e9c`（spec_gap jsonl utf-8）。
+2. `cmd | tail; echo $?` 拿到的是 `tail` 的退出码，不是 `cmd` 的——本 session 两次因此误读 ruff/检查脚本结果。验收取证时把命令重定向到文件再单独看 `$?`，或开 `pipefail`。
+
 ### Hook no-match 不能写进 `systemMessage` — 消费项目会每轮刷横幅 (2026-09-16 S86)
 
 **Issue**: `to_hook_response` 在 miss 时返回 `systemMessage: "🤖 VibeSOP: No matching skill found..."`. Claude Code / Grok 把 `systemMessage` 当用户可见横幅。消费项目（如 `llm-safety`）大多数 prompt 本来就不该匹配 VibeSOP 技能，应用 `vibe build` 后每轮都弹这句，看起来像坏了。Grok 的 UserPromptSubmit 还有额外限制：allow-hook 的 stdout / `additionalContext` 会被丢掉，横幅对用户可见、对模型没有指纹，agent 还会按 routing.md 再跑一遍 `vibe route`。

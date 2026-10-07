@@ -46,7 +46,7 @@
 - [x] **P0/D2（fork+spec validate）**：BLOCKED 后被用户决策取代——**Jev 不采用**（不开源；上游 `providers.py` 端点硬编码不可重定向）。
 - [x] **sub-1B 本地替代验证（仓库外 `../jev-local-verify/`）**：59 条评分行同批对照 hermetic 基线（89.8%）。Qwen3-0.6B Q8_0：schema 59/59、top-1 45.8%（no-match 拒答 1/20 是主缺口）、4 条 win 全部命中基线 fallback_llm 失败点、reject-only 2/2、oracle 并集 96.6%。LFM2.5-230M：塌缩（5.1%）。0.6B 是 sub-1B 档实际下限。
 - [x] **约束遵守**：全程零仓库逻辑改动；用户令「证实有效前不改仓库逻辑」已记入 warm 层。
-- 本地 main 与 origin/main 同步（`86b69f43`，0/0）；S90 收尾仅提交 2 个记忆文件，Jev 契约文档改动已按用户决定丢弃。
+- 本地 main 与 origin/main 同步（`86b69f43`，0/0）；S90 收尾仅提交 2 个记忆文件（`021e260d`，干净树 artifact-links exact match 实测过），Jev 契约文档改动已按用户决定丢弃。
 
 **Key Discoveries**:
 1. LM Studio 手动放模型若路径曾有 `.part` 下载残留，扫描器会永久跳过该目录（重启无效）；换全新 publisher/repo 目录名即解
@@ -614,6 +614,7 @@
 - **R5 第二轮人评**（active）— 预览已恢复：`./scripts/ab-jet-preview.sh start`（8801/8802/8803）。用户已截图，分数未回。禁止 `docker rm vibesop-ab-treat/ctrl`。updated: 2026-09-07
 - **路由评测 triage-on 覆盖缺口**（active，S95 登记）— `scripts/eval_routing.py:193` 硬编码 triage off，CI 看不见 triage 层回归（JEV 57 vs 生产 52 的差距门禁不可见）。next_action: 单开一批加 triage-on 口径（mock LLM 钉层或显式 llm_factory），不动现有 hermetic baseline。updated: 2026-10-07
 - **树内未提交归属**（active，S95 登记）— `.pi/settings.json`（混合 hunk：skills 目录+换行）、`.pi/extensions/*.ts`（含 vibe-route.ts 手写逻辑下沉模板事项）、skills.md、vibe-help.md、Makefile、`.grok/hooks/`、17页 pptx。next_action: 等归属方（CMspark 接力上一棒）决定提交口径；B5 `[:200]` 截断待产品决策。updated: 2026-10-07
+- **sub-1B 本地判据融合验证**（active）— Jev 弃用后改走开源小模型线；首轮选择集结果（Qwen3-0.6B 互补 oracle 96.6% vs 基线 89.8%）在 `../jev-local-verify/`。next_action: 用户点头后冻结 30–50 条 held-out 新题（含 no-match 陷阱），对比 {fallback / 直答 / 仲裁}；有效才谈可选层入库，证实前不改仓库逻辑。updated: 2026-09-22
 
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
 
