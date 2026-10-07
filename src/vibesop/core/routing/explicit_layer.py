@@ -53,6 +53,13 @@ def check_explicit_override(
                 cid = c.get("id", "")
                 if cid.endswith(f"/{slash_name}") or cid.endswith(f"-{slash_name}"):
                     return cid, remainder
+            # Flattened ID match (e.g., /builtin-session-end → builtin/session-end).
+            # Registry listings render "ns/id" as "ns-id"; routing-audit
+            # 2026-10: every /builtin-<name> query fell through to fallback.
+            for c in candidates:
+                cid = c.get("id", "")
+                if cid.replace("/", "-") == slash_name:
+                    return cid, remainder
 
     # Priority 1: !skill_id prefix
     match = EXPLICIT_PREFIX_PATTERN.match(query)

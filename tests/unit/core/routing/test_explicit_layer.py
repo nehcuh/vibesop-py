@@ -81,3 +81,24 @@ class TestCheckExplicitOverride:
         skill_id, cleaned = check_explicit_override("!debug    fix this error", candidates)
         assert skill_id == "debug"
         assert cleaned == "fix this error"
+
+    def test_slash_flattened_id_match(self) -> None:
+        """/<ns>-<name> (flattened ns/name) resolves to the namespaced id."""
+        candidates = [{"id": "builtin/session-end"}, {"id": "review"}]
+        skill_id, cleaned = check_explicit_override("/builtin-session-end", candidates)
+        assert skill_id == "builtin/session-end"
+        assert cleaned == ""
+
+    def test_slash_flattened_id_with_remainder(self) -> None:
+        """Flattened-id match keeps the trailing text as remainder."""
+        candidates = [{"id": "builtin/skill-craft"}]
+        skill_id, cleaned = check_explicit_override("/builtin-skill-craft draft a skill", candidates)
+        assert skill_id == "builtin/skill-craft"
+        assert cleaned == "draft a skill"
+
+    def test_slash_unknown_flattened_id_misses(self) -> None:
+        """Flattened form of an unknown skill still misses."""
+        candidates = [{"id": "builtin/session-end"}]
+        skill_id, cleaned = check_explicit_override("/builtin-no-such-skill", candidates)
+        assert skill_id is None
+        assert cleaned is None
