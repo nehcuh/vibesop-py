@@ -20,6 +20,18 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 `gate43-t7/t14-echo-measure.md` 已 `git add -f` 入库。`adversarial-panel` 第 3 步不再依赖未跟踪的 `.grok/workflows/`：无 Grok workflow 时 5+N 自举。凡被 tracked 文档引用的产物必须 tracked。
 
+## Local Small-Model Judge — Jev 替代线（2026-09-22）
+
+决策：JevHarness 的托管 Jev 不采用——不开源，且上游 `providers.py` 端点硬编码（TypeSafe 固定 URL / Vercel 内部 transport，无 base_url 参数），本地模型无法接管其判断腿。改为在 HF 高推荐 sub-1B 开源模型上验证「小模型做路由 choice 判断」。**用户约束：验证证实有效之前，不改仓库逻辑**；验证全部在仓库外工作区 `../jev-local-verify/`（探针脚本 + 原始 JSON + REPORT.md）。
+
+首轮结果（`tests/benchmark/routing_eval.yaml` 59 条评分行，与 hermetic 基线同批逐题对照，LM Studio 结构化输出枚举约束、temp 0）：
+
+- **机制成立**：Qwen3-0.6B (Q8_0, Apache-2.0) schema 合规 59/59，~2.2s/条——「小模型+约束解码做 choice」可零凭据复现。
+- **整替不成立**：单模型 top-1 45.8% vs 基线级联 89.8%。主要缺口是**不会拒答**（20 条 no-match 断言仅 1 条说 NONE，19 条强行注入）。
+- **互补信号**：模型答对的 4 条**全部**落在基线 `fallback_llm` 层失败点；reject-only 近似负例硬门 2/2 通过；oracle 并集上界 96.6%（+6.8pp）。oracle ≠ 融合，选择集 ≠ 独立估计。
+- **档位下限**：LFM2.5-230M 塌缩（top-1 5.1%，56/59 答同一 id）——sub-1B 档内 0.6B 是本任务的实际下限；LFM2 许可为 LFM Open License（非 Apache）。
+- 未验证：held-out 泛化、融合策略、no-match 拒答教化（few-shot）、多次重跑方差。下一步（需人工决策）：冻结 30–50 条 held-out 新题做 {fallback / 直答 / 仲裁} 融合对比；有效再谈可选层入库。
+
 ## Technical Pitfalls
 
 ### 官方 JEV 在构造评测上赢、在真实会话上过注入 (2026-09-24 S94)

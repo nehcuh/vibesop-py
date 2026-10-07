@@ -40,6 +40,24 @@
 - 交付：7 页 PPT `docs/VibeSOP-内部介绍.pptx`。口径：R8 盲评未结算；记忆只承诺可检索；多专家结论限定任务集。
 - Recorded: no（介绍材料，未改 src）
 
+### S90 (2026-09-22) [vibesop-py] JevHarness P0 契约落地 + Jev 弃用 → sub-1B 本地替代验证
+
+- [x] **P0/D1 契约落地 → 已批准 → 随 Jev 线关闭丢弃（2026-09-22 用户决定）**：6 条设计契约曾写入 `docs/PHILOSOPHY.md` / `docs/observe-routing.md` §16 / `docs/experiments/README.md`，闸门自证全过（断链 58→58、版本 7→7、干净树 artifact-links exact match、basedpyright 0 error）；Jev 确认不采用后用户决定丢弃文档改动，diff 留档 `../jev-local-verify/results/jev-contracts-docs.patch`。契约内容若未来需要可从 patch 恢复。
+- [x] **P0/D2（fork+spec validate）**：BLOCKED 后被用户决策取代——**Jev 不采用**（不开源；上游 `providers.py` 端点硬编码不可重定向）。
+- [x] **sub-1B 本地替代验证（仓库外 `../jev-local-verify/`）**：59 条评分行同批对照 hermetic 基线（89.8%）。Qwen3-0.6B Q8_0：schema 59/59、top-1 45.8%（no-match 拒答 1/20 是主缺口）、4 条 win 全部命中基线 fallback_llm 失败点、reject-only 2/2、oracle 并集 96.6%。LFM2.5-230M：塌缩（5.1%）。0.6B 是 sub-1B 档实际下限。
+- [x] **约束遵守**：全程零仓库逻辑改动；用户令「证实有效前不改仓库逻辑」已记入 warm 层。
+- 本地 main 与 origin/main 同步（`86b69f43`，0/0）；S90 收尾仅提交 2 个记忆文件，Jev 契约文档改动已按用户决定丢弃。
+
+**Key Discoveries**:
+1. LM Studio 手动放模型若路径曾有 `.part` 下载残留，扫描器会永久跳过该目录（重启无效）；换全新 publisher/repo 目录名即解
+2. 本机 HF CDN 超时，ModelScope 直连可用（Qwen/LiquidAI 官方仓都有）
+3. Qwen3 原版混合思考模型在结构化输出下必须 `/no_think` + max_tokens ≥256，否则 content 空转
+
+**Next Steps**:
+- 待用户决策：冻结 30–50 条 held-out 新题（含 no-match 陷阱），跑 {fallback / 小模型直答 / 小模型仲裁} 融合对比；有效才谈可选层入库
+
+**Recorded**: yes — Jev 弃用决策 + sub-1B 边界 + 互补信号 → project-knowledge.md「Local Small-Model Judge」节
+
 ### S89 (2026-09-21) [vibesop-py] F1/F2/F9 设计先行 + tmux 三路落地
 
 - 用户：用其他 tmux 面板分别调 claude / pi / kimi，先产品设计再开发。
