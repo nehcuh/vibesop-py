@@ -28,7 +28,7 @@
 - `auto_deprecate` now defaults to `True` (autonomous lifecycle)
 - `orchestrate()` as default CLI entry (not `route()`)
 - OMX skills moved to external pack (like gstack/superpowers)
-- `keyword_match_max_chars=5`: short queries use keyword routing, long queries use LLM
+- `keyword_match_max_chars=15`: short queries use keyword routing, long queries use LLM
 
 **Architecture decisions**:
 - GitHub Issues as lightweight registry for skill market (no extra infra)

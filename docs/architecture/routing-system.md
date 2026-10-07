@@ -357,7 +357,9 @@ routing:
   session_stickiness_boost: 0.03 # Continuity boost (0.0–0.2)
   fallback_mode: transparent     # transparent / silent / disabled
   enable_quality_boost: true     # Grade-based confidence adjustment
-  keyword_match_max_chars: 5     # Max chars for keyword routing (0=always LLM, 200=always keyword)
+  keyword_match_max_chars: 15    # Max chars for keyword routing (0=always LLM)
+  ai_triage_short_query_bypass_chars: 15  # Queries this short skip AI triage;
+                                # must be >= keyword_match_max_chars (validated)
   index_match_threshold: 0.20    # SEMANTIC_INDEX token bar, curated namespaces
   index_external_match_threshold: 0.30  # Token bar for external pack profiles
   index_embedding_threshold: 0.45       # Embedding-fallback cosine floor

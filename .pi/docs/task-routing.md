@@ -19,7 +19,8 @@ scenario_patterns:
 # .vibe/config.yaml
 routing:
   min_confidence: 0.6
-  keyword_match_max_chars: 5
+  keyword_match_max_chars: 15
+  ai_triage_short_query_bypass_chars: 15  # must be >= keyword_match_max_chars
 ```
 
 ## Disabling Auto-Triggers

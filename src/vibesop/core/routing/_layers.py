@@ -218,6 +218,7 @@ def try_ai_triage_layer(
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
     force: bool = False,
+    original_query: str | None = None,
 ) -> tuple[SkillRoute | None, LayerDetail]:
     triage_start = time.perf_counter()
 
@@ -230,7 +231,7 @@ def try_ai_triage_layer(
             duration_ms=(time.perf_counter() - triage_start) * 1000,
         )
 
-    # Short-query bypass: queries under N chars skip AI Triage
+    # Short-query bypass: queries at or under N chars skip AI Triage
     # because short queries are usually explicit skill names or keywords,
     # which the traditional matchers handle faster and more accurately.
     # Uses character count (not word count) to correctly handle CJK
@@ -239,11 +240,20 @@ def try_ai_triage_layer(
     # this bypass is skipped.
     if not force:
         bypass_chars = getattr(router._config, "ai_triage_short_query_bypass_chars", 15)
-        if len(query) < bypass_chars:
+        # 旁路必须与 unified._should_use_keyword_routing 同源且同口径：
+        # 同源——量会话增强前的 original_query（缺省 None 时退回 query，
+        # 兼容 _try_ai_triage 等无增强调用方），否则 use_keyword=True 的
+        # 短查询会因 enriched 前缀膨胀而不被旁路，LLM 照烧；
+        # 同口径——统一为 <=：keyword_match_max_chars 字段文档自述
+        # "Short queries (<=N chars) use fast keyword matching"，若一处 <=
+        # 一处 <，恰好等于阈值的查询会陷入「词法模式已选但 triage 未旁路」
+        # 的矛盾态（两条都走）。
+        bypass_target = original_query if original_query is not None else query
+        if len(bypass_target) <= bypass_chars:
             return None, LayerDetail(
                 layer=RoutingLayer.AI_TRIAGE,
                 matched=False,
-                reason=f"Short-query bypass (<{bypass_chars} chars): falling through to traditional matchers",
+                reason=f"Short-query bypass (<={bypass_chars} chars): falling through to traditional matchers",
                 duration_ms=(time.perf_counter() - triage_start) * 1000,
             )
 

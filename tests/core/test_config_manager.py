@@ -490,6 +490,19 @@ def test_index_match_threshold_default() -> None:
     assert RoutingConfig().index_match_threshold == pytest.approx(0.20)
 
 
+def test_short_query_bypass_must_cover_keyword_threshold() -> None:
+    """bypass >= keyword is the invariant that keeps keyword-mode queries out of
+    AI triage; smaller bypass reopens the "keyword selected, triage not bypassed"
+    double-routed state (routing review 2026-10-07)."""
+    # Defaults and bypass > keyword are legal.
+    RoutingConfig()
+    RoutingConfig(ai_triage_short_query_bypass_chars=200, keyword_match_max_chars=15)
+    RoutingConfig(ai_triage_short_query_bypass_chars=15, keyword_match_max_chars=0)
+    # bypass < keyword is rejected.
+    with pytest.raises(ValidationError):
+        RoutingConfig(ai_triage_short_query_bypass_chars=15, keyword_match_max_chars=30)
+
+
 def test_index_match_threshold_from_project_toml(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

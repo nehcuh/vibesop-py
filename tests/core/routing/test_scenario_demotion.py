@@ -60,7 +60,7 @@ def _candidates() -> list[dict]:
 class TestScenarioDemotionKeywordBranch:
     """use_keyword=True branch (short queries, or long queries without LLM)."""
 
-    # 4 chars <= keyword_match_max_chars default (5) → keyword branch
+    # 4 chars <= keyword_match_max_chars default (15) → keyword branch
     QUERY = "提交代码"
 
     def _make_router(self, tmp_path: Path) -> UnifiedRouter:
@@ -274,7 +274,7 @@ class TestScenarioParticipationCounting:
     exactly once — otherwise layer stats under-report scenario involvement.
     """
 
-    # 4 chars <= keyword_match_max_chars default (5) → keyword branch
+    # 4 chars <= keyword_match_max_chars default (15) → keyword branch
     QUERY = "提交代码"
 
     def _make_router(self, tmp_path: Path) -> UnifiedRouter:

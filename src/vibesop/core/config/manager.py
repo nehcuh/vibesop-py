@@ -17,7 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from vibesop.core.config._base import TolerantConfig
 
@@ -189,7 +189,9 @@ class RoutingConfig(TolerantConfig):
         le=200,
         description="Skip AI Triage when query character length is below this threshold. "
         "Uses character count (not word count) to correctly handle CJK and "
-        "other languages without whitespace word boundaries.",
+        "other languages without whitespace word boundaries. Must be >= "
+        "keyword_match_max_chars so every query keyword routing selects is "
+        "also bypassed (enforced by model validation).",
     )
     keyword_match_max_chars: int = Field(
         default=15,
@@ -199,8 +201,29 @@ class RoutingConfig(TolerantConfig):
         "when query character length exceeds this threshold. "
         "Short queries (<=N chars) use fast keyword matching; "
         "long queries rely on LLM semantic triage. "
-        "Set to 0 to always use LLM, 200 to always use keyword matching.",
+        "Set to 0 to always use LLM; large values bias toward keyword "
+        "matching, but queries up to ai_triage_short_query_bypass_chars "
+        "still skip AI triage (bypass must cover this threshold).",
     )
+
+    @model_validator(mode="after")
+    def _bypass_covers_keyword_threshold(self) -> RoutingConfig:
+        """The short-query bypass must cover every query keyword routing selects.
+
+        Both thresholds gate the same pre-enrichment character count with the
+        same <= semantics (_layers.try_ai_triage_layer bypass vs
+        _should_use_keyword_routing). If the bypass fell below the keyword
+        threshold, a keyword-mode query longer than the bypass would enter AI
+        triage anyway — the "keyword mode selected but triage not bypassed"
+        double-routed state both call sites' comments declare eliminated.
+        """
+        if self.ai_triage_short_query_bypass_chars < self.keyword_match_max_chars:
+            raise ValueError(
+                "ai_triage_short_query_bypass_chars must be >= "
+                f"keyword_match_max_chars, got {self.ai_triage_short_query_bypass_chars} < "
+                f"{self.keyword_match_max_chars}"
+            )
+        return self
     index_match_threshold: float = Field(
         default=0.20,
         ge=0.0,

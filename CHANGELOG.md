@@ -9,7 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`RoutingConfig` enforces `ai_triage_short_query_bypass_chars >= keyword_match_max_chars`**
+  (model validator). Both thresholds gate the same pre-enrichment character
+  count with `<=` semantics; a bypass below the keyword threshold reopened the
+  "keyword mode selected but AI triage not bypassed" double-routed state.
+  Configs that set only `keyword_match_max_chars` above the bypass now fail at
+  load with an actionable message. The `keyword_match_max_chars` field doc no
+  longer promises "200 = always keyword matching" (a triage hit can still win
+  within the bypass window).
+
 ### Fixed
+
+- **Stale `keyword_match_max_chars: 5` values aligned with the actual default (15)**:
+  the `5` had propagated from a dead `getattr` fallback in
+  `unified.py:_should_use_keyword_routing` into `docs/architecture/routing-system.md`,
+  `.vibe/PROJECT_CONTEXT.md`, both adapter `task-routing.md.j2` templates, and
+  the generated `.pi` copy (all now 15; the fallback is 15 too). The previously
+  undocumented `ai_triage_short_query_bypass_chars` field is now documented in
+  the same places, including the `>= keyword_match_max_chars` invariant.
+- **Stale architecture docstring in `unified.py`** (`route()` layer cascade did
+  not match the `_layers`-based implementation) and a drifted line-number
+  comment.
+- **`scripts/video/` lint**: 13 ruff errors fixed and 3 files reformatted.
+- **Test hygiene**: vacuous boundary assertion in `test_short_query_gate.py`
+  (mojibake string literal, tautologically true) now asserts the real query;
+  a type-annotation-only `pytest` import moved behind `TYPE_CHECKING`;
+  two stale `default (5)` comments corrected in `test_scenario_demotion.py`.
 
 - **No-match hook banner no longer shown to the user**: unmatched turns
   used to inject `systemMessage: "🤖 VibeSOP: No matching skill found.

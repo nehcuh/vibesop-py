@@ -1,0 +1,96 @@
+# VibeSOP intro video — single source of truth.
+# Each scene: id, template (see render.py), sentences (one TTS clip each).
+# Visual elements reveal on sentence index `s` (0-based) via data-s attrs.
+voice: zh-CN-YunxiNeural
+rate: "+10%"
+gap: 0.25          # seconds of silence between sentences
+tail: 0.6          # extra hold at end of each scene
+fps: 25
+width: 1920
+height: 1080
+
+scenes:
+  - id: s01_cold_open
+    template: cold_open
+    sentences:
+      - 周一，你花了四十分钟，教会 AI 修好一个诡异的 bug。
+      - 周三，同样的问题又出现了。
+      - 它，全忘了。
+
+  - id: s02_pains
+    template: pains
+    sentences:
+      - 今天的 AI 编程代理很聪明，却有三个老毛病。
+      - 第一，失忆：每开一个新会话，都要从零开始。
+      - 第二，口说无凭：它说完成了，却拿不出证据。
+      - 第三，各自为政：在 Claude、Grok、Kimi 里积累的经验，彼此不通。
+
+  - id: s03_intro
+    template: intro
+    sentences:
+      - VibeSOP，就是为这些问题而生的。
+      - 它是一个多代理 AI 工程工作流系统，目标很简单：让 AI 代理记住你做过的事。
+
+  - id: s04_flywheel
+    template: flywheel
+    sentences:
+      - VibeSOP 的核心，是一个会自我进化的飞轮。
+      - 你提出需求，它把请求路由到最合适的技能；
+      - 执行完成，必须拿出验证证据；
+      - 收工时，自动写好交接；
+      - 夜里，后台 Loop 挖掘你的历史会话；
+      - 把反复成功的做法变成技能候选，经你审核之后，再回到路由里。
+
+  - id: s05_route
+    template: route
+    sentences:
+      - 先看入口。只要一句自然语言，比如：帮我调试这个报错。
+      - vibe route 会逐层尝试显式调用、关键词、场景、语义索引和 AI 分诊。
+      - 这一次，它选中了系统化调试技能，置信度百分之八十八。
+      - 如果没有合适的技能，它会如实告诉你，而不是硬塞一个。
+
+  - id: s06_verify
+    template: verify
+    sentences:
+      - 第二环：完成，必须有证据。
+      - 每个执行计划都带着验证合同：先定义验收标准，再选择验证器。
+      - 不可交付的计划会被直接阻断，而不是假装已经完成。
+      - 模型说通过不算数，要看这一次执行留下的真实凭据。
+
+  - id: s07_handoff
+    template: handoff
+    sentences:
+      - 第三环：收工，即交接。
+      - 你只要说一句收工，session-end 技能就会接手：
+      - 把踩过的坑，写进项目知识库；
+      - 把这次的进展和下一步，写进 PROJECT_CONTEXT 交接区；
+      - 挖掘会话里重复出现的工具序列，然后提交代码。
+      - 下次打开新会话，代理直接从上次停下的地方继续。
+
+  - id: s08_loop
+    template: loop
+    sentences:
+      - 第四环：你睡觉的时候，它在学习。
+      - 对话镜像把 Claude Code 的会话同步到本地，作为学习素材。
+      - vibe loop 内置三个预设任务：每十五分钟，把工具调用折叠成行为序列；
+      - 凌晨四点十七分，晋升高置信度的模式；
+      - 四点三十七分，再根据未命中的信号，调整置信度。
+      - 一条命令就能托管给 macOS 的 launchd，不需要常驻进程。
+
+  - id: s09_craft
+    template: craft
+    sentences:
+      - 第五环：从历史中，长出新技能。
+      - scan-candidates 按任务聚类历史执行，筛出反复出现、成功率高的模式。
+      - candidates 列出每个候选的成功率、核心步骤，以及是否跨项目出现。
+      - promote 一键生成 SKILL.md 草稿。
+      - 但草稿必须经过你的修改才能激活。未审，不注入。
+      - 从此，你的技能库，由你自己的实践长出来。
+
+  - id: s10_outro
+    template: outro
+    sentences:
+      - 最后，一处编写，处处可用。
+      - 同一份 SKILL.md，通过 vibe build，分发到 Claude Code、Grok Build、Kimi、Pi、OpenCode 和 Cursor。
+      - 用 uv 一行安装，vibe quickstart 快速上手。
+      - VibeSOP，让 AI 代理记住你做过的事。

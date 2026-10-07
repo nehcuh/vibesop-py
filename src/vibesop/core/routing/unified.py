@@ -6,7 +6,9 @@ one matching strategy. Layers execute in priority order; the first confident
 match wins.
 
 Architecture:
-    route() → [_try_explicit, _try_scenario, _try_ai_triage, _try_matchers]
+    route() → junk guard + unwrap → _single_skill_route
+        → [_layers explicit, _layers early (scenario + semantic index),
+           _layers AI triage, _layers matchers]
                                                         ↓
                               matcher aggregation: keyword/tfidf/embedding,
                               max confidence wins; levenshtein is last-resort
@@ -692,7 +694,11 @@ class UnifiedRouter(
                 context,
             )
 
-        use_keyword = self._should_use_keyword_routing(query, context)
+        # 长度门槛量「会话增强前」的 original_query（:555 在 enrichment 之前捕获）：
+        # enriched query 拼接了会话上下文、长度必然膨胀，按它判定会把短句
+        # （如「相同方式继续」，6 字）推入 LLM 分支（生产实测 5-6s fallback_llm）。
+        # enriched 仍用于后续匹配/注入，此处只改「是否走词法路由」的度量对象。
+        use_keyword = self._should_use_keyword_routing(original_query, context)
 
         # Management gate for the early layers (scenario / semantic index):
         # slash-* management skills must not win non-management queries here
@@ -742,6 +748,10 @@ class UnifiedRouter(
             candidates,
             context,  # pyright: ignore[reportArgumentType]
             force=(not use_keyword) or (scenario_candidate is not None),
+            # 旁路与 use_keyword 判定同源：都量增强前的 original_query，
+            # 否则短查询仍会以 force=False 进入 triage 且不被旁路（LLM 照烧）。
+            # 注：:1572 的 _try_ai_triage 调用点不传此参数，走默认 None 回退 query。
+            original_query=original_query,
         )
         routing_path.append(RoutingLayer.AI_TRIAGE)
         layer_details.append(detail)
@@ -1033,7 +1043,7 @@ class UnifiedRouter(
         self, query: str, context: RoutingContext | None = None
     ) -> bool:
         """Determine whether to use keyword-based routing or LLM semantic triage."""
-        keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 5)
+        keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 15)
         use_keyword = len(query) <= keyword_max_chars
 
         # Respect skip_ai_triage from context (used by PlanBuilder for sub-task routing)
