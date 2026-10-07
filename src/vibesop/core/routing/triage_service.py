@@ -364,6 +364,9 @@ class TriageService:
                     output_tokens=output_tokens,
                     query=query,
                     selected_skill=skill_id,
+                    selected_confidence=(
+                        parsed_confidence if isinstance(parsed_confidence, float | int) else None
+                    ),
                 )
 
             # Record success for circuit breaker

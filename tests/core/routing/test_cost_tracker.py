@@ -86,3 +86,20 @@ class TestTriageCostTracker:
         # Should not raise
         record = tracker.record("test-model", 10, 10, "q", None)
         assert record.total_tokens == 20
+
+    def test_selected_confidence_recorded(self, tmp_path: Path):
+        import json
+
+        tracker = TriageCostTracker(storage_dir=tmp_path)
+        tracker.record("test-model", 10, 10, "q", "some-skill", selected_confidence=0.88)
+        row = json.loads((tmp_path / "ai_triage_log.jsonl").read_text().strip())
+        assert row["selected_confidence"] == pytest.approx(0.88)
+
+    def test_selected_confidence_defaults_to_none(self, tmp_path: Path):
+        import json
+
+        tracker = TriageCostTracker(storage_dir=tmp_path)
+        record = tracker.record("test-model", 10, 10, "q", None)
+        assert record.selected_confidence is None
+        row = json.loads((tmp_path / "ai_triage_log.jsonl").read_text().strip())
+        assert row["selected_confidence"] is None

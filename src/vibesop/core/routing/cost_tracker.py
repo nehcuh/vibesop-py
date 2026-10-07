@@ -61,6 +61,10 @@ class TriageCallRecord:
     estimated_cost_usd: float
     query: str
     selected_skill: str | None
+    # Confidence the triage LLM stated for its selection, when parsed.
+    # Routing-audit 2026-10: without it, min_confidence counterfactuals
+    # (e.g. 0.6 vs 0.3) are not computable from this log.
+    selected_confidence: float | None = None
 
 
 class TriageCostTracker:
@@ -89,6 +93,7 @@ class TriageCostTracker:
         output_tokens: int,
         query: str,
         selected_skill: str | None,
+        selected_confidence: float | None = None,
     ) -> TriageCallRecord:
         """Record a triage call and append to log.
 
@@ -98,6 +103,8 @@ class TriageCostTracker:
             output_tokens: Generated output tokens.
             query: Original user query.
             selected_skill: Skill ID returned by triage, or None.
+            selected_confidence: LLM-stated confidence for the selection,
+                or None when the reply carried no usable value.
 
         Returns:
             The created record.
@@ -113,6 +120,7 @@ class TriageCostTracker:
             estimated_cost_usd=round(cost, 6),
             query=query,
             selected_skill=selected_skill,
+            selected_confidence=selected_confidence,
         )
 
         try:
