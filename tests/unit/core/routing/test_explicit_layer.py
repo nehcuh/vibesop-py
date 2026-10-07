@@ -92,7 +92,9 @@ class TestCheckExplicitOverride:
     def test_slash_flattened_id_with_remainder(self) -> None:
         """Flattened-id match keeps the trailing text as remainder."""
         candidates = [{"id": "builtin/skill-craft"}]
-        skill_id, cleaned = check_explicit_override("/builtin-skill-craft draft a skill", candidates)
+        skill_id, cleaned = check_explicit_override(
+            "/builtin-skill-craft draft a skill", candidates
+        )
         assert skill_id == "builtin/skill-craft"
         assert cleaned == "draft a skill"
 

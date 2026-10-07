@@ -224,6 +224,7 @@ class RoutingConfig(TolerantConfig):
                 f"{self.keyword_match_max_chars}"
             )
         return self
+
     index_match_threshold: float = Field(
         default=0.20,
         ge=0.0,

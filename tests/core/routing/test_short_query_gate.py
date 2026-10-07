@@ -69,9 +69,7 @@ class TestKeywordGateMeasuresOriginalQuery:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Enrichment must not push a short original query into LLM triage."""
-        router = UnifiedRouter(
-            project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True)
-        )
+        router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True))
         llm = _CountingLLM()
         router.set_llm(llm)
 
@@ -95,9 +93,7 @@ class TestKeywordGateMeasuresOriginalQuery:
 
     def test_long_query_still_forces_triage(self, tmp_path: Path) -> None:
         """Long queries keep the forced-triage path (no behavior change)."""
-        router = UnifiedRouter(
-            project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True)
-        )
+        router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True))
         llm = _CountingLLM()
         router.set_llm(llm)
 
@@ -111,9 +107,7 @@ class TestKeywordGateMeasuresOriginalQuery:
 class TestShortQueryBypassBoundary:
     def test_exactly_threshold_chars_bypass_triage(self, tmp_path: Path) -> None:
         """len(query) == keyword_match_max_chars stays in keyword mode."""
-        router = UnifiedRouter(
-            project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True)
-        )
+        router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True))
         llm = _CountingLLM()
         router.set_llm(llm)
 
@@ -126,9 +120,7 @@ class TestShortQueryBypassBoundary:
 
     def test_keyword_gate_inclusive_boundary(self, tmp_path: Path) -> None:
         """与 _layers 旁路口径一致：恰好 15 字走词法，16 字走 LLM。"""
-        router = UnifiedRouter(
-            project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True)
-        )
+        router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True))
         router.set_llm(_CountingLLM())
 
         assert router._should_use_keyword_routing("x" * 15) is True
@@ -140,9 +132,7 @@ class TestTriageLayerBypassSource:
 
     @staticmethod
     def _router(tmp_path: Path) -> tuple[UnifiedRouter, _CountingLLM]:
-        router = UnifiedRouter(
-            project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True)
-        )
+        router = UnifiedRouter(project_root=tmp_path, config=RoutingConfig(enable_ai_triage=True))
         llm = _CountingLLM()
         router.set_llm(llm)
         return router, llm
