@@ -75,6 +75,24 @@ def query_matches_triggers(query: str, triggers: Iterable[Any]) -> str | None:
     return None
 
 
+def _bounded_confidence(value: Any) -> float | None:
+    """Model-reported confidence as float, or None when unusable.
+
+    Usable means: numeric, not a JSON boolean (bool is an int subclass, so
+    ``true`` would otherwise sneak in as 1.0), and within [0.0, 1.0].
+    Shared by the cost log and the match path so both apply the identical
+    validation — the log only feeds metrics, but unbounded values would
+    silently poison min_confidence counterfactuals computed from it.
+    """
+    if (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and 0.0 <= float(value) <= 1.0
+    ):
+        return float(value)
+    return None
+
+
 class TriageService:
     """AI Triage layer for skill routing."""
 
@@ -364,9 +382,7 @@ class TriageService:
                     output_tokens=output_tokens,
                     query=query,
                     selected_skill=skill_id,
-                    selected_confidence=(
-                        parsed_confidence if isinstance(parsed_confidence, float | int) else None
-                    ),
+                    selected_confidence=_bounded_confidence(parsed_confidence),
                 )
 
             # Record success for circuit breaker
@@ -428,12 +444,9 @@ class TriageService:
                     # Structured-only path: trust the model's bounded
                     # self-reported confidence, else default to 0.88.
                     confidence = 0.88
-                    if (
-                        isinstance(parsed_confidence, (int, float))
-                        and not isinstance(parsed_confidence, bool)
-                        and 0.0 <= float(parsed_confidence) <= 1.0
-                    ):
-                        confidence = float(parsed_confidence)
+                    bounded = _bounded_confidence(parsed_confidence)
+                    if bounded is not None:
+                        confidence = bounded
                     result = SkillRoute(
                         skill_id=skill_id,
                         confidence=confidence,

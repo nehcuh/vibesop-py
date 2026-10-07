@@ -1246,6 +1246,14 @@ class TestNoMatchExit:
         assert result is not None
         assert result.match.confidence == 0.88
 
+    def test_structured_match_preserves_zero_confidence(self) -> None:
+        """0.0 is a valid model-reported confidence; a truthiness default
+        (`bounded or 0.88`) would silently swallow it."""
+        service = self._service_with_reply('{"skill_id": "skill-a", "confidence": 0.0}')
+        result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
+        assert result is not None
+        assert result.match.confidence == 0.0
+
     def test_parse_bare_none_tokens(self) -> None:
         """NONE/null bare tokens parse to skill_id None, not a skill."""
         service = _make_service()
@@ -1296,6 +1304,27 @@ class TestNoMatchExit:
         result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
         assert result is not None
         assert result.match.confidence == 0.88
+
+    def test_cost_log_uses_same_confidence_validation_as_match_path(self) -> None:
+        """The cost log's selected_confidence must apply the identical predicate
+        as the match path: bool and out-of-range values log as None, not as
+        1.0 / 1.5 polluting min_confidence counterfactuals (review 2026-10-07)."""
+        cases = [
+            ('{"skill_id": "skill-a", "confidence": 0.93}', 0.93),
+            ('{"skill_id": "skill-a", "confidence": 1}', 1.0),
+            ('{"skill_id": "skill-a", "confidence": true}', None),
+            ('{"skill_id": "skill-a", "confidence": false}', None),
+            ('{"skill_id": "skill-a", "confidence": 1.5}', None),
+            ('{"skill_id": "skill-a", "confidence": -0.2}', None),
+            ('{"skill_id": "skill-a"}', None),
+        ]
+        for content, expected in cases:
+            service = self._service_with_reply(content)
+            spy = MagicMock(wraps=service._cost_tracker.record)
+            service._cost_tracker.record = spy
+            result = service.try_ai_triage("fix the bug", [{"id": "skill-a", "intent": "test"}])
+            assert result is not None, content
+            assert spy.call_args.kwargs["selected_confidence"] == expected, content
 
     def test_prompt_declined_formats_round_trip_to_no_match(self) -> None:
         """Contract: every prompt version's DECLINED output format parses to

@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Triage cost log validates `selected_confidence` like the match path**:
+  the log previously admitted JSON booleans (`true` → 1.0, since `bool` is an
+  `int` subclass) and out-of-range values (42, -3), while the match path
+  rejected both. Both paths now share one `_bounded_confidence` predicate
+  (numeric, non-bool, within [0.0, 1.0]); unbounded values log as `None`.
+  Metrics-only fix — routing decisions were never affected.
 - **Stale `keyword_match_max_chars: 5` values aligned with the actual default (15)**:
   the `5` had propagated from a dead `getattr` fallback in
   `unified.py:_should_use_keyword_routing` into `docs/architecture/routing-system.md`,
