@@ -808,3 +808,9 @@
 - 后续版本升级时确保 config.toml 中的 analytics 设置不被覆盖
 
 **Recorded**: yes — 3 technical pitfalls + 1 reusable pattern → project-knowledge.md
+
+## 2026-10-07 — CMspark 路由审计任务包接力（终端侧坐实）
+- 三判决：<user_query>=观测噪音为主；短桶最差是真信号（会话延续词）；86.7% weak_negative=重复记账伪影（62% hit_reask，148 task）；min_confidence 0.6 非元凶（双峰是 miss 写 0 的约定）
+- 3 补丁工作树未提交：span effective_query / triage log selected_confidence / explicit 扁平化别名；466 tests 绿含 hermetic 门禁
+- 产物：~/CMspark-projects/vibesop-routing-audit/{extra_analysis.py,handback-claude-20261007.md}
+- 待办：安全项（~/.vibe/config.toml 明文 DeepSeek key 轮换+改 env）；5 个 open questions 见 handback §5
