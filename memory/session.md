@@ -594,6 +594,8 @@
 - **Grok 真实会话 probe**（active）— S86 重装 `vibe` 并 `vibe build grok-build --output ~/.grok`：`--hook` 已存在；miss 空信封、命中仍 `VibeSOP routed`。next_action: 重启 Grok 后在 llm-safety 确认闲聊无横幅，并看 route span 是否落盘。updated: 2026-09-17
 - **gate42/43 cron 验收**（active）— gate43 T+14 到期日=2026-09-07。next_action: 到期自动跑，勿在本 session 提前执行。updated: 2026-09-07
 - **R5 第二轮人评**（active）— 预览已恢复：`./scripts/ab-jet-preview.sh start`（8801/8802/8803）。用户已截图，分数未回。禁止 `docker rm vibesop-ab-treat/ctrl`。updated: 2026-09-07
+- **路由评测 triage-on 覆盖缺口**（active，S95 登记）— `scripts/eval_routing.py:193` 硬编码 triage off，CI 看不见 triage 层回归（JEV 57 vs 生产 52 的差距门禁不可见）。next_action: 单开一批加 triage-on 口径（mock LLM 钉层或显式 llm_factory），不动现有 hermetic baseline。updated: 2026-10-07
+- **树内未提交归属**（active，S95 登记）— `.pi/settings.json`（混合 hunk：skills 目录+换行）、`.pi/extensions/*.ts`（含 vibe-route.ts 手写逻辑下沉模板事项）、skills.md、vibe-help.md、Makefile、`.grok/hooks/`、17页 pptx。next_action: 等归属方（CMspark 接力上一棒）决定提交口径；B5 `[:200]` 截断待产品决策。updated: 2026-10-07
 
 ### S46 (2026-08-26) [vibesop-py] v8.1.1 文档/版本 + 平台不变量
 
@@ -814,3 +816,14 @@
 - 3 补丁工作树未提交：span effective_query / triage log selected_confidence / explicit 扁平化别名；466 tests 绿含 hermetic 门禁
 - 产物：~/CMspark-projects/vibesop-routing-audit/{extra_analysis.py,handback-claude-20261007.md}
 - 待办：安全项（~/.vibe/config.toml 明文 DeepSeek key 轮换+改 env）；5 个 open questions 见 handback §5
+
+### S95 (2026-10-07 ~22:30) [vibesop-py] 双门禁修复轮 A/B + CI 修红 + JEV 复测
+
+- **批 A** `bff4699e`：RoutingConfig validator 强制 `bypass >= keyword`（关双旋钮矛盾态窗口）；5 处 `keyword_match_max_chars` 5→15 对齐 + bypass 字段文档；unified.py docstring/指针；scripts/video 13 lint 清零；测试卫生（恒真断言/TC002/过时注释）。
+- **批 B** `96d2a75a`：`_bounded_confidence` 共享谓词（cost log 与 match path 校验对齐，附赠 NaN/inf 清洗）。
+- **门禁轨迹**：kimi 改动前闸 M1（提交范围）→ 选择性 pathspec 提交 → claude post-commit 闸抓 **P0**（unified.py 依赖未提交的 `_layers.py` 契约，HEAD 不自包含）→ amend 并入 → 双闸 APPROVE。教训入 Reusable Patterns。
+- **CI**：main 既有红（Lint format + Security Scan virtualenv/urllib3）→ `24395b27` format 3 文件 + virtualenv 21.14.5 → `58692f70` urllib3 2.8.0 → CI/E2E/CodeQL 全绿。注意：第二次起 `git push` 默认推 main，「先 CI 后推」顺序被打破（已如实记录）。
+- **JEV 复测**（用户给 key）：jev-1.13.0 pin 同 S92，构造集 **57/61** vs 生产路由 triage-on **52/61**（p50 1270ms vs 15ms，仅 3/61 真调 LLM）；过注入 conf=0.99、noul 不一致（16/37）复现；**维持 S94 不接入**。原始数据 `/tmp/jev-reval-20261007/`。路由改动 A/B 61 条零变化。
+- 过程披露：实验污染生产 triage 缓存 3 正例，已按 `TriageCache.key_for` 清洗（备份 /tmp/triage_cache.backup-20261007.json）。
+- **Next**：B5 `[:200]` 截断决策；批 C（vibe-route.ts 下沉模板，被未提交 .pi/extensions 阻塞）；.pi/settings.json 混合 hunk、pptx 归属；grok CLI `grok update` ≥1.0.13 恢复第二道闸；eval triage-on 覆盖缺口单开一批。
+- Recorded: yes — JEV 复测 / eval triage 零覆盖 / 生产缓存污染 3 pitfalls + 拆批切穿契约 pattern → project-knowledge.md

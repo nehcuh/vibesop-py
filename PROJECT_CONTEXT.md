@@ -14,6 +14,16 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-10-07 S95 · 双门禁修复轮 A/B + CI 修红 + JEV 复测
+
+**Workspace**：VibeSOP main @ `58692f70`（已推送，CI/E2E/CodeQL 全绿）。`.pi/settings.json`、`.pi/extensions/*.ts`、skills.md、vibe-help.md、Makefile、`.grok/hooks/`、17页 pptx 仍是树内脏项，未纳入。
+
+**完成**：批A `bff4699e`（RoutingConfig 强制 bypass>=keyword validator；5 处 keyword_match_max_chars 5→15 + bypass 文档；unified.py docstring/指针；scripts/video lint 清零）；批B `96d2a75a`（cost-log 与 match path 共享 _bounded_confidence）。双门禁各经一轮 REQUEST CHANGES 后双 APPROVE（claude post-commit 闸抓到 _layers.py 契约被切出提交的 P0）。CI 既有红修复：`24395b27`（ruff format 3 文件 + virtualenv 21.14.5）+ `58692f70`（urllib3 2.8.0）。
+
+**JEV 复测**：维持 S94「不接入」。构造集 jev-1.13.0 **57/61** vs 生产路由 triage-on **52/61**（p50 1270ms vs 15ms，仅 3/61 真调 LLM）；conf=0.99 过注入、noul 不一致（16/37）复现；真实会话集 `/tmp/jev-real-eval/` 已失不可重验。原始 `/tmp/jev-reval-20261007/`。
+
+**Next**：B5 `[:200]` 截断产品决策；eval triage-on 覆盖缺口单开一批（`eval_routing.py:193` 硬编码 triage off）；vibe-route.ts 手写逻辑下沉模板（被未提交 .pi/extensions 阻塞）；grok CLI 需 `grok update` ≥1.0.13 才能恢复第二道闸。
+
 ### 2026-09-24 S94 END · JEV 不替换技能路由
 
 **Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是既有脏项，未纳入。
@@ -23,14 +33,4 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 **关键决定**：不把 JEV 接进路由。判断用 choice；不要用 noul 当注入闸门。密钥和 `/tmp/jev-*-eval/` 原始记录不入库。
 
 **Next**：若再比较，对照现有 AI triage，并单独计真实会话里不该注入的句子。
-
-### 2026-09-21 S91 END · 内部介绍 7 页 PPT
-
-**Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是 S85 遗留脏项，未纳入。
-
-**完成**：内部介绍叙事压成 7 页 `docs/VibeSOP-内部介绍.pptx`（误区 → 对照数字 → 五件事/四层分工 → 查看器差异 → 三亮点 → 三句话）。口径：R8 盲评未结算；委员会 0/72 主因阶段额度；记忆只承诺可检索。
-
-**关键决定**：不把 `docs/VibeSOP-CMspark-部门分享-17页.pptx` 当本会话产物入库。macOS 无 soffice 时用 PowerPoint 导 PDF，必须按 presentation **name** 选取，不能信 `active presentation`。
-
-**Next**：上场第 3 页口头补阶段额度与 R8 未结算。R8 盲评仍待独立盲评人。
 <!-- handoff:end -->

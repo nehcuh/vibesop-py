@@ -30,6 +30,30 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 **Files**: `tests/benchmark/routing_eval.yaml`；`.vibe/observability/spans.jsonl`
 
+### JEV 复测维持「不接入」：构造集仍赢 5 分，反对理由全部复现 (2026-10-07 S95)
+
+**Issue**: 路由 short-query bypass 修复（bff4699e）后重测 JEV（pin `jev-1.13.0`，目录/截断/计分同 S92）：构造集 JEV **57/61** vs 生产路由（DeepSeek triage ON）**52/61** vs hermetic 关键词 53/61；JEV p50 **1270ms** vs 生产路由 p50 **15ms**（prefilter 让 58/61 根本不调 LLM，仅 3 条真走 triage）。4 个 miss 里 2 个是高置信过注入（`help me fix this bug` 应不注入但 conf=0.99 选了 systematic-debugging）；choice/noul 不一致复现（37 条选对正例 16 条 noul<0.5）。S94 的决定性证据（真实会话 17/27 vs 23/27）原始数据 `/tmp/jev-real-eval/` 已不存在，本轮无法重验。
+
+**Solution**: 维持 S94「不接入」。若未来要推翻，必须先重建真实会话标注集（从 Grok 历史重新标注「只有用户点名流程才算该注入」），构造集数字不构成充分理由。本轮路由改动对构造集零影响（A/B 61 条逐行无变化，bypass 边界只动恰 15 字查询且词法结果一致）。
+
+**Files**: `/tmp/jev-reval-20261007/`（raw.jsonl 全量请求/响应，未入库）；`scripts/eval_routing.py:193`
+
+### `eval_routing.py` 对 AI triage 层零覆盖 — 52 vs 57 的差距 CI 看不见 (2026-10-07 S95)
+
+**Issue**: 构造评测 harness `scripts/eval_routing.py:193` 硬编码 `RoutingConfig(enable_embedding=False, enable_ai_triage=False)`，hermetic 与 non-hermetic 都不调 triage。CI「Routing Eval (report-only)」因此永远测不到 triage 层回归；JEV 57/61 vs 生产 triage-on 52/61 这个真实差距在门禁里完全不可见。同时评测集无会话上下文，bypass 的 original_query 语义也测不到。
+
+**Solution**: 另起一批给评测加 triage-on 口径（显式 llm_factory + prompt_builder 或 mock LLM 钉层断言），与 hermetic 门禁并存；别动现有 baseline 语义。
+
+**Files**: `scripts/eval_routing.py:193`；`tests/benchmark/routing_eval.yaml`
+
+### 用生产 project_root 跑路由实验会写生产 triage 缓存 (2026-10-07 S95)
+
+**Issue**: `UnifiedRouter(project_root=<repo>)` 的 triage 会把结果写 `.vibe/triage_cache.json`（正例 TTL 72h / 负例 6h，SCHEMA v2，key=`sha256(redact+normalize(query))`）。对照实验（如先跑无 LLM 基线再跑有 LLM）会互相喂缓存，且污染真实使用 72 小时。fallback 的负例大多走 prefilter 提前返回不写缓存，但正例必写。
+
+**Solution**: 实验一律用临时 project_root（hermetic 评测的姿势），或事后用 `TriageCache.key_for(query)` 精确移除实验查询键（备份原文件到 /tmp）。判断「缓存是否被实验污染」可看条目 `ts` 与实验窗口。
+
+**Files**: `src/vibesop/core/routing/triage_cache.py:47-57`；`.vibe/triage_cache.json`
+
 ### macOS 用 PowerPoint 导 PDF 时 `active presentation` 可能是另一份已打开的 VibeSOP 稿 (2026-09-21 S91)
 
 **Issue**: 本机无 `soffice`，`qlmanage -t` 只出一张缩略图。改用 AppleScript `save thePres in … as save as PDF`。`open POSIX file` 之后取 `active presentation`，会落到自动恢复的另一份 VibeSOP 稿（本机是 23 页《把经验留给机器》），PDF 页数和正文全错，mtime 却是新的。覆盖同一路径再 `open` 也会吃 Office 缓存，导出仍是旧字。
@@ -415,6 +439,10 @@ with self._path.open("a") as f:
 **Known limitation**（defer Phase B+1）: AtomicWriter rename 换 inode — flock 锁的是旧 inode，rename 后新 inode 不受保护。Fix 是 sibling lock file（`reflections.jsonl.lock`），更大重构。
 
 ## Reusable Patterns
+
+### 双门禁拆批：按文件切 commit 可能切穿原子 API 契约 — HEAD 自包含必须隔离复跑 (2026-10-07 S95)
+
+拆批提交时「同链路文件分一批」要上升到「跨文件调用契约同一批」：unified.py 调用点传了新参数、`_layers.py` 签名改动留在树内时，HEAD 单独 checkout 每个走该路径的路由都 TypeError，而工作树全绿（测试跑的是树不是 HEAD）。判据：commit 后用 `git archive HEAD | tar -x -C <tmpdir>` 隔离抽取、对受影响测试复跑一遍（49 passed 即自包含）；post-commit 只读复审闸能抓到这类「树绿 HEAD 红」，是本流程第二道闸真实拦下 P0 的实证。
 
 ### 路由判断模型要拆「构造集」和「真实会话」两套分母 (2026-09-24 S94)
 

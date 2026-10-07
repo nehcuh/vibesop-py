@@ -1,12 +1,17 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-09-24 (S94 — JEV 技能判断对照，不接入)
+**Last Updated**: 2026-10-07 (S95 — 双门禁修复轮 A/B + CI 修红 + JEV 复测维持不接入)
 
 ---
 
 ## Goals
 
-### Current Week (September 18-24, 2026)
+### Current Week (October 6-12, 2026)
+
+1. **路由 short-query gate 修复轮收口** — 双 APPROVE，4 commits 上 main（bff4699e 批A validator+文档对齐 / 96d2a75a 批B cost-log 校验 / 24395b27+58692f70 CI 修红），CI 全绿。遗留：B5 截断决策、eval triage-on 覆盖缺口（新登记）。
+2. **JEV 复测** — 维持 S94 不接入：构造集 57/61 仍赢生产路由 52/61，但 p50 1270ms vs 15ms、conf=0.99 过注入、noul 不一致全部复现；真实会话集已失不可重验。
+
+### Previous Week (September 18-24, 2026)
 
 1. **JEV 能否替换技能判断** — 测完，不接入。构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。延迟约 1.15s，不比现有 deepseek triage 快。
 
