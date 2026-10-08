@@ -1,6 +1,20 @@
 
 ## Current Session
 
+### S95 (2026-10-07) [vibesop-py] 拉取 origin/main + 多路独立对抗复审
+
+- 路由 `builtin/adversarial-panel` 88%。本地曾 ahead 2（S90 session），origin 新 10 提交；ff-only 不可用，rebase 到 `origin/main`，S90 笔记保留。backup: `backup/s90-session-before-2026-10-07`。S67 stash 未 pop。
+- Pull 评审面：`86b69f43` → `58692f70`（10 commits）。HEAD 另有 2 个 rebase 后的 session 提交，不进 frozen patch。
+- Frozen: `.omx/artifacts/review-diff-86b69f43-58692f70.patch`（25 files +1700/−54）
+- Theme: Unreleased 路由短查询闸 / slash id / cost-log confidence / urllib3 CVE / scripts/video
+- E2E [executed GitHub]: CI `37618777691` SUCCESS；Quickstart E2E `37618777732` SUCCESS（ubuntu + windows）。本机 Docker Desktop daemon 未起，容器 e2e 跳过。
+- Workflow: `adversarial-review`（镜头已 retarget 到本次 Unreleased，不复审 8.5.0 observe）
+- 评审期间不改 `src/`
+- 完成 [executed]（次会话补跑，冻结面未变）：finders 5/5，15 候选 → 14 确认 / 1 驳回 / 0 未核实。合成 **COMMENT**（0 HIGH / 2 MEDIUM / 12 LOW），不挡发布、无需回滚。MEDIUM：C1 配置校验器 hook 路径静默杀死路由（CHANGELOG「fail at load」半真）；L1 视频级联顺序与架构文档矛盾 + 88% 徽章出处失效。驳回：O3 nvidia marker 化简（全在 torch linux 门后，零解析变化）。报告 `.omx/artifacts/adversarial-review-86b69f43-58692f70.md`
+- 未启动 `fix-from-review`（等用户点名；若修优先级 C1 > L1 > LOW 批）
+- 修复 [executed]（同日续会话，用户点名「标准流程进行优化」）：14 条确认全修。C1 hook 错误信封用户可见（全平台，exit 0）+ CLI 干净报错 exit 2；L1 视频级联改真实顺序 + 演示查询 21 字；LOW 批 C2/C3/C4/K1/K3/S1/T1/T2/L2/L3/L4/O1 全落。测试 +7（C1×4、C2、T1、T2）。定向 241 passed、波及 2042 passed / 4 skipped、ruff 全仓干净、basedpyright 0 err、hermetic exit 0。未 commit（等授权）。注意：render.py 高亮行号绑采集输出，下次渲染需人工复核
+- Recorded: yes — hook 信封纪律（miss 静默 / error 可见）→ project-knowledge.md。session-end 2026-10-08 09:14 收口：修复仍未 commit（等用户点名），仅记忆文件入库
+
 ### S94 END (2026-09-24) [vibesop-py] JEV 技能判断收工
 
 - 本会话测了官方 JEV 能否改进技能选择：构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。速度中位数约 1.15s，不比 deepseek triage（988ms）快。上下文约 1800 token，未顶满 32k/64k。
@@ -607,6 +621,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
+- **S95 对抗评审修复待提交**（active）— 10-07 拉取 `86b69f43→58692f70` 五路对抗评审终裁 COMMENT（0H/2M/12L），14 条确认修复已落盘并验证（定向 241 + 波及 2042 passed、ruff/basedpyright/hermetic 全绿）。未 commit。next_action: 用户点名「提交」→ 分组 git add（排除 `.omx/`、`.grok/workflows/`、`examples/datasets/`）→ conventional commit → push → 盯 job 级 CI；`render.py` 高亮行号绑采集输出，下次渲染视频前人工复核。updated: 2026-10-08
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
 - **Grok 真实会话 probe**（active）— S86 重装 `vibe` 并 `vibe build grok-build --output ~/.grok`：`--hook` 已存在；miss 空信封、命中仍 `VibeSOP routed`。next_action: 重启 Grok 后在 llm-safety 确认闲聊无横幅，并看 route span 是否落盘。updated: 2026-09-17

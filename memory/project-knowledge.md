@@ -34,6 +34,14 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### Hook 信封纪律成对：miss 静默、配置错误必须用户可见 (2026-10-08 S95)
+
+**Issue**: `to_hook_response` 在 config validator errors 非空且无技能匹配时返回空信封（exit 0）——路由被配置错误静默杀死，用户只看到「没匹配」。CHANGELOG 的「fail at load」半真：裸 CLI 会炸，hook 路径不会。五路对抗评审才抓到（C1 MEDIUM）。
+
+**Solution**: 与 S86 no-match 条目配对：miss → 只写 agent-only fingerprint（`additionalContext`），不弹用户横幅；**errors 非空 → 发用户可见信封**（全平台含 grok，exit 0 不挡宿主 prompt），裸 CLI 打干净错误 exit 2。两个方向各钉测试，防止「修一边坏一边」。
+
+**Files**: `src/vibesop/agent/runtime/agent_runtime.py` (`to_hook_response`), `src/vibesop/cli/main.py`
+
 ### 官方 JEV 在构造评测上赢、在真实会话上过注入 (2026-09-24 S94)
 
 **Issue**: TypeSafe `jev-1.13.0` 的 choice 对 `tests/benchmark/routing_eval.yaml` 是 58/59，hermetic 关键词路由 53/59。同一目录拿到本项目 Grok 历史会话（27 条、标签先于系统写死：只有用户自己点名流程才注入；只读评审稿不注入）变成 JEV 17/27、关键词路由 23/27。JEV 把只读复审打成 `code-review`，把「babysit 到主分支」打成 `slash-orchestrate`。同一次请求里的 noul「要不要注入」和 choice 不一致（构造集 36 条选对的正例里 23 条 noul<0.5）。公开规格上下文是请求合计 64k、state 加最长一道题 32k；我们只送了 description/intent（截到 400 字），实测约 1800 input token，没有顶满窗口。速度也没有优势：本机 JEV 中位数 1146–1179ms，历史 AI triage（deepseek-v4-flash）中位数 988ms；厂商 70–500ms 是短 state、美国西海岸的数字。关键词已命中的 route span 有约 17% 低于 100ms，每条都改走 JEV 会把这截拉到 1 秒以上。

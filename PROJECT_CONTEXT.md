@@ -14,6 +14,16 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-10-08 S95 END · 拉取评审 COMMENT + 14 修复落盘待提交
+
+**Workspace**：VibeSOP main（本地 ahead 2，均为 S90 记忆提交，未 push）。工作树有 14 个修复文件未 commit；`.omx/` 产物、`.grok/workflows/`、`examples/datasets/` 不入库。
+
+**完成**：origin/main 10 提交（`86b69f43→58692f70`）E2E 全绿后补跑五路对抗评审，终裁 **COMMENT**（15 候选 → 14 确认 / 1 驳回，0H/2M/12L），报告 `.omx/artifacts/adversarial-review-86b69f43-58692f70.md`。用户点名「标准流程进行优化」后 14 条确认全修：C1 hook 配置错误信封用户可见（全平台 exit 0）+ 裸 CLI exit 2；L1 视频级联对齐真实顺序 explicit→scenario+semantic→AI triage→matcher；12 LOW（TTS 读音、ffmpeg 退出码、asyncio.to_thread、tempfile.mkdtemp 重构、钉测试等）。验证 [executed]：定向 241 + 波及 2042 passed / 4 skipped、ruff 全仓干净、basedpyright 0 err、hermetic exit 0。
+
+**关键决定**：修复未 commit——项目惯例（S80/S55）等用户点名再提交。grok 真 miss 仍静默（NIT-3 契约保留），仅 errors 发信封。
+
+**Next**：用户点名「提交」→ 分组 git add（排除上述目录）→ conventional commit → push → 盯 **job 级** CI。`render.py` 高亮行号绑采集输出，下次渲染视频前需人工复核。
+
 ### 2026-10-07 S95 · 双门禁修复轮 A/B + CI 修红 + JEV 复测
 
 **Workspace**：VibeSOP main @ `58692f70`（已推送，CI/E2E/CodeQL 全绿）。`.pi/settings.json`、`.pi/extensions/*.ts`、skills.md、vibe-help.md、Makefile、`.grok/hooks/`、17页 pptx 仍是树内脏项，未纳入。
@@ -33,22 +43,4 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 **关键决定**：不把 JEV 接进路由。判断用 choice；不要用 noul 当注入闸门。密钥和 `/tmp/jev-*-eval/` 原始记录不入库。
 
 **Next**：若再比较，对照现有 AI triage，并单独计真实会话里不该注入的句子。
-
-### 2026-09-22 S90 END · Jev 弃用 + sub-1B 本地判据验证首轮
-
-**Workspace**：仓库外工作区 `../jev-local-verify/`。本会话未改仓库逻辑。
-
-**完成**：Jev 正式弃用（不开源、端点硬编码）。Qwen3-0.6B 本地验证：schema 59/59、top-1 45.8% vs 基线 89.8%、oracle 并集 96.6%；LFM2.5-230M 塌缩。
-
-**关键决定**：效果证实前不改仓库逻辑。下一步是 held-out 融合对比。
-
-### 2026-09-21 S91 END · 内部介绍 7 页 PPT
-
-**Workspace**：VibeSOP main。本会话未改 `src/`。`.pi/` 与 `.grok/hooks/` 仍是 S85 遗留脏项，未纳入。
-
-**完成**：内部介绍叙事压成 7 页 `docs/VibeSOP-内部介绍.pptx`（误区 → 对照数字 → 五件事/四层分工 → 查看器差异 → 三亮点 → 三句话）。口径：R8 盲评未结算；委员会 0/72 主因阶段额度；记忆只承诺可检索。
-
-**关键决定**：不把 `docs/VibeSOP-CMspark-部门分享-17页.pptx` 当本会话产物入库。macOS 无 soffice 时用 PowerPoint 导 PDF，必须按 presentation **name** 选取，不能信 `active presentation`。
-
-**Next**：上场第 3 页口头补阶段额度与 R8 未结算。R8 盲评仍待独立盲评人。
 <!-- handoff:end -->

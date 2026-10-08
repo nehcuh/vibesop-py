@@ -1,21 +1,21 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-10-07 (S95 — 双门禁修复轮 A/B + CI 修红 + JEV 复测维持不接入)
+**Last Updated**: 2026-10-08 (S95 — 拉取评审 COMMENT，14 修复落盘待提交)
 
 ---
 
 ## Goals
 
-### Current Week (October 6-12, 2026)
+### Current Week (October 5-11, 2026)
 
-1. **路由 short-query gate 修复轮收口** — 双 APPROVE，4 commits 上 main（bff4699e 批A validator+文档对齐 / 96d2a75a 批B cost-log 校验 / 24395b27+58692f70 CI 修红），CI 全绿。遗留：B5 截断决策、eval triage-on 覆盖缺口（新登记）。
-2. **JEV 复测** — 维持 S94 不接入：构造集 57/61 仍赢生产路由 52/61，但 p50 1270ms vs 15ms、conf=0.99 过注入、noul 不一致全部复现；真实会话集已失不可重验。
+1. **Pull 86b69f43→58692f70 对抗评审 + 修复**（待提交）— 五路终裁 COMMENT（15 候选 → 14 确认 / 1 驳回，0H/2M/12L）；用户点名后 14 条确认全修（C1 hook 错误信封可见 / L1 视频级联顺序 / 12 LOW），2042 passed + ruff/type/hermetic 全绿。工作树未 commit，等用户点名。
+2. **路由 short-query gate 修复轮收口** — 双 APPROVE，4 commits 上 main（bff4699e 批A validator+文档对齐 / 96d2a75a 批B cost-log 校验 / 24395b27+58692f70 CI 修红），CI 全绿。遗留：B5 截断决策、eval triage-on 覆盖缺口（新登记）。
+3. **JEV 复测** — 维持 S94 不接入：构造集 57/61 仍赢生产路由 52/61，但 p50 1270ms vs 15ms、conf=0.99 过注入、noul 不一致全部复现；真实会话集已失不可重验。
 
 ### Previous Week (September 18-24, 2026)
 
-1. **JEV 能否替换技能判断** — 测完，不接入。构造评测 58/59 对关键词 53/59；真实 Grok 会话 17/27 对 23/27。延迟约 1.15s，不比现有 deepseek triage 快。
-2. **Jev 线关闭 + sub-1B 开源替代验证** ✅ (首轮完成 - Sep 21–22) — Jev 不采用（不开源、端点硬编码）；Qwen3-0.6B 本地验证：机制成立（schema 59/59）、整替不成立（45.8% vs 89.8%）、fallback 层互补 oracle 96.6%。工作区 `../jev-local-verify/`。
-3. **sub-1B 融合验证**（待用户决策）— 冻结 held-out 30–50 题跑 {fallback / 直答 / 仲裁} 对比；证实前不改仓库逻辑。
+1. **JEV 线关闭** ✅ — JEV 不替换路由（构造 58/59 但真实会话 17/27 过注入）；Jev 不采用（不开源、端点硬编码）；Qwen3-0.6B 首轮：机制成立（schema 59/59）、整替不成立（45.8% vs 89.8%）、oracle 互补 96.6%
+2. **sub-1B 融合验证**（待用户决策）— 冻结 held-out 30–50 题跑 {fallback / 直答 / 仲裁} 对比；证实前不改仓库逻辑。
 
 ### Previous Week (September 11-17, 2026)
 
