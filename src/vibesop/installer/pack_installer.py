@@ -621,8 +621,75 @@ class PackInstaller:
             # chmod can fail (read-only tree). That is a required-build failure,
             # not a generic install error that leaves the cloned pack in place.
             script_path.chmod(0o755)
+            # Windows CreateProcess cannot exec a POSIX shell script directly
+            # (WinError 193 "%1 is not a valid Win32 application"), so on
+            # win32 a genuinely available Windows-native POSIX shell interprets
+            # the script explicitly — still with shell=False, never
+            # cmd/PowerShell (they cannot interpret sh scripts).
+            # ``System32\bash.exe`` is the WSL launcher: it would run inside
+            # the Linux VM where this Windows script path does not exist, so
+            # it is skipped — after resolving both the candidate and the
+            # boundary, so ``..``-laden aliases of the launcher path cannot
+            # evade the exclusion. POSIX keeps the direct executable
+            # invocation.
+            build_argv = [str(script_path)]
+            if sys.platform == "win32":
+                # Windows env lookup is case-insensitive; uppercase names keep
+                # linters honest while matching ProgramFiles/SystemRoot/LocalAppData.
+                system32 = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32"
+                try:
+                    resolved_system32 = system32.resolve()
+                except OSError as exc:
+                    # Fail closed: without a trustworthy boundary the WSL
+                    # launcher cannot be reliably excluded.
+                    raise PackBuildError(
+                        f"{script_path.name} error: cannot resolve the Windows "
+                        "System32 boundary; local build refused"
+                    ) from exc
+                shell_candidates = [
+                    shutil.which("sh"),
+                    shutil.which("bash"),
+                    Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+                    / "Git"
+                    / "bin"
+                    / "bash.exe",
+                    Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+                    / "Git"
+                    / "bin"
+                    / "bash.exe",
+                    Path(os.environ.get("LOCALAPPDATA", ""))
+                    / "Programs"
+                    / "Git"
+                    / "bin"
+                    / "bash.exe",
+                ]
+                for candidate in shell_candidates:
+                    if not candidate:
+                        continue
+                    raw_shell = Path(candidate)
+                    if not raw_shell.is_absolute():
+                        continue
+                    try:
+                        resolved_shell = raw_shell.resolve()
+                    except OSError:
+                        # Unresolvable spelling: ignore this candidate.
+                        continue
+                    if not resolved_shell.is_file():
+                        continue
+                    try:
+                        resolved_shell.relative_to(resolved_system32)
+                    except ValueError:
+                        build_argv = [str(resolved_shell), script_path.as_posix()]
+                        break
+                else:
+                    # Fail closed: a required build must never silently skip or
+                    # fall back to a non-POSIX interpreter.
+                    raise PackBuildError(
+                        f"{script_path.name} error: no Windows-native POSIX shell "
+                        "(Git Bash or sh.exe) found; local build refused"
+                    )
             result = subprocess.run(
-                [str(script_path)],
+                build_argv,
                 cwd=target_path,
                 capture_output=True,
                 text=True,
