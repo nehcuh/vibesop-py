@@ -43,8 +43,8 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 # citations; stale multiset unchanged.
 # Re-observed 2026-09-21 after merging the local session memory: +3 stale
 # citations from memory/session.md; ok citations unchanged.
-FROZEN_REF_TOTAL = 1146
-FROZEN_OK = 684
+FROZEN_REF_TOTAL = 1185
+FROZEN_OK = 723
 FROZEN_STALE_OCCURRENCES = 462
 FROZEN_STALE_KEYS = 454
 

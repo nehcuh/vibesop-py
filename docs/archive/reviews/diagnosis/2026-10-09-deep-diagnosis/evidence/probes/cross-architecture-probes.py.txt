@@ -1,0 +1,37 @@
+import sys
+# Avoid probe filenames shadowing standard-library modules.
+if sys.path:
+    sys.path.pop(0)
+import json,tempfile
+from pathlib import Path
+from vibesop.agent import AgentRouter
+from vibesop.agent.step_runner import StepRunner
+from vibesop.core.models import ExecutionPlan,ExecutionStep,WorkflowPattern,AgentSquad,AgentRole,SquadStep
+from vibesop.core.orchestration.workflow_engine import WorkflowEngine
+from vibesop.core.orchestration.events import PlanEventLog
+
+def step(id, deps=()): return ExecutionStep(step_id=id,step_number=1,skill_id='demo',intent='work',input_query='work',dependencies=list(deps))
+
+def public_runner(plan,root):
+    # Stub upstream orchestration only; run the actual public bridge/from_dict/tracker.
+    router=AgentRouter.__new__(AgentRouter)
+    router.orchestrate=lambda query:{'is_multi_intent':True,'plan':plan.to_dict()}
+    return router.create_runner('work and verify',project_root=root)
+
+with tempfile.TemporaryDirectory() as temp:
+    p=ExecutionPlan(plan_id='ff-success',original_query='work',steps=[step('a'),step('b'),step('verify',['a','b'])],metadata={'execution_ready':True})
+    calls=[];runner=public_runner(p,Path(temp));out=runner.execute_all(lambda s,c:calls.append(s.step_id) or 'ok',fail_fast=True)
+    print('PUBLIC_FAIL_FAST',json.dumps({'calls':calls,'returned':out,'is_complete':runner.is_complete}))
+with tempfile.TemporaryDirectory() as temp:
+    p=ExecutionPlan(plan_id='dynamic-fail',original_query='work',workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,steps=[step('a')],metadata={'execution_ready':True})
+    runner=public_runner(p,Path(temp));out=runner.execute_all(lambda s,c:(_ for _ in ()).throw(ValueError('cross boom')))
+    print('PUBLIC_DYNAMIC',json.dumps({'returned':out,'failed_count':runner.failed_count,'is_complete':runner.is_complete,'underlying_status':runner._plan.status.value}))
+squad=AgentSquad(squad_id='cross-squad',roles=[AgentRole(role_id='implementer',name='Implementer'),AgentRole(role_id='red_team',name='Red')],steps=[SquadStep(step_id='impl',role_id='implementer',skill_ids=['demo']),SquadStep(step_id='red',role_id='red_team',skill_ids=['demo'],input_from=['impl'])],execution_order=['impl','red'],collaboration_protocol='review_gate',max_rounds=1,lead_role='red_team')
+def squad_plan():
+    return ExecutionPlan(plan_id='squad-cross',original_query='work',workflow_pattern=WorkflowPattern.RED_TEAM,metadata={'execution_ready':True,'agent_squad':squad.to_dict()},steps=[ExecutionStep(step_id='impl',step_number=1,skill_id='demo',intent='implement',input_query='work',assigned_role='implementer',agent_squad_id=squad.squad_id),ExecutionStep(step_id='red',step_number=2,skill_id='demo',intent='review',input_query='work',assigned_role='red_team',agent_squad_id=squad.squad_id,dependencies=['impl'])])
+with tempfile.TemporaryDirectory() as temp:
+    runner=public_runner(squad_plan(),Path(temp));calls=[]
+    out=runner.execute_all(lambda s,c:calls.append({'step':s.step_id,'handoff':bool(c.get('handoff'))}) or ('blocked: no evidence' if s.step_id=='red' else 'artifact'))
+    print('PUBLIC_SQUAD',json.dumps({'calls':calls,'returned':out}))
+p=squad_plan();log=PlanEventLog();out=WorkflowEngine(event_log=log).run(p,lambda s,c:{'content':'artifact'})
+print('REJECTED_GATE_TERMINAL',json.dumps({'verdicts':[v.model_dump() for v in out.verdicts],'plan_status':p.status.value,'events':[e.to_dict() for e in log.replay(p.plan_id,0).events if e.type.value=='plan_terminal'],'result_keys':list(out.to_dict())}))

@@ -1,0 +1,13 @@
+Bytecode compiled 4185 files in 120ms
+LOOP_UNTIL_DRY: no LLM configured — reorchestration degraded to goals-met check only; APPEND_STEPS and LOOP_BACK will not trigger.
+Dynamic step s1 failed: boom
+Review gate failed for role=red_team target=implementer: LLM error (review_gate): No LLM configured; review gate cannot operate. Configure an LLM provider to enable automated review. (provider=review_gate)
+FAIL_FAST_SUCCESS {"calls": ["s1", "s2"], "result": {"plan_id": "audit-plan", "completed": 2, "failed": 0, "skipped": 0, "results": [{"step_id": "s1", "output": "OK", "error": null, "status": "completed"}, {"step_id": "s2", "output": "OK", "error": null, "status": "completed"}]}, "statuses": ["completed", "completed", "pending"]}
+DEPENDENCY_FAILURE {"result": {"plan_id": "audit-plan", "completed": 0, "failed": 1, "skipped": 0, "results": [{"step_id": "s1", "output": null, "error": "boom", "status": "failed"}]}, "statuses": ["failed", "pending"], "is_complete": false}
+RESUME_FAILED {"calls": ["s1", "s2"], "result": {"plan_id": "audit-plan", "completed": 2, "failed": 0, "skipped": 0, "results": [{"step_id": "s1", "output": "OK", "error": null, "status": "completed"}, {"step_id": "s2", "output": "OK", "error": null, "status": "completed"}]}}
+DYNAMIC_FAILURE {"result": {"plan_id": "audit-plan", "completed": 0, "failed": 0, "skipped": 0, "results": {"s1": {"error": "boom"}}, "dynamic": true, "pattern": "loop_until_dry"}, "statuses": ["failed"], "failed_count": 0, "is_complete": false, "plan_status": "failed"}
+HOT_RELOAD {"first": "first", "second": "first", "explicit_reload": "first"}
+DISABLE_CACHE {"first": 1, "warm_routable": 1, "new_process_routable": 1, "force_reload_count": 0}
+SQUAD_BRIDGE {"result": {"plan_id": "audit-squad-plan", "completed": 2, "failed": 0, "skipped": 0, "results": [{"step_id": "impl", "output": "code artifact", "error": null, "status": "completed"}, {"step_id": "red", "output": "blocked: missing evidence", "error": null, "status": "completed"}], "dynamic": false, "pattern": "red_team"}, "calls": [{"id": "impl", "has_handoff": false}, {"id": "red", "has_handoff": false}], "plan_status": "pending"}
+SQUAD_GATE_REJECTED {"plan_status": "completed", "verdicts": [{"passed": false, "reviewer_role": "red_team", "target_role": "implementer", "issues": ["LLM error (review_gate): No LLM configured; review gate cannot operate. Configure an LLM provider to enable automated review. (provider=review_gate)"], "score": 0.0, "requires_revision": false, "revision_feedback": ""}]}
+PARALLEL_SYNC_SECONDS 0.4

@@ -1,0 +1,6 @@
+Bytecode compiled 4185 files in 63ms
+COUNTER_LOSS {"expected_success_count": 2, "actual_success_count": 1}
+DISK_RECALL_SKILL {"expected_skill": "builtin/systematic-debugging", "actual_skill": null, "is_gold": true}
+BAD_DATE ValueError Invalid isoformat string: 'bad-date'
+CROSS_ID_COUNTER_LOSS {"expected_A_success_count": 1, "actual_A_success_count": 0, "both_patterns_preserved": true}
+ACTION_CHANGE_EVIDENCE {"new_action": "builtin/commit-message", "old_action_success_count_inherited": 3, "confidence": 0.5, "new_action_is_reliable": true, "default_matches": ["builtin/commit-message"]}

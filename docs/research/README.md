@@ -9,5 +9,7 @@
 | 多专家执行与固定角色委员会 | [实验登记册](../experiments/README.md) | 旧实验已结算；v2 未完成，冻结版与修订版分开 |
 | 多路评审、学习闭环与观测 | [按主题归档的评审](../archive/reviews/README.md) | 保留 brief、独立意见、合并裁决的关系 |
 | evo 优化实验 | [handback 证据](evidence/README.md) | 从退役 worktree 提取，保留原始字节及 SHA-256 |
+| 研究结论落地 F1 / F2 / F9 | [2026-09-21 落地计划](../specs/2026-09-21-skill-distill-landing.md) | 历史阶段记录，实时状态未核验；[评审与三路 handback](../archive/research-artifacts.md#skill-distillation-2026-09-21) |
+| 2026-10-09 深度诊断与优化 | [诊断报告](../archive/reviews/diagnosis/2026-10-09-deep-diagnosis/REPORT.md) | 诊断原始结论与后续修复分开；[本轮计划](../plans/README.md#current-execution)执行中，验收尚未完成 |
 
 对外解读：[文章索引](../essays/README.md)。本地 `.omx/artifacts/` 继续保存历史原件和测量材料；[过程材料导航](../archive/research-artifacts.md)按主题列出入口，避免破坏已有运行路径。worktree 与冷归档恢复见[维护索引](../maintenance/README.md)。

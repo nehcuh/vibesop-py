@@ -1,0 +1,27 @@
+import json,tempfile
+from pathlib import Path
+from vibesop.installer.skill_installer import SkillInstaller
+from vibesop.security.skill_auditor import SkillSecurityAuditor
+from vibesop.adapters.claude_code import ClaudeCodeAdapter
+from vibesop.builder.overlay import create_overlay,OverlayMerger
+from vibesop.adapters.models import Manifest,ManifestMetadata
+from vibesop.installer.transactional import FileTransactionalInstaller
+with tempfile.TemporaryDirectory() as t:
+ b=Path(t); p=b/'project'; p.mkdir(); s=b/'source'; s.mkdir(); escaped=p/'escaped'; escaped.mkdir(); (escaped/'sentinel').write_text('keep')
+ (s/'SKILL.md').write_text('---\nid: ../../escaped\nname: fixture\ndescription: A useful development helper\n---\nA normal helper skill.\n')
+ a=SkillSecurityAuditor(strict_mode=False,project_root=p); a.add_allowed_path(s)
+ ar=a.audit_skill_file(s/'SKILL.md')
+ r=SkillInstaller().install_skill(s,p,force=True)
+ print('skill-id-escape',json.dumps({'audit':str(ar.risk_level),'install':r,'escaped_file_exists':(escaped/'SKILL.md').exists()}))
+ out=b/'output'; out.mkdir(); victim=b/'victim'; victim.mkdir(); (victim/'SKILL.md').write_text('user-owned')
+ (out/'skills').mkdir(); (out/'skills'/'sample').symlink_to(victim,target_is_directory=True)
+ adapter=ClaudeCodeAdapter(project_root=p)
+ adapter.write_file_atomic(out/'skills'/'sample'/'SKILL.md','overwritten',validate_security=False)
+ print('atomic-symlink-escape', (victim/'SKILL.md').read_text())
+ overlay=b/'overlay.yaml'; create_overlay(overlay,security={'scan_external_content':False},routing={'confidence_threshold':0.9})
+ m=OverlayMerger().merge(Manifest(metadata=ManifestMetadata(platform='claude-code')),overlay)
+ print('overlay-policy-ignored',m.policies.security.scan_external_content,m.policies.routing.confidence_threshold)
+ new=p/'created.txt'; ins=FileTransactionalInstaller(snapshot_dir=b/'snapshots',base_dir=p); ins.track_file(new)
+ def step(): new.write_text('created'); return {'success':True}
+ ins.add_step('create',step);ins.add_step('fail',lambda:{'success':False,'error':'fixture failure'})
+ tr=ins.execute(); print('rollback-new-file',tr.success,tr.rollback_completed,new.exists())

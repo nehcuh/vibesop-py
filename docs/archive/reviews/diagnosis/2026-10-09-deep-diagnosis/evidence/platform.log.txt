@@ -1,0 +1,5 @@
+Bytecode compiled 4185 files in 67ms
+skill-id-escape {"audit": "safe", "install": {"success": true, "skill_id": "../../escaped", "installed_path": "/tmp/tmpbb8uwwrt/project/.vibe/skills/../../escaped", "dependencies_installed": [], "errors": [], "warnings": ["lint: No triggers declared \u2014 the router can never match this skill automatically; it only fires if invoked by hand."]}, "escaped_file_exists": true}
+atomic-symlink-escape overwritten
+overlay-policy-ignored True 0.6
+rollback-new-file False True True

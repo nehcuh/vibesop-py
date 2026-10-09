@@ -1,0 +1,33 @@
+Bytecode compiled 4185 files in 74ms
+No prompt_builder provided; AI triage will use the minimal fallback prompt ('Query: ... Select best skill.'), which the LLM may answer as chat, so skill selection is likely to fail.
+saved -> /evidence/evidence/eval-routing.json
+
+=== Routing Baseline Check: OK (exit 0) ===
+baseline: /repo/tests/benchmark/routing_baseline.json
+entries matched: 59 | new-fails: 0 | new-passes: 0 | drift: 0 | known-fails: 6
+59 entries match baseline
+
+=== Routing Eval (routing_eval.yaml) ===
+queries: 59 (skipped_env: 2) | top-1: 53/59 (89.8%) | recall@3: 53/59 (89.8%)
+two-sided: pos 37 (over-reject 4) | neg 20 (over-inject 2) | near-miss 14 (over-inject 2)
+routing outcomes by layer: {"keyword": 32, "explicit": 5, "no_match": 22} | no-match rate: 37.3%
+
+Misroutes (6):
+  [fallback_llm] '帮我深度诊断这个项目的性能瓶颈并给出优化建议'
+      expect: ['builtin/deep-diagnosis-optimization']  actual: fallback-llm (100%)
+  [fallback_llm] 'which skills are performing well and which need at'
+      expect: ['builtin/slash-evaluate']  actual: fallback-llm (100%)
+  [fallback_llm] '来一次全维度代码库审计'
+      expect: ['builtin/deep-diagnosis-optimization']  actual: fallback-llm (100%)
+  [fallback_llm] '审计一下第三方依赖的供应链安全'
+      expect: ['builtin/deep-diagnosis-optimization']  actual: fallback-llm (100%)
+  [keyword] '工地上的工人六点准时收工下班'
+      expect: []  actual: builtin/session-end (95%)
+  [keyword] 'herd instinct is what drives most market bubbles'
+      expect: []  actual: builtin/instinct (50%)
+
+Confusion pairs:
+  3x  builtin/deep-diagnosis-optimization -> fallback-llm
+  1x  builtin/slash-evaluate -> fallback-llm
+  1x  <no-match> -> builtin/session-end
+  1x  <no-match> -> builtin/instinct

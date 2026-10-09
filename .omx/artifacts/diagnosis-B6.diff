@@ -1,0 +1,1285 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5a7d7865..867aeb38 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Changed
+ 
++- **B6 diagnosis optimization**: Instinct writes merge under thread and process locks using loaded baselines; persisted row shape remains compatible. Evidence is scoped to pattern and action identity.
++
+ - **B4 diagnosis optimization**: Overlay writers and validators use canonical policies.security/routing; the merger still reads historical top-level policies with canonical values taking precedence. Sandbox builds run in a writable isolated copy and publish guarded regular-file outputs after success.
+ 
+ - **B8 diagnosis optimization**: Manual routing E2E observes the actual augmented-query cache lookup key and uses its single recorded row with production decay and effective routing threshold. Live API wiring and an explicitly controlled last-good harness are reported separately.
+@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
++- **B6 diagnosis optimization**: Preserve concurrent feedback instead of overwriting newer disk state; reset confidence and outcome evidence on action changes, discard stale feedback for replaced actions, and prevent clear/prune resurrection.
++
+ - **B4 diagnosis optimization**: Preserve effective overlay policy values on round-trip and reject invalid overrides. Required build failures return false before audit/publication/index/lock, clean the failed target, and reject escaping/symlink artifacts; ordinary outputs work with macOS indirect temporary roots.
+ 
+ - **B8 diagnosis optimization**: Avoid false failures when distinct queries cache the same skill at different confidence. Keep missing live positive-cache prerequisites non-passing without mutating the cache; validate accept, reject, equality, negative-cache and no-entry contracts with real producer payloads.
+diff --git a/src/vibesop/core/instinct/learner.py b/src/vibesop/core/instinct/learner.py
+index a8a93b83..8ca4f1aa 100644
+--- a/src/vibesop/core/instinct/learner.py
++++ b/src/vibesop/core/instinct/learner.py
+@@ -18,6 +18,29 @@ from vibesop.utils.atomic_writer import write_text
+ logger = logging.getLogger(__name__)
+ 
+ 
++def _wilson_confidence(success_count: int, failure_count: int) -> float:
++    """Wilson score center for a Bernoulli rate.
++
++    Returns 0.5 when there is no evidence so a reset row matches
++    ``Instinct``'s default confidence. ``Instinct.update`` uses the same
++    formula for ``n > 0``.
++    """
++    n = success_count + failure_count
++    if n <= 0:
++        return 0.5
++    p = success_count / n
++    z = 1.96  # 95% confidence
++    denominator = 1 + z**2 / n
++    return (p + z**2 / (2 * n)) / denominator
++
++
++def _confidence_matches_update(success_count: int, failure_count: int, confidence: float) -> bool:
++    """True when ``confidence`` is the Wilson value ``update()`` would store."""
++    if success_count + failure_count <= 0:
++        return False
++    return confidence == _wilson_confidence(success_count, failure_count)
++
++
+ @dataclass
+ class Instinct:
+     """A learned pattern or rule of thumb."""
+@@ -57,15 +80,10 @@ class Instinct:
+         else:
+             self.failure_count += 1
+ 
+-        # Update confidence based on success rate and sample size
+-        # Use Wilson score interval for better small-sample behavior
+-        n = self.total_applications
+-        if n > 0:
+-            p = self.success_rate
+-            z = 1.96  # 95% confidence
+-            denominator = 1 + z**2 / n
+-            center = (p + z**2 / (2 * n)) / denominator
+-            self.confidence = center
++        # Update confidence based on success rate and sample size.
++        # Wilson score interval for better small-sample behavior.
++        if self.total_applications > 0:
++            self.confidence = _wilson_confidence(self.success_count, self.failure_count)
+ 
+         self.last_used = datetime.now()
+ 
+@@ -204,6 +222,255 @@ def _is_untrusted_layer_context(context: str) -> bool:
+     return normalized not in {layer.value for layer in AUTO_EXTRACT_TRUSTED_LAYERS}
+ 
+ 
++@dataclass(frozen=True)
++class _InstinctBaseline:
++    """Per-id snapshot taken at load (and refreshed after each merged save)."""
++
++    pattern: str
++    action: str
++    context: str
++    confidence: float
++    success_count: int
++    failure_count: int
++    times_matched: int
++    last_used: datetime | None
++    created_at: datetime
++    source: str
++    tags: tuple[str, ...]
++
++    @classmethod
++    def capture(cls, instinct: Instinct) -> _InstinctBaseline:
++        return cls(
++            pattern=instinct.pattern,
++            action=instinct.action,
++            context=instinct.context,
++            confidence=instinct.confidence,
++            success_count=instinct.success_count,
++            failure_count=instinct.failure_count,
++            times_matched=instinct.times_matched,
++            last_used=instinct.last_used,
++            created_at=instinct.created_at,
++            source=instinct.source,
++            tags=tuple(instinct.tags),
++        )
++
++
++@dataclass
++class _DiskInstincts:
++    """Latest ``instincts.jsonl`` snapshot read under the cross-process lock."""
++
++    rows: dict[str, Instinct]
++    membership_known: bool
++
++
++def _assign_instinct_fields(dst: Instinct, src: Instinct) -> None:
++    """Copy persisted fields onto ``dst`` without replacing the object."""
++    dst.pattern = src.pattern
++    dst.action = src.action
++    dst.context = src.context
++    dst.confidence = src.confidence
++    dst.success_count = src.success_count
++    dst.failure_count = src.failure_count
++    dst.times_matched = src.times_matched
++    dst.last_used = src.last_used
++    dst.created_at = src.created_at
++    dst.source = src.source
++    dst.tags = list(src.tags)
++
++
++def _later_datetime(left: datetime | None, right: datetime | None) -> datetime | None:
++    if left is None:
++        return right
++    if right is None:
++        return left
++    return left if left >= right else right
++
++
++def _evidence_key(pattern: str, action: str) -> tuple[str, str]:
++    """Success and failure belong to this pair, not to the row id alone."""
++    return (pattern, action)
++
++
++def _apply_times_matched_delta(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """``times_matched`` is neutral and is not success/failure evidence."""
++    memory.times_matched = max(0, disk.times_matched + (memory.times_matched - base.times_matched))
++
++
++def _apply_counter_delta(
++    memory: Instinct, disk: Instinct, base: _InstinctBaseline
++) -> tuple[int, int, float]:
++    """Apply ``disk + (memory - loaded)`` and return the pre-merge evidence.
++
++    Caller must already know memory, disk, and the baseline share one
++    pattern+action. A different action must not use this delta.
++    """
++    pre_success = memory.success_count
++    pre_failure = memory.failure_count
++    pre_confidence = memory.confidence
++    memory.success_count = max(0, disk.success_count + (pre_success - base.success_count))
++    memory.failure_count = max(0, disk.failure_count + (pre_failure - base.failure_count))
++    _apply_times_matched_delta(memory, disk, base)
++    return pre_success, pre_failure, pre_confidence
++
++
++def _adopt_unedited_fields(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """Keep a local edit; otherwise take the newer disk value."""
++    if memory.pattern == base.pattern:
++        memory.pattern = disk.pattern
++    if memory.action == base.action:
++        memory.action = disk.action
++    if memory.context == base.context:
++        memory.context = disk.context
++    if memory.source == base.source:
++        memory.source = disk.source
++    if tuple(memory.tags) == base.tags:
++        memory.tags = list(disk.tags)
++    if memory.created_at == base.created_at:
++        memory.created_at = disk.created_at
++    if memory.last_used == base.last_used:
++        memory.last_used = disk.last_used
++    else:
++        memory.last_used = _later_datetime(memory.last_used, disk.last_used)
++
++
++def _reconcile_confidence(
++    memory: Instinct,
++    disk: Instinct,
++    base: _InstinctBaseline,
++    pre_success: int,
++    pre_failure: int,
++    pre_confidence: float,
++) -> None:
++    counts_unchanged = memory.success_count == pre_success and memory.failure_count == pre_failure
++    if pre_confidence != base.confidence:
++        produced_by_update = _confidence_matches_update(pre_success, pre_failure, pre_confidence)
++        if produced_by_update and not counts_unchanged:
++            memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
++        else:
++            memory.confidence = pre_confidence
++        return
++    disk_counts = (
++        memory.success_count == disk.success_count and memory.failure_count == disk.failure_count
++    )
++    if disk_counts or counts_unchanged:
++        memory.confidence = disk.confidence if disk_counts else pre_confidence
++        return
++    memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
++
++
++def _merge_aligned_new_action(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """Both sides already share a new pattern+action; the baseline is the old one.
++
++    Local success/failure are that new action's own counts, starting at zero
++    when the action changed. Add them to disk. Do not subtract the previous
++    action's baseline, or a second switch to the new action wipes the peer's
++    evidence (and a zero baseline would keep the old counters).
++    """
++    pre_success = memory.success_count
++    pre_failure = memory.failure_count
++    pre_confidence = memory.confidence
++    memory.success_count = max(0, disk.success_count + pre_success)
++    memory.failure_count = max(0, disk.failure_count + pre_failure)
++    _apply_times_matched_delta(memory, disk, base)
++    _adopt_unedited_fields(memory, disk, base)
++    if pre_success == 0 and pre_failure == 0:
++        memory.confidence = disk.confidence
++        return
++    if _confidence_matches_update(pre_success, pre_failure, pre_confidence):
++        memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
++        return
++    memory.confidence = pre_confidence
++
++
++def _merge_local_action_change(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """This process changed pattern+action. Keep the reset evidence.
++
++    Disk may still be the previous action, including feedback recorded on it
++    after this process loaded. Those counters are not the new action's evidence.
++    """
++    _apply_times_matched_delta(memory, disk, base)
++    _adopt_unedited_fields(memory, disk, base)
++
++
++def _merge_disk_action_change(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """Disk pattern+action changed. Drop this process's old-action feedback.
++
++    The in-memory row may still be the action this process loaded and then
++    accepted or rejected. That delta must not move onto the new action, and
++    the old action must not be written back. ``times_matched`` stays neutral.
++    Other local edits (context, source, tags) are kept.
++    """
++    local_context = memory.context
++    local_source = memory.source
++    local_tags = list(memory.tags)
++    local_created_at = memory.created_at
++    local_last_used = memory.last_used
++    local_matched = memory.times_matched
++    _assign_instinct_fields(memory, disk)
++    if local_context != base.context:
++        memory.context = local_context
++    if local_source != base.source:
++        memory.source = local_source
++    if tuple(local_tags) != base.tags:
++        memory.tags = local_tags
++    if local_created_at != base.created_at:
++        memory.created_at = local_created_at
++    if local_last_used != base.last_used:
++        memory.last_used = _later_datetime(local_last_used, disk.last_used)
++    memory.times_matched = max(0, disk.times_matched + (local_matched - base.times_matched))
++
++
++def _merge_shared_instinct(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
++    """Merge one id that this process already loaded.
++
++    Untouched rows copy disk. Same pattern+action as the baseline uses the
++    counter delta. Any other pattern+action is a different evidence domain:
++    the side that changed action keeps that action's evidence and does not
++    inherit the other action's successes or failures.
++    """
++    if _InstinctBaseline.capture(memory) == base:
++        _assign_instinct_fields(memory, disk)
++        return
++    memory_key = _evidence_key(memory.pattern, memory.action)
++    disk_key = _evidence_key(disk.pattern, disk.action)
++    base_key = _evidence_key(base.pattern, base.action)
++    if memory_key == disk_key == base_key:
++        pre_success, pre_failure, pre_confidence = _apply_counter_delta(memory, disk, base)
++        _adopt_unedited_fields(memory, disk, base)
++        _reconcile_confidence(memory, disk, base, pre_success, pre_failure, pre_confidence)
++        return
++    if memory_key == disk_key:
++        _merge_aligned_new_action(memory, disk, base)
++        return
++    if memory_key == base_key:
++        _merge_disk_action_change(memory, disk, base)
++        return
++    _merge_local_action_change(memory, disk, base)
++
++
++def _merge_unloaded_overlap(memory: Instinct, disk: Instinct) -> None:
++    """Same id appeared on disk for a row this process did not load.
++
++    A zero-evidence ``learn()`` must not wipe another instance's counters
++    when the action matches, and must not inherit them when the action
++    differs. Non-zero local counters are an absolute upsert (``set_instinct``).
++    """
++    local_evidence = (
++        memory.success_count != 0 or memory.failure_count != 0 or memory.times_matched != 0
++    )
++    if local_evidence:
++        return
++    if memory.action == disk.action:
++        _assign_instinct_fields(memory, disk)
++        return
++    new_action = memory.action
++    _assign_instinct_fields(memory, disk)
++    memory.action = new_action
++    memory.success_count = 0
++    memory.failure_count = 0
++    memory.confidence = 0.5
++
++
+ class InstinctLearner:
+     """Learn and manage instincts from experience."""
+ 
+@@ -223,6 +490,9 @@ class InstinctLearner:
+         except ImportError:
+             self._numpy = None
+         self._lock = threading.RLock()
++        # Snapshot at load, including action. Same pattern+action applies
++        # disk + (memory - loaded) (D11). A different action does not (D13).
++        self._baselines: dict[str, _InstinctBaseline] = {}
+         # Generation counter for clear() — bumped on every purge so concurrent
+         # learners detect that their in-memory state is stale (loaded before
+         # the clear) and drop it instead of resurrecting purged data via merge
+@@ -264,6 +534,7 @@ class InstinctLearner:
+                     except (json.JSONDecodeError, KeyError):
+                         continue
+             self._embedding_cache.clear()
++        self._refresh_baselines_locked()
+         # Always probe for sequences.jsonl even when instincts.jsonl is absent
+         # — otherwise a project that has recorded tool-call sequences but no
+         # learned instincts would silently drop every sequence on next load
+@@ -315,30 +586,22 @@ class InstinctLearner:
+         except OSError as e:
+             logger.warning("Failed to back up %s: %s", data_path, e)
+ 
+-    def _merge_disk_into_memory_locked(self) -> None:
+-        """Re-read ``instincts.jsonl`` from disk and merge any IDs that are
+-        NOT in our in-memory ``_instincts`` dict.
+-
+-        In-memory wins for shared IDs (we just modified them). Disk-only IDs
+-        are promoted so a concurrent process's writes are not clobbered when
+-        we save. Called inside the cross-process lock; doesn't take
+-        ``self._lock`` (caller already holds it).
+-
+-        Known limitation (adversarial review Phase B FLAW #2): for shared IDs,
+-        this merge replaces disk's ``success_count`` / ``failure_count`` with
+-        in-memory values, which silently drops a concurrent writer's counter
+-        updates. A delta-based merge (tracking per-id counts at load time and
+-        applying ``disk + (memory - loaded)``) is the proper fix but adds
+-        non-trivial state; deferred unless the feedback loop surfaces real
+-        loss. Trigger requires two writers mutating the SAME instinct's
+-        counters within the same load-save window — unlikely with the daily
+-        04:37 feedback-collect schedule vs daytime interactive use.
+-        """
++    def _refresh_baselines_locked(self) -> None:
++        """Record the post-merge counters so the next save does not re-apply them."""
++        self._baselines = {
++            instinct_id: _InstinctBaseline.capture(instinct)
++            for instinct_id, instinct in self._instincts.items()
++        }
++
++    def _read_disk_instincts_locked(self) -> _DiskInstincts | None:
++        """Read the latest instincts file. ``None`` means the read failed."""
+         if not self.storage_path.exists():
+-            return
++            return _DiskInstincts(rows={}, membership_known=True)
++        rows: dict[str, Instinct] = {}
++        skipped = 0
+         try:
+-            with self.storage_path.open(encoding="utf-8") as f:
+-                for raw_line in f:
++            with self.storage_path.open(encoding="utf-8") as handle:
++                for raw_line in handle:
+                     stripped = raw_line.strip()
+                     if not stripped:
+                         continue
+@@ -346,11 +609,58 @@ class InstinctLearner:
+                         data = json.loads(stripped)
+                         instinct = Instinct.from_dict(data)
+                     except (json.JSONDecodeError, KeyError):
++                        skipped += 1
+                         continue
+-                    if instinct.id not in self._instincts:
+-                        self._instincts[instinct.id] = instinct
+-        except OSError as e:
+-            logger.warning("Failed to re-read %s for merge: %s", self.storage_path, e)
++                    rows[instinct.id] = instinct
++        except OSError as exc:
++            logger.warning("Failed to re-read %s for merge: %s", self.storage_path, exc)
++            return None
++        # A partially unreadable file is not proof that missing ids were deleted.
++        return _DiskInstincts(rows=rows, membership_known=skipped == 0)
++
++    def _drop_untouched_deleted_ids_locked(self, disk_rows: dict[str, Instinct]) -> None:
++        """Drop loaded rows that a delete/prune/clear removed and we did not edit.
++
++        Dirty local edits and ids created after load are left in place. ``clear``
++        still drops every stale row via the epoch guard before this runs.
++        """
++        for instinct_id, memory in list(self._instincts.items()):
++            if instinct_id in disk_rows or instinct_id not in self._baselines:
++                continue
++            if _InstinctBaseline.capture(memory) == self._baselines[instinct_id]:
++                del self._instincts[instinct_id]
++
++    def _merge_disk_into_memory_locked(self) -> None:
++        """Re-read ``instincts.jsonl`` and merge it into memory.
++
++        Called inside both ``self._lock`` and the cross-process lock. Disk-only
++        ids are adopted. Shared ids whose pattern and action still match the
++        loaded baseline apply ``disk + (memory - loaded)`` to ``success_count``,
++        ``failure_count``, and ``times_matched`` (D11). Success and failure are
++        bound to pattern+action (D13): a local action change keeps its reset
++        and does not import the other action's counters; a disk action change
++        drops this process's feedback on the old action. ``times_matched`` stays
++        the neutral counter either way. An untouched row takes the disk version
++        wholesale, which also keeps a delete or prune from being rewritten.
++        Baselines, including action, are refreshed to the merged row so a later
++        save does not apply the same delta again.
++        """
++        disk = self._read_disk_instincts_locked()
++        if disk is None:
++            return
++        if disk.membership_known:
++            self._drop_untouched_deleted_ids_locked(disk.rows)
++        for instinct_id, disk_instinct in disk.rows.items():
++            memory = self._instincts.get(instinct_id)
++            if memory is None:
++                self._instincts[instinct_id] = disk_instinct
++                continue
++            base = self._baselines.get(instinct_id)
++            if base is None:
++                _merge_unloaded_overlap(memory, disk_instinct)
++            else:
++                _merge_shared_instinct(memory, disk_instinct, base)
++        self._refresh_baselines_locked()
+ 
+     def _merge_disk_sequences_into_memory_locked(self) -> None:
+         """Same merge semantics for ``sequences.jsonl``."""
+@@ -388,12 +698,13 @@ class InstinctLearner:
+                 )
+                 self._instincts.clear()
+                 self._sequences.clear()
++                self._baselines.clear()
+                 self._embedding_cache.clear()
+                 self._clear_epoch_at_load = current_epoch
+ 
+-            # Pick up concurrent writes from other processes (launchd
+-            # promote vs interactive learn, etc.). In-memory wins for
+-            # shared IDs; disk-only IDs are preserved.
++            # Latest disk snapshot under both locks, then per-id counter delta.
++            # learn/record_outcome/save and the CLI writers that call them land
++            # here. clear() deliberately does not. routing_pending is another store.
+             self._merge_disk_into_memory_locked()
+             self._merge_disk_sequences_into_memory_locked()
+             self._backup_locked(self.storage_path)
+@@ -441,6 +752,7 @@ class InstinctLearner:
+             count = len(self._instincts)
+             self._instincts.clear()
+             self._sequences.clear()
++            self._baselines.clear()
+             self._embedding_cache.clear()
+             for path in (
+                 self.storage_path,
+@@ -498,6 +810,7 @@ class InstinctLearner:
+             if current_epoch > self._clear_epoch_at_load:
+                 self._instincts.clear()
+                 self._sequences.clear()
++                self._baselines.clear()
+                 self._embedding_cache.clear()
+                 self._clear_epoch_at_load = current_epoch
+             # Merge concurrent writes first so we prune against the fullest
+@@ -516,6 +829,7 @@ class InstinctLearner:
+                 return victims
+             for victim in victims:
+                 del self._instincts[victim.id]
++                self._baselines.pop(victim.id, None)
+             self._embedding_cache.clear()
+             self._backup_locked(self.storage_path)
+             # Write instincts.jsonl directly — NOT _save(), which re-acquires
+@@ -551,10 +865,13 @@ class InstinctLearner:
+         # Check if already exists
+         if instinct_id in self._instincts:
+             instinct = self._instincts[instinct_id]
+-            # Update if action changed
++            # Evidence is bound to pattern+action. Keep the row id, but a new
++            # action must not inherit the previous action's successes (D13).
+             if instinct.action != action:
+                 instinct.action = action
+-                instinct.confidence = 0.5  # Reset confidence
++                instinct.confidence = 0.5
++                instinct.success_count = 0
++                instinct.failure_count = 0
+         else:
+             instinct = Instinct(
+                 id=instinct_id,
+diff --git a/tests/core/test_instinct_learner.py b/tests/core/test_instinct_learner.py
+index 1d68382e..ea1a3834 100644
+--- a/tests/core/test_instinct_learner.py
++++ b/tests/core/test_instinct_learner.py
+@@ -2,8 +2,12 @@
+ 
+ from __future__ import annotations
+ 
++import json
++import os
++import subprocess
+ import sys
+ import tempfile
++import threading
+ from collections.abc import Iterator
+ from datetime import datetime
+ from pathlib import Path
+@@ -259,6 +263,70 @@ class TestInstinctLearner:
+         assert second.action == "new-action"
+         assert second.confidence == pytest.approx(0.5)  # reset on action change
+ 
++    def test_learn_same_action_preserves_counters(self, learner: InstinctLearner) -> None:
++        """Re-learning the same action is not a new evidence revision."""
++        instinct = learner.learn(pattern="debug error", action="keep-action", tags=["routing"])
++        for _ in range(3):
++            learner.record_outcome(instinct.id, success=True)
++
++        again = learner.learn(pattern="debug error", action="keep-action")
++
++        assert again.id == instinct.id
++        assert again.success_count == 3
++        assert again.failure_count == 0
++        assert again.tags == ["routing"]
++        assert again.is_reliable is True
++
++    def test_action_change_resets_evidence_for_pattern_and_action(
++        self, learner: InstinctLearner
++    ) -> None:
++        """D13: a new action must not inherit the previous action's successes.
++
++        Three successes make the old action reliable. After the action change
++        the same row id remains, counters are zero, confidence is 0.5, and
++        ``is_reliable`` is false. One new success does not cross the
++        reliability gate (that needs 3 applications).
++        """
++        instinct = learner.learn(
++            pattern="review Python",
++            action="action A",
++            tags=["routing"],
++        )
++        for _ in range(3):
++            learner.record_outcome(instinct.id, success=True)
++        assert learner._instincts[instinct.id].is_reliable is True
++        # Neutral match count is not success evidence and stays on the row.
++        learner._instincts[instinct.id].times_matched = 4
++
++        changed = learner.learn(pattern="review Python", action="action B")
++
++        assert changed.id == instinct.id
++        assert changed.action == "action B"
++        assert changed.success_count == 0
++        assert changed.failure_count == 0
++        assert changed.confidence == pytest.approx(0.5)
++        assert changed.is_reliable is False
++        assert changed.tags == ["routing"]
++        assert changed.times_matched == 4
++
++        disk = _read_production_instincts(learner.storage_path)
++        stored = disk[instinct.id]
++        assert stored.action == "action B"
++        assert stored.success_count == 0
++        assert stored.failure_count == 0
++        assert stored.confidence == pytest.approx(0.5)
++        assert stored.is_reliable is False
++        assert stored.times_matched == 4
++
++        reloaded = InstinctLearner(storage_path=learner.storage_path)
++        reloaded.record_outcome(instinct.id, success=True)
++        once = reloaded.instincts[instinct.id]
++        assert once.success_count == 1
++        assert once.failure_count == 0
++        assert once.total_applications == 1
++        assert once.is_reliable is False
++        assert reloaded.find_matching("review Python") == []
++
+     def test_learn_with_context_and_tags(self, learner: InstinctLearner) -> None:
+         instinct = learner.learn(
+             pattern="deploy app",
+@@ -732,3 +800,584 @@ class TestInstinctLearnerCrossProcessLock:
+         reloaded = InstinctLearner(storage_path=storage_path)
+         assert t_hash in reloaded._sequences
+         assert s_hash not in reloaded._sequences
++
++
++def _read_production_instincts(path: Path) -> dict[str, Instinct]:
++    """Read ``instincts.jsonl`` through the production row schema.
++
++    Rows must come from ``InstinctLearner``'s writer. The key set is the
++    production ``Instinct.to_dict()`` schema, not a hand-built payload.
++    """
++    schema = set(Instinct(id="schema-probe", pattern="p", action="a").to_dict())
++    loaded: dict[str, Instinct] = {}
++    for line in path.read_text(encoding="utf-8").splitlines():
++        if not line.strip():
++            continue
++        payload = json.loads(line)
++        assert set(payload) == schema
++        instinct = Instinct.from_dict(payload)
++        loaded[instinct.id] = instinct
++    return loaded
++
++
++class TestInstinctCounterMerge:
++    """D11: stale snapshots must not drop another instance's counters."""
++
++    @pytest.fixture
++    def storage_path(self) -> Iterator[Path]:
++        with tempfile.TemporaryDirectory() as tmpdir:
++            yield Path(tmpdir) / "instincts.jsonl"
++
++    def test_stale_holder_keeps_other_instance_success_and_new_row(
++        self, storage_path: Path
++    ) -> None:
++        """A and B both hold query A. A records a success. B adds query B.
++
++        Disk success for A stays 1, and B's new row is preserved. A later
++        save from B must not apply that delta twice.
++        """
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A")
++        learner_a = InstinctLearner(storage_path=storage_path)
++        learner_b = InstinctLearner(storage_path=storage_path)
++        assert learner_a.has_instinct(seeded.id)
++        assert learner_b.has_instinct(seeded.id)
++
++        learner_a.record_outcome(seeded.id, success=True)
++        added = learner_b.learn(pattern="query B", action="action B")
++
++        disk = _read_production_instincts(storage_path)
++        assert disk[seeded.id].success_count == 1
++        assert disk[seeded.id].failure_count == 0
++        assert disk[seeded.id].confidence > 0.5
++        assert disk[added.id].pattern == "query B"
++        assert disk[added.id].action == "action B"
++
++        learner_b.learn(pattern="query C", action="action C")
++        disk_after = _read_production_instincts(storage_path)
++        assert disk_after[seeded.id].success_count == 1
++        assert disk_after[seeded.id].confidence > 0.5
++        assert {row.pattern for row in disk_after.values()} == {"query A", "query B", "query C"}
++
++    def test_same_id_success_and_failure_deltas_accumulate(self, storage_path: Path) -> None:
++        """Two loaded instances mutating the same id must sum, not overwrite."""
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A")
++        learner_a = InstinctLearner(storage_path=storage_path)
++        learner_b = InstinctLearner(storage_path=storage_path)
++
++        learner_a.record_outcome(seeded.id, success=True)
++        learner_b.record_outcome(seeded.id, success=True)
++        both_success = InstinctLearner(storage_path=storage_path)
++        assert both_success.instincts[seeded.id].success_count == 2
++        assert both_success.instincts[seeded.id].failure_count == 0
++
++        # A's snapshot is one success behind. Saving it again must not drop
++        # B's success and must not apply A's old delta a second time.
++        learner_a.save()
++        assert InstinctLearner(storage_path=storage_path).instincts[seeded.id].success_count == 2
++
++        learner_a.record_outcome(seeded.id, success=False)
++        mixed = InstinctLearner(storage_path=storage_path)
++        assert mixed.instincts[seeded.id].success_count == 2
++        assert mixed.instincts[seeded.id].failure_count == 1
++
++    def test_stale_holder_does_not_resurrect_evidence_after_action_change(
++        self, storage_path: Path
++    ) -> None:
++        """B still holds the pre-change row. Its unrelated save must not restore it."""
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A", tags=["routing"])
++        for _ in range(3):
++            seeder.record_outcome(seeded.id, success=True)
++        holder = InstinctLearner(storage_path=storage_path)
++        changer = InstinctLearner(storage_path=storage_path)
++        assert holder.instincts[seeded.id].success_count == 3
++        assert changer.instincts[seeded.id].is_reliable is True
++
++        changer.learn(pattern="query A", action="action B")
++        holder.learn(pattern="query B", action="other")
++
++        disk = _read_production_instincts(storage_path)
++        stored = disk[seeded.id]
++        assert stored.action == "action B"
++        assert stored.success_count == 0
++        assert stored.failure_count == 0
++        assert stored.confidence == pytest.approx(0.5)
++        assert stored.is_reliable is False
++        assert stored.tags == ["routing"]
++        assert any(row.pattern == "query B" for row in disk.values())
++
++    def test_field_edit_then_save_does_not_double_count(self, storage_path: Path) -> None:
++        """Accept-style retag calls save() after record_outcome already persisted."""
++        learner = InstinctLearner(storage_path=storage_path)
++        instinct = learner.learn(pattern="query A", action="action A", source="auto_routing")
++        learner.record_outcome(instinct.id, success=True)
++        live = learner.instincts[instinct.id]
++        live.source = "routing_pending"
++        live.tags = ["routing", "pending_accept"]
++        live.context = "routing_pending_accept"
++        learner.save()
++
++        disk = _read_production_instincts(storage_path)
++        stored = disk[instinct.id]
++        assert stored.success_count == 1
++        assert stored.failure_count == 0
++        assert stored.source == "routing_pending"
++        assert stored.tags == ["routing", "pending_accept"]
++        assert stored.context == "routing_pending_accept"
++
++    def test_prune_is_not_resurrected_by_stale_save(self, storage_path: Path) -> None:
++        """An untouched stale instance must not write a pruned row back."""
++        junk = "ok ok ok ok"
++        keeper = "debug this routing error now"
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeder.learn(
++            pattern=junk,
++            action="drop",
++            context="keyword",
++            tags=["routing", "auto_extracted"],
++            source="auto_routing",
++        )
++        seeder.learn(pattern=keeper, action="keep", source="manual")
++        stale = InstinctLearner(storage_path=storage_path)
++        pruner = InstinctLearner(storage_path=storage_path)
++
++        removed = pruner.prune_auto_extracted(dry_run=False)
++
++        assert {row.pattern for row in removed} == {junk}
++        stale.learn(pattern="query B", action="action B")
++        patterns = {row.pattern for row in _read_production_instincts(storage_path).values()}
++        assert junk not in patterns
++        assert keeper in patterns
++        assert "query B" in patterns
++
++
++_QUERY = "debug this routing error now"
++_ACTION_A = "suggest builtin/systematic-debugging skill"
++_ACTION_B = "suggest builtin/code-review skill"
++
++
++def _public_disk_row(path: Path, query: str) -> Instinct:
++    """Read the row through a new learner and ``Instinct.from_dict``.
++
++    The file bytes come from ``InstinctLearner`` saves. The key set is the
++    production ``to_dict()`` schema.
++    """
++    reader = InstinctLearner(storage_path=path)
++    live = reader.get_instinct_for_query(query)
++    assert live is not None
++    decoded = _read_production_instincts(path)
++    stored = decoded[live.id]
++    assert stored.to_dict() == live.to_dict()
++    return live
++
++
++def _seed_action_a(path: Path, successes: int) -> Instinct:
++    seeder = InstinctLearner(storage_path=path)
++    seeded = seeder.learn(pattern=_QUERY, action=_ACTION_A)
++    for _ in range(successes):
++        seeder.record_outcome_for_query(_QUERY, success=True)
++    return seeded
++
++
++class TestActionEvidenceIdentity:
++    """Success and failure belong to pattern+action, not the row id alone.
++
++    Two long-lived learners load the same row. One learns a new action.
++    Feedback the other still applies to the old action must not move onto
++    the new action, in either order, for accept and reject, including a
++    zero baseline and a new action whose counter equals the old baseline.
++    """
++
++    @pytest.fixture
++    def storage_path(self) -> Iterator[Path]:
++        with tempfile.TemporaryDirectory() as tmpdir:
++            yield Path(tmpdir) / "instincts.jsonl"
++
++    @pytest.mark.parametrize("success", [True, False])
++    @pytest.mark.parametrize("seed_successes", [0, 3])
++    def test_change_then_old_feedback_stays_on_reset(
++        self, storage_path: Path, seed_successes: int, success: bool
++    ) -> None:
++        seeded = _seed_action_a(storage_path, seed_successes)
++        holder = InstinctLearner(storage_path=storage_path)
++        changer = InstinctLearner(storage_path=storage_path)
++        assert holder.get_instinct_for_query(_QUERY) is not None
++        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
++
++        changed = changer.learn(pattern=_QUERY, action=_ACTION_B)
++        assert changed.id == seeded.id
++        assert changed.action == _ACTION_B
++        assert changed.success_count == 0
++        assert changed.failure_count == 0
++        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
++
++        holder.record_outcome_for_query(_QUERY, success=success)
++        holder.save()
++
++        row = _public_disk_row(storage_path, _QUERY)
++        assert row.id == seeded.id
++        assert row.action == _ACTION_B
++        assert row.success_count == 0
++        assert row.failure_count == 0
++        assert row.confidence == pytest.approx(0.5)
++        assert row.is_reliable is False
++
++    @pytest.mark.parametrize("success", [True, False])
++    @pytest.mark.parametrize("seed_successes", [0, 3])
++    def test_old_feedback_then_change_discards_old_action_delta(
++        self, storage_path: Path, seed_successes: int, success: bool
++    ) -> None:
++        seeded = _seed_action_a(storage_path, seed_successes)
++        holder = InstinctLearner(storage_path=storage_path)
++        changer = InstinctLearner(storage_path=storage_path)
++
++        holder.record_outcome_for_query(_QUERY, success=success)
++        changed = changer.learn(pattern=_QUERY, action=_ACTION_B)
++        assert changed.id == seeded.id
++        holder.save()
++
++        row = _public_disk_row(storage_path, _QUERY)
++        assert row.id == seeded.id
++        assert row.action == _ACTION_B
++        assert row.success_count == 0
++        assert row.failure_count == 0
++        assert row.confidence == pytest.approx(0.5)
++        assert row.is_reliable is False
++
++    @pytest.mark.parametrize("success", [True, False])
++    def test_same_counter_old_feedback_does_not_increment_new_action(
++        self, storage_path: Path, success: bool
++    ) -> None:
++        seeded = _seed_action_a(storage_path, 3)
++        holder = InstinctLearner(storage_path=storage_path)
++        changer = InstinctLearner(storage_path=storage_path)
++        changer.learn(pattern=_QUERY, action=_ACTION_B)
++        for _ in range(3):
++            changer.record_outcome_for_query(_QUERY, success=True)
++        before = _public_disk_row(storage_path, _QUERY)
++        assert before.action == _ACTION_B
++        assert before.success_count == 3
++        assert before.failure_count == 0
++        assert before.is_reliable is True
++        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
++
++        holder.record_outcome_for_query(_QUERY, success=success)
++        holder.save()
++
++        row = _public_disk_row(storage_path, _QUERY)
++        assert row.id == seeded.id
++        assert row.action == _ACTION_B
++        assert row.success_count == before.success_count
++        assert row.failure_count == before.failure_count
++        assert row.confidence == pytest.approx(before.confidence)
++        assert row.is_reliable is True
++
++    def test_new_action_keeps_peer_evidence_recorded_after_switch(self, storage_path: Path) -> None:
++        """A second learner switching to B must not wipe B's own successes."""
++        _seed_action_a(storage_path, 3)
++        peer = InstinctLearner(storage_path=storage_path)
++        local = InstinctLearner(storage_path=storage_path)
++        peer.learn(pattern=_QUERY, action=_ACTION_B)
++        peer.record_outcome_for_query(_QUERY, success=True)
++        peer.record_outcome_for_query(_QUERY, success=True)
++        before = _public_disk_row(storage_path, _QUERY)
++        assert before.action == _ACTION_B
++        assert before.success_count == 2
++
++        local.learn(pattern=_QUERY, action=_ACTION_B)
++
++        row = _public_disk_row(storage_path, _QUERY)
++        assert row.action == _ACTION_B
++        assert row.success_count == 2
++        assert row.failure_count == 0
++        assert row.confidence == pytest.approx(before.confidence)
++
++    def test_same_action_public_feedback_still_sums(self, storage_path: Path) -> None:
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern=_QUERY, action=_ACTION_A)
++        holder = InstinctLearner(storage_path=storage_path)
++        peer = InstinctLearner(storage_path=storage_path)
++        holder.record_outcome_for_query(_QUERY, success=True)
++        peer.record_outcome_for_query(_QUERY, success=True)
++
++        row = _public_disk_row(storage_path, _QUERY)
++        assert row.id == seeded.id
++        assert row.action == _ACTION_A
++        assert row.success_count == 2
++        assert row.failure_count == 0
++
++
++# Hang bound for real subprocesses. Not a timing assertion of the merge.
++_PROC_TIMEOUT_S = 20.0
++
++
++def _learner_script(storage: Path, body: str) -> str:
++    return "\n".join(
++        [
++            "from pathlib import Path",
++            "from vibesop.core.instinct.learner import InstinctLearner",
++            f"storage = Path({str(storage)!r})",
++            body,
++        ]
++    )
++
++
++def _start_learner_process(storage: Path, body: str) -> subprocess.Popen[str]:
++    env = os.environ.copy()
++    env["PYTHONUNBUFFERED"] = "1"
++    return subprocess.Popen(
++        [sys.executable, "-c", _learner_script(storage, body)],
++        stdin=subprocess.PIPE,
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++        text=True,
++        bufsize=1,
++        env=env,
++    )
++
++
++def _stop_processes(procs: list[subprocess.Popen[str]]) -> None:
++    for proc in procs:
++        if proc.poll() is None:
++            proc.kill()
++            try:
++                proc.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                continue
++
++
++def _process_error(proc: subprocess.Popen[str]) -> str:
++    if proc.poll() is None:
++        proc.kill()
++        try:
++            proc.wait(timeout=5)
++        except subprocess.TimeoutExpired:
++            return ""
++    if proc.stderr is None:
++        return ""
++    return proc.stderr.read()
++
++
++def _expect_line(proc: subprocess.Popen[str], expected: str) -> None:
++    if proc.stdout is None:
++        raise AssertionError("process stdout is closed")
++    holder: dict[str, str] = {}
++
++    def _read() -> None:
++        assert proc.stdout is not None
++        holder["line"] = proc.stdout.readline()
++
++    thread = threading.Thread(target=_read, daemon=True)
++    thread.start()
++    thread.join(_PROC_TIMEOUT_S)
++    if thread.is_alive():
++        proc.kill()
++        raise AssertionError(
++            f"timed out after {_PROC_TIMEOUT_S}s waiting for {expected!r}: {_process_error(proc)}"
++        )
++    line = holder.get("line", "")
++    if line.strip() != expected:
++        proc.kill()
++        raise AssertionError(f"expected {expected!r}, got {line!r}: {_process_error(proc)}")
++
++
++def _send_go(proc: subprocess.Popen[str]) -> None:
++    if proc.stdin is None:
++        raise AssertionError("process stdin is closed")
++    proc.stdin.write("GO\n")
++    proc.stdin.flush()
++
++
++def _send_line(proc: subprocess.Popen[str], line: str) -> None:
++    if proc.stdin is None:
++        raise AssertionError("process stdin is closed")
++    proc.stdin.write(line + "\n")
++    proc.stdin.flush()
++
++
++def _finish_process(proc: subprocess.Popen[str]) -> None:
++    _expect_line(proc, "DONE")
++    if proc.stdin is not None:
++        proc.stdin.close()
++    try:
++        proc.wait(timeout=_PROC_TIMEOUT_S)
++    except subprocess.TimeoutExpired:
++        proc.kill()
++        proc.wait(timeout=5)
++        raise AssertionError(f"process did not exit: {_process_error(proc)}") from None
++    if proc.returncode != 0:
++        raise AssertionError(f"exit {proc.returncode}: {_process_error(proc)}")
++
++
++_MP_RECORD_SUCCESS = """
++learner = InstinctLearner(storage)
++print("LOADED", flush=True)
++if input() != "GO":
++    raise SystemExit("missing GO")
++learner.record_outcome(learner.generate_id("query A"), success=True)
++print("DONE", flush=True)
++"""
++
++_MP_ADD_QUERY_B = """
++learner = InstinctLearner(storage)
++print("LOADED", flush=True)
++if input() != "GO":
++    raise SystemExit("missing GO")
++learner.learn(pattern="query B", action="action B")
++print("DONE", flush=True)
++"""
++
++_MP_LEARN_AFTER_CLEAR = """
++learner = InstinctLearner(storage)
++print("LOADED", flush=True)
++if input() != "GO":
++    raise SystemExit("missing GO")
++learner.learn(pattern="query B", action="action B")
++learner.learn(pattern="query B", action="action B")
++print("DONE", flush=True)
++"""
++
++# Same sibling path InstinctLearner._cross_process_lock passes to
++# vibesop.utils.file_lock.cross_process_lock: instincts.jsonl -> instincts.jsonl.lock.
++_MP_HOLD_PRODUCTION_LOCK = """
++from vibesop.utils.file_lock import cross_process_lock
++
++lock_path = storage.with_suffix(storage.suffix + ".lock")
++with cross_process_lock(lock_path):
++    print("LOCK_HELD", flush=True)
++    if input() != "RELEASE":
++        raise SystemExit("missing RELEASE")
++print("DONE", flush=True)
++"""
++
++_MP_CONTEND_THEN_LEARNER_WRITE = """
++from vibesop.utils.file_lock import CouldNotLock, cross_process_lock
++
++lock_path = storage.with_suffix(storage.suffix + ".lock")
++print("READY", flush=True)
++if input() != "GO":
++    raise SystemExit("missing GO")
++try:
++    with cross_process_lock(lock_path, blocking=False):
++        raise SystemExit("acquired production lock while holder still holds it")
++except CouldNotLock:
++    print("CONTENDED", flush=True)
++if input() != "WRITE":
++    raise SystemExit("missing WRITE")
++with cross_process_lock(lock_path):
++    print("ACQUIRED", flush=True)
++learner = InstinctLearner(storage)
++learner.record_outcome(learner.generate_id("query A"), success=True)
++learner.learn(pattern="query B", action="action B")
++print("DONE", flush=True)
++"""
++
++
++class TestInstinctMultiprocessMerge:
++    """Real OS processes. Timeouts only bound a hang; they do not score speed."""
++
++    @pytest.fixture
++    def storage_path(self) -> Iterator[Path]:
++        with tempfile.TemporaryDirectory() as tmpdir:
++            yield Path(tmpdir) / "instincts.jsonl"
++
++    def test_processes_keep_success_when_peer_adds_a_row(self, storage_path: Path) -> None:
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A")
++        writer = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
++        peer = _start_learner_process(storage_path, _MP_ADD_QUERY_B)
++        procs = [writer, peer]
++        try:
++            _expect_line(writer, "LOADED")
++            _expect_line(peer, "LOADED")
++            _send_go(writer)
++            _finish_process(writer)
++            _send_go(peer)
++            _finish_process(peer)
++        finally:
++            _stop_processes(procs)
++
++        disk = _read_production_instincts(storage_path)
++        assert disk[seeded.id].success_count == 1
++        assert disk[seeded.id].failure_count == 0
++        assert disk[seeded.id].confidence > 0.5
++        assert {row.pattern for row in disk.values()} == {"query A", "query B"}
++
++    def test_processes_sum_same_id_successes(self, storage_path: Path) -> None:
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A")
++        first = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
++        second = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
++        procs = [first, second]
++        try:
++            _expect_line(first, "LOADED")
++            _expect_line(second, "LOADED")
++            _send_go(first)
++            _send_go(second)
++            _finish_process(first)
++            _finish_process(second)
++        finally:
++            _stop_processes(procs)
++
++        disk = _read_production_instincts(storage_path)
++        assert disk[seeded.id].success_count == 2
++        assert disk[seeded.id].failure_count == 0
++
++    def test_process_clear_does_not_resurrect_old_row(self, storage_path: Path) -> None:
++        seeder = InstinctLearner(storage_path=storage_path)
++        secret = seeder.learn(pattern="query A", action="action A")
++        stale = _start_learner_process(storage_path, _MP_LEARN_AFTER_CLEAR)
++        try:
++            _expect_line(stale, "LOADED")
++            assert InstinctLearner(storage_path=storage_path).clear() == 1
++            _send_go(stale)
++            _finish_process(stale)
++        finally:
++            _stop_processes([stale])
++
++        disk = _read_production_instincts(storage_path)
++        assert secret.id not in disk
++        assert {row.pattern for row in disk.values()} == {"query B"}
++
++    def test_held_lock_rejects_nonblocking_peer_then_learner_writes(
++        self, storage_path: Path
++    ) -> None:
++        """CouldNotLock while the holder is still inside the production lock.
++
++        LOCK_HELD is printed inside ``cross_process_lock``. RELEASE is sent
++        only after CONTENDED. The 20s joins are hang bounds, not a speed score.
++        """
++        seeder = InstinctLearner(storage_path=storage_path)
++        seeded = seeder.learn(pattern="query A", action="action A")
++        lock_path = storage_path.with_suffix(storage_path.suffix + ".lock")
++        assert lock_path.name == "instincts.jsonl.lock"
++
++        holder = _start_learner_process(storage_path, _MP_HOLD_PRODUCTION_LOCK)
++        contender = _start_learner_process(storage_path, _MP_CONTEND_THEN_LEARNER_WRITE)
++        procs = [holder, contender]
++        try:
++            _expect_line(holder, "LOCK_HELD")
++            assert holder.poll() is None
++            _expect_line(contender, "READY")
++            _send_go(contender)
++            _expect_line(contender, "CONTENDED")
++            assert holder.poll() is None
++            _send_line(holder, "RELEASE")
++            _finish_process(holder)
++            _send_line(contender, "WRITE")
++            _expect_line(contender, "ACQUIRED")
++            _finish_process(contender)
++        finally:
++            _stop_processes(procs)
++
++        disk = _read_production_instincts(storage_path)
++        stored = disk[seeded.id]
++        assert stored.action == "action A"
++        assert stored.success_count == 1
++        assert stored.failure_count == 0
++        others = [row for row in disk.values() if row.id != seeded.id]
++        assert [row.pattern for row in others] == ["query B"]
++        assert others[0].action == "action B"
++        assert others[0].id != seeded.id
+diff --git a/tests/unit/core/routing/test_instinct_feedback_loop.py b/tests/unit/core/routing/test_instinct_feedback_loop.py
+index 35099cd9..6a554c5b 100644
+--- a/tests/unit/core/routing/test_instinct_feedback_loop.py
++++ b/tests/unit/core/routing/test_instinct_feedback_loop.py
+@@ -31,6 +31,8 @@ from __future__ import annotations
+ from pathlib import Path
+ from unittest.mock import MagicMock
+ 
++import pytest
++
+ from vibesop.core.instinct.learner import InstinctLearner
+ from vibesop.core.matching.base import MatchResult, MatcherType
+ from vibesop.core.routing.optimization_service import OptimizationService
+@@ -230,3 +232,83 @@ class TestRewardSignalFix:
+             host.record_feedback_outcome(QUERY, success=True)
+ 
+         assert learner.instincts[iid].is_reliable is True
++
++
++class TestActionChangeDropsInheritedEvidence:
++    """D13 at the routing consumer: one success on a new action must not boost.
++
++    ``apply_instinct_boost`` only sees instincts ``find_matching`` accepts
++    (``is_reliable`` and confidence >= 0.6). The new action still names the
++    same skill, so a row that kept the old three successes plus one new
++    success would boost. Reset evidence must not.
++    """
++
++    def test_new_action_one_success_does_not_boost(self, tmp_path: Path) -> None:
++        learner = _real_learner(tmp_path)
++        learner.learn(pattern=QUERY, action=ACTION, source="auto_routing")
++        iid = next(iter(learner.instincts))
++        for _ in range(3):
++            learner.record_outcome(iid, success=True)
++        assert learner.instincts[iid].is_reliable is True
++
++        svc = _make_service(learner)
++        before = svc.apply_instinct_boost([_match(SKILL, 0.5)], QUERY, context=None)
++        assert before[0].metadata.get("boosted") is True
++
++        new_action = f"avoid {SKILL} skill"
++        changed = learner.learn(pattern=QUERY, action=new_action, source="auto_routing")
++        assert changed.id == iid
++        assert changed.action == new_action
++        assert changed.success_count == 0
++        assert changed.failure_count == 0
++        assert changed.confidence == pytest.approx(0.5)
++        assert changed.is_reliable is False
++
++        learner.record_outcome(iid, success=True)
++        once = learner.instincts[iid]
++        assert once.success_count == 1
++        assert once.total_applications == 1
++        assert once.is_reliable is False
++
++        after = svc.apply_instinct_boost([_match(SKILL, 0.5)], QUERY, context=None)
++        assert after[0].confidence == 0.5
++        assert after[0].metadata.get("boosted") is not True
++        assert after[0].metadata.get("boost_source") != "instinct"
++
++
++_OTHER_SKILL = "builtin/code-review"
++_OTHER_ACTION = f"suggest {_OTHER_SKILL} skill"
++
++
++class TestOldActionFeedbackDoesNotCrossActions:
++    """Feedback on a loaded action A must not become evidence for action B."""
++
++    def test_old_accept_after_peer_switches_action_does_not_boost(self, tmp_path: Path) -> None:
++        storage = tmp_path / "instincts.jsonl"
++        seeder = InstinctLearner(storage_path=storage)
++        seeder.learn(pattern=QUERY, action=ACTION, source="auto_routing")
++        for _ in range(3):
++            seeder.record_outcome_for_query(QUERY, success=True)
++
++        holder = InstinctLearner(storage_path=storage)
++        changer = InstinctLearner(storage_path=storage)
++        changer.learn(pattern=QUERY, action=_OTHER_ACTION, source="auto_routing")
++        assert holder.get_instinct_for_query(QUERY) is not None
++        assert holder.get_instinct_for_query(QUERY).action == ACTION  # type: ignore[union-attr]
++
++        holder.record_outcome_for_query(QUERY, success=True)
++
++        reader = InstinctLearner(storage_path=storage)
++        row = reader.get_instinct_for_query(QUERY)
++        assert row is not None
++        assert row.action == _OTHER_ACTION
++        assert row.success_count == 0
++        assert row.failure_count == 0
++        assert row.is_reliable is False
++
++        svc = _make_service(reader)
++        boosted = svc.apply_instinct_boost(
++            [_match(SKILL, 0.5), _match(_OTHER_SKILL, 0.5)], QUERY, None
++        )
++        assert boosted[0].metadata.get("boosted") is not True
++        assert boosted[1].metadata.get("boosted") is not True

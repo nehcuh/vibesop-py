@@ -4,6 +4,17 @@
 
 大型运行轨迹见[实验登记册](../experiments/README.md)；退役 worktree 的材料见[恢复说明](../maintenance/README.md)。
 
+<a id="skill-distillation-2026-09-21"></a>
+## 2026-09-21 研究结论落地 F1 / F2 / F9
+
+以下是 2026-09-21 的历史阶段记录，实时执行、合入及验收状态未核验。原文件保留当时口径；本节引用的四份过程材料均已纳入 Git。
+
+- [落地计划](../specs/2026-09-21-skill-distill-landing.md)：设计、派工和完成定义。
+- [研究结论落地评审](../../.omx/artifacts/skill-distillation-review-20260921.md)：研究发现与待执行项。
+- [F1 handback](../../.omx/artifacts/distill-lane-f1-handback.md)：规格缺口与注入策略。
+- [F2 handback](../../.omx/artifacts/distill-lane-f2-handback.md)：选中、读到、执行与验收的消费分账。
+- [F9 / F10 handback](../../.omx/artifacts/distill-lane-f9-handback.md)：晋升模板与治理测量。
+
 ## A/B 与路由测量
 
 - [ab-jet-preview.md](../../.omx/artifacts/ab-jet-preview.md)
@@ -737,3 +748,7 @@
 - [gate9-newfiles.txt](../../.omx/artifacts/gate9-newfiles.txt)
 - [gate9-pi.md](../../.omx/artifacts/gate9-pi.md)
 - [gate9.diff](../../.omx/artifacts/gate9.diff)
+
+## 2026-10-09 深度诊断
+
+[冻结诊断与独立意见](reviews/diagnosis/2026-10-09-deep-diagnosis/REPORT.md)、[原件位置与恢复](reviews/diagnosis/2026-10-09-deep-diagnosis/RESTORE.md)。修复计划与冻结诊断分开登记，见[计划索引](../plans/README.md)。

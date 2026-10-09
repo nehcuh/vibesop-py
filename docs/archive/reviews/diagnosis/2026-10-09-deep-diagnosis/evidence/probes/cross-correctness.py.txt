@@ -1,0 +1,53 @@
+import os,json,tempfile
+from pathlib import Path
+from unittest.mock import patch,Mock
+from typer.testing import CliRunner
+from rich.console import Console
+from io import StringIO
+from vibesop.cli.main import app,_maybe_prompt_replay
+import vibesop.cli.commands.skill_commands as sc
+
+# Run the real registered CLI and real parser/auditor/installer; isolate HOME.
+# Only questionary answers and post-install semantic indexing are stubbed.
+with tempfile.TemporaryDirectory() as d:
+    root=Path(d);project=root/'project';project.mkdir();source=root/'source';source.mkdir();home=root/'home';home.mkdir()
+    (source/'SKILL.md').write_text('---\nid: ../../../outside\nname: Fixture\ndescription: Local development helper\n---\nNormal helper body.\n')
+    prev=Path.cwd();os.chdir(project)
+    try:
+        with patch.object(Path,'home',return_value=home), patch.dict(os.environ,{'HOME':str(home)},clear=True), patch.object(sc.questionary,'select',return_value=Mock(ask=Mock(return_value=50))),patch.object(sc.questionary,'confirm',return_value=Mock(ask=Mock(return_value=True))),patch.object(sc,'_verify_and_sync',return_value=False):
+            r=CliRunner().invoke(app,['skill','add',str(source),'--global','--manual-config'])
+        print('REAL_SKILL_ADD',json.dumps({'exit_code':r.exit_code,'exception':str(r.exception) if r.exception else None,'audit_passed':'Security audit passed' in r.output,'outside_written':(root/'outside'/'SKILL.md').exists(),'installation_complete':'Installation complete' in r.output}))
+    finally:os.chdir(prev)
+
+# Actual build CLI: only dummy credentials, output/home/temp project isolated.
+with tempfile.TemporaryDirectory() as d:
+    root=Path(d);project=root/'project';project.mkdir();home=root/'home';home.mkdir();out=project/'output';prev=Path.cwd();os.chdir(project)
+    try:
+        with patch.object(Path,'home',return_value=home),patch.dict(os.environ,{'HOME':str(home),'OPENAI_API_KEY':'AUDIT_DUMMY_ONLY','ANTHROPIC_API_KEY':'AUDIT_DUMMY_ONLY'},clear=True):
+            r=CliRunner().invoke(app,['build','opencode','--output',str(out)])
+        secret=out/'llm-config.json'
+        print('REAL_BUILD_OPENCODE',json.dumps({'exit_code':r.exit_code,'exception':str(r.exception) if r.exception else None,'file_exists':secret.exists(),'dummy_materialized':secret.exists() and 'AUDIT_DUMMY_ONLY' in secret.read_text(),'mode':oct(secret.stat().st_mode&0o777) if secret.exists() else None,'credential_optin_args':False}))
+    finally:os.chdir(prev)
+
+# Replay consumer: real SpanWriter and real learner and real should_replay.
+from vibesop.core.instinct.learner import InstinctLearner
+from vibesop.core.observability.models import Span
+from vibesop.core.observability.span_writer import SpanWriter
+from vibesop.core.observability.embedding import EmbeddingCache
+from vibesop.core.observability.replay import should_replay
+from vibesop.core.observability.recall import recall_similar
+import numpy as np
+with tempfile.TemporaryDirectory() as d:
+    root=Path(d);writer=SpanWriter(root/'spans.jsonl');learner=InstinctLearner(root/'instincts.jsonl');inst=learner.learn('debug flaky tests','builtin/systematic-debugging')
+    for _ in range(3):learner.record_outcome(inst.id,True)
+    for i in range(3):
+        s=Span(id=f's{i}',trace_id=f't{i}',name='route:query',span_kind='task',task_id='same-task',project_id='audit',input_data={'query':'debug flaky tests'},metadata={'skill_id':'builtin/systematic-debugging'})
+        s.set_ok();writer.write_span(s)
+    with patch.object(EmbeddingCache,'_compute',return_value=np.ones(384,dtype=np.float32)):
+        cache=EmbeddingCache(root/'embeddings.npz');decision=should_replay('debug flaky tests',writer.query_recent(),cache=cache,learner=learner)
+        # Stubs isolate IO/interactive observation only: wrapper still invokes real
+        # should_replay against REAL disk records and real learner.
+        capture=StringIO(); c=Console(file=capture,color_system=None)
+        with patch('vibesop.cli.main._is_interactive_stdio',return_value=True),patch('vibesop.core.observability.span_writer.SpanWriter',return_value=writer),patch('vibesop.core.instinct.learner.InstinctLearner',return_value=learner),patch('vibesop.core.observability.replay.should_replay',side_effect=lambda **kwargs:should_replay(cache=cache,**kwargs)),patch('vibesop.cli.main.typer.confirm',return_value=True),patch('vibesop.core.observability.replay.emit_replay_span',return_value='provenance'):
+            returned=_maybe_prompt_replay(Mock(),'debug flaky tests',c)
+    print('REAL_REPLAY_CONSUMER',json.dumps({'should_prompt':decision.should_prompt,'gold':decision.top_match.is_gold,'skill_id':decision.top_match.skill_id,'confirmed_return':returned,'unknown_in_prompt':'(unknown)' in capture.getvalue(),'outcome_count':learner.get_instinct_for_query('debug flaky tests').success_count}))

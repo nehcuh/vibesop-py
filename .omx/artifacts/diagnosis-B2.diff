@@ -1,0 +1,2034 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index b1f089d6..7aeaa6ef 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Changed
+ 
++- **B2 diagnosis optimization**: Candidate cache schema v5 fingerprints the loader markdown/YAML discovery set and current governance projection. Governance changes are visible on the next lookup; skill content retains its five-second refresh interval.
++
+ - **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible.
+ 
+ - **B1 diagnosis optimization**: Generated OpenCode/Cursor LLM config uses api_key_env references rather than ambient secret values. Guarded atomic output uses exclusive temporary files; platform rendering rejects ancestor links before creating skill directories while preserving legal installed skill links.
+@@ -29,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
++- **B2 diagnosis optimization**: Invalidate hot and persisted candidates on skill disable, scope, lifecycle, ownership and same-timestamp edits. Clear parsed/external metadata before rebuilding under a new fingerprint; reuse parsed configuration when bytes are unchanged.
++
+ - **B3-r2 diagnosis optimization**: Preserve authoritative blocked outcomes through the public execution adapter, including ordinary review rejection and structured blocked results. Align dynamic step states/counts with their shared per-step outcomes; preserve existing engine run-completed semantics and legacy failure accounting.
+ 
+ - **B3 diagnosis optimization**: Continue fail_fast after a wholly successful parallel batch, report real dynamic execution failures, preserve role/isolation/handoff context and expose required-review errors independently of execution success. Mark only failed-dependency descendants skipped; retain resumable pending work. Map internal squad steps back to the original ExecutionStep objects for public executor callbacks.
+diff --git a/src/vibesop/core/routing/_layers.py b/src/vibesop/core/routing/_layers.py
+index 2ef2303a..690079dd 100644
+--- a/src/vibesop/core/routing/_layers.py
++++ b/src/vibesop/core/routing/_layers.py
+@@ -594,6 +594,26 @@ def _try_embedding_fallback(
+     return match, detail
+ 
+ 
++def _usable_index_cache(router: Any) -> dict[str, Any] | None:
++    """Return the router's index cache when it still matches the reload epoch.
++
++    ``isinstance(cached, dict)`` keeps MagicMock routers on the load path
++    (attribute access auto-creates a Mock, which is not a dict). An empty
++    dict is a real "tried, missing" result and is returned as-is. A dict
++    stamped with an older epoch is stale and must be reloaded.
++    """
++    from vibesop.core.routing.candidate_manager import index_cache_epoch
++
++    cached = getattr(router, "_index_layer_cache", None)
++    if not isinstance(cached, dict):
++        return None
++    epoch = index_cache_epoch(getattr(router, "project_root", ""))
++    stored = getattr(router, "_index_layer_epoch", None)
++    if stored != epoch:
++        return None
++    return cached
++
++
+ def try_index_layer(
+     router: RoutingCore,
+     query: str,
+@@ -608,12 +628,18 @@ def try_index_layer(
+     # profiles' combined text on every route. We check `isinstance(cached, dict)`
+     # rather than `is None` so MagicMock-based unit tests (which auto-create
+     # attributes on access) still take the load path on first call.
+-    cached = getattr(router, "_index_layer_cache", None)
+-    if not isinstance(cached, dict):
++    cached = _usable_index_cache(router)
++    if cached is None:
+         indexer = SkillIndexer(project_root=router.project_root)
++        # Stamp the epoch we loaded against. A later candidate reload bumps
++        # it and the next call takes this branch again.
++        from vibesop.core.routing.candidate_manager import index_cache_epoch
++
++        epoch = index_cache_epoch(getattr(router, "project_root", ""))
+         if not indexer.has_index():
+             router._index_layer_cache = {}  # mark as "tried, missing"
+             router._index_profile_tokens = {}
++            router._index_layer_epoch = epoch
+             return None, LayerDetail(
+                 layer=RoutingLayer.SEMANTIC_INDEX,
+                 matched=False,
+@@ -622,6 +648,7 @@ def try_index_layer(
+             )
+         router._index_layer_cache = indexer.load_index()
+         router._index_profile_tokens = _build_profile_token_index(router._index_layer_cache)
++        router._index_layer_epoch = epoch
+         cached = router._index_layer_cache
+ 
+     index = cached
+diff --git a/src/vibesop/core/routing/candidate_manager.py b/src/vibesop/core/routing/candidate_manager.py
+index 919791f2..d6951ab5 100644
+--- a/src/vibesop/core/routing/candidate_manager.py
++++ b/src/vibesop/core/routing/candidate_manager.py
+@@ -11,6 +11,7 @@ import json
+ import logging
+ import re
+ import threading
++import time
+ from pathlib import Path
+ from typing import Any
+ 
+@@ -19,10 +20,85 @@ from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
+ 
+ logger = logging.getLogger(__name__)
+ 
+-#: Bump when the candidates cache entry format changes; mismatched caches are
+-#: discarded instead of misread (old files simply miss the key → treated as
+-#: foreign-format and rebuilt).
+-_CANDIDATES_CACHE_SCHEMA_VERSION = 3
++#: Bump when the cache entry format or the invalidation fingerprint changes.
++#: Mismatched caches are discarded instead of misread (old files simply miss
++#: the key or carry a previous version → treated as foreign and rebuilt).
++#: v5 hashes the loader discovery inputs (``*.md`` + skill YAML, including
++#: default extra roots), registry.yaml, and the auto-config
++#: enabled/scope/lifecycle/project_hash projection. v4 hashed SKILL.md only
++#: and omitted owner hash, so an ordinary markdown skill or a public
++#: project_hash update could be served again under a stale fingerprint.
++_CANDIDATES_CACHE_SCHEMA_VERSION = 5
++
++# Semantic-index caches live on the router (``_layers.try_index_layer``),
++# which CandidateManager does not hold. A project-keyed epoch lets reload
++# invalidate those caches without a back-reference into UnifiedRouter.
++_index_cache_epochs: dict[str, int] = {}
++_index_epoch_lock = threading.Lock()
++
++
++def _index_epoch_key(project_root: object) -> str:
++    """Stable key for ``index_cache_epoch`` (resolved path when we have one)."""
++    if isinstance(project_root, Path):
++        try:
++            return str(project_root.resolve())
++        except OSError:
++            return str(project_root)
++    return str(project_root)
++
++
++def index_cache_epoch(project_root: object) -> int:
++    """Current semantic-index cache epoch for ``project_root``.
++
++    ``try_index_layer`` must treat a stored epoch other than this value as a
++    miss. The epoch starts at 0 and increases on candidate reload.
++    """
++    key = _index_epoch_key(project_root)
++    with _index_epoch_lock:
++        return _index_cache_epochs.get(key, 0)
++
++
++def _bump_index_cache_epoch(project_root: object) -> None:
++    key = _index_epoch_key(project_root)
++    with _index_epoch_lock:
++        _index_cache_epochs[key] = _index_cache_epochs.get(key, 0) + 1
++
++
++def _dedup_paths(paths: list[Path]) -> list[Path]:
++    """Drop duplicate paths, preferring resolved identity when the file exists."""
++    seen: set[str] = set()
++    unique: list[Path] = []
++    for path in paths:
++        try:
++            key = str(path.resolve()) if path.exists() else str(path)
++        except OSError:
++            key = str(path)
++        if key in seen:
++            continue
++        seen.add(key)
++        unique.append(path)
++    return unique
++
++
++def _hash_labeled(hasher: Any, label: str, path: Path, payload: bytes) -> None:
++    """Mix a labeled path and payload into ``hasher`` without boundary collisions."""
++    raw_path = str(path).encode()
++    hasher.update(label.encode())
++    hasher.update(b"\0")
++    hasher.update(len(raw_path).to_bytes(4, "big"))
++    hasher.update(raw_path)
++    hasher.update(len(payload).to_bytes(8, "big"))
++    hasher.update(payload)
++
++
++def _read_bytes(path: Path) -> bytes:
++    try:
++        return path.read_bytes()
++    except OSError:
++        try:
++            return f"unreadable:{path.stat().st_mtime_ns}".encode()
++        except OSError:
++            return b"unreadable"
+ 
+ 
+ def with_source_file(metadata: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+@@ -65,50 +141,171 @@ class CandidateManager:
+         self._usage_flush_count: int = 0
+         self._USAGE_FLUSH_INTERVAL: int = 10
+         self._path_mtimes: dict[str, float] = {}
++        self._content_fingerprint: str | None = None
++        self._governance_token_cached: str | None = None
+         self._disk_cache_bypassed: bool = False
++        self._clock = time.monotonic
+ 
+     @property
+     def _disk_cache_path(self) -> Path:
+         return self.project_root / ".vibe" / "cache" / "candidates_v2.json"
+ 
+     def _compute_paths_hash(self, search_paths: list[Path]) -> str:
+-        """Hash all SKILL.md paths and their mtimes for cache invalidation."""
+-        h = hashlib.sha256()
+-        for sp in sorted(search_paths):
+-            if not sp.exists():
++        """Fingerprint every input that can change the candidate pool.
++
++        Loader discovery inputs contribute content bytes, not only mtime, so a
++        same-timestamp edit cannot keep a stale disk entry. ``auto-config.yaml``
++        contributes the enabled/scope/lifecycle/project_hash projection (usage
++        stats must not thrash the pool). ``registry.yaml`` contributes its
++        full bytes.
++        """
++        from vibesop.core.skills.loader import discovery_input_files
++
++        hasher = hashlib.sha256()
++        for skill_file in discovery_input_files(search_paths):
++            suffix = skill_file.suffix.lower()
++            label = "skill-yaml" if suffix in {".yaml", ".yml"} else "skill-md"
++            _hash_labeled(hasher, label, skill_file, _read_bytes(skill_file))
++        for registry in self._registry_files(search_paths):
++            payload = _read_bytes(registry) if registry.is_file() else b"absent"
++            _hash_labeled(hasher, "registry", registry, payload)
++        for config in self._auto_config_paths(search_paths, deep=True):
++            _hash_labeled(
++                hasher,
++                "auto-config",
++                config,
++                self._governance_projection_bytes(config),
++            )
++        return hasher.hexdigest()[:16]
++
++    def _skill_markdown_files(self, search_paths: list[Path]) -> list[Path]:
++        from vibesop.core.skills.loader import discovery_input_files
++
++        return [
++            path
++            for path in discovery_input_files(search_paths)
++            if path.suffix.lower() not in {".yaml", ".yml"}
++        ]
++
++    def _skill_yaml_files(self, search_paths: list[Path]) -> list[Path]:
++        from vibesop.core.skills.loader import discovery_input_files
++
++        return [
++            path
++            for path in discovery_input_files(search_paths)
++            if path.suffix.lower() in {".yaml", ".yml"}
++        ]
++
++    def _registry_files(self, search_paths: list[Path]) -> list[Path]:
++        """Registries whose bytes can change which skills are visible.
++
++        Includes the project installer registry, any ``registry.yaml`` under
++        the search roots, and the core registry ``ConfigManager.load_registry``
++        reads. The in-memory ``load_registry`` cache itself is not cleared
++        here (audit-only; that object is not owned by this manager).
++        """
++        found: list[Path] = [self.project_root / ".vibe" / "skills" / "registry.yaml"]
++        for search_path in search_paths:
++            if not search_path.exists():
+                 continue
+-            skill_files = sorted(sp.rglob("SKILL.md"), key=str)
+-            for skill_file in skill_files:
+-                h.update(str(skill_file).encode())
+-                try:
+-                    mtime = skill_file.stat().st_mtime
+-                    h.update(str(mtime).encode())
+-                except OSError:
++            found.extend(search_path.rglob("registry.yaml"))
++        try:
++            from vibesop.utils.bundled import bundled_core_file
++
++            found.append(bundled_core_file("registry.yaml", self.project_root))
++        except Exception:
++            logger.debug("registry fingerprint source unavailable", exc_info=True)
++        return sorted(_dedup_paths(found), key=str)
++
++    def _auto_config_paths(self, search_paths: list[Path], *, deep: bool) -> list[Path]:
++        """Auto-config files that supply enabled/scope/lifecycle.
++
++        The hot check (``deep=False``) only stats the file
++        ``SkillConfigManager`` actually writes plus the project copy. The
++        disk fingerprint also walks nested ``auto-config.yaml`` files under
++        the search roots, because the loader ignores those names as skills
++        but a nested copy can still be the file a test or tool points at.
++        """
++        found: list[Path] = []
++        try:
++            from vibesop.core.skills.config_manager import SkillConfigManager
++
++            found.append(Path(SkillConfigManager.SKILL_CONFIG_FILE))
++        except Exception:
++            logger.debug("auto-config path unavailable", exc_info=True)
++        found.append(self.project_root / ".vibe" / "skills" / "auto-config.yaml")
++        if deep:
++            for search_path in search_paths:
++                if not search_path.exists():
+                     continue
+-        return h.hexdigest()[:16]
++                found.extend(search_path.rglob("auto-config.yaml"))
++        return _dedup_paths(found)
++
++    @staticmethod
++    def _governance_projection_bytes(path: Path) -> bytes:
++        """Bytes that change iff enabled, scope, lifecycle, or owner hash change.
++
++        Reads the same content-addressed snapshot ``get_skill_config`` uses, so
++        a same-mtime auto-config edit cannot split the fingerprint from the
++        live reader. ``usage_stats`` is omitted so recording a route does not
++        invalidate the candidate pool.
++        """
++        from vibesop.core.skills.config_manager import SkillConfigManager
++
++        return SkillConfigManager.governance_projection(path)
++
++    def _governance_token(self) -> str:
++        """Cheap stamp of the auto-config projection checked on every route."""
++        hasher = hashlib.sha256()
++        search_paths = self._search_paths if self._search_paths else []
++        for config in self._auto_config_paths(search_paths, deep=False):
++            _hash_labeled(
++                hasher,
++                "auto-config",
++                config,
++                self._governance_projection_bytes(config),
++            )
++        return hasher.hexdigest()[:16]
++
++    def _governance_changed_locked(self) -> bool:
++        """True when enabled/scope/lifecycle drifted since the pool was built.
++
++        Caller holds ``_cache_lock``. A missing baseline is not a change:
++        ``_cached_reload_locked`` records the token when it fills the pool.
++        """
++        if self._governance_token_cached is None:
++            return False
++        return self._governance_token() != self._governance_token_cached
+ 
+     @staticmethod
+     def _compute_skill_mtimes(search_paths: list[Path]) -> dict[str, float]:
+-        """Return {path_str: mtime} for every SKILL.md under search_paths."""
++        """Return {path_str: mtime} for markdown the loader would consider."""
++        from vibesop.core.skills.loader import discovery_input_files
++
+         mtimes: dict[str, float] = {}
+-        for sp in search_paths:
+-            if not sp.exists():
++        for skill_file in discovery_input_files(search_paths):
++            if skill_file.suffix.lower() in {".yaml", ".yml"}:
++                continue
++            try:
++                mtimes[str(skill_file)] = skill_file.stat().st_mtime
++            except OSError:
+                 continue
+-            for skill_file in sp.rglob("SKILL.md"):
+-                try:
+-                    mtimes[str(skill_file)] = skill_file.stat().st_mtime
+-                except OSError:
+-                    continue
+         return mtimes
+ 
+-    def _load_from_disk_cache(self, search_paths: list[Path]) -> list[dict[str, Any]] | None:
++    def _load_from_disk_cache(
++        self,
++        search_paths: list[Path],
++        paths_hash: str | None = None,
++    ) -> list[dict[str, Any]] | None:
+         """Try loading candidates from persistent disk cache."""
+         if self._disk_cache_bypassed:
+             return None
+         cache_path = self._disk_cache_path
+         if not cache_path.exists():
+             return None
+-        current_hash = self._compute_paths_hash(search_paths)
++        current_hash = (
++            paths_hash if paths_hash is not None else self._compute_paths_hash(search_paths)
++        )
+         try:
+             data = json.loads(cache_path.read_text(encoding="utf-8"))
+             if not isinstance(data, dict):
+@@ -180,7 +377,10 @@ class CandidateManager:
+         self._candidates_cache = None
+         self._last_reload_check = 0.0
+         self._path_mtimes = {}
++        self._content_fingerprint = None
++        self._governance_token_cached = None
+         self._disk_cache_bypassed = True
++        _bump_index_cache_epoch(self.project_root)
+ 
+     def get_candidates(self) -> list[dict[str, Any]]:
+         """Discover and return all skill candidates.
+@@ -197,6 +397,7 @@ class CandidateManager:
+                 project_root=self.project_root,
+                 search_paths=self._search_paths,
+             )
++            self._search_paths = self._fingerprint_search_paths()
+ 
+         definitions = self._skill_loader.discover_all()
+         from vibesop.core.optimization.cold_start import get_cold_start_strategy
+@@ -282,16 +483,16 @@ class CandidateManager:
+         """
+         with self._cache_lock:
+             if self._candidates_cache is not None:
+-                if self._should_check_reload():
++                # Governance is one small file and must be visible on the next
++                # route. The deep skill-file walk stays on the 5s interval.
++                if self._governance_changed_locked() or self._should_check_reload():
+                     return self._cached_reload_locked()
+                 return self._candidates_cache
+             return self._cached_reload_locked()
+ 
+     def _should_check_reload(self) -> bool:
+         """Rate-limited check: probe filesystem marker + deep skill mtimes every N seconds."""
+-        import time
+-
+-        now = time.monotonic()
++        now = self._clock()
+         if now - self._last_reload_check < self._RELOAD_CHECK_INTERVAL:
+             return False
+         self._last_reload_check = now
+@@ -299,45 +500,122 @@ class CandidateManager:
+         if self._check_reload_needed():
+             return True
+ 
+-        # Check if any SKILL.md under search paths changed
+-        current_mtimes = self._compute_skill_mtimes(self._search_paths)
+-        if current_mtimes != self._path_mtimes:
+-            self._path_mtimes = current_mtimes
+-            return True
+-        return False
++        # Path set / mtime catches add, delete, and ordinary edits. The
++        # content fingerprint catches a body change that preserved mtime
++        # (same-second write, checkout that restores timestamps).
++        search_paths = self._fingerprint_search_paths()
++        current_mtimes = self._compute_skill_mtimes(search_paths)
++        current_hash = self._compute_paths_hash(search_paths)
++        mtime_changed = current_mtimes != self._path_mtimes
++        hash_changed = (
++            self._content_fingerprint is not None and current_hash != self._content_fingerprint
++        )
++        self._path_mtimes = current_mtimes
++        self._content_fingerprint = current_hash
++        return mtime_changed or hash_changed
+ 
+     def _check_reload_needed(self) -> bool:
+         """Check if a .skills_reload marker signals new skill installation."""
+         marker = self.project_root / ".vibe" / ".skills_reload"
+         return marker.exists()
+ 
++    def _invalidate_discovery_caches(self) -> None:
++        """Drop parsed skill metadata before rebuilding the candidate pool.
++
++        Mirrors ``SkillManager.reload_skills`` (clear, then rediscover) and
++        also drops ``ExternalSkillLoader._cache``, which ``clear_cache`` does
++        not. Doing this before ``get_candidates`` is what stops a new
++        fingerprint from being persisted next to the previous metadata.
++        """
++        loader = self._skill_loader
++        if loader is None:
++            return
++        invalidate = getattr(loader, "invalidate_discovery_cache", None)
++        if callable(invalidate):
++            invalidate()
++            return
++        clear = getattr(loader, "clear_cache", None)
++        if callable(clear):
++            clear()
++        external = getattr(loader, "_external_loader", None)
++        if external is None:
++            return
++        ext_clear = getattr(external, "clear_cache", None)
++        if callable(ext_clear):
++            ext_clear()
++
++    def _remember_watch_state(self, search_paths: list[Path], paths_hash: str) -> None:
++        self._path_mtimes = self._compute_skill_mtimes(search_paths)
++        self._content_fingerprint = paths_hash
++        self._governance_token_cached = self._governance_token()
++
+     def _cached_reload_locked(self) -> list[dict[str, Any]]:
+         """Reload candidates.  Caller MUST hold _cache_lock."""
+         marker = self.project_root / ".vibe" / ".skills_reload"
+         with contextlib.suppress(OSError):
+             marker.unlink()
+         self._candidates_cache = None
+-
+-        search_paths = self._search_paths if self._search_paths else self._build_search_paths()
+-        cached = self._load_from_disk_cache(search_paths)
++        # Clear parsed metadata before either the disk hit or the rescan.
++        # A hit must not leave the loader holding the previous body, and a
++        # miss must re-read files before the new fingerprint is written.
++        self._invalidate_discovery_caches()
++        _bump_index_cache_epoch(self.project_root)
++
++        if not self._search_paths:
++            # Remember the roots we actually hashed. A disk hit never calls
++            # get_candidates, and an empty _search_paths would make the next
++            # mtime walk look like a deletion and reload forever.
++            self._search_paths = list(self._build_search_paths())
++        search_paths = self._fingerprint_search_paths()
++        paths_hash = self._compute_paths_hash(search_paths)
++        cached = self._load_from_disk_cache(search_paths, paths_hash)
+         if cached is not None:
+             self._candidates_cache = cached
+-            self._path_mtimes = self._compute_skill_mtimes(search_paths)
++            self._remember_watch_state(search_paths, paths_hash)
+             return cached
+ 
+         candidates = self.get_candidates()
++        # Hash AFTER the rescan, using the roots the loader actually walked.
++        search_paths = self._fingerprint_search_paths()
+         paths_hash = self._compute_paths_hash(search_paths)
+         self._candidates_cache = candidates
+-        self._path_mtimes = self._compute_skill_mtimes(search_paths)
++        self._remember_watch_state(search_paths, paths_hash)
+         self._save_to_disk_cache(candidates, paths_hash)
+         return candidates
+ 
++    def _fingerprint_search_paths(self) -> list[Path]:
++        """Roots the live loader walks, else the manager's planned roots.
++
++        Fingerprint, mtime walk, and disk cache must use this set. Rehashing
++        only ``self._search_paths`` after reload cannot see default extra
++        roots SkillLoader appends when ``strict_search_paths`` is false.
++        """
++        loader = self._skill_loader
++        if loader is not None:
++            getter = getattr(loader, "discovery_search_paths", None)
++            if callable(getter):
++                paths = [Path(p) for p in getter()]
++                if paths:
++                    self._search_paths = paths
++                    return paths
++            raw = getattr(loader, "_search_paths", None)
++            if raw:
++                paths = [Path(p) for p in raw]
++                self._search_paths = paths
++                return paths
++        if self._search_paths:
++            return list(self._search_paths)
++        built = list(self._build_search_paths())
++        self._search_paths = built
++        return built
++
+     def _build_search_paths(self) -> list[Path]:
+         """Build the list of search paths for skill discovery."""
+         from vibesop.utils.bundled import resolve_builtin_skills_dir
+ 
+         paths: list[Path] = [
+             self.project_root / ".vibe" / "skills",
++            self.project_root / "skills",
+             Path.home() / ".config" / "skills",
+             Path.home() / ".config" / "opencode" / "skills",
+             Path.home() / ".claude" / "skills",
+@@ -349,8 +627,15 @@ class CandidateManager:
+         return paths
+ 
+     def reload(self) -> int:
+-        """Invalidate cache and reload."""
++        """Invalidate memory and disk caches and rebuild candidates from disk.
++
++        The disk file is removed first so this call cannot return a stale
++        hit. ``_cached_reload_locked`` clears the loader cache before the
++        rescan and only then writes the new fingerprint.
++        """
+         self._candidates_cache = None
++        self._governance_token_cached = None
++        self._content_fingerprint = None
+         with contextlib.suppress(OSError):
+             self._disk_cache_path.unlink()
+         return len(self.get_cached_candidates())
+diff --git a/src/vibesop/core/skills/config_manager.py b/src/vibesop/core/skills/config_manager.py
+index 84cd681f..afb19a0e 100644
+--- a/src/vibesop/core/skills/config_manager.py
++++ b/src/vibesop/core/skills/config_manager.py
+@@ -1,5 +1,6 @@
+ """技能配置管理器 - 管理技能级别的 LLM 和其他配置."""
+ 
++import hashlib
+ import logging
+ from dataclasses import dataclass, field
+ from pathlib import Path
+@@ -19,10 +20,39 @@ from vibesop.core.models import SkillLifecycle
+ logger = logging.getLogger(__name__)
+ console = Console()
+ 
++
+ # Module-level cache for loaded skill config files.
++# Keyed by resolved path → (raw-bytes digest, parsed dict, governance bytes).
+ # _load_skill_config_file() is a hot path called once per skill (395+ times
+-# on cold start). Without caching, the same YAML file is parsed 395 times.
+-_CONFIG_FILE_CACHE: dict[Path, tuple[float, dict[str, Any]]] = {}
++# on cold start). Same-mtime edits stay visible because the key is content,
++# not mtime; unmodified bytes skip yaml.safe_load.
++@dataclass(frozen=True, slots=True)
++class _ConfigSnapshot:
++    digest: bytes
++    data: dict[str, Any]
++    governance: bytes
++
++
++_CONFIG_FILE_CACHE: dict[Path, _ConfigSnapshot] = {}
++
++
++def _project_hash_from_entry(entry: dict[str, Any]) -> str:
++    """Project owner hash with the same fallback SkillConfig / loader consume.
++
++    ``evaluation_context`` wins when it is a non-empty mapping; otherwise
++    ``metadata``. Missing or non-dict values yield an empty string, which
++    the loader treats as "no isolation key".
++    """
++    ctx = entry.get("evaluation_context")
++    if not isinstance(ctx, dict) or not ctx:
++        ctx = entry.get("metadata")
++    if not isinstance(ctx, dict):
++        return ""
++    value = ctx.get("project_hash")
++    if value is None:
++        return ""
++    return str(value)
++
+ 
+ # Backward-compatible alias
+ SkillLifecycleState = SkillLifecycle
+@@ -262,33 +292,140 @@ class SkillConfigManager:
+             confidence=skill_data.get("metadata", {}).get("confidence", 0.5),
+         )
+ 
++    @classmethod
++    def invalidate_config_cache(cls, path: Path | None = None) -> None:
++        """Drop the in-memory auto-config snapshot.
++
++        Same-mtime content edits are already visible because the cache is
++        keyed by raw bytes. Call this after an out-of-band writer that this
++        process did not make through ``update_skill_config``. Do not rewrite
++        the config file solely to flush the cache.
++        """
++        if path is None:
++            _CONFIG_FILE_CACHE.clear()
++            return
++        target = Path(path)
++        _CONFIG_FILE_CACHE.pop(target, None)
++        _CONFIG_FILE_CACHE.pop(cls._cache_key(target), None)
++
++    @classmethod
++    def config_content_version(cls, path: Path | None = None) -> str:
++        """Hex SHA-256 of the raw config bytes; empty if the file is missing."""
++        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
++        snapshot = cls._load_config_snapshot(target)
++        if snapshot is not None:
++            return snapshot.digest.hex()
++        if target.is_file():
++            try:
++                return hashlib.sha256(target.read_bytes()).hexdigest()
++            except OSError:
++                return ""
++        return ""
++
++    @classmethod
++    def governance_projection(cls, path: Path | None = None) -> bytes:
++        """enabled/scope/lifecycle/project_hash bytes from the live snapshot.
++
++        The candidate fingerprint and ``get_skill_config`` share this parse.
++        ``usage_stats`` is omitted so recording a route does not thrash the
++        pool. Parse failures fall back to a raw-bytes marker so the
++        fingerprint still moves when the file changes.
++        """
++        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
++        snapshot = cls._load_config_snapshot(target)
++        if snapshot is not None:
++            return snapshot.governance
++        if target.is_file():
++            try:
++                return b"raw\0" + target.read_bytes()
++            except OSError:
++                return b"unreadable"
++        return b"absent"
++
+     @classmethod
+     def _load_skill_config_file(cls) -> dict[str, Any]:
+-        config_path = cls.SKILL_CONFIG_FILE
+-        if not config_path.exists():
++        snapshot = cls._load_config_snapshot()
++        if snapshot is None:
+             return {}
++        return snapshot.data
+ 
+-        try:
+-            mtime = config_path.stat().st_mtime
+-            cached = _CONFIG_FILE_CACHE.get(config_path)
+-            if cached is not None and cached[0] == mtime:
+-                return cached[1]
++    @classmethod
++    def _load_config_snapshot(cls, path: Path | None = None) -> _ConfigSnapshot | None:
++        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
++        key = cls._cache_key(target)
++        if not target.exists():
++            _CONFIG_FILE_CACHE.pop(key, None)
++            return None
+ 
+-            if config_path.suffix.lower() == ".toml":
+-                from vibesop.utils.encoding import load_toml_with_fallback
++        try:
++            raw = target.read_bytes()
++        except OSError:
++            return None
+ 
+-                data = load_toml_with_fallback(config_path) or {}
+-            else:
+-                from vibesop.utils.encoding import read_text_with_fallback
++        digest = hashlib.sha256(raw).digest()
++        cached = _CONFIG_FILE_CACHE.get(key)
++        if cached is not None and cached.digest == digest:
++            return cached
+ 
+-                data = yaml.safe_load(read_text_with_fallback(config_path)) or {}
+-            if isinstance(data, dict):
+-                _CONFIG_FILE_CACHE[config_path] = (mtime, data)
+-            return cast("dict[str, Any]", data)
++        try:
++            parsed: Any = cls._parse_config_bytes(target, raw)
+         except Exception as e:
+-            console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
++            console.print(f"[yellow]⚠ Failed to load {target}: {e}[/yellow]")
++            return None
+ 
+-        return {}
++        data = parsed if isinstance(parsed, dict) else {}
++        snapshot = _ConfigSnapshot(
++            digest=digest,
++            data=cast("dict[str, Any]", data),
++            governance=cls._governance_bytes_from_data(parsed),
++        )
++        _CONFIG_FILE_CACHE[key] = snapshot
++        return snapshot
++
++    @staticmethod
++    def _cache_key(path: Path) -> Path:
++        try:
++            return path.resolve()
++        except OSError:
++            return path
++
++    @staticmethod
++    def _parse_config_bytes(path: Path, raw: bytes) -> Any:
++        try:
++            text = raw.decode("utf-8")
++        except UnicodeDecodeError:
++            import locale
++
++            text = raw.decode(locale.getpreferredencoding())
++        if text.startswith("\ufeff"):
++            text = text[1:]
++        if path.suffix.lower() == ".toml":
++            import tomllib
++
++            return tomllib.loads(text) or {}
++        return yaml.safe_load(text) or {}
++
++    @staticmethod
++    def _governance_bytes_from_data(data: object) -> bytes:
++        """Bytes that change iff enabled, scope, lifecycle, or owner hash change."""
++        if not isinstance(data, dict):
++            return b"nonskill-map"
++        skills = data.get("skills", {})
++        if not isinstance(skills, dict):
++            kind = type(skills).__name__
++            return f"skills-not-map:{kind}".encode()
++        lines: list[str] = []
++        for skill_id in sorted(skills, key=str):
++            entry = skills[skill_id]
++            if not isinstance(entry, dict):
++                lines.append(f"{skill_id}\t<bad>")
++                continue
++            enabled = entry.get("enabled", True)
++            scope = entry.get("scope", "global")
++            lifecycle = entry.get("lifecycle", "active")
++            project_hash = _project_hash_from_entry(entry)
++            lines.append(f"{skill_id}\t{enabled!r}\t{scope!r}\t{lifecycle!r}\t{project_hash!r}")
++        return "\n".join(lines).encode()
+ 
+     @classmethod
+     def _save_skill_config_file(cls, config_data: dict[str, Any]) -> None:
+@@ -299,7 +436,7 @@ class SkillConfigManager:
+         with config_file.open("w", encoding="utf-8") as f:
+             yaml.dump(config_data, f, default_flow_style=False)
+ 
+-        _CONFIG_FILE_CACHE.pop(config_file, None)
++        cls.invalidate_config_cache(config_file)
+         logger.info(f"Skill config saved to: {config_file}")
+ 
+ 
+diff --git a/src/vibesop/core/skills/external_loader.py b/src/vibesop/core/skills/external_loader.py
+index 2d2de5a0..356a3694 100644
+--- a/src/vibesop/core/skills/external_loader.py
++++ b/src/vibesop/core/skills/external_loader.py
+@@ -121,6 +121,10 @@ class ExternalSkillLoader:
+             pass
+         return self._auditor
+ 
++    def clear_cache(self) -> None:
++        """Drop cached external metadata so the next discovery re-reads SKILL.md."""
++        self._cache = {}
++
+     def discover_all(self, force_reload: bool = False) -> dict[str, ExternalSkillMetadata]:
+         if self._cache and not force_reload:
+             return self._cache
+diff --git a/src/vibesop/core/skills/loader.py b/src/vibesop/core/skills/loader.py
+index 50ae0298..4948c7b3 100644
+--- a/src/vibesop/core/skills/loader.py
++++ b/src/vibesop/core/skills/loader.py
+@@ -46,6 +46,69 @@ NON_SKILL_YAML_PARENT_DIRS = frozenset(
+ _SKILL_YAML_FILENAMES = frozenset({"skill.yaml", "skill.yml"})
+ 
+ 
++def is_non_skill_yaml_path(file_path: Path) -> bool:
++    """Return True if this YAML file cannot be a skill definition.
++
++    Shared with the candidate fingerprint so ``auto-config.yaml`` /
++    ``registry.yaml`` and nested pack junk are excluded from the skill-YAML
++    hash in the same way ``_load_yaml_skill`` skips them.
++    """
++    if file_path.name in NON_SKILL_YAML_FILENAMES:
++        return True
++    if file_path.name.lower() in _SKILL_YAML_FILENAMES:
++        return False
++    return any(part.lower() in NON_SKILL_YAML_PARENT_DIRS for part in file_path.parent.parts)
++
++
++def discovery_input_files(search_paths: Sequence[str | Path]) -> list[Path]:
++    """Markdown and skill-YAML files ``discover_all`` would consider.
++
++    Matches the loader globs (``*.md``, ``*.yaml``/``*.yml`` minus non-skill
++    YAML), not the post-parse skill map. Frontmatter-less markdown is still
++    an input because a later edit can add one. Shared with the candidate
++    fingerprint so those two views cannot drift.
++    """
++    found: list[Path] = []
++    seen: set[str] = set()
++    for search_path in search_paths:
++        root = Path(search_path)
++        try:
++            exists = root.exists()
++        except OSError:
++            continue
++        if not exists:
++            continue
++        try:
++            md_files = root.rglob("*.md")
++        except OSError:
++            md_files = []
++        for md_file in md_files:
++            _append_discovery_file(found, seen, md_file)
++        for pattern in ("*.yaml", "*.yml"):
++            try:
++                yaml_files = root.rglob(pattern)
++            except OSError:
++                continue
++            for yaml_file in yaml_files:
++                if is_non_skill_yaml_path(yaml_file):
++                    continue
++                _append_discovery_file(found, seen, yaml_file)
++    return sorted(found, key=str)
++
++
++def _append_discovery_file(found: list[Path], seen: set[str], path: Path) -> None:
++    try:
++        if not path.is_file():
++            return
++        key = str(path.resolve()) if path.exists() else str(path)
++    except OSError:
++        key = str(path)
++    if key in seen:
++        return
++    seen.add(key)
++    found.append(path)
++
++
+ @dataclass
+ class LoadedSkill:
+     """A skill definition loaded from a file."""
+@@ -135,6 +198,14 @@ class SkillLoader:
+     def project_hash(self) -> str:
+         return self._project_hash
+ 
++    def discovery_search_paths(self) -> list[Path]:
++        """Search roots ``discover_all`` walks, including default extra roots."""
++        return list(self._search_paths)
++
++    def discovery_skill_files(self) -> list[Path]:
++        """Files ``discover_all`` would consider under the live search roots."""
++        return discovery_input_files(self._search_paths)
++
+     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
+         """Discover all available skills."""
+         if self._skill_cache and not force_reload:
+@@ -372,11 +443,7 @@ class SkillLoader:
+ 
+     def _is_non_skill_yaml_path(self, file_path: Path) -> bool:
+         """Return True if this YAML file cannot be a skill definition."""
+-        if file_path.name in NON_SKILL_YAML_FILENAMES:
+-            return True
+-        if file_path.name.lower() in _SKILL_YAML_FILENAMES:
+-            return False
+-        return any(part.lower() in NON_SKILL_YAML_PARENT_DIRS for part in file_path.parent.parts)
++        return is_non_skill_yaml_path(file_path)
+ 
+     def _load_yaml_skill(self, file_path: Path) -> None:
+         """Load a skill from a YAML file."""
+@@ -488,4 +555,22 @@ class SkillLoader:
+         }
+ 
+     def clear_cache(self) -> None:
++        """Drop this loader's skill map. Does not touch the external-pack cache."""
+         self._skill_cache = {}
++
++    def invalidate_discovery_cache(self) -> None:
++        """Forget discovered skills so the next ``discover_all`` re-reads disk.
++
++        Clears this loader's skill map and the external-pack cache.
++        ``clear_cache`` stays a skill-map-only reset so existing callers keep
++        their contract. ``discover_all(force_reload=True)`` is unchanged: it
++        still rebuilds the skill map but does not, by itself, drop a warm
++        external-pack cache. Candidate reload calls this method first.
++        """
++        self.clear_cache()
++        external = self._external_loader
++        if external is None:
++            return
++        clear = getattr(external, "clear_cache", None)
++        if callable(clear):
++            clear()
+diff --git a/tests/core/routing/test_skill_governance.py b/tests/core/routing/test_skill_governance.py
+index 5892a168..904131f6 100644
+--- a/tests/core/routing/test_skill_governance.py
++++ b/tests/core/routing/test_skill_governance.py
+@@ -1,23 +1,68 @@
+ """Tests for Skill Governance (Phase 3): enable/disable and scope enforcement."""
+ 
++import json
++from pathlib import Path
++
+ import pytest
+ 
+ from vibesop.core.routing.unified import UnifiedRouter
+ from vibesop.core.skills.config_manager import SkillConfigManager
+ 
+ 
++def _isolate_config_and_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
++    """Point auto-config and external skill roots at ``tmp_path``.
++
++    ``SkillConfigManager`` writes a CWD-relative file. Leaving that pointed
++    at the repo would persist test disables into the worktree and would make
++    the candidate fingerprint depend on unrelated files.
++    """
++    from vibesop.core.skills.external_loader import ExternalSkillLoader
++
++    config_file = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
++    config_file.parent.mkdir(parents=True, exist_ok=True)
++    monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config_file)
++
++    home = tmp_path / "home"
++    home.mkdir(exist_ok=True)
++    monkeypatch.setenv("HOME", str(home))
++    monkeypatch.setattr(Path, "home", lambda: home)
++    monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [home / ".claude" / "skills"])
++    return config_file
++
++
++def _router(tmp_path: Path) -> UnifiedRouter:
++    router = UnifiedRouter(project_root=tmp_path)
++    router._config.enable_ai_triage = False
++    router._config.enable_embedding = False
++    return router
++
++
++def _open_deep_watch(router: UnifiedRouter) -> None:
++    """Let the next route run the deep SKILL.md walk.
++
++    One ``route()`` calls ``get_cached_candidates`` more than once. The later
++    call sees no change and arms the 5s interval, so a follow-up route skips
++    the body scan. This only rewinds that interval. The candidate list and
++    ``SkillLoader._skill_cache`` stay populated; a refresh that forgets to
++    drop them still returns the old description.
++    """
++    router._candidate_manager._last_reload_check = 0.0
++
++
+ @pytest.fixture
+-def router_with_skills(tmp_path):
++def router_with_skills(tmp_path, monkeypatch):
+     """Router with a local project skill and a builtin skill."""
++    _isolate_config_and_home(tmp_path, monkeypatch)
+     (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
+-    (tmp_path / ".vibe").mkdir()
+-    (tmp_path / ".vibe" / "skills").mkdir()
++    (tmp_path / ".vibe").mkdir(exist_ok=True)
++    (tmp_path / ".vibe" / "skills").mkdir(exist_ok=True)
+ 
+     # Create a local project skill
+     local_skill_dir = tmp_path / ".vibe" / "skills" / "my-local-skill"
+     local_skill_dir.mkdir(parents=True)
+     (local_skill_dir / "SKILL.md").write_text(
+-        "---\nname: my-local-skill\nintent: Run local task\ntags: [run, local, task]\n---\n# My Local Skill\n",
++        "---\nname: my-local-skill\ndescription: Run local task\n"
++        "intent: Run local task\ntags: [run, local, task]\n---\n# My Local Skill\n",
+         encoding="utf-8",
+     )
+ 
+@@ -40,24 +85,85 @@ def router_with_skills(tmp_path):
+ class TestSkillEnablement:
+     """Test enable/disable filtering in routing."""
+ 
+-    @pytest.mark.slow
+-    def test_disabled_skill_excluded_from_routing(self, router_with_skills, tmp_path):
+-        """Skills with enabled=False should be excluded from candidates at discovery time."""
+-        # Disable the local skill
+-        SkillConfigManager.update_skill_config("my-local-skill", {"enabled": False})
+-
+-        # Clear router cache so next orchestrate() reloads from SkillLoader
+-        router_with_skills._candidates_cache = None
+-        if hasattr(router_with_skills, "_skill_loader"):
+-            router_with_skills._skill_loader._skill_cache = {}
++    def test_disabled_skill_excluded_from_routing(self, router_with_skills):
++        """Skills with enabled=False stay unroutable, including explicit !id.
+ 
+-        # SkillLoader.discover_all() filters out disabled skills;
+-        # route() should therefore not match the disabled skill
+-        result = router_with_skills.orchestrate("!my-local-skill run local task")
+-        assert result.primary is None or result.primary.skill_id != "my-local-skill"
++        The pool is whatever the public route path loaded. Nothing clears
++        ``_candidates_cache`` or ``SkillLoader._skill_cache`` from the test.
++        """
++        SkillConfigManager.update_skill_config("my-local-skill", {"enabled": False})
++        try:
++            result = router_with_skills.route(
++                "!my-local-skill run local task",
++                record_telemetry=False,
++            )
++            assert result.primary is None or result.primary.skill_id != "my-local-skill"
++        finally:
++            SkillConfigManager.update_skill_config("my-local-skill", {"enabled": True})
++
++    def test_disable_hides_skill_on_hot_route_and_disk_cache_hit(
++        self, router_with_skills, tmp_path
++    ):
++        """D04: update_skill_config(enabled=False) then route().
++
++        The same process must drop the skill on the next route, and a new
++        process must not revive it from ``candidates_v2.json``. A third
++        router proves the rebuilt file is a disk-cache hit, not another rescan
++        that happens to agree.
++        """
++        hot = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert hot.primary is not None
++        assert hot.primary.skill_id == "my-local-skill"
+ 
+-        # Clean up
+-        SkillConfigManager.update_skill_config("my-local-skill", {"enabled": True})
++        # Arm the 5s filesystem watch, then disable. Governance must still
++        # win on the next route; the interval must not keep the old enabled bit.
++        router_with_skills.route("!my-local-skill run local task", record_telemetry=False)
++        SkillConfigManager.update_skill_config("my-local-skill", {"enabled": False})
++        try:
++            again = router_with_skills.route(
++                "!my-local-skill run local task",
++                record_telemetry=False,
++            )
++            assert again.primary is None or again.primary.skill_id != "my-local-skill"
++            hot_ids = {
++                c["id"] for c in router_with_skills._candidate_manager.get_cached_candidates()
++            }
++            assert "my-local-skill" not in hot_ids
++
++            cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++            payload = json.loads(cache_path.read_text(encoding="utf-8"))
++            manager = router_with_skills._candidate_manager
++            assert payload["paths_hash"] == manager._compute_paths_hash(manager._search_paths)
++            assert all(c.get("id") != "my-local-skill" for c in payload["candidates"])
++
++            payload["candidates"].append(
++                {
++                    "id": "disk-cache-sentinel",
++                    "enabled": True,
++                    "description": "hit",
++                    "lifecycle": "active",
++                    "scope": "global",
++                    "source_file": str(
++                        tmp_path / ".vibe" / "skills" / "my-local-skill" / "SKILL.md"
++                    ),
++                }
++            )
++            cache_path.write_text(json.dumps(payload), encoding="utf-8")
++            stamped = cache_path.stat().st_mtime_ns
++
++            fresh = _router(tmp_path)
++            fresh_ids = {c["id"] for c in fresh._candidate_manager.get_cached_candidates()}
++            assert "my-local-skill" not in fresh_ids
++            assert "disk-cache-sentinel" in fresh_ids
++            assert cache_path.stat().st_mtime_ns == stamped
++
++            cold = fresh.route("!my-local-skill run local task", record_telemetry=False)
++            assert cold.primary is None or cold.primary.skill_id != "my-local-skill"
++        finally:
++            SkillConfigManager.update_skill_config("my-local-skill", {"enabled": True})
+ 
+     def test_enabled_skill_included_in_routing(self, router_with_skills):
+         """Skills with enabled=True (default) should be available."""
+@@ -80,11 +186,166 @@ class TestSkillScope:
+         assert result.primary is not None
+         assert result.primary.skill_id == "my-local-skill"
+ 
+-        # Clean up
+         SkillConfigManager.update_skill_config("my-local-skill", {"scope": "global"})
+ 
+-    def test_project_scoped_skill_filtered_outside_project(self, tmp_path):
++    def test_scope_and_archive_refresh_hot_and_fresh_routes(self, router_with_skills, tmp_path):
++        """Scope and lifecycle edits follow the same path as enabled=False."""
++        first = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert first.primary is not None
++        assert first.primary.skill_id == "my-local-skill"
++
++        SkillConfigManager.update_skill_config("my-local-skill", {"scope": "project"})
++        try:
++            scoped = router_with_skills.route(
++                "!my-local-skill run local task",
++                record_telemetry=False,
++            )
++            assert scoped.primary is not None
++            assert scoped.primary.skill_id == "my-local-skill"
++            hot_scope = next(
++                c
++                for c in router_with_skills._candidate_manager.get_cached_candidates()
++                if c["id"] == "my-local-skill"
++            )
++            assert hot_scope["scope"] == "project"
++
++            fresh = _router(tmp_path)
++            fresh_scope = next(
++                c
++                for c in fresh._candidate_manager.get_cached_candidates()
++                if c["id"] == "my-local-skill"
++            )
++            assert fresh_scope["scope"] == "project"
++            fresh_hit = fresh.route("!my-local-skill run local task", record_telemetry=False)
++            assert fresh_hit.primary is not None
++            assert fresh_hit.primary.skill_id == "my-local-skill"
++        finally:
++            SkillConfigManager.update_skill_config("my-local-skill", {"scope": "global"})
++
++        SkillConfigManager.update_skill_config("my-local-skill", {"lifecycle": "archived"})
++        try:
++            archived = router_with_skills.route(
++                "!my-local-skill run local task",
++                record_telemetry=False,
++            )
++            assert archived.primary is None or archived.primary.skill_id != "my-local-skill"
++            cold = _router(tmp_path)
++            cold_ids = {c["id"] for c in cold._candidate_manager.get_cached_candidates()}
++            assert "my-local-skill" not in cold_ids
++            cold_route = cold.route("!my-local-skill run local task", record_telemetry=False)
++            assert cold_route.primary is None or cold_route.primary.skill_id != "my-local-skill"
++        finally:
++            SkillConfigManager.update_skill_config("my-local-skill", {"lifecycle": "active"})
++
++    def test_same_mtime_yaml_disable_hides_skill_hot_and_fresh(self, router_with_skills, tmp_path):
++        """R1: same-mtime auto-config edit is visible to reader, hot, and disk."""
++        import os
++
++        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE
++
++        config = SkillConfigManager.SKILL_CONFIG_FILE
++        config.write_text(
++            "skills:\n  my-local-skill:\n    enabled: true\n",
++            encoding="utf-8",
++        )
++        first = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert first.primary is not None
++        assert first.primary.skill_id == "my-local-skill"
++
++        stamp = config.stat()
++        config.write_text(
++            "skills:\n  my-local-skill:\n    enabled: false\n",
++            encoding="utf-8",
++        )
++        os.utime(config, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
++
++        hot = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert hot.primary is None or hot.primary.skill_id != "my-local-skill"
++        hot_ids = {c["id"] for c in router_with_skills._candidate_manager.get_cached_candidates()}
++        assert "my-local-skill" not in hot_ids
++        assert SkillConfigManager.get_skill_config("my-local-skill").enabled is False
++
++        _CONFIG_FILE_CACHE.clear()
++        fresh = _router(tmp_path)
++        fresh_ids = {c["id"] for c in fresh._candidate_manager.get_cached_candidates()}
++        assert "my-local-skill" not in fresh_ids
++        assert SkillConfigManager.get_skill_config("my-local-skill").enabled is False
++        cold = fresh.route("!my-local-skill run local task", record_telemetry=False)
++        assert cold.primary is None or cold.primary.skill_id != "my-local-skill"
++
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        assert all(c.get("id") != "my-local-skill" for c in payload["candidates"])
++
++    def test_public_owner_hash_update_hides_skill_hot_and_fresh(self, router_with_skills, tmp_path):
++        """R3: update_skill_config owner hash is honored by hot, fresh, and loader."""
++        from vibesop.core.skills.loader import SkillLoader
++
++        first = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert first.primary is not None
++        assert first.primary.skill_id == "my-local-skill"
++
++        loader = router_with_skills._candidate_manager._skill_loader
++        own_hash = loader.project_hash
++        SkillConfigManager.update_skill_config(
++            "my-local-skill",
++            {"scope": "project", "evaluation_context": {"project_hash": own_hash}},
++        )
++        owned = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert owned.primary is not None
++        assert owned.primary.skill_id == "my-local-skill"
++
++        SkillConfigManager.update_skill_config(
++            "my-local-skill",
++            {"evaluation_context": {"project_hash": "another-project"}},
++        )
++        hot = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert hot.primary is None or hot.primary.skill_id != "my-local-skill"
++        hot_ids = {c["id"] for c in router_with_skills._candidate_manager.get_cached_candidates()}
++        assert "my-local-skill" not in hot_ids
++
++        fresh = _router(tmp_path)
++        fresh_ids = {c["id"] for c in fresh._candidate_manager.get_cached_candidates()}
++        assert "my-local-skill" not in fresh_ids
++        cold = fresh.route("!my-local-skill run local task", record_telemetry=False)
++        assert cold.primary is None or cold.primary.skill_id != "my-local-skill"
++
++        raw = SkillLoader(
++            tmp_path,
++            search_paths=[tmp_path / ".vibe" / "skills"],
++            enable_external=False,
++            strict_search_paths=True,
++        ).discover_all()
++        assert "my-local-skill" not in raw
++        disk = SkillConfigManager.get_skill_config("my-local-skill")
++        assert disk.evaluation_context.get("project_hash") == "another-project"
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        assert all(c.get("id") != "my-local-skill" for c in payload["candidates"])
++
++    def test_project_scoped_skill_filtered_outside_project(
++        self, tmp_path, monkeypatch: pytest.MonkeyPatch
++    ):
+         """Project-scoped skills should be excluded when routing from a different project."""
++        _isolate_config_and_home(tmp_path, monkeypatch)
+         # Create two project roots
+         project_a = tmp_path / "project_a"
+         project_b = tmp_path / "project_b"
+@@ -99,7 +360,6 @@ class TestSkillScope:
+             encoding="utf-8",
+         )
+ 
+-        # Set it to project scope
+         SkillConfigManager.update_skill_config("project-a-skill", {"scope": "project"})
+ 
+         # Create router for project B - should not see project-a-skill
+@@ -117,7 +377,6 @@ class TestSkillScope:
+         if result.primary:
+             assert result.primary.skill_id != "project-a-skill"
+ 
+-        # Clean up
+         SkillConfigManager.update_skill_config("project-a-skill", {"scope": "global"})
+ 
+     def test_global_skill_always_available(self, router_with_skills):
+@@ -128,6 +387,132 @@ class TestSkillScope:
+         assert result.primary.skill_id == "systematic-debugging"
+ 
+ 
++class TestSkillBodyRefresh:
++    """D05: SKILL.md edits show up through auto-refresh and explicit reload."""
++
++    def test_description_edit_auto_refresh_and_explicit_reload(self, router_with_skills, tmp_path):
++        skill = tmp_path / ".vibe" / "skills" / "my-local-skill" / "SKILL.md"
++        first = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert first.primary is not None
++        assert first.primary.description == "Run local task"
++
++        skill.write_text(
++            "---\nname: my-local-skill\ndescription: Edited description\n"
++            "intent: Run local task\ntags: [run, local, task]\n---\n# edited\n",
++            encoding="utf-8",
++        )
++        # The first route already armed the 5s deep walk. While that gate is
++        # shut the previous body is served; opening it is what auto-refresh is.
++        held = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert held.primary is not None
++        assert held.primary.description == "Run local task"
++        _open_deep_watch(router_with_skills)
++        refreshed = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert refreshed.primary is not None
++        assert refreshed.primary.skill_id == "my-local-skill"
++        assert refreshed.primary.description == "Edited description"
++
++        skill.write_text(
++            "---\nname: my-local-skill\ndescription: Reloaded description\n"
++            "intent: Run local task\ntags: [run, local, task]\n---\n# reloaded\n",
++            encoding="utf-8",
++        )
++        # Auto-refresh just re-armed the interval. Explicit reload must not
++        # wait it out, and must not store the previous body under the new hash.
++        assert router_with_skills._candidate_manager._last_reload_check != 0.0
++        router_with_skills.reload_candidates()
++        reloaded = router_with_skills.route(
++            "!my-local-skill run local task",
++            record_telemetry=False,
++        )
++        assert reloaded.primary is not None
++        assert reloaded.primary.description == "Reloaded description"
++
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        manager = router_with_skills._candidate_manager
++        assert payload["paths_hash"] == manager._compute_paths_hash(manager._search_paths)
++        cached = next(c for c in payload["candidates"] if c["id"] == "my-local-skill")
++        assert cached["description"] == "Reloaded description"
++        assert all(c.get("description") != "Edited description" for c in payload["candidates"])
++        assert all(c.get("description") != "Run local task" for c in payload["candidates"])
++
++    def test_add_and_delete_refresh_the_pool(self, router_with_skills, tmp_path):
++        router_with_skills.route("!my-local-skill run local task", record_telemetry=False)
++        added = tmp_path / ".vibe" / "skills" / "added-skill"
++        added.mkdir()
++        (added / "SKILL.md").write_text(
++            "---\nname: added-skill\ndescription: Newly added\n---\n# added\n",
++            encoding="utf-8",
++        )
++        _open_deep_watch(router_with_skills)
++        seen = router_with_skills.route("!added-skill use it", record_telemetry=False)
++        assert seen.primary is not None
++        assert seen.primary.skill_id == "added-skill"
++        assert seen.primary.description == "Newly added"
++
++        (added / "SKILL.md").unlink()
++        # Delete goes through explicit reload while the deep-walk interval is
++        # still armed by the route that discovered the new skill.
++        assert router_with_skills._candidate_manager._last_reload_check != 0.0
++        router_with_skills.reload_candidates()
++        gone = router_with_skills.route("!added-skill use it", record_telemetry=False)
++        assert gone.primary is None or gone.primary.skill_id != "added-skill"
++        ids = {c["id"] for c in router_with_skills._candidate_manager.get_cached_candidates()}
++        assert "added-skill" not in ids
++
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        assert all(c.get("id") != "added-skill" for c in payload["candidates"])
++
++
++class TestDisableModelInvocation:
++    """Fail-closed A-5: explicit-only skills stay reachable by name only."""
++
++    def test_explicit_reaches_invocation_disabled_skill(self, tmp_path, monkeypatch):
++        _isolate_config_and_home(tmp_path, monkeypatch)
++        (tmp_path / "pyproject.toml").write_text('[project]\nname = "vibesop"\n', encoding="utf-8")
++        skill_dir = tmp_path / "core" / "skills" / "explicit-only-skill"
++        skill_dir.mkdir(parents=True)
++        (skill_dir / "SKILL.md").write_text(
++            "---\nname: explicit-only-skill\n"
++            "description: Probe spec gaps for the xyzzy-plugh ritual\n"
++            "disable-model-invocation: true\n---\n# explicit only\n",
++            encoding="utf-8",
++        )
++        router = _router(tmp_path)
++        from vibesop.core.routing.matcher_pipeline import (
++            filter_invocation_disabled_candidates,
++            invocation_disabled_skill_ids,
++        )
++
++        explicit = router.route("!explicit-only-skill do it", record_telemetry=False)
++        assert explicit.primary is not None
++        assert explicit.primary.skill_id == "explicit-only-skill"
++
++        auto = router.route(
++            "please handle the xyzzy-plugh ritual now",
++            record_telemetry=False,
++        )
++        assert auto.primary is None or auto.primary.skill_id != "explicit-only-skill"
++
++        pool = router._candidate_manager.get_cached_candidates()
++        assert any(c["id"] == "explicit-only-skill" and c["disable_model_invocation"] for c in pool)
++        assert all(
++            c["id"] != "explicit-only-skill" for c in filter_invocation_disabled_candidates(pool)
++        )
++        assert "explicit-only-skill" in invocation_disabled_skill_ids(router)
++
++
+ class TestSkillConfigDefaults:
+     """Test SkillConfig default values."""
+ 
+diff --git a/tests/core/skills/test_loader.py b/tests/core/skills/test_loader.py
+index 319d6f3d..a4c3538b 100644
+--- a/tests/core/skills/test_loader.py
++++ b/tests/core/skills/test_loader.py
+@@ -11,7 +11,7 @@ from vibesop.core.models import SkillLifecycle
+ from vibesop.core.skills.base import PromptSkill, WorkflowSkill
+ from vibesop.core.skills.config_manager import SkillConfig, SkillConfigManager
+ from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
+-from vibesop.core.skills.loader import LoadedSkill, SkillLoader
++from vibesop.core.skills.loader import LoadedSkill, SkillLoader, discovery_input_files
+ from vibesop.spec.models import SkillSpec, SkillType
+ 
+ 
+@@ -62,6 +62,10 @@ class TestSkillLoaderInit:
+         loader = SkillLoader(project_root=tmp_path, search_paths=[custom])
+         assert custom in loader._search_paths
+ 
++    def test_discovery_search_paths_include_default_project_skills(self, tmp_path: Path):
++        loader = SkillLoader(project_root=tmp_path, enable_external=False)
++        assert tmp_path.resolve() / "skills" in loader.discovery_search_paths()
++
+     def test_project_hash_deterministic(self, tmp_path: Path):
+         loader1 = SkillLoader(project_root=tmp_path)
+         loader2 = SkillLoader(project_root=tmp_path)
+@@ -115,6 +119,30 @@ class TestGenerateIdFromPath:
+ class TestDiscoverAll:
+     """Test discover_all method."""
+ 
++    def test_discovery_input_files_include_ordinary_markdown(self, tmp_path: Path):
++        skills_dir = tmp_path / "skills" / "alpha"
++        skills_dir.mkdir(parents=True)
++        ordinary = skills_dir / "alpha.md"
++        ordinary.write_text(
++            "---\nname: alpha\ndescription: before\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        (skills_dir / "README.md").write_text("# notes\n", encoding="utf-8")
++        files = discovery_input_files([tmp_path / "skills"])
++        names = {path.name for path in files}
++        assert "alpha.md" in names
++        assert "README.md" in names
++        loader = SkillLoader(
++            project_root=tmp_path,
++            search_paths=[tmp_path / "skills"],
++            enable_external=False,
++            strict_search_paths=True,
++        )
++        discovered = {path.name for path in loader.discovery_skill_files()}
++        assert discovered == names
++        skills = loader.discover_all()
++        assert skills["alpha"].metadata.description == "before"
++
+     def test_discovers_markdown_skills(self, tmp_path: Path):
+         skills_dir = tmp_path / "skills"
+         skills_dir.mkdir()
+@@ -498,6 +526,59 @@ Body
+         loader.clear_cache()
+         assert len(loader._skill_cache) == 0
+ 
++    def test_invalidate_discovery_cache_reloads_skill_body(self, tmp_path: Path):
++        skills_dir = tmp_path / "skills" / "demo"
++        skills_dir.mkdir(parents=True)
++        skill = skills_dir / "SKILL.md"
++        skill.write_text(
++            "---\nname: demo\ndescription: old\n---\n# old\n",
++            encoding="utf-8",
++        )
++        loader = SkillLoader(project_root=tmp_path, enable_external=False)
++        assert loader.discover_all()["demo"].metadata.description == "old"
++        skill.write_text(
++            "---\nname: demo\ndescription: new\n---\n# new\n",
++            encoding="utf-8",
++        )
++        assert loader.discover_all()["demo"].metadata.description == "old"
++        loader.invalidate_discovery_cache()
++        assert loader.discover_all()["demo"].metadata.description == "new"
++
++    def test_clear_cache_leaves_external_cache(self, tmp_path: Path):
++        loader = SkillLoader(project_root=tmp_path, enable_external=True)
++        assert loader._external_loader is not None
++        loader._external_loader._cache["keep"] = object()  # type: ignore[assignment]
++        loader.clear_cache()
++        assert loader._skill_cache == {}
++        assert "keep" in loader._external_loader._cache
++        loader.invalidate_discovery_cache()
++        assert loader._external_loader._cache == {}
++
++
++class TestExternalLoaderCache:
++    """External-pack metadata must not outlive an explicit cache clear."""
++
++    def test_clear_cache_rereads_skill_md(self, tmp_path: Path):
++        from vibesop.core.skills.external_loader import ExternalSkillLoader
++
++        root = tmp_path / "ext"
++        skill_dir = root / "alpha"
++        skill_dir.mkdir(parents=True)
++        skill = skill_dir / "SKILL.md"
++        skill.write_text(
++            "---\nname: alpha\ndescription: one\n---\nbody\n",
++            encoding="utf-8",
++        )
++        loader = ExternalSkillLoader(external_paths=[root], require_audit=False)
++        assert loader.discover_all()["alpha"].base_metadata.description == "one"
++        skill.write_text(
++            "---\nname: alpha\ndescription: two\n---\nbody\n",
++            encoding="utf-8",
++        )
++        assert loader.discover_all()["alpha"].base_metadata.description == "one"
++        loader.clear_cache()
++        assert loader.discover_all()["alpha"].base_metadata.description == "two"
++
+ 
+ class TestValidateAlgorithms:
+     """Test _validate_algorithms."""
+diff --git a/tests/unit/core/routing/test_candidate_manager.py b/tests/unit/core/routing/test_candidate_manager.py
+index 5dc5d43f..16f3f223 100644
+--- a/tests/unit/core/routing/test_candidate_manager.py
++++ b/tests/unit/core/routing/test_candidate_manager.py
+@@ -399,6 +399,33 @@ class TestCacheInvalidation:
+         )
+         assert mgr._load_from_disk_cache([search_path]) is None
+ 
++        # v3 hashed mtime only. A matching paths_hash must still be discarded
++        # so a pre-fix entry cannot be reread as if it were content-addressed.
++        cache_path.write_text(
++            json.dumps(
++                {
++                    "schema_version": 3,
++                    "paths_hash": paths_hash,
++                    "candidates": [{"id": "stale-v3", "description": "old"}],
++                }
++            ),
++            encoding="utf-8",
++        )
++        assert mgr._load_from_disk_cache([search_path]) is None
++
++        # v4 hashed SKILL.md only and omitted project_hash / ordinary markdown.
++        cache_path.write_text(
++            json.dumps(
++                {
++                    "schema_version": 4,
++                    "paths_hash": paths_hash,
++                    "candidates": [{"id": "stale-v4", "description": "old"}],
++                }
++            ),
++            encoding="utf-8",
++        )
++        assert mgr._load_from_disk_cache([search_path]) is None
++
+         mgr._save_to_disk_cache([{"id": "current"}], paths_hash)
+         loaded = mgr._load_from_disk_cache([search_path])
+         assert loaded == [{"id": "current"}]
+@@ -441,3 +468,453 @@ class TestCacheInvalidation:
+         (new_dir / "SKILL.md").write_text("id: new\n", encoding="utf-8")
+ 
+         assert mgr._should_check_reload() is True
++
++
++def _isolated_manager(tmp_path: Path):
++    """CandidateManager whose discovery is the tiny skills dir, not the machine."""
++    from vibesop.core.skills.loader import SkillLoader
++
++    search = tmp_path / "skills"
++    search.mkdir(exist_ok=True)
++    mgr = CandidateManager(tmp_path)
++    mgr._search_paths = [search]
++    mgr._skill_loader = SkillLoader(
++        project_root=tmp_path,
++        search_paths=[search],
++        enable_external=False,
++        strict_search_paths=True,
++    )
++    return mgr, search
++
++
++def _write_skill(search: Path, skill_id: str, description: str) -> Path:
++    skill = search / skill_id / "SKILL.md"
++    skill.parent.mkdir(parents=True, exist_ok=True)
++    skill.write_text(
++        f"---\nname: {skill_id}\ndescription: {description}\n---\n# {skill_id}\n",
++        encoding="utf-8",
++    )
++    return skill
++
++
++class TestFingerprintContract:
++    """D04/D05 cache key: content, governance projection, registry, skill YAML."""
++
++    def test_content_changes_hash_preserved_mtime_does_not(self, tmp_path: Path) -> None:
++        mgr, search = _isolated_manager(tmp_path)
++        skill = _write_skill(search, "alpha", "one")
++        before = mgr._compute_paths_hash([search])
++
++        stamp = skill.stat()
++        skill.write_text(
++            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        import os
++
++        os.utime(skill, (stamp.st_atime, stamp.st_mtime))
++        assert mgr._compute_paths_hash([search]) != before
++
++        # A pure timestamp touch must not look like a new skill body.
++        current = mgr._compute_paths_hash([search])
++        os.utime(skill, (stamp.st_atime, stamp.st_mtime + 50))
++        assert mgr._compute_paths_hash([search]) == current
++
++    def test_yaml_skill_and_registry_are_in_the_fingerprint(self, tmp_path: Path) -> None:
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "one")
++        baseline = mgr._compute_paths_hash([search])
++
++        yaml_skill = search / "beta.yaml"
++        yaml_skill.write_text(
++            "id: beta\nname: beta\ndescription: from yaml\n",
++            encoding="utf-8",
++        )
++        with_yaml = mgr._compute_paths_hash([search])
++        assert with_yaml != baseline
++
++        yaml_skill.write_text(
++            "id: beta\nname: beta\ndescription: yaml edited\n",
++            encoding="utf-8",
++        )
++        assert mgr._compute_paths_hash([search]) != with_yaml
++
++        registry = search / "registry.yaml"
++        registry.write_text("skills: []\n", encoding="utf-8")
++        with_registry = mgr._compute_paths_hash([search])
++        registry.write_text("skills:\n  - id: added\n", encoding="utf-8")
++        assert mgr._compute_paths_hash([search]) != with_registry
++
++    def test_usage_stats_do_not_change_fingerprint_governance_does(
++        self, tmp_path: Path, monkeypatch
++    ) -> None:
++        from vibesop.core.skills.config_manager import SkillConfigManager
++
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "one")
++        config_file = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
++        config_file.parent.mkdir(parents=True)
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config_file)
++
++        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "scope": "global"})
++        baseline = mgr._compute_paths_hash([search])
++        SkillConfigManager.update_skill_config("alpha", {"usage_stats": {"call_count": 4}})
++        assert mgr._compute_paths_hash([search]) == baseline
++
++        SkillConfigManager.update_skill_config("alpha", {"enabled": False})
++        disabled = mgr._compute_paths_hash([search])
++        assert disabled != baseline
++
++        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "lifecycle": "archived"})
++        assert mgr._compute_paths_hash([search]) != disabled
++
++    def test_same_mtime_edit_is_visible_to_auto_refresh(self, tmp_path: Path) -> None:
++        import os
++
++        mgr, search = _isolated_manager(tmp_path)
++        skill = _write_skill(search, "alpha", "one")
++        first = mgr.get_cached_candidates()
++        assert next(c for c in first if c["id"] == "alpha")["description"] == "one"
++
++        stamp = skill.stat()
++        skill.write_text(
++            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        os.utime(skill, (stamp.st_atime, stamp.st_mtime))
++        # Open the rate-limit gate. This does not clear either cache.
++        mgr._last_reload_check = 0.0
++        second = mgr.get_cached_candidates()
++        assert next(c for c in second if c["id"] == "alpha")["description"] == "two"
++
++    def test_reload_persists_new_metadata_under_new_fingerprint(self, tmp_path: Path) -> None:
++        mgr, search = _isolated_manager(tmp_path)
++        skill = _write_skill(search, "alpha", "one")
++        assert (
++            next(c for c in mgr.get_cached_candidates() if c["id"] == "alpha")["description"]
++            == "one"
++        )
++
++        skill.write_text(
++            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        mgr.reload()
++        refreshed = next(c for c in mgr.get_cached_candidates() if c["id"] == "alpha")
++        assert refreshed["description"] == "two"
++
++        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
++        assert payload["paths_hash"] == mgr._compute_paths_hash(mgr._search_paths)
++        cached = next(c for c in payload["candidates"] if c["id"] == "alpha")
++        assert cached["description"] == "two"
++
++        # A second manager must hit that file, not rebuild a different body.
++        payload["candidates"].append({"id": "disk-cache-sentinel", "description": "hit"})
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        cache_path.write_text(json.dumps(payload), encoding="utf-8")
++        stamped = cache_path.stat().st_mtime_ns
++
++        fresh, _fresh_search = _isolated_manager(tmp_path)
++        # Same roots the writer hashed. pin_search_paths would bypass the disk.
++        fresh._search_paths = [search]
++        fresh._skill_loader = mgr._skill_loader
++        # The shared loader was cleared by reload; a hit must not need it.
++        ids = {c["id"] for c in fresh.get_cached_candidates()}
++        assert "disk-cache-sentinel" in ids
++        assert (
++            next(c for c in fresh.get_cached_candidates() if c["id"] == "alpha")["description"]
++            == "two"
++        )
++        assert cache_path.stat().st_mtime_ns == stamped
++
++    def test_add_and_delete_via_auto_refresh_and_reload(self, tmp_path: Path) -> None:
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "one")
++        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha"}
++
++        _write_skill(search, "beta", "two")
++        mgr._last_reload_check = 0.0
++        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha", "beta"}
++
++        (search / "beta" / "SKILL.md").unlink()
++        mgr.reload()
++        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha"}
++        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
++        assert all(c.get("id") != "beta" for c in payload["candidates"])
++
++    def test_reload_invalidates_index_layer_cache(self, tmp_path: Path) -> None:
++        from types import SimpleNamespace
++
++        from vibesop.core.routing._layers import try_index_layer
++        from vibesop.core.routing.candidate_manager import index_cache_epoch
++
++        mgr, _search = _isolated_manager(tmp_path)
++        router = SimpleNamespace(
++            project_root=tmp_path,
++            _config=SimpleNamespace(
++                index_match_threshold=0.35,
++                index_external_match_threshold=0.5,
++            ),
++            _index_layer_cache={"stale-skill": object()},
++            _index_profile_tokens={"stale-skill": {"stale"}},
++            _index_layer_epoch=index_cache_epoch(tmp_path),
++            _get_skill_source=lambda _sid, _ns: "builtin",
++        )
++        mgr.reload()
++        _match, detail = try_index_layer(router, "review code", [])
++        assert detail.matched is False
++        assert "stale-skill" not in router._index_layer_cache
++
++
++class _Clock:
++    """Controllable monotonic clock for the declared 5s auto-refresh interval."""
++
++    def __init__(self, now: float = 100.0) -> None:
++        self.now = now
++
++    def __call__(self) -> float:
++        return self.now
++
++
++def _write_named_markdown(search: Path, skill_id: str, filename: str, description: str) -> Path:
++    skill = search / skill_id / filename
++    skill.parent.mkdir(parents=True, exist_ok=True)
++    skill.write_text(
++        f"---\nname: {skill_id}\ndescription: {description}\n---\n# {skill_id}\n",
++        encoding="utf-8",
++    )
++    return skill
++
++
++class TestDiscoveryFingerprintParity:
++    """R1–R3: fingerprint, config reader, and loader discovery stay one source."""
++
++    def test_same_mtime_config_edit_hides_skill_on_hot_and_fresh_disk(
++        self, tmp_path: Path, monkeypatch
++    ) -> None:
++        import os
++
++        from vibesop.core.skills.config_manager import (
++            _CONFIG_FILE_CACHE,
++            SkillConfigManager,
++        )
++
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "before")
++        config = tmp_path / "auto-config.yaml"
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
++        _CONFIG_FILE_CACHE.clear()
++        config.write_text("skills:\n  alpha:\n    enabled: true\n", encoding="utf-8")
++
++        first = mgr.get_cached_candidates()
++        assert [c["enabled"] for c in first if c["id"] == "alpha"] == [True]
++        before = mgr._content_fingerprint
++        stamp = config.stat()
++        config.write_text("skills:\n  alpha:\n    enabled: false\n", encoding="utf-8")
++        os.utime(config, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
++
++        hot = mgr.get_cached_candidates()
++        after = mgr._content_fingerprint
++        assert before != after
++        assert [c["id"] for c in hot] == []
++        assert SkillConfigManager.get_skill_config("alpha").enabled is False
++
++        _CONFIG_FILE_CACHE.clear()
++        fresh, _ = _isolated_manager(tmp_path)
++        fresh_ids = [c["id"] for c in fresh.get_cached_candidates()]
++        assert fresh_ids == []
++        assert SkillConfigManager.get_skill_config("alpha").enabled is False
++
++        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
++        payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        assert all(c.get("id") != "alpha" for c in payload["candidates"])
++
++    def test_ordinary_markdown_edit_is_visible_after_declared_interval(
++        self, tmp_path: Path
++    ) -> None:
++        mgr, search = _isolated_manager(tmp_path)
++        skill = _write_named_markdown(search, "alpha", "alpha.md", "before")
++        clock = _Clock(100.0)
++        mgr._clock = clock
++        first = mgr.get_cached_candidates()
++        assert next(c for c in first if c["id"] == "alpha")["description"] == "before"
++        before = mgr._content_fingerprint
++        mgr._last_reload_check = clock.now
++
++        skill.write_text(
++            "---\nname: alpha\ndescription: after\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        clock.now += 1.0
++        held = mgr.get_cached_candidates()
++        assert next(c for c in held if c["id"] == "alpha")["description"] == "before"
++        assert mgr._compute_paths_hash([search]) != before
++
++        clock.now += 5.0
++        hot = mgr.get_cached_candidates()
++        fresh, _ = _isolated_manager(tmp_path)
++        assert next(c for c in hot if c["id"] == "alpha")["description"] == "after"
++        assert (
++            next(c for c in fresh.get_cached_candidates() if c["id"] == "alpha")["description"]
++            == "after"
++        )
++
++    def test_default_project_skills_root_is_fingerprinted(
++        self, tmp_path: Path, monkeypatch
++    ) -> None:
++        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
++        from vibesop.core.skills.external_loader import ExternalSkillLoader
++        from vibesop.core.skills.loader import SkillLoader
++
++        home = tmp_path / "home"
++        home.mkdir(exist_ok=True)
++        monkeypatch.setattr(Path, "home", lambda: home)
++        monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [home / "none"])
++        config = tmp_path / "auto-config.yaml"
++        config.write_text("skills: {}\n", encoding="utf-8")
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
++        _CONFIG_FILE_CACHE.clear()
++
++        project = tmp_path / "default-root"
++        search = project / "skills"
++        skill = _write_skill(search, "alpha", "before")
++        mgr = CandidateManager(project)
++        mgr._search_paths = mgr._build_search_paths()
++        mgr._skill_loader = SkillLoader(
++            project,
++            search_paths=mgr._search_paths,
++            enable_external=False,
++            strict_search_paths=False,
++        )
++        clock = _Clock(100.0)
++        mgr._clock = clock
++        mgr.get_cached_candidates()
++        before = mgr._content_fingerprint
++        assert search in mgr._search_paths
++        assert search in mgr._skill_loader._search_paths
++
++        skill.write_text(
++            "---\nname: alpha\ndescription: after\n---\n# alpha\n",
++            encoding="utf-8",
++        )
++        clock.now += 5.0
++        mgr._last_reload_check = 0.0
++        hot = mgr.get_cached_candidates()
++        fresh = CandidateManager(project)
++        fresh._search_paths = fresh._build_search_paths()
++        fresh._skill_loader = SkillLoader(
++            project,
++            search_paths=fresh._search_paths,
++            enable_external=False,
++            strict_search_paths=False,
++        )
++        assert before != mgr._compute_paths_hash(mgr._search_paths)
++        assert [c["description"] for c in hot if c["id"] == "alpha"] == ["after"]
++        assert [c["description"] for c in fresh.get_cached_candidates() if c["id"] == "alpha"] == [
++            "after"
++        ]
++
++    def test_public_owner_hash_update_hides_skill_on_hot_and_fresh(
++        self, tmp_path: Path, monkeypatch
++    ) -> None:
++        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
++        from vibesop.core.skills.loader import SkillLoader
++
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "before")
++        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
++        config.parent.mkdir(parents=True, exist_ok=True)
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
++        _CONFIG_FILE_CACHE.clear()
++
++        SkillConfigManager.update_skill_config(
++            "alpha",
++            {
++                "scope": "project",
++                "evaluation_context": {"project_hash": mgr._skill_loader.project_hash},
++            },
++        )
++        first = mgr.get_cached_candidates()
++        assert [c["id"] for c in first] == ["alpha"]
++        before = mgr._content_fingerprint
++
++        SkillConfigManager.update_skill_config(
++            "alpha",
++            {"evaluation_context": {"project_hash": "another-project"}},
++        )
++        mgr._last_reload_check = 0.0
++        hot = mgr.get_cached_candidates()
++        fresh, _ = _isolated_manager(tmp_path)
++        raw = SkillLoader(
++            tmp_path,
++            search_paths=[search],
++            enable_external=False,
++            strict_search_paths=True,
++        ).discover_all()
++        assert before != mgr._compute_paths_hash([search])
++        assert [c["id"] for c in hot] == []
++        assert [c["id"] for c in fresh.get_cached_candidates()] == []
++        assert list(raw) == []
++        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
++        assert all(c.get("id") != "alpha" for c in payload["candidates"])
++
++    def test_metadata_project_hash_fallback_matches_loader(
++        self, tmp_path: Path, monkeypatch
++    ) -> None:
++        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
++        from vibesop.core.skills.loader import SkillLoader
++
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "before")
++        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
++        config.parent.mkdir(parents=True, exist_ok=True)
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
++        _CONFIG_FILE_CACHE.clear()
++
++        SkillConfigManager.update_skill_config(
++            "alpha",
++            {"scope": "project", "metadata": {"project_hash": "another-project"}},
++        )
++        assert mgr.get_cached_candidates() == []
++        raw = SkillLoader(
++            tmp_path,
++            search_paths=[search],
++            enable_external=False,
++            strict_search_paths=True,
++        ).discover_all()
++        assert list(raw) == []
++        config_obj = SkillConfigManager.get_skill_config("alpha")
++        assert config_obj.evaluation_context.get("project_hash") == "another-project"
++
++    def test_unmodified_config_does_not_reparse_yaml(self, tmp_path: Path, monkeypatch) -> None:
++        from unittest.mock import patch
++
++        import yaml
++
++        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
++
++        mgr, search = _isolated_manager(tmp_path)
++        _write_skill(search, "alpha", "one")
++        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
++        config.parent.mkdir(parents=True, exist_ok=True)
++        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
++        _CONFIG_FILE_CACHE.clear()
++        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "scope": "global"})
++        mgr.get_cached_candidates()
++        mgr._last_reload_check = mgr._clock()
++
++        with patch(
++            "vibesop.core.skills.config_manager.yaml.safe_load", wraps=yaml.safe_load
++        ) as spy:
++            mgr.get_cached_candidates()
++            mgr.get_cached_candidates()
++            assert spy.call_count == 0
++
++        version = SkillConfigManager.config_content_version()
++        SkillConfigManager.invalidate_config_cache()
++        with patch(
++            "vibesop.core.skills.config_manager.yaml.safe_load", wraps=yaml.safe_load
++        ) as spy:
++            assert SkillConfigManager.get_skill_config("alpha").enabled is True
++            assert spy.call_count == 1
++        assert SkillConfigManager.config_content_version() == version

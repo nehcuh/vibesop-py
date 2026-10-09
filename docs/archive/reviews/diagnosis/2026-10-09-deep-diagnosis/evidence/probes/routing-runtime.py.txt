@@ -1,0 +1,58 @@
+import json
+from tempfile import TemporaryDirectory
+from pathlib import Path
+from unittest.mock import patch
+from vibesop.agent.step_runner import StepRunner
+from vibesop.core.models import ExecutionPlan, ExecutionStep, StepStatus, WorkflowPattern
+from vibesop.core.routing.candidate_manager import CandidateManager
+from vibesop.core.skills.config_manager import SkillConfigManager
+
+
+def plan(deps=((),(),('s1','s2')), pattern=WorkflowPattern.SEQUENTIAL):
+    return ExecutionPlan(plan_id='audit-plan', original_query='audit', workflow_pattern=pattern, steps=[ExecutionStep(step_id=f's{i}', step_number=i, skill_id='demo',intent='do', input_query='do', dependencies=list(d)) for i,d in enumerate(deps,1)])
+
+p=plan(); calls=[]; r=StepRunner(p, track_state=False)
+out=r.execute_all(lambda s,c: calls.append(s.step_id) or 'OK', fail_fast=True)
+print('FAIL_FAST_SUCCESS', json.dumps({'calls':calls,'result':out,'statuses':[s.status.value for s in p.steps]}))
+
+p=plan(((),('s1',))); calls=[]; r=StepRunner(p,track_state=False)
+out=r.execute_all(lambda s,c: (_ for _ in ()).throw(ValueError('boom')) if s.step_id=='s1' else calls.append(s.step_id) or 'OK')
+print('DEPENDENCY_FAILURE',json.dumps({'result':out,'statuses':[s.status.value for s in p.steps],'is_complete':r.is_complete}))
+
+p=plan(((),('s1',)));p.steps[0].status=StepStatus.FAILED;p.steps[0].result_summary='Error: boom';calls=[];r=StepRunner(p,track_state=False)
+out=r.execute_all(lambda s,c: calls.append(s.step_id) or 'OK')
+print('RESUME_FAILED',json.dumps({'calls':calls,'result':out}))
+
+p=plan(((),),WorkflowPattern.LOOP_UNTIL_DRY);r=StepRunner(p,track_state=False)
+out=r.execute_all(lambda s,c: (_ for _ in ()).throw(ValueError('boom')))
+print('DYNAMIC_FAILURE',json.dumps({'result':out,'statuses':[s.status.value for s in p.steps],'failed_count':r.failed_count,'is_complete':r.is_complete,'plan_status':p.status.value}))
+
+with TemporaryDirectory() as d:
+    root=Path(d); sp=root/'skills';sp.mkdir();skill=sp/'SKILL.md'
+    def write(text):skill.write_text('---\nid: project/demo\nname: Demo\ndescription: '+text+'\nnamespace: project\ntags: [demo]\n---\nBody\n')
+    write('first');m=CandidateManager(root);m.pin_search_paths([sp]);m._RELOAD_CHECK_INTERVAL=0
+    first=m.get_cached_candidates();write('second');second=m.get_cached_candidates();third=m.reload()
+    print('HOT_RELOAD',json.dumps({'first':first[0]['description'],'second':second[0]['description'],'explicit_reload':m.get_cached_candidates()[0]['description']}))
+
+with TemporaryDirectory() as d:
+    root=Path(d);sp=root/'skills';sp.mkdir();(sp/'SKILL.md').write_text('---\nid: project/demo\nname: Demo\ndescription: first\nnamespace: project\ntags: [demo]\n---\nBody\n')
+    with patch.object(SkillConfigManager,'SKILL_CONFIG_FILE',root/'auto-config.yaml'):
+        m=CandidateManager(root);m._build_search_paths=lambda:[sp];m._RELOAD_CHECK_INTERVAL=0
+        first=m.get_cached_candidates();SkillConfigManager.set_enabled('project/demo',False)
+        warm=m.get_cached_candidates();cold=CandidateManager(root);cold._build_search_paths=lambda:[sp];again=cold.get_cached_candidates()
+        print('DISABLE_CACHE',json.dumps({'first':len(first),'warm_routable':len(m.filter_routable(warm)[0]),'new_process_routable':len(cold.filter_routable(again)[0]),'force_reload_count':cold.reload()}))
+
+from vibesop.core.models import AgentSquad, AgentRole, SquadStep
+from vibesop.core.orchestration.workflow_engine import WorkflowEngine
+squad=AgentSquad(squad_id='audit-squad', roles=[AgentRole(role_id='implementer',name='Implementer'),AgentRole(role_id='red_team',name='Red team')],steps=[SquadStep(step_id='impl',role_id='implementer',skill_ids=['demo']),SquadStep(step_id='red',role_id='red_team',skill_ids=['demo'],input_from=['impl'])],execution_order=['impl','red'], collaboration_protocol='review_gate', max_rounds=2,lead_role='red_team')
+p=ExecutionPlan(plan_id='audit-squad-plan',original_query='audit',workflow_pattern=WorkflowPattern.RED_TEAM,metadata={'agent_squad':squad.to_dict()},steps=[ExecutionStep(step_id='impl',step_number=1,skill_id='demo',intent='implement',input_query='do',assigned_role='implementer',agent_squad_id=squad.squad_id),ExecutionStep(step_id='red',step_number=2,skill_id='demo',intent='review',input_query='do',assigned_role='red_team',agent_squad_id=squad.squad_id,dependencies=['impl'])])
+calls=[];r=StepRunner(p,track_state=False)
+out=r.execute_all(lambda s,c: calls.append({'id':s.step_id,'has_handoff':'handoff' in c}) or ('blocked: missing evidence' if s.step_id=='red' else 'code artifact'))
+print('SQUAD_BRIDGE',json.dumps({'result':out,'calls':calls,'plan_status':p.status.value}))
+r=WorkflowEngine().run(p,lambda s,c:{'content':'code artifact' if s.step_id=='impl' else 'Review failed'})
+print('SQUAD_GATE_REJECTED',json.dumps({'plan_status':p.status.value,'verdicts':[v.to_dict() if hasattr(v,'to_dict') else v.model_dump() for v in r.verdicts]}))
+
+from time import monotonic,sleep
+p=plan(((),()))
+r=StepRunner(p,track_state=False)
+t=monotonic();r.execute_all(lambda s,c:sleep(.2) or 'OK');print('PARALLEL_SYNC_SECONDS',round(monotonic()-t,2))

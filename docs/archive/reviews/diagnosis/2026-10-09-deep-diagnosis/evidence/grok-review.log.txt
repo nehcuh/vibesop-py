@@ -1,0 +1,8 @@
+Internal error: {
+  "message": "API error (status 426 Upgrade Required): Your Grok CLI version (0.2.111) is outdated. Please update to version 1.0.13 or later via `grok update` or the installation documentation.",
+  "http_status": 426
+}
+Error: Internal error: {
+  "message": "API error (status 426 Upgrade Required): Your Grok CLI version (0.2.111) is outdated. Please update to version 1.0.13 or later via `grok update` or the installation documentation.",
+  "http_status": 426
+}

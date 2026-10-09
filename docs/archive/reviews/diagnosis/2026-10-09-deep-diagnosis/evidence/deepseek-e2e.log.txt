@@ -1,0 +1,13 @@
+Bytecode compiled 4185 files in 117ms
+PASS  T0 LLM client configured (real LLM e2e)  provider=SpanWrappedProvider
+PASS  T1 scenario query forces AI triage + real LLM call  skill=builtin/riper-workflow layer=ai_triage path=['explicit', 'keyword', 'keyword', 'scenario', 'semantic_index', 'ai_triage'] 1.0s triage_log 0->1
+PASS  T1b incident query (observation)  skill=builtin/deep-diagnosis-optimization layer=keyword
+PASS  T2 repeat query: persistent cache hit, zero LLM calls  entries=1 persistent_cache=True recall_method=None 0.0s vs 1.0s triage_log 1->1
+PASS  T3 junk query rejected without telemetry  has_match=False analytics 0->0
+FAIL  T4 last-good fires (decayed) + scenario fallback wins  skill=builtin/riper-workflow layer=ai_triage triage=AI triage selected 'builtin/riper-workflow' (confidence: 62%) scenario_fallback=None
+PASS  T5 short query routed (observation)  skill=fallback-llm path=['explicit', 'keyword', 'keyword', 'scenario', 'semantic_index', 'ai_triage', 'levenshtein', 'fallback_llm']
+
+============================================================
+E2E SUMMARY: 6/7 passed
+
+SCRIPT_EXIT 1

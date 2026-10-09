@@ -1,0 +1,21 @@
+import json
+from vibesop.agent.step_runner import StepRunner
+from vibesop.core.models import ExecutionPlan, ExecutionStep, WorkflowPattern
+from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
+def make(pattern=WorkflowPattern.SEQUENTIAL, squad=False):
+ return ExecutionPlan(plan_id='functional-audit',original_query='diagnose and verify',workflow_pattern=pattern,steps=[ExecutionStep(step_id='mapping',step_number=1,skill_id='normal-helper',intent='map',input_query='map',assigned_role='implementer' if squad else None,agent_squad_id='normal-squad' if squad else None),ExecutionStep(step_id='architecture',step_number=2,skill_id='normal-helper',intent='architecture',input_query='architecture',assigned_role='implementer' if squad else None,agent_squad_id='normal-squad' if squad else None),ExecutionStep(step_id='review',step_number=3,skill_id='normal-helper',intent='verify',input_query='verify',dependencies=['mapping','architecture'],assigned_role='reviewer' if squad else None,agent_squad_id='normal-squad' if squad else None)])
+for ff in (False,True):
+ p=make();r=StepRunner(p,track_state=False);calls=[];o=r.execute_all(lambda s,c:calls.append(s.step_id) or 'OK',fail_fast=ff)
+ print('FAILFAST',json.dumps({'enabled':ff,'calls':calls,'completed':o['completed'],'failed':o['failed'],'skipped':o['skipped'],'runner_is_complete':r.is_complete}))
+p=make(WorkflowPattern.LOOP_UNTIL_DRY);p.steps=p.steps[:1];r=StepRunner(p,track_state=False)
+def error_executor(s,c): raise ValueError('ordinary fixture failure')
+o=r.execute_all(error_executor)
+print('DYNAMIC',json.dumps({'returned_completed':o['completed'],'returned_failed':o['failed'],'runner_failed_count':r.failed_count,'runner_is_complete':r.is_complete,'plan_status':p.status.value,'step_status':p.steps[0].status.value,'results':o['results']}))
+for squad in (False,True):
+ p=make(WorkflowPattern.RED_TEAM if squad else WorkflowPattern.SEQUENTIAL,squad);r=StepRunner(p,track_state=False);calls=[]
+ def execute(s,c):
+  calls.append({'id':s.step_id,'context_type':type(c).__name__,'has_dependencies':bool(getattr(c,'dependency_outputs',None))})
+  return {'status':'blocked','reason':'ordinary missing test evidence'} if s.step_id=='review' else 'OK'
+ o=r.execute_all(execute)
+ print('REVIEW',json.dumps({'squad':squad,'raw_result_is_failure':is_acceptance_failure({'status':'blocked'}),'completed':o['completed'],'failed':o['failed'],'review_status':p.steps[-1].status.value,'calls':calls}))

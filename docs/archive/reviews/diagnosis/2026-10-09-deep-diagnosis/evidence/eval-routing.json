@@ -1,0 +1,1129 @@
+{
+  "total": 59,
+  "skipped_env": 2,
+  "top1_accuracy": 0.8983,
+  "recall_at_3": 0.8983,
+  "errors": [
+    {
+      "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "diagnosis",
+      "note": ""
+    },
+    {
+      "query": "which skills are performing well and which need attention",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "skill_mgmt",
+      "note": ""
+    },
+    {
+      "query": "来一次全维度代码库审计",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "cross_cutting",
+      "note": ""
+    },
+    {
+      "query": "审计一下第三方依赖的供应链安全",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "actual": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "category": "adversarial",
+      "note": ""
+    },
+    {
+      "query": "工地上的工人六点准时收工下班",
+      "expect": [],
+      "reject": [],
+      "actual": "builtin/session-end",
+      "top3": [
+        "builtin/session-end",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "category": "near_miss",
+      "note": "near_miss of builtin/session-end; 域外因为描述工地作息，不是结束本次会话"
+    },
+    {
+      "query": "herd instinct is what drives most market bubbles",
+      "expect": [],
+      "reject": [],
+      "actual": "builtin/instinct",
+      "top3": [
+        "builtin/instinct",
+        "builtin/riper-workflow",
+        "builtin/adversarial-arbitration"
+      ],
+      "layer": "keyword",
+      "confidence": 0.504,
+      "category": "near_miss",
+      "note": "near_miss of builtin/instinct; 域外因为是行为金融话题，不是技能本能状态"
+    }
+  ],
+  "confusion_pairs": {
+    "builtin/deep-diagnosis-optimization -> fallback-llm": 3,
+    "builtin/slash-evaluate -> fallback-llm": 1,
+    "<no-match> -> builtin/session-end": 1,
+    "<no-match> -> builtin/instinct": 1
+  },
+  "n_pos": 37,
+  "n_neg": 20,
+  "over_reject": 4,
+  "over_inject": 2,
+  "routing_outcomes_by_layer": {
+    "keyword": 32,
+    "explicit": 5,
+    "no_match": 22
+  },
+  "no_match_rate": 0.3729,
+  "n_near_miss": 14,
+  "near_miss_over_inject": 2,
+  "dataset": "tests/benchmark/routing_eval.yaml",
+  "hermetic": true,
+  "generated_at": "2026-10-09T01:21:56.661621+00:00",
+  "per_query": [
+    {
+      "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "run a deep diagnosis of the codebase and suggest optimizations",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "builtin/deep-diagnosis-optimization",
+      "top3": [
+        "builtin/deep-diagnosis-optimization",
+        "builtin/session-end",
+        "builtin/riper-workflow"
+      ],
+      "layer": "keyword",
+      "confidence": 0.685,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "全面审查这个仓库的代码质量",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "builtin/deep-diagnosis-optimization",
+      "top3": [
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging",
+        "builtin/test-generation"
+      ],
+      "layer": "keyword",
+      "confidence": 0.796,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "让 agent 自主运行一组实验并汇报评估结果",
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "reject": [],
+      "primary": "builtin/autonomous-experiment",
+      "top3": [
+        "builtin/autonomous-experiment",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "start an autonomous experiment loop with prediction evaluation",
+      "expect": [
+        "builtin/autonomous-experiment"
+      ],
+      "reject": [],
+      "primary": "builtin/autonomous-experiment",
+      "top3": [
+        "builtin/autonomous-experiment",
+        "builtin/code-review",
+        "builtin/riper-workflow"
+      ],
+      "layer": "keyword",
+      "confidence": 0.8,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "把最近踩过的坑沉淀下来，以后别再犯了",
+      "expect": [
+        "builtin/experience-evolution"
+      ],
+      "reject": [],
+      "primary": "builtin/experience-evolution",
+      "top3": [
+        "builtin/experience-evolution",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "accumulate what we learned from practice into project knowledge",
+      "expect": [
+        "builtin/experience-evolution"
+      ],
+      "reject": [],
+      "primary": "builtin/experience-evolution",
+      "top3": [
+        "builtin/experience-evolution",
+        "builtin/riper-workflow",
+        "builtin/babysit-main"
+      ],
+      "layer": "keyword",
+      "confidence": 0.472,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "查看一下我的 instinct 学习状态",
+      "expect": [
+        "builtin/instinct"
+      ],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "top3": [
+        "builtin/instinct",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.748,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "show my coding instincts and their confidence",
+      "expect": [
+        "builtin/instinct"
+      ],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "top3": [
+        "builtin/instinct",
+        "builtin/riper-workflow",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "keyword",
+      "confidence": 0.781,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "从我的工作流里学习一个新的本能模式",
+      "expect": [
+        "builtin/instinct"
+      ],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "top3": [
+        "builtin/instinct",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.971,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "用 RIPER 流程来做这个功能",
+      "expect": [
+        "builtin/riper-workflow"
+      ],
+      "reject": [],
+      "primary": "builtin/riper-workflow",
+      "top3": [
+        "builtin/riper-workflow",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "run the riper workflow for this feature",
+      "expect": [
+        "builtin/riper-workflow"
+      ],
+      "reject": [],
+      "primary": "builtin/riper-workflow",
+      "top3": [
+        "builtin/riper-workflow",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "收工了",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "top3": [
+        "builtin/session-end",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "that's all for now, heading out",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "top3": [
+        "builtin/session-end",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "今天就到这里，保存一下进度",
+      "expect": [
+        "builtin/session-end"
+      ],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "top3": [
+        "builtin/session-end",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "把这段对话提炼成一个新技能",
+      "expect": [
+        "builtin/skill-craft"
+      ],
+      "reject": [],
+      "primary": "builtin/skill-craft",
+      "top3": [
+        "builtin/skill-craft",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "craft a new skill from this session's patterns",
+      "expect": [
+        "builtin/skill-craft"
+      ],
+      "reject": [],
+      "primary": "builtin/skill-craft",
+      "top3": [
+        "builtin/skill-craft",
+        "builtin/riper-workflow",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "keyword",
+      "confidence": 0.675,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "拉取最新代码并使用多路独立对抗进行复审",
+      "expect": [
+        "builtin/adversarial-panel"
+      ],
+      "reject": [],
+      "primary": "builtin/adversarial-panel",
+      "top3": [
+        "builtin/adversarial-panel",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.952,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "pull latest and run multi-lane independent adversarial review",
+      "expect": [
+        "builtin/adversarial-panel"
+      ],
+      "reject": [],
+      "primary": "builtin/adversarial-panel",
+      "top3": [
+        "builtin/adversarial-panel",
+        "builtin/code-review",
+        "builtin/riper-workflow"
+      ],
+      "layer": "keyword",
+      "confidence": 0.718,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "对抗合成器给出 REQUEST CHANGES，这些是真的问题还是看法",
+      "expect": [
+        "builtin/adversarial-arbitration"
+      ],
+      "reject": [],
+      "primary": "builtin/adversarial-arbitration",
+      "top3": [
+        "builtin/adversarial-arbitration",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.955,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "classify adversarial REQUEST CHANGES findings as D T or J",
+      "expect": [
+        "builtin/adversarial-arbitration"
+      ],
+      "reject": [],
+      "primary": "builtin/adversarial-arbitration",
+      "top3": [
+        "builtin/adversarial-arbitration",
+        "builtin/adversarial-panel",
+        "builtin/task-briefing"
+      ],
+      "layer": "keyword",
+      "confidence": 0.502,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "babysit 到合并 main",
+      "expect": [
+        "builtin/babysit-main"
+      ],
+      "reject": [],
+      "primary": "builtin/babysit-main",
+      "top3": [
+        "builtin/babysit-main",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.733,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "watch CI until this origin/main push is green",
+      "expect": [
+        "builtin/babysit-main"
+      ],
+      "reject": [],
+      "primary": "builtin/babysit-main",
+      "top3": [
+        "builtin/babysit-main",
+        "builtin/code-review",
+        "builtin/riper-workflow"
+      ],
+      "layer": "keyword",
+      "confidence": 0.723,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "评估一下这些技能的使用质量和效果",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-evaluate",
+      "top3": [
+        "builtin/slash-evaluate",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.607,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "which skills are performing well and which need attention",
+      "expect": [
+        "builtin/slash-evaluate"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "/help",
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-help",
+      "top3": [
+        "builtin/slash-help",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "explicit",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "vibe 这个工具怎么用",
+      "expect": [
+        "builtin/slash-help",
+        "help"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-help",
+      "top3": [
+        "builtin/slash-help",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.762,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "/install superpowers",
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-install",
+      "top3": [
+        "builtin/slash-install",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "explicit",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "帮我安装一个技能包",
+      "expect": [
+        "builtin/slash-install"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-install",
+      "top3": [
+        "builtin/slash-install",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.844,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "/list",
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-list",
+      "top3": [
+        "builtin/slash-list",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "explicit",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "列出所有可用技能",
+      "expect": [
+        "builtin/slash-list"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-list",
+      "top3": [
+        "builtin/slash-list",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.957,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "/orchestrate 同时做安全审查和补测试",
+      "expect": [
+        "builtin/slash-orchestrate"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-orchestrate",
+      "top3": [
+        "builtin/slash-orchestrate",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "explicit",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "/route 这个查询到合适的技能",
+      "expect": [
+        "builtin/slash-route"
+      ],
+      "reject": [],
+      "primary": "builtin/slash-route",
+      "top3": [
+        "builtin/slash-route",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "explicit",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "来一次全维度代码库审计",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "这个 bug 在 router.py 第 123 行，修复它并验证",
+      "expect": [
+        "kimi-gated-fix"
+      ],
+      "reject": [],
+      "primary": null,
+      "top3": [],
+      "layer": null,
+      "confidence": null,
+      "ok1": null,
+      "ok3": null,
+      "skipped_env": true
+    },
+    {
+      "query": "验证这个 prompt chain 各阶段是否符合规范",
+      "expect": [
+        "prompt-chain-validator"
+      ],
+      "reject": [],
+      "primary": null,
+      "top3": [],
+      "layer": null,
+      "confidence": null,
+      "ok1": null,
+      "ok3": null,
+      "skipped_env": true
+    },
+    {
+      "query": "help me write a unit test for this function",
+      "expect": [],
+      "reject": [
+        "builtin/slash-help"
+      ],
+      "primary": "builtin/test-generation",
+      "top3": [
+        "builtin/test-generation",
+        "builtin/riper-workflow",
+        "builtin/adversarial-arbitration"
+      ],
+      "layer": "keyword",
+      "confidence": 0.579,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "help me fix this bug in the login flow",
+      "expect": [],
+      "reject": [
+        "builtin/slash-help"
+      ],
+      "primary": "builtin/systematic-debugging",
+      "top3": [
+        "builtin/systematic-debugging",
+        "builtin/riper-workflow",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "keyword",
+      "confidence": 0.522,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "审计一下第三方依赖的供应链安全",
+      "expect": [
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "xyzq 什么都不相关的乱码查询 blargh",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "写公众号总结",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "写一篇微信文章",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "翻译这段英文",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "今天天气怎么样",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "帮我出一道考试题，不要实现",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "add this to the quokka-todo list before we forget",
+      "expect": [
+        "benchpack/quokka-todo"
+      ],
+      "reject": [],
+      "primary": "benchpack/quokka-todo",
+      "top3": [
+        "benchpack/quokka-todo",
+        "builtin/task-briefing",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "keyword",
+      "confidence": 0.663,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "take a wombat-snapshot of the workspace before the risky edit",
+      "expect": [
+        "benchpack/wombat-snapshot"
+      ],
+      "reject": [],
+      "primary": "benchpack/wombat-snapshot",
+      "top3": [
+        "benchpack/wombat-snapshot",
+        "builtin/riper-workflow",
+        "builtin/adversarial-arbitration"
+      ],
+      "layer": "keyword",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "工地上的工人六点准时收工下班",
+      "expect": [],
+      "reject": [],
+      "primary": "builtin/session-end",
+      "top3": [
+        "builtin/session-end",
+        "builtin/deep-diagnosis-optimization",
+        "builtin/systematic-debugging"
+      ],
+      "layer": "keyword",
+      "confidence": 0.95,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "the presents are all wrapped up under the tree already",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "我家猫的捕猎本能很强，总叼老鼠回家",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "herd instinct is what drives most market bubbles",
+      "expect": [],
+      "reject": [],
+      "primary": "builtin/instinct",
+      "top3": [
+        "builtin/instinct",
+        "builtin/riper-workflow",
+        "builtin/adversarial-arbitration"
+      ],
+      "layer": "keyword",
+      "confidence": 0.504,
+      "ok1": false,
+      "ok3": false,
+      "skipped_env": false
+    },
+    {
+      "query": "周末报了个陶艺课，想学一门新技能",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "预约师傅上门安装净水器",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "帮我把搬家要带的东西列个清单",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "can you list the groceries we need for the camping trip",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "这几位实习生的表现需要做个评估反馈",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "这家老字号三代人沉淀出了独门酱菜方子",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "最近总是失眠，想去医院做个全面检查",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "昨晚交响音乐会的编排太震撼了",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "自驾游从成都到拉萨走哪条路线风景最好",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    },
+    {
+      "query": "化学课上我们分组做实验观察沉淀反应",
+      "expect": [],
+      "reject": [],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true,
+      "ok3": true,
+      "skipped_env": false
+    }
+  ]
+}

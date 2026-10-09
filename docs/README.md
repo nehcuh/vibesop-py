@@ -20,3 +20,5 @@ For the project overview, see the root **[README.md](../README.md)**.
 ---
 
 *This file is kept for backward compatibility. All documentation navigation should use INDEX.md or the root README.*
+
+2026-10-09：[冻结诊断](archive/reviews/diagnosis/2026-10-09-deep-diagnosis/REPORT.md) · [执行计划](plans/README.md) · [证据恢复](archive/reviews/diagnosis/2026-10-09-deep-diagnosis/RESTORE.md)。

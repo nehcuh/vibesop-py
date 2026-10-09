@@ -1,0 +1,2949 @@
+{
+  "date": "2026-10-09",
+  "state": "inventory only; cleanup not yet completed",
+  "source_baseline": "49901afe401a3f6fd25ba33c4854ce6329e1e44c",
+  "worktree": "/Users/huchen/.codex/worktrees/diagnosis-optimization/vibesop-py",
+  "docs": [
+    {
+      "path": "docs/CODE_OF_CONDUCT.md",
+      "category": "current",
+      "bytes": 1616
+    },
+    {
+      "path": "docs/EXTERNAL_SKILLS_EXAMPLES.md",
+      "category": "current",
+      "bytes": 8358
+    },
+    {
+      "path": "docs/EXTERNAL_SKILLS_GUIDE.md",
+      "category": "current",
+      "bytes": 10828
+    },
+    {
+      "path": "docs/INDEX.md",
+      "category": "current",
+      "bytes": 13722
+    },
+    {
+      "path": "docs/KIMI_CLI_SETUP.md",
+      "category": "current",
+      "bytes": 7293
+    },
+    {
+      "path": "docs/OMX_GUIDE.md",
+      "category": "current",
+      "bytes": 21865
+    },
+    {
+      "path": "docs/PHILOSOPHY.md",
+      "category": "current",
+      "bytes": 4294
+    },
+    {
+      "path": "docs/POSITIONING.md",
+      "category": "current",
+      "bytes": 4592
+    },
+    {
+      "path": "docs/PROJECT_STATUS.md",
+      "category": "current",
+      "bytes": 6031
+    },
+    {
+      "path": "docs/QUICKSTART_DEVELOPERS.md",
+      "category": "current",
+      "bytes": 6723
+    },
+    {
+      "path": "docs/QUICKSTART_SKILL_INSTALLATION.md",
+      "category": "current",
+      "bytes": 10780
+    },
+    {
+      "path": "docs/QUICKSTART_USERS.md",
+      "category": "current",
+      "bytes": 9583
+    },
+    {
+      "path": "docs/README.md",
+      "category": "current",
+      "bytes": 829
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "category": "current",
+      "bytes": 10234
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "category": "current",
+      "bytes": 1050
+    },
+    {
+      "path": "docs/SKILLS_GUIDE.md",
+      "category": "current",
+      "bytes": 30145
+    },
+    {
+      "path": "docs/SKILL_LLM_CONFIG_GUIDE.md",
+      "category": "current",
+      "bytes": 10453
+    },
+    {
+      "path": "docs/TRUST_AND_SECURITY_AUDIT.md",
+      "category": "current",
+      "bytes": 6345
+    },
+    {
+      "path": "docs/USE_CASES.en.md",
+      "category": "current",
+      "bytes": 13879
+    },
+    {
+      "path": "docs/USE_CASES.md",
+      "category": "current",
+      "bytes": 14583
+    },
+    {
+      "path": "docs/VibeSOP-内部介绍.pptx",
+      "category": "current",
+      "bytes": 191930
+    },
+    {
+      "path": "docs/adr/001-skill-ecosystem-evolution.md",
+      "category": "current",
+      "bytes": 33572
+    },
+    {
+      "path": "docs/adr/002-optimization-roadmap-v55.md",
+      "category": "current",
+      "bytes": 9420
+    },
+    {
+      "path": "docs/adr/003-plan-completion-criteria.md",
+      "category": "current",
+      "bytes": 1778
+    },
+    {
+      "path": "docs/adr/004-deprecated-types-cleanup.md",
+      "category": "current",
+      "bytes": 8912
+    },
+    {
+      "path": "docs/adr/005-loop-command-target.md",
+      "category": "current",
+      "bytes": 5503
+    },
+    {
+      "path": "docs/adr/README.md",
+      "category": "current",
+      "bytes": 1088
+    },
+    {
+      "path": "docs/agent-integration.md",
+      "category": "current",
+      "bytes": 4306
+    },
+    {
+      "path": "docs/api/index.html",
+      "category": "current",
+      "bytes": 138
+    },
+    {
+      "path": "docs/api/search.js",
+      "category": "current",
+      "bytes": 99816
+    },
+    {
+      "path": "docs/api/vibesop.html",
+      "category": "current",
+      "bytes": 105400
+    },
+    {
+      "path": "docs/architecture/ARCHITECTURE.md",
+      "category": "current",
+      "bytes": 27166
+    },
+    {
+      "path": "docs/architecture/README.md",
+      "category": "current",
+      "bytes": 3250
+    },
+    {
+      "path": "docs/architecture/acceptance-evidence.md",
+      "category": "current",
+      "bytes": 5886
+    },
+    {
+      "path": "docs/architecture/cross-platform-support.md",
+      "category": "current",
+      "bytes": 13939
+    },
+    {
+      "path": "docs/architecture/external-integrations.md",
+      "category": "current",
+      "bytes": 7795
+    },
+    {
+      "path": "docs/architecture/overview.md",
+      "category": "current",
+      "bytes": 1207
+    },
+    {
+      "path": "docs/architecture/routing-system.md",
+      "category": "current",
+      "bytes": 20147
+    },
+    {
+      "path": "docs/architecture/skill-runtime-interface.md",
+      "category": "current",
+      "bytes": 13269
+    },
+    {
+      "path": "docs/architecture/three-layers.md",
+      "category": "current",
+      "bytes": 17840
+    },
+    {
+      "path": "docs/architecture/verification-contract.md",
+      "category": "current",
+      "bytes": 5824
+    },
+    {
+      "path": "docs/archive/2026-04-24-architecture-optimization.md",
+      "category": "historical",
+      "bytes": 46417
+    },
+    {
+      "path": "docs/archive/2026-04-24-unify-v5-roadmap-orchestration.md",
+      "category": "historical",
+      "bytes": 19597
+    },
+    {
+      "path": "docs/archive/2026-04-26-quality-sprint.md",
+      "category": "historical",
+      "bytes": 58088
+    },
+    {
+      "path": "docs/archive/2026-04-28-v5-gap-closure.md",
+      "category": "historical",
+      "bytes": 26217
+    },
+    {
+      "path": "docs/archive/2026-04-29-skill-pack-install-architecture.md",
+      "category": "historical",
+      "bytes": 34314
+    },
+    {
+      "path": "docs/archive/CLI_OPTIMIZATION_PLAN.md",
+      "category": "historical",
+      "bytes": 9810
+    },
+    {
+      "path": "docs/archive/DELIVERY_SUMMARY.md",
+      "category": "historical",
+      "bytes": 7034
+    },
+    {
+      "path": "docs/archive/DISCUSSION_SUMMARY.md",
+      "category": "historical",
+      "bytes": 8731
+    },
+    {
+      "path": "docs/archive/LLM_CONFIG_IMPLEMENTATION_SUMMARY.md",
+      "category": "historical",
+      "bytes": 8984
+    },
+    {
+      "path": "docs/archive/PRODUCTION_READINESS_REVIEW.md",
+      "category": "historical",
+      "bytes": 10808
+    },
+    {
+      "path": "docs/archive/README.md",
+      "category": "historical",
+      "bytes": 1792
+    },
+    {
+      "path": "docs/archive/README_UPDATE_SUMMARY.md",
+      "category": "historical",
+      "bytes": 4405
+    },
+    {
+      "path": "docs/archive/SKILL_ADD_INTEGRATION_COMPLETE.md",
+      "category": "historical",
+      "bytes": 16197
+    },
+    {
+      "path": "docs/archive/SKILL_UNDERSTANDING_SUMMARY.md",
+      "category": "historical",
+      "bytes": 12643
+    },
+    {
+      "path": "docs/archive/agent-integration-legacy.md",
+      "category": "historical",
+      "bytes": 2193
+    },
+    {
+      "path": "docs/archive/chrome-sidepanel-task-plan-panel.md",
+      "category": "historical",
+      "bytes": 9431
+    },
+    {
+      "path": "docs/archive/core-usecase-analysis.md",
+      "category": "historical",
+      "bytes": 7495
+    },
+    {
+      "path": "docs/archive/e2e-validation-report-2026-06-14.md",
+      "category": "historical",
+      "bytes": 15083
+    },
+    {
+      "path": "docs/archive/parallel-execution-design.md",
+      "category": "historical",
+      "bytes": 2911
+    },
+    {
+      "path": "docs/archive/research-artifacts.md",
+      "category": "historical",
+      "bytes": 57463
+    },
+    {
+      "path": "docs/archive/reviews/README.md",
+      "category": "historical",
+      "bytes": 9903
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-brief.md",
+      "category": "historical",
+      "bytes": 9871
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-grok.md",
+      "category": "historical",
+      "bytes": 13266
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief-pi.md",
+      "category": "historical",
+      "bytes": 9668
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-brief.md",
+      "category": "historical",
+      "bytes": 8742
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-plan-merged.md",
+      "category": "historical",
+      "bytes": 11410
+    },
+    {
+      "path": "docs/archive/reviews/dashboard-v3/_review-dashboard-v3-phase-a-task1-brief.md",
+      "category": "historical",
+      "bytes": 8940
+    },
+    {
+      "path": "docs/archive/reviews/diagnosis/_diagnosis-2026-07-24-synthesis.md",
+      "category": "historical",
+      "bytes": 7475
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-brief.md",
+      "category": "historical",
+      "bytes": 8634
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-kimi.md",
+      "category": "historical",
+      "bytes": 4387
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-brief.md",
+      "category": "historical",
+      "bytes": 5513
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-a-merged.md",
+      "category": "historical",
+      "bytes": 3270
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-brief.md",
+      "category": "historical",
+      "bytes": 7414
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-b-merged.md",
+      "category": "historical",
+      "bytes": 4887
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-brief.md",
+      "category": "historical",
+      "bytes": 7350
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-kimi.md",
+      "category": "historical",
+      "bytes": 61815
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-merged.md",
+      "category": "historical",
+      "bytes": 6941
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-c-pi.md",
+      "category": "historical",
+      "bytes": 10897
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-brief.md",
+      "category": "historical",
+      "bytes": 7079
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-d-merged.md",
+      "category": "historical",
+      "bytes": 4383
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-phase-e-merged.md",
+      "category": "historical",
+      "bytes": 4007
+    },
+    {
+      "path": "docs/archive/reviews/instinct-loop/_review-instinct-loop-pi.md",
+      "category": "historical",
+      "bytes": 6161
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-brief-l2.md",
+      "category": "historical",
+      "bytes": 4981
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-brief-m2.md",
+      "category": "historical",
+      "bytes": 4765
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-brief-m4.md",
+      "category": "historical",
+      "bytes": 3517
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-brief-m5.md",
+      "category": "historical",
+      "bytes": 4743
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-brief-p2.md",
+      "category": "historical",
+      "bytes": 8026
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-kimi.md",
+      "category": "historical",
+      "bytes": 8681
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-l2-kimi.md",
+      "category": "historical",
+      "bytes": 24804
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-l2-pi.md",
+      "category": "historical",
+      "bytes": 0
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m2-kimi.md",
+      "category": "historical",
+      "bytes": 20585
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m2-pi.md",
+      "category": "historical",
+      "bytes": 6569
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m4-kimi.md",
+      "category": "historical",
+      "bytes": 1039
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m4-pi.md",
+      "category": "historical",
+      "bytes": 5287
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m5-kimi.md",
+      "category": "historical",
+      "bytes": 14111
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-m5-pi.md",
+      "category": "historical",
+      "bytes": 0
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-p2-kimi.md",
+      "category": "historical",
+      "bytes": 8493
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-p2-pi.md",
+      "category": "historical",
+      "bytes": 7441
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-pi.md",
+      "category": "historical",
+      "bytes": 7768
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-sprint1-evolution-brief.md",
+      "category": "historical",
+      "bytes": 2878
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-sprint1-evolution-merged.md",
+      "category": "historical",
+      "bytes": 1281
+    },
+    {
+      "path": "docs/archive/reviews/observability/_review-sprint1-evolution-pi.md",
+      "category": "historical",
+      "bytes": 11773
+    },
+    {
+      "path": "docs/archive/reviews/s51/_fix-s51-m1-m7-review-architecture.md",
+      "category": "historical",
+      "bytes": 25930
+    },
+    {
+      "path": "docs/archive/reviews/s51/_fix-s51-m1-m7-review-correctness.md",
+      "category": "historical",
+      "bytes": 21951
+    },
+    {
+      "path": "docs/archive/reviews/s51/_fix-s51-m1-m7.md",
+      "category": "historical",
+      "bytes": 15237
+    },
+    {
+      "path": "docs/archive/reviews/s51/_review-s51-gate45-46-brief.md",
+      "category": "historical",
+      "bytes": 5092
+    },
+    {
+      "path": "docs/archive/reviews/s51/_review-s51-gate45-46-merged.md",
+      "category": "historical",
+      "bytes": 10444
+    },
+    {
+      "path": "docs/archive/reviews/s51/_review-s51-lane-architecture.md",
+      "category": "historical",
+      "bytes": 20608
+    },
+    {
+      "path": "docs/archive/reviews/s51/_review-s51-lane-correctness.md",
+      "category": "historical",
+      "bytes": 9926
+    },
+    {
+      "path": "docs/archive/reviews/s51/_review-s51-lane-invariants.md",
+      "category": "historical",
+      "bytes": 19088
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-cross-session-cluster-brief.md",
+      "category": "historical",
+      "bytes": 5424
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-cross-session-cluster-merged.md",
+      "category": "historical",
+      "bytes": 6605
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-brief.md",
+      "category": "historical",
+      "bytes": 6247
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-grok.md",
+      "category": "historical",
+      "bytes": 3788
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-merged.md",
+      "category": "historical",
+      "bytes": 7221
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-pi.md",
+      "category": "historical",
+      "bytes": 4026
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-grok.md",
+      "category": "historical",
+      "bytes": 3289
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-merged.md",
+      "category": "historical",
+      "bytes": 4706
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-task-memory-loop-v2-pi.md",
+      "category": "historical",
+      "bytes": 2691
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w0-implementation-brief.md",
+      "category": "historical",
+      "bytes": 7174
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w0-merged.md",
+      "category": "historical",
+      "bytes": 2884
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w1-implementation-brief.md",
+      "category": "historical",
+      "bytes": 8056
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w1-merged.md",
+      "category": "historical",
+      "bytes": 6556
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w2-implementation-brief.md",
+      "category": "historical",
+      "bytes": 7262
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w2-merged.md",
+      "category": "historical",
+      "bytes": 5020
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w3-implementation-brief.md",
+      "category": "historical",
+      "bytes": 8451
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w3-merged.md",
+      "category": "historical",
+      "bytes": 7678
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_review-w5-2-cross-project-promote-merged.md",
+      "category": "historical",
+      "bytes": 9371
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief-v2.md",
+      "category": "historical",
+      "bytes": 14698
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/_w5-2-cross-project-promote-brief.md",
+      "category": "historical",
+      "bytes": 11432
+    },
+    {
+      "path": "docs/archive/reviews/task-memory/w4-review-brief.md",
+      "category": "historical",
+      "bytes": 10554
+    },
+    {
+      "path": "docs/archive/roadmap-index.md",
+      "category": "historical",
+      "bytes": 333
+    },
+    {
+      "path": "docs/archive/roadmap-through-8.3.md",
+      "category": "historical",
+      "bytes": 34942
+    },
+    {
+      "path": "docs/archive/version_05.md",
+      "category": "historical",
+      "bytes": 33924
+    },
+    {
+      "path": "docs/article-x-plain.txt",
+      "category": "current",
+      "bytes": 15272
+    },
+    {
+      "path": "docs/cold-start-guide.md",
+      "category": "current",
+      "bytes": 5390
+    },
+    {
+      "path": "docs/decisions/2026-07-22-observability-loop-closure.md",
+      "category": "current",
+      "bytes": 96280
+    },
+    {
+      "path": "docs/decisions/2026-07-27-dashboard-first-principles.md",
+      "category": "current",
+      "bytes": 21316
+    },
+    {
+      "path": "docs/decisions/2026-07-27-dashboard-redesign-v1.md",
+      "category": "current",
+      "bytes": 26441
+    },
+    {
+      "path": "docs/decisions/2026-07-27-dashboard-redesign-v2-final.md",
+      "category": "current",
+      "bytes": 27933
+    },
+    {
+      "path": "docs/decisions/2026-07-27-dashboard-v3-orchestration-map-and-reflection.md",
+      "category": "current",
+      "bytes": 35394
+    },
+    {
+      "path": "docs/decisions/2026-07-29-bm25-chinese-recall-precheck.md",
+      "category": "current",
+      "bytes": 1503
+    },
+    {
+      "path": "docs/decisions/2026-07-29-task-memory-product-design.md",
+      "category": "current",
+      "bytes": 11370
+    },
+    {
+      "path": "docs/decisions/2026-07-31-positioning-vs-llm-space.md",
+      "category": "current",
+      "bytes": 18270
+    },
+    {
+      "path": "docs/decisions/2026-07-31-product-evolution-adversarial.md",
+      "category": "current",
+      "bytes": 15947
+    },
+    {
+      "path": "docs/decisions/2026-08-22-d4-immutable-records-rejected.md",
+      "category": "current",
+      "bytes": 2695
+    },
+    {
+      "path": "docs/decisions/2026-09-09-practice-health-roadmap.md",
+      "category": "current",
+      "bytes": 16206
+    },
+    {
+      "path": "docs/decisions/2026-09-09-practice-next.md",
+      "category": "current",
+      "bytes": 8021
+    },
+    {
+      "path": "docs/decisions/2026-09-09-verification-progress.md",
+      "category": "current",
+      "bytes": 19254
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "category": "current",
+      "bytes": 1601
+    },
+    {
+      "path": "docs/decisions/health-round-unknown-not-false-excerpt.md",
+      "category": "current",
+      "bytes": 1583
+    },
+    {
+      "path": "docs/decisions/w0-embedding-benchmark.json",
+      "category": "current",
+      "bytes": 2399
+    },
+    {
+      "path": "docs/decisions/w0-embedding-benchmark.md",
+      "category": "current",
+      "bytes": 6726
+    },
+    {
+      "path": "docs/demo-recording-guide.md",
+      "category": "current",
+      "bytes": 1984
+    },
+    {
+      "path": "docs/dev/CONTRIBUTING.md",
+      "category": "current",
+      "bytes": 4251
+    },
+    {
+      "path": "docs/dev/agent-scenario-validation-2026-07-19.md",
+      "category": "current",
+      "bytes": 13462
+    },
+    {
+      "path": "docs/dev/agent-scenario-validation-sop.md",
+      "category": "current",
+      "bytes": 9588
+    },
+    {
+      "path": "docs/dev/api-reference.md",
+      "category": "current",
+      "bytes": 10367
+    },
+    {
+      "path": "docs/dev/architecture-overview.md",
+      "category": "current",
+      "bytes": 3778
+    },
+    {
+      "path": "docs/dev/architecture.md",
+      "category": "current",
+      "bytes": 3926
+    },
+    {
+      "path": "docs/dev/eval-set-append-workflow.md",
+      "category": "current",
+      "bytes": 4651
+    },
+    {
+      "path": "docs/dev/hooks-guide.md",
+      "category": "current",
+      "bytes": 4943
+    },
+    {
+      "path": "docs/dev/platform-invariants.md",
+      "category": "current",
+      "bytes": 5459
+    },
+    {
+      "path": "docs/dev/releasing.md",
+      "category": "current",
+      "bytes": 967
+    },
+    {
+      "path": "docs/dev/route-outcomes-rebuild.md",
+      "category": "current",
+      "bytes": 3103
+    },
+    {
+      "path": "docs/dev/routing-benchmark.md",
+      "category": "current",
+      "bytes": 8093
+    },
+    {
+      "path": "docs/dev/testing.md",
+      "category": "current",
+      "bytes": 1347
+    },
+    {
+      "path": "docs/dev/windows-compat/01-analysis.md",
+      "category": "current",
+      "bytes": 6534
+    },
+    {
+      "path": "docs/dev/windows-compat/02-design.md",
+      "category": "current",
+      "bytes": 8589
+    },
+    {
+      "path": "docs/dev/windows-compat/03-adversarial-review.md",
+      "category": "current",
+      "bytes": 4751
+    },
+    {
+      "path": "docs/dev/windows-compat/04-implementation-log.md",
+      "category": "current",
+      "bytes": 4710
+    },
+    {
+      "path": "docs/dev/windows-compat/05-review.md",
+      "category": "current",
+      "bytes": 6094
+    },
+    {
+      "path": "docs/dev/windows-compat/06-verification.md",
+      "category": "current",
+      "bytes": 2810
+    },
+    {
+      "path": "docs/dev/windows-compat/README.md",
+      "category": "current",
+      "bytes": 1984
+    },
+    {
+      "path": "docs/enterprise-agent-methodology.md",
+      "category": "current",
+      "bytes": 25664
+    },
+    {
+      "path": "docs/essays/2026-09-11-harness-hot-takes.md",
+      "category": "current",
+      "bytes": 7539
+    },
+    {
+      "path": "docs/essays/2026-09-11-wechat-never-converge-comments.md",
+      "category": "current",
+      "bytes": 1924
+    },
+    {
+      "path": "docs/essays/2026-09-11-wechat-never-converge-short.md",
+      "category": "current",
+      "bytes": 3271
+    },
+    {
+      "path": "docs/essays/2026-09-11-wechat-never-converge.md",
+      "category": "current",
+      "bytes": 4844
+    },
+    {
+      "path": "docs/essays/README.md",
+      "category": "current",
+      "bytes": 677
+    },
+    {
+      "path": "docs/essays/agent-trust/README.md",
+      "category": "current",
+      "bytes": 842
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-editorial.md",
+      "category": "current",
+      "bytes": 7061
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat-illustrated.md",
+      "category": "current",
+      "bytes": 35978
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/2026-09-12-agent-trust-wechat.md",
+      "category": "current",
+      "bytes": 40385
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/evidence/evo-lane-A-handback.md",
+      "category": "current",
+      "bytes": 7282
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/evidence/evo-lane-C1-handback.md",
+      "category": "current",
+      "bytes": 3840
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-1.mmd",
+      "category": "current",
+      "bytes": 532
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-1.png",
+      "category": "current",
+      "bytes": 100257
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-10.mmd",
+      "category": "current",
+      "bytes": 457
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-10.png",
+      "category": "current",
+      "bytes": 99975
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-2.mmd",
+      "category": "current",
+      "bytes": 417
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-2.png",
+      "category": "current",
+      "bytes": 74462
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-3.mmd",
+      "category": "current",
+      "bytes": 513
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-3.png",
+      "category": "current",
+      "bytes": 116651
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-4.mmd",
+      "category": "current",
+      "bytes": 472
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-4.png",
+      "category": "current",
+      "bytes": 104756
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-5.mmd",
+      "category": "current",
+      "bytes": 397
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-5.png",
+      "category": "current",
+      "bytes": 87807
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-6.mmd",
+      "category": "current",
+      "bytes": 354
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-6.png",
+      "category": "current",
+      "bytes": 75043
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-7.mmd",
+      "category": "current",
+      "bytes": 572
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-7.png",
+      "category": "current",
+      "bytes": 112241
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-8.mmd",
+      "category": "current",
+      "bytes": 512
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-8.png",
+      "category": "current",
+      "bytes": 100224
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-9.mmd",
+      "category": "current",
+      "bytes": 649
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/figure-9.png",
+      "category": "current",
+      "bytes": 104620
+    },
+    {
+      "path": "docs/essays/agent-trust/archive/assets/mermaid-config.json",
+      "category": "current",
+      "bytes": 524
+    },
+    {
+      "path": "docs/essays/agent-trust/article.md",
+      "category": "current",
+      "bytes": 34183
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/01-committee.png",
+      "category": "current",
+      "bytes": 152063
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/01-committee.svg",
+      "category": "current",
+      "bytes": 13311
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/02-roles.mmd",
+      "category": "current",
+      "bytes": 616
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/02-roles.png",
+      "category": "current",
+      "bytes": 127394
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/02-roles.svg",
+      "category": "current",
+      "bytes": 20337
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/03-stage-rule.mmd",
+      "category": "current",
+      "bytes": 713
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/03-stage-rule.png",
+      "category": "current",
+      "bytes": 172440
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/03-stage-rule.svg",
+      "category": "current",
+      "bytes": 19587
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/04-clock.png",
+      "category": "current",
+      "bytes": 131381
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/04-clock.svg",
+      "category": "current",
+      "bytes": 6001
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/05-delegation.mmd",
+      "category": "current",
+      "bytes": 678
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/05-delegation.png",
+      "category": "current",
+      "bytes": 158926
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/05-delegation.svg",
+      "category": "current",
+      "bytes": 21351
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/06-wikiskill.png",
+      "category": "current",
+      "bytes": 105706
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/06-wikiskill.svg",
+      "category": "current",
+      "bytes": 7590
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/07-review.mmd",
+      "category": "current",
+      "bytes": 628
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/07-review.png",
+      "category": "current",
+      "bytes": 140522
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/07-review.svg",
+      "category": "current",
+      "bytes": 17834
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/08-harness.png",
+      "category": "current",
+      "bytes": 136135
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/08-harness.svg",
+      "category": "current",
+      "bytes": 6540
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/09-memory.png",
+      "category": "current",
+      "bytes": 98249
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/09-memory.svg",
+      "category": "current",
+      "bytes": 7240
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/EDITORIAL-AUDIT.md",
+      "category": "current",
+      "bytes": 6204
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/README.md",
+      "category": "current",
+      "bytes": 2084
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/artifact-sha256.json",
+      "category": "current",
+      "bytes": 4862
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/build_article.py",
+      "category": "current",
+      "bytes": 4464
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/chart-data.json",
+      "category": "current",
+      "bytes": 2294
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/contact-sheet.jpg",
+      "category": "current",
+      "bytes": 237589
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mermaid-config.json",
+      "category": "current",
+      "bytes": 473
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mobile-clock-section.png",
+      "category": "current",
+      "bytes": 218341
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mobile-main-figure.png",
+      "category": "current",
+      "bytes": 208362
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mobile-opening.png",
+      "category": "current",
+      "bytes": 241942
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mobile-table-section.png",
+      "category": "current",
+      "bytes": 167970
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/mobile-verification.json",
+      "category": "current",
+      "bytes": 128
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/raw-result-verification.json",
+      "category": "current",
+      "bytes": 1011
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/render_figures.py",
+      "category": "current",
+      "bytes": 7767
+    },
+    {
+      "path": "docs/essays/agent-trust/assets/review-provenance.json",
+      "category": "current",
+      "bytes": 763
+    },
+    {
+      "path": "docs/essays/agent-trust/preview.html",
+      "category": "current",
+      "bytes": 1672952
+    },
+    {
+      "path": "docs/experiments/2026-09-14-fixed-role-interim-findings.md",
+      "category": "current",
+      "bytes": 6751
+    },
+    {
+      "path": "docs/experiments/README.md",
+      "category": "current",
+      "bytes": 2526
+    },
+    {
+      "path": "docs/experiments/fixed-role-committee-v2-matrices.md",
+      "category": "current",
+      "bytes": 4934
+    },
+    {
+      "path": "docs/experiments/fixed-role-committee-v2-protocol.md",
+      "category": "current",
+      "bytes": 12066
+    },
+    {
+      "path": "docs/experiments/fixed-role-v2/README.md",
+      "category": "current",
+      "bytes": 1456
+    },
+    {
+      "path": "docs/experiments/fixed-role-v2/evidence-manifest.json",
+      "category": "current",
+      "bytes": 924
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/README.md",
+      "category": "current",
+      "bytes": 4299
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/RESULTS.md",
+      "category": "current",
+      "bytes": 3035
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/audit-summary.json",
+      "category": "current",
+      "bytes": 17834
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/audit.py",
+      "category": "current",
+      "bytes": 2159
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/check_runner.py",
+      "category": "current",
+      "bytes": 2057
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/check_runner_partial.py",
+      "category": "current",
+      "bytes": 2285
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/checkpoint.py",
+      "category": "current",
+      "bytes": 3719
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/events.jsonl",
+      "category": "current",
+      "bytes": 1326
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/evidence-manifest.json",
+      "category": "current",
+      "bytes": 579
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/observations.md",
+      "category": "current",
+      "bytes": 2113
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/preflight-request.json",
+      "category": "current",
+      "bytes": 135
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/preflight-response.json",
+      "category": "current",
+      "bytes": 1066
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/protocol-fidelity-review.md",
+      "category": "current",
+      "bytes": 2005
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/report.py",
+      "category": "current",
+      "bytes": 1766
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/run.py",
+      "category": "current",
+      "bytes": 7260
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/run_nonthinking.py",
+      "category": "current",
+      "bytes": 7858
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/run_partial_reports.py",
+      "category": "current",
+      "bytes": 8156
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/runner-partial-self-check.json",
+      "category": "current",
+      "bytes": 502
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/runner-self-check.json",
+      "category": "current",
+      "bytes": 502
+    },
+    {
+      "path": "docs/experiments/multi-expert-calibration/tasks.py",
+      "category": "current",
+      "bytes": 34248
+    },
+    {
+      "path": "docs/experiments/multi-expert-e2e-protocol.md",
+      "category": "current",
+      "bytes": 12132
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/FIRST12_AUDIT.md",
+      "category": "current",
+      "bytes": 2869
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/READY_FOR_REVIEW.md",
+      "category": "current",
+      "bytes": 6157
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/REPORT.md",
+      "category": "current",
+      "bytes": 19102
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/REPORT.primary360.md",
+      "category": "current",
+      "bytes": 11346
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/STATUS.md",
+      "category": "current",
+      "bytes": 1754
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/evidence-manifest.json",
+      "category": "current",
+      "bytes": 561
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/freeze.json",
+      "category": "current",
+      "bytes": 3402
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/__init__.py",
+      "category": "current",
+      "bytes": 80
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/analysis.py",
+      "category": "current",
+      "bytes": 6525
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/arms.py",
+      "category": "current",
+      "bytes": 13525
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/audit.py",
+      "category": "current",
+      "bytes": 3365
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/budget.py",
+      "category": "current",
+      "bytes": 6342
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/engine.py",
+      "category": "current",
+      "bytes": 6696
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/llm.py",
+      "category": "current",
+      "bytes": 1291
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/offline_check.py",
+      "category": "current",
+      "bytes": 21904
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/pack.py",
+      "category": "current",
+      "bytes": 4463
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/recorder.py",
+      "category": "current",
+      "bytes": 3112
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/report.py",
+      "category": "current",
+      "bytes": 4735
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/runner.py",
+      "category": "current",
+      "bytes": 12567
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/schedule.py",
+      "category": "current",
+      "bytes": 4358
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/harness/tools.py",
+      "category": "current",
+      "bytes": 7809
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/independence.md",
+      "category": "current",
+      "bytes": 3624
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/logs/docker-image-at-resume.txt",
+      "category": "current",
+      "bytes": 279
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/preregistration.md",
+      "category": "current",
+      "bytes": 3122
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/AUDIT.md",
+      "category": "current",
+      "bytes": 1986
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/README.md",
+      "category": "current",
+      "bytes": 310
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/audit360.json",
+      "category": "current",
+      "bytes": 355088
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/audit360.py",
+      "category": "current",
+      "bytes": 10453
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/collect.py",
+      "category": "current",
+      "bytes": 2491
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/da_by_task.png",
+      "category": "current",
+      "bytes": 60033
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/da_by_task.svg",
+      "category": "current",
+      "bytes": 107387
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/fail_mix.png",
+      "category": "current",
+      "bytes": 31576
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/fail_mix.svg",
+      "category": "current",
+      "bytes": 76532
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/pass_by_arm.png",
+      "category": "current",
+      "bytes": 26335
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/pass_by_arm.svg",
+      "category": "current",
+      "bytes": 47980
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/resources_by_arm.png",
+      "category": "current",
+      "bytes": 48555
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/resources_by_arm.svg",
+      "category": "current",
+      "bytes": 88084
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/task_arm_heatmap.png",
+      "category": "current",
+      "bytes": 42444
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/figures/task_arm_heatmap.svg",
+      "category": "current",
+      "bytes": 78335
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/generate_combined.py",
+      "category": "current",
+      "bytes": 8794
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/generate_report.py",
+      "category": "current",
+      "bytes": 16989
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/plot.py",
+      "category": "current",
+      "bytes": 5534
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/PROCESS.md",
+      "category": "current",
+      "bytes": 5120
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/beliefs.md",
+      "category": "current",
+      "bytes": 15067
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/calibration-supervisor-audit.json",
+      "category": "current",
+      "bytes": 2472
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/final-editorial-review.md",
+      "category": "current",
+      "bytes": 3518
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/formal-first12-supervisor-audit.json",
+      "category": "current",
+      "bytes": 5272
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-correction1.md",
+      "category": "current",
+      "bytes": 2722
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase1.md",
+      "category": "current",
+      "bytes": 5094
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase2-start.md",
+      "category": "current",
+      "bytes": 5007
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase3-complete.md",
+      "category": "current",
+      "bytes": 4376
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase4-recovery.md",
+      "category": "current",
+      "bytes": 2862
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase4-sensitivity.md",
+      "category": "current",
+      "bytes": 3920
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/grok-phase5-delivery.md",
+      "category": "current",
+      "bytes": 4026
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/phase4-supervision-notes.md",
+      "category": "current",
+      "bytes": 5278
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/results.tsv",
+      "category": "current",
+      "bytes": 722
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/sensitivity-decision.md",
+      "category": "current",
+      "bytes": 2479
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/sensitivity-guard-audit.json",
+      "category": "current",
+      "bytes": 1373
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/sensitivity-infrastructure-interruption.json",
+      "category": "current",
+      "bytes": 8333
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/sensitivity-start-audit.json",
+      "category": "current",
+      "bytes": 351
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/supervision.md",
+      "category": "current",
+      "bytes": 5934
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/supervisor-final-20260913T023645Z.json",
+      "category": "current",
+      "bytes": 2324
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/supervisor-final-20260913T033401Z.json",
+      "category": "current",
+      "bytes": 2880
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/supervisor-progress.jsonl",
+      "category": "current",
+      "bytes": 434
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/provenance/supervisor_audit.py",
+      "category": "current",
+      "bytes": 5999
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/tables.json",
+      "category": "current",
+      "bytes": 8157
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/report/usage_cost.py",
+      "category": "current",
+      "bytes": 3185
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/resources.yaml",
+      "category": "current",
+      "bytes": 2222
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/__init__.py",
+      "category": "current",
+      "bytes": 276
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/cases.py",
+      "category": "current",
+      "bytes": 17517
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/catalog.py",
+      "category": "current",
+      "bytes": 27308
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/common.py",
+      "category": "current",
+      "bytes": 9064
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/evaluate.py",
+      "category": "current",
+      "bytes": 10862
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/oracles.py",
+      "category": "current",
+      "bytes": 26899
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/tasks/qa_bank.py",
+      "category": "current",
+      "bytes": 13985
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/verify-latest.json",
+      "category": "current",
+      "bytes": 10299
+    },
+    {
+      "path": "docs/experiments/multi-expert-formal/verify_experiment.py",
+      "category": "current",
+      "bytes": 11231
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/README.md",
+      "category": "current",
+      "bytes": 964
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/REPORT.md",
+      "category": "current",
+      "bytes": 6539
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/SOURCE-DIFF.md",
+      "category": "current",
+      "bytes": 1627
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/SOURCE-DIFF.patch",
+      "category": "current",
+      "bytes": 21548
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/evidence-manifest.json",
+      "category": "current",
+      "bytes": 580
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/freeze.json",
+      "category": "current",
+      "bytes": 11234
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/PACK.json",
+      "category": "current",
+      "bytes": 3581
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/__init__.py",
+      "category": "current",
+      "bytes": 80
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/analysis.py",
+      "category": "current",
+      "bytes": 6525
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/arms.py",
+      "category": "current",
+      "bytes": 13525
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/audit.py",
+      "category": "current",
+      "bytes": 3365
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/budget.py",
+      "category": "current",
+      "bytes": 6342
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/engine.py",
+      "category": "current",
+      "bytes": 6696
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/llm.py",
+      "category": "current",
+      "bytes": 1291
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/offline_check.py",
+      "category": "current",
+      "bytes": 21904
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/pack.py",
+      "category": "current",
+      "bytes": 4463
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/recorder.py",
+      "category": "current",
+      "bytes": 3112
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/report.py",
+      "category": "current",
+      "bytes": 4735
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/runner.py",
+      "category": "current",
+      "bytes": 12567
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/schedule.py",
+      "category": "current",
+      "bytes": 4358
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/harness/tools.py",
+      "category": "current",
+      "bytes": 7809
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/independence.md",
+      "category": "current",
+      "bytes": 3624
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/preregistration.md",
+      "category": "current",
+      "bytes": 3122
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/resources.yaml",
+      "category": "current",
+      "bytes": 2222
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/__init__.py",
+      "category": "current",
+      "bytes": 276
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/cases.py",
+      "category": "current",
+      "bytes": 17517
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/catalog.py",
+      "category": "current",
+      "bytes": 27308
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/common.py",
+      "category": "current",
+      "bytes": 9064
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/evaluate.py",
+      "category": "current",
+      "bytes": 10862
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/oracles.py",
+      "category": "current",
+      "bytes": 26899
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/tasks/qa_bank.py",
+      "category": "current",
+      "bytes": 13985
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/frozen-primary-sources/verify_experiment.py",
+      "category": "current",
+      "bytes": 11231
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/__init__.py",
+      "category": "current",
+      "bytes": 80
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/analysis.py",
+      "category": "current",
+      "bytes": 6525
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/arms.py",
+      "category": "current",
+      "bytes": 13938
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/audit.py",
+      "category": "current",
+      "bytes": 3365
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/budget.py",
+      "category": "current",
+      "bytes": 6342
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/engine.py",
+      "category": "current",
+      "bytes": 7959
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/llm.py",
+      "category": "current",
+      "bytes": 1291
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/offline_check.py",
+      "category": "current",
+      "bytes": 21904
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/pack.py",
+      "category": "current",
+      "bytes": 4491
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/recorder.py",
+      "category": "current",
+      "bytes": 3205
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/report.py",
+      "category": "current",
+      "bytes": 4735
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/runner.py",
+      "category": "current",
+      "bytes": 13677
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/schedule.py",
+      "category": "current",
+      "bytes": 4915
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/test_soft.py",
+      "category": "current",
+      "bytes": 12522
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/harness/tools.py",
+      "category": "current",
+      "bytes": 7809
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/independence.md",
+      "category": "current",
+      "bytes": 3624
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/preregistration.md",
+      "category": "current",
+      "bytes": 2258
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/AUDIT.md",
+      "category": "current",
+      "bytes": 2208
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/audit144.json",
+      "category": "current",
+      "bytes": 168962
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/audit144.py",
+      "category": "current",
+      "bytes": 10824
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/collect.py",
+      "category": "current",
+      "bytes": 2911
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/derive_interrupt_usage.py",
+      "category": "current",
+      "bytes": 10641
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/dsoft_by_task.png",
+      "category": "current",
+      "bytes": 64789
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/dsoft_by_task.svg",
+      "category": "current",
+      "bytes": 121818
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/fail_mix.png",
+      "category": "current",
+      "bytes": 40159
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/fail_mix.svg",
+      "category": "current",
+      "bytes": 95352
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/pass_by_arm.png",
+      "category": "current",
+      "bytes": 25726
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/pass_by_arm.svg",
+      "category": "current",
+      "bytes": 56453
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/resources_by_arm.png",
+      "category": "current",
+      "bytes": 52409
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/resources_by_arm.svg",
+      "category": "current",
+      "bytes": 98787
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/task_arm_heatmap.png",
+      "category": "current",
+      "bytes": 41510
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/figures/task_arm_heatmap.svg",
+      "category": "current",
+      "bytes": 81346
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/generate_report.py",
+      "category": "current",
+      "bytes": 19642
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/derived-usage.json",
+      "category": "current",
+      "bytes": 42453
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/derived-usage.md",
+      "category": "current",
+      "bytes": 1879
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshot-index.json",
+      "category": "current",
+      "bytes": 5618
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/config-render-resolve-v1-brief-D_soft-r0.result.json",
+      "category": "current",
+      "bytes": 663
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/config-render-resolve-v1-brief-D_soft-r2.result.json",
+      "category": "current",
+      "bytes": 663
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/match-vwap-window-v1-brief-D_soft-r2.result.json",
+      "category": "current",
+      "bytes": 655
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/route-lifecycle-v1-full-D_soft-r1.result.json",
+      "category": "current",
+      "bytes": 649
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/route-priority-table-v1-brief-D_soft-r0.result.json",
+      "category": "current",
+      "bytes": 661
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/route-priority-table-v1-full-A-r0.result.json",
+      "category": "current",
+      "bytes": 649
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/route-priority-table-v1-full-D_soft-r0.result.json",
+      "category": "current",
+      "bytes": 659
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/running-snapshots-before-resume/window-dedup-late-v1-brief-D_soft-r0.result.json",
+      "category": "current",
+      "bytes": 655
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/interruption-audit/supervisor-interruption.json",
+      "category": "current",
+      "bytes": 8333
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/plot.py",
+      "category": "current",
+      "bytes": 5774
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/report/tables.json",
+      "category": "current",
+      "bytes": 6220
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/resources.yaml",
+      "category": "current",
+      "bytes": 2222
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/__init__.py",
+      "category": "current",
+      "bytes": 276
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/cases.py",
+      "category": "current",
+      "bytes": 17517
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/catalog.py",
+      "category": "current",
+      "bytes": 27308
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/common.py",
+      "category": "current",
+      "bytes": 9064
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/evaluate.py",
+      "category": "current",
+      "bytes": 10862
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/oracles.py",
+      "category": "current",
+      "bytes": 26899
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/tasks/qa_bank.py",
+      "category": "current",
+      "bytes": 13985
+    },
+    {
+      "path": "docs/experiments/multi-expert-sensitivity/verify_experiment.py",
+      "category": "current",
+      "bytes": 11231
+    },
+    {
+      "path": "docs/loop-setup-guide.md",
+      "category": "current",
+      "bytes": 16241
+    },
+    {
+      "path": "docs/maintenance/README.md",
+      "category": "current",
+      "bytes": 2287
+    },
+    {
+      "path": "docs/maintenance/cleanup-inventory-2026-09-14.json",
+      "category": "current",
+      "bytes": 21661
+    },
+    {
+      "path": "docs/maintenance/cleanup-migration-2026-09-14.json",
+      "category": "current",
+      "bytes": 57474
+    },
+    {
+      "path": "docs/maintenance/cleanup-plan-2026-09-14.md",
+      "category": "current",
+      "bytes": 9772
+    },
+    {
+      "path": "docs/maintenance/cleanup-result-2026-09-14.md",
+      "category": "current",
+      "bytes": 4164
+    },
+    {
+      "path": "docs/maintenance/cleanup-verification-2026-09-14.json",
+      "category": "current",
+      "bytes": 1051
+    },
+    {
+      "path": "docs/maintenance/documentation-refresh-2026-09-14.md",
+      "category": "current",
+      "bytes": 2948
+    },
+    {
+      "path": "docs/observe-routing.md",
+      "category": "current",
+      "bytes": 21615
+    },
+    {
+      "path": "docs/plans/2026-07-27-dashboard-v3-phase-a-data-instrumentation.md",
+      "category": "current",
+      "bytes": 29654
+    },
+    {
+      "path": "docs/plans/2026-10-09-diagnosis-optimization.json",
+      "category": "current",
+      "bytes": 22708
+    },
+    {
+      "path": "docs/plans/2026-10-09-diagnosis-optimization.md",
+      "category": "current",
+      "bytes": 27804
+    },
+    {
+      "path": "docs/plans/README.md",
+      "category": "current",
+      "bytes": 3500
+    },
+    {
+      "path": "docs/proposals/jevharness-integration-assessment.md",
+      "category": "current",
+      "bytes": 16083
+    },
+    {
+      "path": "docs/proposals/skill-market-search-and-feedback-loop.md",
+      "category": "current",
+      "bytes": 18674
+    },
+    {
+      "path": "docs/proposals/skill-source-and-llm-config.md",
+      "category": "current",
+      "bytes": 16663
+    },
+    {
+      "path": "docs/proposals/skill-understanding-and-auto-config.md",
+      "category": "current",
+      "bytes": 29511
+    },
+    {
+      "path": "docs/proposals/smart-skill-installation.md",
+      "category": "current",
+      "bytes": 10273
+    },
+    {
+      "path": "docs/research/2026-09-09-agent-skills-paper.md",
+      "category": "current",
+      "bytes": 2532
+    },
+    {
+      "path": "docs/research/README.md",
+      "category": "current",
+      "bytes": 1728
+    },
+    {
+      "path": "docs/research/evidence/README.md",
+      "category": "current",
+      "bytes": 2142
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-A-claude/artifacts/evo-lane-A-handback.md",
+      "category": "current",
+      "bytes": 7282
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-B-pi/artifacts/evo-lane-B-handback.md",
+      "category": "current",
+      "bytes": 8783
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-C-kimi/artifacts/evo-lane-C-handback.md",
+      "category": "current",
+      "bytes": 5430
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-C-kimi/artifacts/evo-lane-C1-handback.md",
+      "category": "current",
+      "bytes": 3840
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-Cgold-kimi/artifacts/evo-lane-Cgold-handback.md",
+      "category": "current",
+      "bytes": 3873
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-D1-claude/artifacts/evo-lane-D1-handback.md",
+      "category": "current",
+      "bytes": 4972
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-D2-claude/artifacts/evo-lane-D2-handback.md",
+      "category": "current",
+      "bytes": 4737
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-E-pi/artifacts/evo-lane-E-handback.md",
+      "category": "current",
+      "bytes": 9037
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-A-handback.md",
+      "category": "current",
+      "bytes": 7282
+    },
+    {
+      "path": "docs/research/evidence/evo-20260911/vibesop-evo-wave1/artifacts/evo-lane-B-handback.md",
+      "category": "current",
+      "bytes": 8783
+    },
+    {
+      "path": "docs/research/research-survey.md",
+      "category": "current",
+      "bytes": 226526
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/REPORT.md",
+      "category": "current",
+      "bytes": 26616
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/README.md",
+      "category": "current",
+      "bytes": 3398
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/artifact-links.log",
+      "category": "current",
+      "bytes": 151
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/baseline.json",
+      "category": "current",
+      "bytes": 484
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/container-wheel-tool.log",
+      "category": "current",
+      "bytes": 2072
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/cross-architecture.log",
+      "category": "current",
+      "bytes": 2067
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/cross-correctness.log",
+      "category": "current",
+      "bytes": 470
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/decision-source.log",
+      "category": "current",
+      "bytes": 171
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/deepseek-e2e.log",
+      "category": "current",
+      "bytes": 1112
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/deepseek-review.log",
+      "category": "current",
+      "bytes": 9890
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/docker-derived-build.log",
+      "category": "current",
+      "bytes": 2495
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/eval-routing.json",
+      "category": "current",
+      "bytes": 27740
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/eval-routing.log",
+      "category": "current",
+      "bytes": 1804
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/final-container-coverage.json",
+      "category": "current",
+      "bytes": 3815898
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/final-container-pytest.log",
+      "category": "current",
+      "bytes": 68447
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/final-container-pytest.xml",
+      "category": "current",
+      "bytes": 1069665
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/grok-review.log",
+      "category": "current",
+      "bytes": 481
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/host-format.log",
+      "category": "current",
+      "bytes": 28
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/host-ruff.log",
+      "category": "current",
+      "bytes": 19
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/host-type.log",
+      "category": "current",
+      "bytes": 30
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/independent-review-prompt.txt",
+      "category": "current",
+      "bytes": 67641
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/manifest.json",
+      "category": "current",
+      "bytes": 9477
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/node24-pytest.log",
+      "category": "current",
+      "bytes": 378
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/node24-pytest.xml",
+      "category": "current",
+      "bytes": 31259
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/node24-setup.log",
+      "category": "current",
+      "bytes": 644
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/pack-functional.log",
+      "category": "current",
+      "bytes": 484
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/platform-render.log",
+      "category": "current",
+      "bytes": 212
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/platform.log",
+      "category": "current",
+      "bytes": 514
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/cross-architecture-probes.py",
+      "category": "current",
+      "bytes": 3503
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/cross-correctness.py",
+      "category": "current",
+      "bytes": 4841
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/deepseek-e2e.py",
+      "category": "current",
+      "bytes": 406
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/deepseek-review.py",
+      "category": "current",
+      "bytes": 525
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/functional-cross.py",
+      "category": "current",
+      "bytes": 2474
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/pack-functional.py",
+      "category": "current",
+      "bytes": 1673
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/platform-security-more.py",
+      "category": "current",
+      "bytes": 1827
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/platform-security-probes.py",
+      "category": "current",
+      "bytes": 2168
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/routing-runtime.py",
+      "category": "current",
+      "bytes": 5110
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/probes/value-probes.py",
+      "category": "current",
+      "bytes": 3368
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/remote-main-sha.txt",
+      "category": "current",
+      "bytes": 41
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/remote-runs.json",
+      "category": "current",
+      "bytes": 924
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/cross-architecture-tests.txt",
+      "category": "current",
+      "bytes": 8959
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/cross-correctness-integration.txt",
+      "category": "current",
+      "bytes": 10034
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/cross-security-ops.txt",
+      "category": "current",
+      "bytes": 7959
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/platform-security.txt",
+      "category": "current",
+      "bytes": 11576
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/routing-runtime.txt",
+      "category": "current",
+      "bytes": 13060
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/synthesis.txt",
+      "category": "current",
+      "bytes": 3860
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/reviews/value-research.txt",
+      "category": "current",
+      "bytes": 14196
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/routing-runtime.log",
+      "category": "current",
+      "bytes": 2551
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/snapshot-artifact-gate.log",
+      "category": "current",
+      "bytes": 0
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/tracked-files.txt",
+      "category": "current",
+      "bytes": 80919
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/value-probes.log",
+      "category": "current",
+      "bytes": 591
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-claude-hook.log",
+      "category": "current",
+      "bytes": 3
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-grok-hook.log",
+      "category": "current",
+      "bytes": 3139
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-quickstart-claude.log",
+      "category": "current",
+      "bytes": 2827
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-quickstart-grok.log",
+      "category": "current",
+      "bytes": 2824
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-tool-claude-hook.log",
+      "category": "current",
+      "bytes": 3171
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-tool-grok-hook.log",
+      "category": "current",
+      "bytes": 3168
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-tool-quickstart-claude.log",
+      "category": "current",
+      "bytes": 2827
+    },
+    {
+      "path": "docs/reviews/2026-10-09-deep-diagnosis/evidence/wheel-tool-quickstart-grok.log",
+      "category": "current",
+      "bytes": 2824
+    },
+    {
+      "path": "docs/semantic/api.md",
+      "category": "current",
+      "bytes": 19350
+    },
+    {
+      "path": "docs/semantic/guide.md",
+      "category": "current",
+      "bytes": 14851
+    },
+    {
+      "path": "docs/skill-format-spec-v2.md",
+      "category": "current",
+      "bytes": 7450
+    },
+    {
+      "path": "docs/skill-format-spec-v3.md",
+      "category": "current",
+      "bytes": 8161
+    },
+    {
+      "path": "docs/skill-format-spec.md",
+      "category": "current",
+      "bytes": 6121
+    },
+    {
+      "path": "docs/skill-routing-explained.md",
+      "category": "current",
+      "bytes": 37839
+    },
+    {
+      "path": "docs/specs/2026-09-09-verification-contract.md",
+      "category": "current",
+      "bytes": 8504
+    },
+    {
+      "path": "docs/specs/2026-09-09-windows-verification.md",
+      "category": "current",
+      "bytes": 2995
+    },
+    {
+      "path": "docs/specs/2026-09-11-claude-code-prompt-guide.md",
+      "category": "current",
+      "bytes": 8049
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-A.md",
+      "category": "current",
+      "bytes": 2296
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-B.md",
+      "category": "current",
+      "bytes": 1796
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-C.md",
+      "category": "current",
+      "bytes": 3625
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-Cgold.md",
+      "category": "current",
+      "bytes": 2320
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-D1.md",
+      "category": "current",
+      "bytes": 3270
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-D2.md",
+      "category": "current",
+      "bytes": 4046
+    },
+    {
+      "path": "docs/specs/2026-09-11-evo-lane-E.md",
+      "category": "current",
+      "bytes": 3071
+    },
+    {
+      "path": "docs/specs/2026-09-11-evolution-direction-prompt.md",
+      "category": "current",
+      "bytes": 13329
+    },
+    {
+      "path": "docs/specs/2026-09-11-evolution-direction-proposal.md",
+      "category": "current",
+      "bytes": 18435
+    },
+    {
+      "path": "docs/specs/2026-09-11-evolution-optimization-plan.md",
+      "category": "current",
+      "bytes": 5408
+    },
+    {
+      "path": "docs/specs/2026-09-11-optimization-convergence-requirements.md",
+      "category": "current",
+      "bytes": 26147
+    },
+    {
+      "path": "docs/specs/2026-09-11-r3-r4-coding-handoff-prompt.md",
+      "category": "current",
+      "bytes": 11643
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-f1-design.md",
+      "category": "current",
+      "bytes": 9881
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-f2-design.md",
+      "category": "current",
+      "bytes": 24812
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-f9-design.md",
+      "category": "current",
+      "bytes": 11383
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-lane-claude.md",
+      "category": "current",
+      "bytes": 3109
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-lane-kimi.md",
+      "category": "current",
+      "bytes": 3592
+    },
+    {
+      "path": "docs/specs/2026-09-21-distill-lane-pi.md",
+      "category": "current",
+      "bytes": 3051
+    },
+    {
+      "path": "docs/specs/2026-09-21-skill-distill-landing.md",
+      "category": "current",
+      "bytes": 4757
+    },
+    {
+      "path": "docs/task-memory-loop-article.md",
+      "category": "current",
+      "bytes": 20914
+    },
+    {
+      "path": "docs/templates/agent-task-brief.md",
+      "category": "current",
+      "bytes": 2411
+    },
+    {
+      "path": "docs/triggers/api.md",
+      "category": "current",
+      "bytes": 18660
+    },
+    {
+      "path": "docs/triggers/guide.md",
+      "category": "current",
+      "bytes": 18760
+    },
+    {
+      "path": "docs/triggers/patterns.md",
+      "category": "current",
+      "bytes": 19006
+    },
+    {
+      "path": "docs/user/CLI_REFERENCE.md",
+      "category": "current",
+      "bytes": 76501
+    },
+    {
+      "path": "docs/user/COMMAND_HANDBOOK.md",
+      "category": "current",
+      "bytes": 9441
+    },
+    {
+      "path": "docs/user/HOOK_INTEGRATION.md",
+      "category": "current",
+      "bytes": 5799
+    },
+    {
+      "path": "docs/user/cli-recordings/README.md",
+      "category": "current",
+      "bytes": 389
+    },
+    {
+      "path": "docs/user/cli-recordings/doctor.txt",
+      "category": "current",
+      "bytes": 846
+    },
+    {
+      "path": "docs/user/cli-recordings/help-route.txt",
+      "category": "current",
+      "bytes": 4928
+    },
+    {
+      "path": "docs/user/cli-recordings/man-route.txt",
+      "category": "current",
+      "bytes": 5624
+    },
+    {
+      "path": "docs/user/cli-recordings/orchestrate-help.txt",
+      "category": "current",
+      "bytes": 2136
+    },
+    {
+      "path": "docs/user/cli-recordings/route-explicit.txt",
+      "category": "current",
+      "bytes": 4732
+    },
+    {
+      "path": "docs/user/cli-recordings/route-weather.txt",
+      "category": "current",
+      "bytes": 3737
+    },
+    {
+      "path": "docs/user/cli-recordings/route-wechat.txt",
+      "category": "current",
+      "bytes": 3733
+    },
+    {
+      "path": "docs/user/cli-recordings/skills-help.txt",
+      "category": "current",
+      "bytes": 3905
+    },
+    {
+      "path": "docs/user/cli-recordings/skills-info.txt",
+      "category": "current",
+      "bytes": 2633
+    },
+    {
+      "path": "docs/user/cli-recordings/skills-list.txt",
+      "category": "current",
+      "bytes": 19
+    },
+    {
+      "path": "docs/user/cli-recordings/status.txt",
+      "category": "current",
+      "bytes": 6462
+    },
+    {
+      "path": "docs/user/cli-recordings/version.txt",
+      "category": "current",
+      "bytes": 953
+    },
+    {
+      "path": "docs/user/getting-started.md",
+      "category": "current",
+      "bytes": 946
+    },
+    {
+      "path": "docs/user/session-intelligent-routing.md",
+      "category": "current",
+      "bytes": 16628
+    },
+    {
+      "path": "docs/user/troubleshooting.md",
+      "category": "current",
+      "bytes": 8943
+    },
+    {
+      "path": "docs/user/workflows.md",
+      "category": "current",
+      "bytes": 1739
+    },
+    {
+      "path": "docs/vibe-coding-article.md",
+      "category": "current",
+      "bytes": 25317
+    }
+  ],
+  "runtime_exclusions": [
+    ".vibe/observability",
+    ".vibe/instincts",
+    ".vibe/memory",
+    ".experiment",
+    "active or unverified worktrees",
+    "branches and stashes"
+  ],
+  "user_changes_preserved": {
+    ".pi/docs/skills.md": "052b06a08f4932dda4a4ede1e992d6746c7433aea13881de4622551f292fef0f",
+    ".pi/extensions/vibesop-route.ts": "27e2503500219b0707b6d39ff833a1143ebf617fc9a2d0406745245ba46ae14a",
+    ".pi/extensions/vibesop-track.ts": "41e047aa479abce230d0ab34c62f6d6bd1c7177b3fd76f87825d240c11cceb92",
+    ".pi/prompts/vibe-help.md": "d07288cfd74c2c5482d7644a957efb2b998aa75d79b93993c3f2284df465fa85",
+    ".pi/settings.json": "f95cca7b9e2e61ef4a476da6bebe75937422fc7293d926261c4655e6bbd28097",
+    "Makefile": "fd9195a73fd95c97b4216df7269192b837f0664a2b8bb0ff5fe067d4f8690857",
+    ".grok/hooks/vibesop-route.json": "2289940407fbbb5939511a29cda8b94bae14430b4f4f8db4f493d90dbd88969e",
+    ".grok/hooks/vibesop-tool-seq.json": "dec19d07194a23ff737b6628ec24a3ca5a28e55de33d1f0471cd39182e7f58ac",
+    "docs/VibeSOP-CMspark-部门分享-17页.pptx": "52737886a08f2012c032f519d213c4660c557a054d03967426c8f77a76e40aef"
+  },
+  "proposed_diagnosis_archive": "docs/archive/reviews/diagnosis/2026-10-09-deep-diagnosis/",
+  "existing_manifest_verification": "57 entries present; bytes unchanged; 30 .log files require explicit preservation"
+}

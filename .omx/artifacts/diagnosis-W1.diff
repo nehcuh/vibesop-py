@@ -1,0 +1,472 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 6595dc77..1f419d25 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -217,8 +217,11 @@ jobs:
+         # boundary files; running them first surfaces concrete errors before
+         # the full regression completes. Same rerun
+         # posture as the full Run tests step below.
++        # W1 (2026-10-09, observation only): -ra + --junitxml appended so
++        # per-test-id skip/rerun outcomes are recoverable from this step's
++        # own report; filters/reruns/gates unchanged.
+         run: >-
+-          uv run pytest -q --reruns 2 --reruns-delay 1
++          uv run pytest -q --reruns 2 --reruns-delay 1 -ra --junitxml=test-results-windows-boundary-py${{ matrix.python-version }}.xml
+           tests/adapters/test_kimi_config_merge.py
+           tests/adapters/test_pi_route_extension.py
+           tests/adapters/test_route_process_boundary.py
+@@ -234,7 +237,28 @@ jobs:
+         # --reruns-delay 1 (gate44 pi NIT-5): Defender-style transient
+         # locks are time-sensitive — an immediate rerun re-hits the same
+         # window (the benchmark job already pairs these two flags).
+-        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2 --reruns-delay 1
++        # W1 (2026-10-09, observation only): -ra + --junitxml appended for
++        # per-test-id outcomes; marker/rerun/gate contracts unchanged.
++        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2 --reruns-delay 1 -ra --junitxml=test-results-windows-full-py${{ matrix.python-version }}.xml
++
++      # W1 (2026-10-09, observation only): upload each step's own JUnit
++      # report so per-test-id skip/rerun/pass sets are recoverable without
++      # -q log archaeology. Reuses the workflow's existing upload-artifact
++      # pin; always() keeps reports available on red runs — upload itself
++      # gates nothing.
++      - name: Upload Windows boundary test report
++        if: always()
++        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
++        with:
++          name: windows-test-report-boundary-py${{ matrix.python-version }}
++          path: test-results-windows-boundary-py${{ matrix.python-version }}.xml
++
++      - name: Upload Windows full test report
++        if: always()
++        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
++        with:
++          name: windows-test-report-full-py${{ matrix.python-version }}
++          path: test-results-windows-full-py${{ matrix.python-version }}.xml
+ 
+   security:
+     name: Security Scan
+diff --git a/.github/workflows/quickstart-e2e.yml b/.github/workflows/quickstart-e2e.yml
+index 80d7197d..476ff2cf 100644
+--- a/.github/workflows/quickstart-e2e.yml
++++ b/.github/workflows/quickstart-e2e.yml
+@@ -266,6 +266,37 @@ jobs:
+           fi
+           echo "SPACED-HOME E2E PASSED"
+ 
++      # W1 (2026-10-09, observation only): record the actual Git Bash
++      # version and the raw LF/CRLF byte counts of the deployed hook
++      # scripts (scratch-home + spaced-home lanes) so the W-RISK-2 CRLF
++      # contradiction is resolved from real Windows run bytes. Prints
++      # counts and versions only — never file contents, never secrets.
++      # Observation never gates: every command is || true.
++      - name: Observe Git Bash version + deployed hook line endings (W1)
++        working-directory: ${{ runner.temp }}
++        env:
++          HOME: ${{ runner.temp }}/scratch-home
++          USERPROFILE: ${{ runner.temp }}/scratch-home
++          SPACED_HOME: ${{ runner.temp }}/scratch home
++        run: |
++          bash --version | sed -n '1p' || true
++          hook_scratch="$HOME/.claude/hooks/vibesop-route.sh"
++          hook_spaced="$SPACED_HOME/.claude/hooks/vibesop-route.sh"
++          uv run --no-project python -c '
++          import sys
++          for label, path in (("scratch-home", sys.argv[1]), ("spaced-home", sys.argv[2])):
++              try:
++                  data = open(path, "rb").read()
++              except OSError as e:
++                  print(label, ": hook MISSING at", path, "(", e, ")")
++                  continue
++              lf = data.count(b"\n")
++              crlf = data.count(b"\r\n")
++              cr = data.count(b"\r")
++              print(label, ": hook bytes=", len(data), " lf=", lf, " crlf=", crlf,
++                    " bare_cr=", cr - crlf, " path=", path, sep="")
++          ' "$hook_scratch" "$hook_spaced" || true
++
+       - name: Dual-platform injection probe (claude-code vs grok-build)
+         working-directory: ${{ runner.temp }}
+         env:
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 67257acf..6166c2fc 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Changed
+ 
++- **W1 diagnosis optimization**: Retain Windows CI gates while collecting per-case JUnit/skip evidence and deployed Git Bash hook byte diagnostics; qualify platform copy fallback without claiming symlink or Windows ACL proof.
++
+ - **B5 diagnosis optimization**: Coroutine function executors are now awaited in parallel batches; single-step batches retain their existing synchronous contract, and async callable objects/custom awaitables remain outside this scope.
+ 
+ - **B6 diagnosis optimization**: Instinct writes merge under thread and process locks using loaded baselines; persisted row shape remains compatible. Evidence is scoped to pattern and action identity.
+diff --git a/tests/adapters/test_base.py b/tests/adapters/test_base.py
+index 90f4f681..9c680260 100644
+--- a/tests/adapters/test_base.py
++++ b/tests/adapters/test_base.py
+@@ -722,13 +722,13 @@ class TestWriteFileAtomicAncestorSymlink:
+             "declared trusted root must refuse a symlinked ancestor inside it"
+         )
+ 
+-    def test_real_dir_write_with_anchor_still_works(
+-        self, tmp_path: Path, symlink_supported: bool
+-    ) -> None:
++    def test_real_dir_write_with_anchor_still_works(self, tmp_path: Path) -> None:
+         """Compatibility: a plain real directory tree under the declared
+-        anchor keeps rendering (the R1 refusal must not over-reach)."""
+-        if not symlink_supported:
+-            pytest.skip("directory symlinks not supported on this host")
++        anchor keeps rendering (the R1 refusal must not over-reach).
++
++        W1: unconditionally executed — the assertion writes a real directory
++        and never creates a symlink, so it must not ride the symlink
++        capability fixture."""
+         adapter = DummyAdapter()
+         output_root = tmp_path / "output"
+         target = output_root / "skills" / "demo" / "SKILL.md"
+@@ -841,3 +841,76 @@ class TestAssertSafeRenderPath:
+         out.mkdir()
+         adapter._assert_safe_render_path(out / "skills", out)
+         adapter._assert_safe_render_path(out / "skills" / "demo", out, allow_leaf_symlink=True)
++
++
++class TestRenderCopyFallbackWithoutSymlinkCapability:
++    """W1 (Windows qualification): with the production symlink capability
++    probe forced False — the unprivileged-Windows branch — the render must
++    take the REAL product copy fallback and every fallback-visible contract
++    must still hold: the platform dir is an actual directory (never a
++    link), copy-source and ownership markers are written, the central
++    source content stays untouched, the render result records the output
++    file, and a second render is idempotent.
++
++    Honest boundary: this is the capability=False lane ONLY. It does not
++    prove the malicious-symlink refusals above — those inherently require
++    creating real symlinks and stay gated on ``symlink_supported``.
++    """
++
++    CENTRAL_BODY = "# Central Install\n\nW1 copy-fallback body\n"
++
++    def _seed_central(self, tmp_path: Path) -> Path:
++        central = tmp_path / "central" / "w1-copy-demo-20261009"
++        central.mkdir(parents=True)
++        (central / "SKILL.md").write_text(self.CENTRAL_BODY, encoding="utf-8")
++        return central
++
++    def test_copy_fallback_real_dir_markers_central_untouched_idempotent(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        import json
++
++        # Simulate the no-symlink-privilege branch deterministically on
++        # every host (same probe the Codex audit forced False on darwin).
++        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
++
++        central = self._seed_central(tmp_path)
++        adapter = DummyAdapter()
++        skills_dir = tmp_path / "out" / "skills"
++        skills_dir.mkdir(parents=True)
++        skill_dir = skills_dir / "w1-copy-demo-20261009"
++        result = RenderResult(success=True)
++
++        # Real DynamicSkillDiscovery shape: source_path rides skill metadata.
++        skill = SimpleNamespace(id="w1-copy-demo-20261009", metadata={"source_path": str(central)})
++        adapter._render_skill_content(skill, skill_dir, result)
++
++        # Actual directory, not a link; content copied from the source.
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
++
++        # Provenance markers from the production fallback.
++        copy_marker = skill_dir / ".vibe-copy-source"
++        assert copy_marker.is_file()
++        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central.resolve()
++        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
++        assert owner["id"] == "w1-copy-demo-20261009"
++        assert owner["source"]["type"] == "pack-copy"
++
++        # The central install itself is never mutated.
++        assert (central / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
++        assert not (central / ".vibe-manifest.json").exists()
++
++        # Output side effect: the rendered file is recorded.
++        assert (skill_dir / "SKILL.md") in result.files_created
++
++        # Idempotent: a second render re-copies, still a real dir, central
++        # still untouched.
++        result2 = RenderResult(success=True)
++        adapter._render_skill_content(skill, skill_dir, result2)
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
++        assert (central / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
++        assert not (central / ".vibe-manifest.json").exists()
+diff --git a/tests/adapters/test_claude_code.py b/tests/adapters/test_claude_code.py
+index 24abaa89..29c5a5d6 100644
+--- a/tests/adapters/test_claude_code.py
++++ b/tests/adapters/test_claude_code.py
+@@ -294,6 +294,13 @@ class TestClaudeCodeHookRendering:
+         if sys.platform != "win32":
+             # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+             assert hook_path.stat().st_mode & 0o111, "Hook should be executable"
++        else:
++            # W1: Windows-side assertion — a real non-empty artifact.
++            # Executability there is proven by the quickstart Git Bash smoke
++            # that runs the deployed hook; POSIX mode bits must not be
++            # dressed up as a Windows ACL proof.
++            assert hook_path.is_file(), "Hook must be a regular file on Windows"
++            assert hook_path.stat().st_size > 0, "Hook artifact must be non-empty"
+         result.add_file.assert_called_once_with(hook_path)
+         result.add_warning.assert_not_called()
+ 
+@@ -1212,3 +1219,83 @@ class TestSkillRenderRefusesBeforeMkdir:
+             "validation must run before mkdir — refused render created central/demo"
+         )
+         assert not (central / ".vibe-manifest.json").exists()
++
++
++class TestSkillCopyFallbackWithoutSymlinkCapability:
++    """W1 (Windows qualification): public ``render_config`` with the symlink
++    capability probe forced False (unprivileged Windows) must take the REAL
++    product copy fallback — the platform skill dir is an actual directory,
++    content comes from the declared source, provenance/ownership markers
++    are written, the central source is never mutated, the flattened name
++    boundary holds for namespaced ids, and re-rendering is idempotent.
++
++    Honest boundary: capability=False lane only — it does NOT stand in for
++    the malicious-symlink refusals above (those stay gated on
++    ``symlink_supported`` because they need real symlinks).
++    """
++
++    CENTRAL_CONTENT = "# Central Install\n\nW1 copy-fallback body — do not touch\n"
++    SKILL_ID = "w1glm-20261009/demo"
++
++    def _manifest(self, central_demo: Path) -> Manifest:
++        return Manifest(
++            metadata=ManifestMetadata(platform="claude-code"),
++            skills=[
++                SkillSpec(
++                    id=self.SKILL_ID,
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                    metadata={"source_path": str(central_demo)},
++                )
++            ],
++        )
++
++    def test_render_copies_real_dir_and_keeps_central_untouched(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        import json
++
++        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
++
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
++
++        adapter = ClaudeCodeAdapter(project_root=tmp_path / "proj")
++        (tmp_path / "proj").mkdir()
++        output_dir = tmp_path / "output"
++
++        result = adapter.render_config(self._manifest(central_demo), output_dir)
++
++        assert result.success, f"copy-fallback render failed: {result.errors}"
++        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
++
++        # Actual directory carrying the source content — never a link.
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++
++        # Production provenance + ownership markers on the copy.
++        copy_marker = skill_dir / ".vibe-copy-source"
++        assert copy_marker.is_file()
++        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
++        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
++        assert owner["id"] == self.SKILL_ID
++        assert owner["source"]["type"] == "pack-copy"
++
++        # Name boundary: exactly the flattened dir, no nested namespace dir.
++        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
++
++        # Central source content unchanged; render left no marker inside it.
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++        # Idempotent second render: still a real dir, central untouched.
++        result2 = adapter.render_config(self._manifest(central_demo), output_dir)
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
+diff --git a/tests/adapters/test_kimi_cli.py b/tests/adapters/test_kimi_cli.py
+index 5f0aa941..de2b9011 100644
+--- a/tests/adapters/test_kimi_cli.py
++++ b/tests/adapters/test_kimi_cli.py
+@@ -276,6 +276,13 @@ class TestKimiCliAdapter:
+         if sys.platform != "win32":
+             # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+             assert hook_path.stat().st_mode & 0o111  # executable
++        else:
++            # W1: Windows-side assertion — a real non-empty artifact.
++            # Executability there is proven by the quickstart Git Bash smoke
++            # that runs the deployed hook; POSIX mode bits must not be
++            # dressed up as a Windows ACL proof.
++            assert hook_path.is_file(), "Hook must be a regular file on Windows"
++            assert hook_path.stat().st_size > 0, "Hook artifact must be non-empty"
+ 
+         content = hook_path.read_text(encoding="utf-8")
+         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
+@@ -671,3 +678,68 @@ class TestKimiSkillRenderBoundary:
+         assert result.success, f"fallback render failed: {result.errors}"
+         rendered = output_dir / "skills" / "b1-unique-missing-source-20261009" / "SKILL.md"
+         assert rendered.exists()
++
++    def test_copy_fallback_real_dir_and_central_untouched(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        """W1 (Windows qualification): capability probe forced False — the
++        public render must take the REAL product copy fallback: actual
++        directory (never a link), markers, flattened name boundary, central
++        source untouched, idempotent. capability=False lane only; it does
++        NOT replace the malicious-symlink refusals above (those stay gated
++        on ``symlink_supported``)."""
++        import json
++
++        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
++
++        skill_id = "w1glm-20261009/demo"
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
++
++        project_root = tmp_path / "proj"
++        project_root.mkdir()
++        output_dir = tmp_path / "out"
++
++        manifest = Manifest(
++            metadata=ManifestMetadata(platform="kimi-cli"),
++            skills=[
++                SkillSpec(
++                    id=skill_id,
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                    metadata={"source_path": str(central_demo)},
++                )
++            ],
++        )
++        adapter = KimiCliAdapter(project_root=project_root)
++        result = adapter.render_config(manifest, output_dir)
++
++        assert result.success, f"copy-fallback render failed: {result.errors}"
++        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
++
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++
++        copy_marker = skill_dir / ".vibe-copy-source"
++        assert copy_marker.is_file()
++        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
++        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
++        assert owner["id"] == skill_id
++        assert owner["source"]["type"] == "pack-copy"
++
++        # Name boundary: exactly the flattened dir, no nested namespace dir.
++        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
++
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++        result2 = adapter.render_config(manifest, output_dir)
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
+diff --git a/tests/adapters/test_pi_coding_agent.py b/tests/adapters/test_pi_coding_agent.py
+index 1da6e9a6..2f111704 100644
+--- a/tests/adapters/test_pi_coding_agent.py
++++ b/tests/adapters/test_pi_coding_agent.py
+@@ -174,3 +174,75 @@ class TestRenderLegalPaths:
+         assert rendered.exists()
+         content = rendered.read_text(encoding="utf-8")
+         assert "b1-unique-missing-source-20261009" in content
++
++
++class TestRenderCopyFallbackWithoutSymlinkCapability:
++    """W1 (Windows qualification): public ``render_config`` with the symlink
++    capability probe forced False (unprivileged Windows) must take the REAL
++    product copy fallback — actual directory (never a link), provenance and
++    ownership markers, flattened name boundary, central source untouched,
++    idempotent re-render.
++
++    Honest boundary: capability=False lane only; it does NOT replace the
++    malicious-symlink refusals above (those stay gated on
++    ``symlink_supported`` because they need real symlinks).
++    """
++
++    def test_copy_fallback_real_dir_and_central_untouched(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        import json
++
++        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
++
++        skill_id = "w1glm-20261009/demo"
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(CENTRAL_CONTENT, encoding="utf-8")
++
++        project_root = tmp_path / "proj"
++        project_root.mkdir()
++        output_dir = project_root / ".pi"
++
++        manifest = Manifest(
++            metadata=ManifestMetadata(platform="pi"),
++            skills=[
++                SkillSpec(
++                    id=skill_id,
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                    metadata={"source_path": str(central_demo)},
++                )
++            ],
++        )
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(manifest, output_dir)
++
++        assert result.success, f"copy-fallback render failed: {result.errors}"
++        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
++
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++
++        copy_marker = skill_dir / ".vibe-copy-source"
++        assert copy_marker.is_file()
++        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
++        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
++        assert owner["id"] == skill_id
++        assert owner["source"]["type"] == "pack-copy"
++
++        # Name boundary: exactly the flattened dir, no nested namespace dir.
++        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
++
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++        result2 = adapter.render_config(manifest, output_dir)
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_dir()
++        assert not skill_dir.is_symlink()
++        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()

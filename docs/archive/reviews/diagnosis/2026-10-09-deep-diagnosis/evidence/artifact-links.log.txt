@@ -1,0 +1,2 @@
+Bytecode compiled 4185 files in 67ms
+check_artifact_links: 1146 reference(s) — 684 ok, 0 dangling, 462 stale (exact baseline match, 462 nontracked).

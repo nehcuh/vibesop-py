@@ -27,3 +27,5 @@ uv run python ../vibesop-py-archives/2026-09-14/restore_worktree.py vibesop-heal
 - 文章的当前稿、预览、配图与历史稿放在同一个文章目录。
 - worktree 收口前保存独有提交、暂存区、工作区、未跟踪和 ignored 证据；校验恢复后再移除目录。保留分支不等于保存了未提交成果。
 - 不把历史 AGENTS.md 当作目录指令，不把尚未完成的实验按旧状态清空。
+
+- [2026-10-09 诊断证据迁移](cleanup-migration-2026-10-09.md)：原路径、Git 副本、冷归档成员与校验关系；[机器映射](cleanup-migration-2026-10-09.json)。诊断快照归档，未完成计划继续保留。

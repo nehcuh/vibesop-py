@@ -1,0 +1,78 @@
+# Platform / installation / security / dashboard audit
+
+Baseline: 49901afe + current dirty workspace, 2026-10-09. Read only source audit; all mutations confined to temporary directories. No real provider credentials read/output or external API invoked. Dummy credentials used for credential persistence probe.
+
+## Mapping and architecture assessment
+
+| Domain | Value / implementation | Assessment |
+|---|---|---|
+| adapters | PlatformAdapter + FileBased/HookBased/SdkBased families, shared content and docs helpers, Claude/Kimi/Pi/Grok/OpenCode implementations | A useful compatibility boundary and already meaningful deduplication. Actual generated artifact semantics remain distributed, so a shared security primitive fix does not guarantee caller safety. Platform contract tests mainly assert files and content fragments rather than running consumers. |
+| builder | ManifestBuilder from config/discovery, OverlayMerger, ConfigRenderer and docs | Declarative project-to-platform projection is valuable. Multiple manifest reconstruction paths discard fields; overlay public helper and consumer schemas disagree. Product needs one canonical typed serialization contract. |
+| hooks | Templates, shell escaping, installer ownership marker + content hash, platform hook registration | Ownership/modified-file preservation improvements are sound. Generic installer and platform adapters are two deployers of the same destinations, creating compatibility debt; tests prove several protections, not all real native hook registration. |
+| installer | SkillInstaller local skill copy, PackInstaller clone→preaudit→build→audit→link, transaction/snapshot helpers | Security order is improved and unsafe local build requires TTY confirmation. Individual skill destination is still derived from untrusted metadata. Sandbox prevents output persistence; success reporting does not distinguish compiled/failed/skipped. |
+| packs | SHA/content locks, trust bound to checksum, central storage and platform symlinks | Practical supply-chain controls but integrity is clone-time rather than continuous execution authorization. This is an explicit limitation, not evidence of arbitrary code execution. Already-installed early return and global lock namespace merit a follow-up contract audit. |
+| security | Lexical PathSafety, static injection/command regex rules, runtime fail-closed content scanning | Useful defense in depth but not an LLM behavioral enforcement mechanism. PathSafety correctly rejects extant symlinks, but write_file_atomic resolves them before validation, neutralizing that layer. Do not describe regex scanning as a sandbox/security proof. |
+| dashboard/integrations | Local FastAPI observability + reflection CRUD; known pack detection and filesystem presence checks | Dashboard binds localhost by default, so no unsupported remote attack claimed. Integration "functional" means presence rather than execution, and layout assumptions differ between quick check and detailed verifier. No confirmed high-severity dashboard exploit in this lane. |
+
+## Confirmed findings
+
+### PS-01 [P1, high confidence] skill add permits metadata-directed writes outside the intended installation root
+
+`src/vibesop/installer/skill_installer.py:93` uses parsed frontmatter id directly in `project_path / .vibe/skills / manifest.id`; copytree has no containment/symlink validation. Parser and SkillSpec only require nonempty id. This is reached by public `vibe skill add` via `skill_commands.py:628` audit then `:646` installer, not just an arbitrary low-level API invocation.
+
+Reproduction: a locally supplied/downloaded normal SKILL.md with `id: ../../escaped` passes the real SkillSecurityAuditor as SAFE, and install_skill(force=True) returns success while creating `project/escaped/SKILL.md`. Directory target is an existing temp project sibling; all writes confined to temp. Expected skill install to remain under `.vibe/skills` irrespective of manifest metadata. Absolute id can choose any writable directory, too. `force` is needed only when selected destination already exists; a new escaped target works without force. User authorizes installing the source, which does not imply arbitrary destination selected by its frontmatter. Fix: validate IDs as logical identifiers, lexical containment and symlink checking of every destination component before copy; similarly validate uninstall/verify id inputs. Avoid reject-all namespace IDs: legit `builtin/name` is supported.
+
+Evidence: `/tmp/vibesop-platform-repro.py`, output `audit: safe`, `success: true`, `escaped_file_exists: true`.
+
+### PS-02 [P1, high confidence] platform render writes through existing skill symlinks into the source tree
+
+`src/vibesop/adapters/base.py:373-385` resolves the output before checking it, and defaults validation base to the resolved parent. `:536` invokes this with no base; `:540` then writes the ownership marker via the original symlink. Existing symlinks are a normal state because VibeSOP itself deploys installed packs this way.
+
+Full render reproduction: create `output/skills/demo -> installed-pack/demo`, create project `skills/demo/SKILL.md` with canonical content, then ClaudeCodeAdapter.render_config with matching demo skill. Result success=True; installed-pack/demo/SKILL.md overwritten, installed-pack/demo/.vibe-manifest.json newly written. Expected rebuilding platform output to update/recreate destination symlink or copy and preserve source installed content. This is source mutation/data loss, not an unproven remote exploit. It bypasses PathSafety's explicit no-symlink policy and can affect another platform sharing the pack. Fix: pass anchored output root, refuse/reconcile symlinked destination before writing, unique atomic temp paths; preserve user files/central pack ownership.
+
+Evidence: `/tmp/vibesop-platform-more-repro.py`, `render-symlink-writes-source True True True`.
+
+### PS-03 [P1, high confidence] OpenCode build persists live environment credentials into a readable artifact
+
+`src/vibesop/adapters/opencode.py:166,178` copies both ANTHROPIC_API_KEY and OPENAI_API_KEY values into llm-config.json. `file_based.py:274` writes it through the ordinary atomic writer (normal umask => 0644). The shared parent implementation correctly stores api_key_env instead, so the OpenCode override regresses the credential boundary.
+
+Reproduction uses both variables set to AUDIT_DUMMY_SECRET via patch.dict, executes complete OpenCodeAdapter.render_config_only in temp root; result success=True, generated file contains dummy secret, mode 0644. No real secret read/output. Expected generated/shareable config to contain environment variable references, especially since caller can choose project output directory. A generated config can be shared/versioned or read by another local account. Fix: use api_key_env consistently and preserve already-existing native login settings rather than dumping ambient credentials.
+
+Evidence: `/tmp/vibesop-platform-more-repro.py`, `opencode-secret-materialized True True 0o644`.
+
+### PS-04 [P2, high confidence] generated security/routing overlay is silently ignored by merger
+
+`src/vibesop/builder/overlay.py:234-238` public create_overlay writes security/routing at top level; merger's `_dict_to_manifest` at `:155-161` reads policies.security/routing. validate_overlay even accepts both top-level keys, so validation cannot catch it.
+
+create_overlay(security={scan_external_content:False},routing={confidence_threshold:.9}) then merge a default Manifest results True/.6, no error. Expected False/.9. More restrictive user policies are likewise ignored, so deployment config does not honor input. Fix canonical overlay schema, ensure helper and validator agree with consumer, round-trip tests for helper outputs. Also create_overlay(skills=['id']) emits partial specs while merger constructs required fields without source lookup; not separately reported until contract established.
+
+Evidence: `/tmp/vibesop-platform-repro.py`, `overlay-policy-ignored True 0.6`.
+
+### PS-05 [P2, high confidence] sandbox pack build cannot produce persisted output, yet install reports success
+
+`src/vibesop/installer/pack_installer.py:469` mounts pack as `/work:ro`; a normal build that generates SKILL.md/docs inside pack therefore fails, and even a script writing /tmp cannot persist the output. `:493-495` encodes failure as string; install_pack at `:220-228` ignores failure outcome and continues publishing/auditing pre-build files, returning True at `:270`.
+
+Actual native arm64 Docker reproduction: BUILD.sh runs mkdir generated; printf generated > generated/output.txt. `_run_build_in_container` yields `Read-only file system`, no artifact. Parent requested complete install-chain probe and it is in progress (mock clone/network only; real audit/Docker). Expected writable isolated copy/workspace, validated output copied back atomically, and required build failure reflected as failed or explicitly incomplete install. Avoid fixing by mounting whole host/project writable or weakening network isolation.
+
+Evidence: `/tmp/vibesop-platform-more-repro.py`, actual Docker ubuntu:22.04 output `BUILD.sh blocked/failed in sandbox...`, `container-artifact-exists False`.
+
+### PS-06 [P2, high confidence, secondary/low exposure] transaction rollback ignores newly created tracked files
+
+`src/vibesop/installer/transactional.py:193` stores only existing file bytes. After track_file(nonexistent), successful step creates it, subsequent step fails; rollback_completed=True while created file still exists. Expected full file rollback includes restoring absence. Production install paths do not currently use this helper, so prioritize after actual CLI safety and render contract; do not inflate this into an active installer exploit.
+
+Evidence: `/tmp/vibesop-platform-repro.py`, `rollback-new-file False True True`.
+
+## Refuted / bounded security hypotheses
+
+- Dashboard traces/{id} path traversal: ordinary slash and encoded slash do not match a single-segment Starlette route; `..` itself only yields `...json`, no traversal. No P1 declared from path concatenation alone.
+- git ext:: / file:// clone: allowlist plus git protocol flags block them. No preaudit transport-RCE finding.
+- Post-install scan: explicitly fail-closed scanner exception; not a general proof of safe agent behavior. Existing malicious-looking content rejection should not be credited as real Docker e2e.
+- Pack local fallback: defaults disabled; TTY + confirmation needed. User has not requested this bypass, and it was not invoked.
+
+## Priorities / next validation
+
+First PS-01/02/03: user file/credential boundaries. Then PS-04/05: declared deployment behavior and install truthfulness. PS-06 is helper debt. Verification should operate native generated consumer artifacts and symlinked central storage in clean HOME/project directories, run valid/malformed IDs, no-leak dummy credentials, required build success/failure, repeated render and multi-platform shared pack cases. Static tests and "file exists" checks are inadequate for these state transitions.
+
+## Follow-up completion
+
+PS-05 complete installer chain reproduced with a local legitimate fixture + real Docker, not only the build helper: success=True, no generated output, skill present, lock written. See `/tmp/vibesop-pack-functional-repro.py` and the correctness/operations cross-report `/tmp/vibesop-audit-20261009-cross-security-ops.md`. Network cloning only is mocked; other components are real. Selected host suite: 94 passed. No further probes were run after parent narrowed the follow-up scope.

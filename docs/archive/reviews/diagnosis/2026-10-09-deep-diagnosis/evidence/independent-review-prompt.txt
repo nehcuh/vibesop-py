@@ -1,0 +1,1247 @@
+请作为独立、苛刻但公平的软件产品与架构评审者，评审以下 VibeSOP 当前项目材料。仅做只读意见，不调用工具，不执行动作。用中文回答：1 核心价值与最小可销售/可采用能力；2 创新中哪些是组合工程，哪些有实验支持，哪些尚未证实；3 架构边界与失败语义风险；4 最值得核查的三项具体缺陷假设；5 下一季度应该停止/保留/优先做什么。不能把假设写成已确认缺陷，不能根据宣传给成功率，请引用材料文件/段落。不要要求安装或另行鉴权。
+
+### README.md
+
+# VibeSOP
+
+> **Engineering tools and empirical research for reliable AI-assisted development.**
+>
+> [中文](README.zh-CN.md) · [Documentation](docs/INDEX.md) · [Project status](docs/PROJECT_STATUS.md) · [Research](docs/research/README.md)
+
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
+[![Version](https://img.shields.io/badge/Version-8.5.0-blue.svg)](https://github.com/nehcuh/vibesop-py/releases)
+[![PyPI](https://img.shields.io/pypi/v/vibesop.svg)](https://pypi.org/project/vibesop/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+VibeSOP is a **multi-agent AI engineering workflow** system. It routes requests
+to the right skill or agent, verifies delivery against explicit criteria, and
+records observable execution evidence. Around that core it provides skill
+selection, governance over what may gate a release, and experience/knowledge
+accumulation across AI coding agents. The repository also contains experiments on
+when skills, specifications, orchestration, review, and memory improve the
+work—and when they add overhead.
+
+**SkillOS is the skill-management subsystem**, not the whole project. VibeSOP
+also covers routing, verification, observability, governance, and
+experience/knowledge accumulation. Reliability is the objective; the presence of
+these tools does not establish an automatic or proven end-to-end software
+factory. See the [project positioning](docs/POSITIONING.md).
+
+## Version and availability
+
+| Surface | State |
+|---|---|
+| Current source and public package | **8.5.0**, published 2026-09-15 |
+| Previous public release | **8.4.1**, published 2026-09-15 |
+| Commit / changelog references to 8.3.1 | Internal repair-batch labels; no 8.3.1 release exists |
+| Skill format | SKILL.md v3.0; independent of the package version |
+| Fixed-role committee v2 | Unfinished research; separate from the installed package |
+
+The capabilities below describe this release. Local experiment data is not part
+of the installed package. Details and release evidence: [project status](docs/PROJECT_STATUS.md).
+
+## What you can do
+
+| Need | Tools in the source tree | Boundary |
+|---|---|---|
+| Select and maintain skills | `vibe route`, skill installation, scopes, lifecycle management | No-match is a valid result; a skill need not be injected into every task |
+| Plan work and check delivery | Execution plans, dependency tracking, verifier selection, blocked-plan handling | A generated plan or a model's approval is not proof of completion |
+| Inspect what happened | Traces, replay, observability, machine acceptance records | Evidence must come from the execution being evaluated |
+| Retrieve prior work | `vibe recall`, feedback, clustering and cross-project pools | Retrieval is implemented; continual improvement is not guaranteed |
+| Run recurring work | `vibe loop` and scheduler integration | Behavior depends on the configured executor, schedule and environment |
+| Evaluate an engineering method | Research reports, protocols, controlled runs and evidence manifests | Experimental branches and results are not automatically shipping features |
+
+The hook path hands skill context to the host coding agent. Runtime, loop and
+validation tools have their own execution paths. Platform configuration support,
+hook support and end-to-end verification should be checked separately in the
+[integration guide](docs/agent-integration.md).
+
+## Quick start
+
+Python **3.12+** is required. Install the public package with uv:
+
+```sh
+uv tool install vibesop
+vibe --version
+vibe quickstart
+```
+
+The routing demo uses a local lightweight path; LLM-enhanced routing requires a
+configured provider. Review the selected skill and plan before relying on it.
+
+To work from source:
+
+```sh
+git clone https://github.com/nehcuh/vibesop-py.git
+cd vibesop-py
+uv sync --extra dev
+uv run vibe --version
+uv run vibe quickstart
+```
+
+Inside a source checkout, use `uv run vibe` in place of `vibe` to avoid accidentally
+invoking an older globally installed package.
+
+## Integrations
+
+Generate configuration for the agent you use, then restart that agent:
+
+| Agent | Command |
+|---|---|
+| Claude Code | `vibe build claude-code --output ~/.claude` |
+| Grok Build | `vibe build grok-build --output ~/.grok` |
+| Kimi CLI | `vibe build kimi-cli --output ~/.kimi-code` |
+| Pi | `vibe build pi --output .pi` |
+| OpenCode | `vibe build opencode --output ~/.config/opencode` |
+| Cursor | `vibe build cursor --output ~/.cursor` |
+
+These are configuration-generation targets, not a claim of identical runtime
+behavior across agents. Use `vibe doctor` and the platform-specific documentation
+to check your environment.
+
+## LLM configuration
+
+For a CLI subprocess, configure a supported provider, for example:
+
+```sh
+export ANTHROPIC_API_KEY="your-key"
+vibe route "help me debug this code"
+```
+
+An in-process integration can supply its host LLM through `AgentRouter.set_llm()`.
+Provider options and platform-specific setup are in the
+[configuration guide](docs/SKILL_LLM_CONFIG_GUIDE.md) and
+[agent integration guide](docs/agent-integration.md).
+
+## Workflow examples
+
+```sh
+vibe route "help me debug this code"
+vibe plan list
+vibe recall "configuration merge lost user hooks"
+vibe loop list
+vibe doctor
+```
+
+`recall` needs recorded traces and its embedding dependencies. Cross-project
+retrieval is explicit (`--cross-project`) and requires a populated pool.
+A blocked plan needs its reported problem resolved; it must not be treated as a
+completed or ready-to-run task. See the
+[verification contract](docs/architecture/verification-contract.md).
+
+### Routing evidence (8.5.0)
+
+`vibe observe routing` reports no-match, near-miss, and decision-source
+evidence from local route spans. It is report-only: it never edits the eval
+dataset, thresholds, or routing policy. Generate a hermetic eval payload, then
+observe spans against it:
+
+```sh
+# 1. Produce a fresh hermetic eval payload (near-miss over-injection evidence).
+uv run python scripts/eval_routing.py --hermetic --json --json-out /tmp/eval-routing.json
+
+# 2. Observe local route spans against it (reads .vibe/observability/spans.jsonl
+#    by default; exit 4 means not enough scorable spans yet).
+uv run vibe observe routing --eval-json /tmp/eval-routing.json --json
+```
+
+Spans come from real `vibe route` runs. See the
+[operator runbook](docs/observe-routing.md) for metric definitions, thresholds,
+exit codes, and cron/CI wrappers.
+
+For commands and realistic scenarios, see the [CLI reference](docs/user/CLI_REFERENCE.md),
+[command handbook](docs/user/COMMAND_HANDBOOK.md), and [use cases](docs/USE_CASES.en.md).
+
+## Research and engineering principles
+
+Our experiments ask how specifications, skills, models and execution environments
+interact; whether more reviewers or fixed expert roles justify their cost; and
+whether stored experience produces useful future behavior.
+
+- [Research overview](docs/research/README.md): findings, source material and limitations.
+- [Experiment registry](docs/experiments/README.md): settled cohorts and unfinished v2 research.
+- [Research survey](docs/research/research-survey.md): the broader evidence record.
+- [Engineering methodology](docs/enterprise-agent-methodology.md): proposed practices, with tested components distinguished from untested end-to-end hypotheses.
+- [Article collection](docs/essays/README.md): explanations for a broader audience.
+
+We select skills when useful, define acceptance criteria, retain failures and
+interruptions, and separate model review from execution evidence. We do not infer
+universal gains from more skills, more agents, or more stored traces. Dataset,
+model, budget and measurement conditions belong beside each reported result.
+
+Some raw runs live in a checksummed local archive and are **not included in a Git
+clone or the wheel**. Experiment evidence manifests describe their locations and
+restoration requirements. Research protocols and package releases have separate
+version histories.
+
+## Development
+
+```sh
+uv sync --extra dev
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+uv run basedpyright --level error
+uv run pytest
+```
+
+A documented test command is not a claim that the current checkout passed it.
+Verification scope and dated evidence belong in the relevant change or report.
+
+Start with the [architecture guide](docs/dev/architecture-overview.md),
+[contribution guide](CONTRIBUTING.md), and [current roadmap](docs/ROADMAP.md).
+The next release should reconcile source changes, migration notes and release
+checks; a positioning update alone does not justify a new version.
+
+## Documentation and project history
+
+[All documentation](docs/INDEX.md) · [Project status](docs/PROJECT_STATUS.md) ·
+[Design principles](docs/PHILOSOPHY.md) · [Changelog](CHANGELOG.md) ·
+[Historical reviews](docs/archive/reviews/README.md) ·
+[Workspace recovery](docs/maintenance/README.md)
+
+## License and acknowledgments
+
+[MIT](LICENSE). VibeSOP integrates with community skill ecosystems including
+[superpowers](https://github.com/obra/superpowers),
+[oh-my-codex](https://github.com/Yeachan-Heo/oh-my-codex), and other installable
+packs. Skills and host agents retain their own authorship, licenses and runtime
+requirements.
+
+Report issues and discuss the project on [GitHub](https://github.com/nehcuh/vibesop-py).
+
+
+### docs/PROJECT_STATUS.md
+
+# VibeSOP Project Status
+
+> 核对日期：2026-09-15。本文区分源码状态、公开发行和研究进度；不以历史测试记录宣称整个工作区已验收。
+
+## 项目定位
+
+VibeSOP 是**多代理 AI 工程工作流**系统：把请求路由到合适的技能或代理，按明确标准验证交付，并记录可观测的执行证据；围绕主线还提供技能选择、发布放行的治理，以及跨代理的经验/知识积累。SkillOS 描述技能管理子系统，不是整个项目。当前仓库还包含任务计划与验证交付、执行观测、经验检索、定时任务及相关实验。定位依据与边界见 [POSITIONING.md](POSITIONING.md)。
+
+## 版本事实
+
+| 对象 | 已核对状态 | 依据 |
+|---|---|---|
+| 当前源码版本 | **8.5.0** | [pyproject.toml](../pyproject.toml)；[uv.lock](../uv.lock)；本机 `uv run vibe --version` |
+| 当前包元数据 | **8.5.0** | wheel/sdist 均由 tag `v8.5.0` 的 Release workflow 构建 |
+| 当前 PyPI 发行 | **8.5.0** | [PyPI 项目](https://pypi.org/project/vibesop/8.5.0/) |
+| 当前 GitHub Release | **8.5.0** | [GitHub Release v8.5.0](https://github.com/nehcuh/vibesop-py/releases/tag/v8.5.0) |
+| 上一公开版本 | **8.4.1**，2026-09-15 发布 | [CHANGELOG](../CHANGELOG.md) |
+| 8.3.1 修复记录 | 源码提交与 CHANGELOG 中的内部修复批次标签 | [CHANGELOG](../CHANGELOG.md)，包括计划拒绝态、交付路径和跨平台修复；属于 8.3.0，不是独立软件包版本 |
+| SKILL.md 规范 | v3.0，独立协议版本 | [格式规范](skill-format-spec-v3.md) |
+| 8.5.0 发布依据 | **已完成** | [PR #124](https://github.com/nehcuh/vibesop-py/pull/124)；merge `fb16f19b`；tag `v8.5.0`；[Release workflow](https://github.com/nehcuh/vibesop-py/actions/runs/34922545572) |
+
+当前**源码、包元数据、PyPI 与 GitHub Release 均为 8.5.0**。8.5.0 新增只读的在线路由证据观测器（`vibe observe routing`，`vibesop.observe.routing` v1，覆盖 no_match / near_miss / decision_source）以及 eval provenance fail-closed 校验；它不写路由注册表、评测集或阈值。8.4.1 是针对 8.4.0 CI 矩阵解释器、热路径基准标记、Release 产物 glob，以及 Python 3.13 符号链接环 fail-closed 的补丁。8.4.0 增加双向路由评测、near_miss 负例、生产 no-match 聚合、CI `decision_source` 注册表，以及产物引用守卫。8.3.0 汇总了验证器与计划交付合同、路由与阻断行为、跨平台修复，以及项目定位和研究资料结构；内部“8.3.1 修复批次”属于 8.3.0 发行范围。
+
+公开产物已交叉核验：PyPI 与 GitHub Release 的 wheel SHA-256 均为 `252a5e64c37d43693bb1218a85e480b8f287c0914d0153b41212bfb286ba7b0f`，sdist SHA-256 均为 `c326fcbdf84564171fa5c3c295814b979fb66d3c2375a24a3bec88e5fee4c996`；两个制品均通过 GitHub build provenance 验证。从 PyPI 隔离安装后，`vibe --version` 返回 `VibeSOP v8.5.0`，`vibe observe routing --help` 正常加载。
+
+## 工程能力与验证边界
+
+| 范围 | 当前源码情况 | 不据此推断 |
+|---|---|---|
+| 技能与平台 | 技能发现/安装/作用域/路由/生命周期；多个代理的配置适配 | 所有平台具有相同 hook 或工具执行语义 |
+| 计划与交付 | 计划跟踪、验证器选择、可用性和内容安全阻断；[合同](architecture/verification-contract.md) | 生成计划就已执行；模型声称通过就可发布 |
+| 观测与经验 | trace、回放、聚类、recall、反馈与项目 pool | 记忆量增加必然提高任务成功率 |
+| 持续任务 | loop 存储、调度及显式执行路径 | 任意任务均能无需监督地安全完成 |
+| 8.3.0 文档与发行 | 同步定位、发行说明、入口文档与 CLI 介绍 | 未完成研究自动成为已发行产品能力 |
+| 8.4.0 Trust & Evidence | 双向路由评测、near_miss 负例、no-match 聚合、decision_source 注册表、全量 tracked markdown 产物引用守卫（1109 refs / 0 dangling / 468 stale occurrences across 460 keys）；详见路线图 | 源码已升版本即 PyPI 已发布；评测数字即可靠性证明 |
+| 8.5.0 online routing evidence（已发行） | 只读观测器 `vibe observe routing` + `vibesop.observe.routing` v1：半开窗口与 project 过滤、覆盖率/最小样本闸、Wilson 区间、decision-source 层分类、可选 hermetic eval provenance 校验、严格退出码；`scripts/aggregate_nomatch.py` 保持 8.4.0 兼容；无策略写入。指标口径与运维步骤见 [runbook](observe-routing.md) | 该命令不自动修改路由策略、评测集或阈值 |
+
+历史测试结果保留在对应变更、验收凭据和研究报告中。当前可信度应按具体功能、执行路径与最近实际验证判断，不再使用“全部计划完成”“全项目 production-ready”作为总括。
+
+## 研究状态
+
+- 研究综述覆盖既有技能/规格/harness、路由、评审与学习闭环记录，见[研究索引](research/README.md)。它是有时间边界的证据汇总。
+- 旧多专家主实验与敏感性队列已结算；固定角色委员会 v2 尚未完成。当前登记与后续记录见[实验索引](experiments/README.md)。
+- evo 优化提交仍保留在分支中；未完成的固定角色实验保留单独 worktree。不能将这些成果直接描述为主线或 PyPI 已发行能力。
+- 2026-09-14 已归档退役 26 个旧工作目录；研究原始数据有校验清单和恢复方法，见[清理结果](maintenance/cleanup-result-2026-09-14.md)。
+
+## 接下来
+
+1. 持续保持源码、包元数据、tag 与发行记录一致。
+2. 优先验证技能选择、no-match 和计划交付的可信性；保持失败、缺证据、通过状态可区分。
+3. 未完研究按各自协议收口，保留旧/新冻结版本和原始失败记录。
+4. 评估记忆、规格和多代理方法的适用条件，达到证据要求后再决定产品化。
+
+具体研发优先级见 [ROADMAP.md](ROADMAP.md)，文档入口见 [INDEX.md](INDEX.md)。
+
+
+### docs/POSITIONING.md
+
+# VibeSOP 的项目定位
+
+> 更新：2026-09-15。面向本仓当前源码与研究资料；发行状态单独见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
+
+## 一句话
+
+**VibeSOP 是围绕可靠 AI 辅助开发的多代理 AI 工程工作流与实证研究项目。**
+
+它把请求路由到合适的技能或代理，按明确标准验证交付，记录可观测的执行证据，对什么可以放行发布进行治理，并跨代理积累经验与知识；同时通过对照实验检验技能、规格、编排、评审、治理与记忆在什么条件下有用。
+
+English: **A multi-agent AI engineering workflow and empirical-evidence project for reliable AI-assisted development.**
+
+“可靠”是工程目标，不能仅凭项目定位宣称已达成。“SkillOS”描述技能的发现、安装、路由、作用域和生命周期管理，是整个项目的一部分；VibeSOP 还覆盖路由、验证、观测、发布放行治理与经验/知识积累。
+
+## 三个组成部分
+
+| 部分 | 当前内容 | 能力边界 |
+|---|---|---|
+| 工程工具 | Python 包与 `vibe` CLI；平台适配；路由、计划、验证交付；执行观测与在线证据；发布放行治理；经验检索与反馈、定时任务 | 各命令、平台和执行路径分别有契约；配置生成不等于所有平台均已端到端验证 |
+| 实证研究 | 技能/规格/harness 对照、路由评测、评审与学习闭环研究、多专家与固定角色实验 | 研究代码、未合并分支和本地数据不自动成为发布包能力；未完实验不充当最终结果 |
+| 工程方法 | 需求和验收标准、证据记录、独立评审、失败分类、可恢复归档 | 是实践原则与待验证假设，不是已经证明有效的通用自动开发流水线 |
+
+## 代码依据
+
+| 能力 | 仓库依据 |
+|---|---|
+| 选择与管理技能 | [路由](../src/vibesop/core/routing/)、[技能](../src/vibesop/core/skills/)、[平台适配](../src/vibesop/adapters/) |
+| 计划与交付 | [编排](../src/vibesop/core/orchestration/)、[Agent Runtime](../src/vibesop/agent/runtime/)、[验证交付合同](architecture/verification-contract.md) |
+| 执行证据 | [观测模块](../src/vibesop/core/observability/)、[机器验收记录工具](../scripts/record_acceptance.py) |
+| 发布放行治理 | [CI decision-source 注册表](../ci/decision-source.yaml)、[治理检查脚本](../scripts/check_ci_decision_source.py) |
+| 经验检索与反馈 | [recall CLI](../src/vibesop/cli/commands/recall_cmd.py)、[反馈](../src/vibesop/core/feedback.py)、[Instinct](../src/vibesop/core/instinct/) |
+| 持续任务 | [loop 模块](../src/vibesop/core/loop/)、[部署指南](loop-setup-guide.md) |
+| 研究与证据 | [研究索引](research/README.md)、[实验登记册](experiments/README.md) |
+
+这些模块支持同一套工作流程，但模块存在不等于从需求到交付的全过程已自动接通，更不等于其效果已被证明。
+
+## 对外表述规则
+
+- **技能按需选择。** no-match 是正常结果；增加技能和角色数量不作为成功指标。
+- **执行有具体主体。** hook 路径把上下文交给宿主代理；Runtime、loop 和验证工具还各有显式执行路径，不能笼统说“VibeSOP 从不运行命令”，也不能说它替代全部编程代理。
+- **完成需要证据。** 缺证据、执行失败和验收通过分别记录；模型评审是输入材料，不能独自承担发布放行权。
+- **记忆只承诺可检索。** trace、聚类与 recall 已有实现；“使用越久越准确”或“跨项目必然产生收益”需要独立实验。
+- **研究保留边界。** 当前样本、任务、模型和预算下的结果不推广成“技能总有效”“多代理总无效”等普遍定理。
+- **版本不跟口号走。** 软件包版本来自 `pyproject.toml`；公开发布以 PyPI / GitHub Release 为准；技能规范版本和实验协议版本独立维护。
+
+## 读者与入口
+
+- 使用工具的开发者：[快速开始](QUICKSTART_USERS.md)与[命令手册](user/CLI_REFERENCE.md)。
+- 集成到宿主代理的开发者：[Agent 集成](agent-integration.md)与[架构导览](dev/architecture-overview.md)。
+- 评估方法是否有效的研究者：[研究综述](research/research-survey.md)与[实验登记册](experiments/README.md)。
+
+产品近期重点仍是选择和交付的可信性、结果可追溯、研究可复验；新增默认专家组织、市场扩张或通用自动开发流水线不因这次定位更新自动进入承诺范围。优先级见 [ROADMAP.md](ROADMAP.md)。
+
+
+### docs/ROADMAP.md
+
+# VibeSOP Roadmap
+
+> **当前源码 / 包元数据 Current source**: 8.5.0（online routing evidence）
+> **公开发行 Public release**: 8.5.0（PyPI / GitHub Release，2026-09-15）
+> **最后更新 Last Updated**: 2026-09-15
+> **历史稿**: [roadmap-through-8.3.md](archive/roadmap-through-8.3.md)（冻结至 8.3.0 的 804 行原稿）
+
+---
+
+## 定位
+
+VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS 是技能管理子系统，不是整个项目。产品实现、研究发现和待验证假设分开管理；定位扩展不自动扩大本周期功能承诺。详见 [POSITIONING.md](POSITIONING.md)。
+
+找不到匹配是正常结果。工具存在、评测可跑、CI 有闸，都不等于已经证明端到端可靠。
+
+## 版本边界
+
+| 对象 | 状态 | 说明 |
+|---|---|---|
+| 当前源码 / 包元数据 | **8.5.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
+| 当前 PyPI / GitHub Release | **8.5.0** | 2026-09-15 发布；tag `v8.5.0` |
+| 8.5.0 online routing evidence | **已公开发行** | 只读观测器 `vibe observe routing`、`vibesop.observe.routing` v1、eval provenance fail-closed |
+
+8.5.0 作为 minor 的理由是新增公开的 operator CLI / 机器契约 / library 面（并在 `scripts/aggregate_nomatch.py` 保持 8.4.0 兼容），不是补丁级修复。源码版本上升不等于 PyPI 已发布，也不等于可靠性已被证明。
+
+## 状态分层
+
+不要把三类混写成同一句「已经完成」：
+
+| 分层 | 含义 | 本文件中的位置 |
+|---|---|---|
+| **已实现并发行（8.4.0–8.5.0）** | 源码、包元数据、PyPI 与 GitHub Release 已对齐 8.5.0 | 8.4.0 / 8.5.0 切片 |
+| **计划中** | 下一轮优化，尚未当作交付 | 优先级 A–E |
+| **研究阻塞** | 预注册实验未跑完或未结算；不得改判据迁就结果 | B、C |
+
+## 8.4.0：Trust & Evidence
+
+数字均为 2026-09-14 本 checkpoint 在本工作区执行所得。实现可观测，不等于可靠性已被证明。
+
+### 双向路由评测与 `top_k` 传递
+
+`scripts/eval_routing.py` 同时报告过拒（正例无真实匹配）与过灌（负例出现真实匹配）。双向计数 report-only，不改变 hermetic `--check` 退出码。`near_miss` 有单独计数器，不并入 `must_not_inject` 子集，但仍按 no-match 期望被 hermetic 评测计分。Embedding 匹配器接受 `MatcherPipeline` 的 `top_k`，避免 `enable_embedding=True` 时因签名不匹配崩溃。
+
+Hermetic 数据集：**55** 条总计 / **53** 条计分 / **2** 条环境跳过。top-1 **47/53**。正例 **31**（过拒 **4**），负例 **20**（过灌 **2**），`near_miss` **14**（过灌 **2**）。已知失败 **6** 条。
+
+### 14 条 `near_miss` 负例 / hermetic 基线
+
+评测集增加 14 条形近触发词、域外的 `near_miss` 负例：单独报告计数器，不并入 `must_not_inject` 子集，但仍按 no-match 期望被 hermetic 评测计分。`uv run python scripts/eval_routing.py --hermetic --check` 本 checkpoint 为绿：与基线一致，0 条新失败，6 条已知失败。
+
+### 生产 no-match 聚合（Wilson 区间）
+
+`scripts/aggregate_nomatch.py` 对 `route:` span 做窗口化 no-match 率，主输出为 Wilson 95% 区间。缺 span 文件 fail-soft（exit 0 + 错误字段），不编造成功率，不接 CI 门禁。
+
+### CI `decision_source` 注册表
+
+`.github/workflows/ci.yml` 的每个 job 必须在 `ci/decision-source.yaml` 声明 `deterministic` 或 `human`。模型输出不得作为 required job 的放行依据。`routing-eval` 为 `human`（永久 report-only）。本 checkpoint：`scripts/check_ci_decision_source.py` **10/10** job 登记且交叉核对通过。
+
+### 产物引用守卫 + 冻结债务基线
+
+`scripts/check_artifact_links.py` 检查 tracked 文档对 `.omx/artifacts/` 的引用。默认扫描 `git ls-files` 中每一个 tracked `*.md`（含 `.omx/artifacts/`、`memory/`、`knowledge/`），与 fresh-clone 集合一致。dangling 一律失败。历史未跟踪引用冻结在 `ci/artifact-links-baseline.json`，精确匹配才过。提取在 ASCII `()` / `:` / `\\` 处截断，基线 key 必须是正规化 POSIX 产物路径/glob/目录，不是 `file:line` 或注解碎片。本 checkpoint： **1109** 条引用 = **641** ok + **468** 条历史非跟踪出现（**460** 个 key）+ **0** dangling，基线精确匹配。该基线是过渡账本，不是永久免责。
+
+## 8.5.0：Online routing evidence（已发行）
+
+数字均为 2026-09-15 本 checkpoint 在本工作区执行所得。该切片 report-only，尚未接门禁。
+
+### `vibe observe routing` 与 `vibesop.observe.routing` v1
+
+只读消费 `.vibe/observability/spans.jsonl` 与可选 `--eval-json`，输出三个信号：
+
+- `no_match` — 可计分 route span 的 no-match 率，带 Wilson 95% 区间；先过覆盖率（`scoring_coverage >= 0.80`）与最小样本（`n_scored >= 100`）闸，避免在极小可读切片上误报。
+- `near_miss` — 可选 `--eval-json`（来自 `scripts/eval_routing.py --hermetic`）；未提供时为 `not_requested`，不伪装成绿。
+- `decision_source` — `metadata.layer` 对 `RoutingLayer` 枚举分类；`unknown_share` 以 `n_scored` 为分母，非枚举值进入 `non_enum_layers`。
+
+半开窗口 `[since, until)`、`project_id` 精确过滤、时间戳 UTC 归一（`started_at` 优先，回退 `timestamp`）。退出码 `0/1/2/3/4` 是标签而非严重度排序，非 Nagios 兼容；`--report-only` 只抑制 verdict，绝不抑制 usage(2)/fault(3)；`--require-inputs` 把缺失输入升级为 fault；`--strict-payloads` 把损坏/未解析载荷升级为 fault。
+
+### eval provenance fail-closed
+
+`--eval-json` 的 `dataset` / `hermetic` / `generated_at` 必填且类型正确；`hermetic` 必须为 `true`；`dataset` 与预期身份精确匹配（分隔符/前导 `./` 归一，不做 basename 匹配）；`generated_at` 必须带时区、不得早于 24h、不得超前 5m。任一不满足即 `invalid_eval_provenance` fault（exit 3），`--report-only` 也不抑制。freshness 独立于 span 窗口。
+
+### 兼容与后台改动
+
+- `scripts/aggregate_nomatch.py` 成为 8.4.0 兼容 facade：解析/评分/Wilson 区间/字节级解码/BOM-CRLF 处理/文件错误均移到 library，CLI 契约不变（缺文件 fail-soft exit 0 + 错误字段）。
+- `scripts/eval_routing.py` 的 `--json` 新增 `dataset` / `hermetic` / `generated_at`，`--json-out` 新增 `hermetic` / `generated_at`；但既有 `--json-out.dataset` 取值由绝对路径改为可移植的仓库相对身份，因此不是纯增量变更。既有 `--check` 退出码与基线闸不变。
+
+运维口径、阈值、退出表、JSON 契约与 cron/CI 包装见 [observe-routing.md](observe-routing.md)。本切片报告**不写**路由注册表、评测集、阈值或策略文件。
+
+## 8.5.0 发行闸（已完成）
+
+8.5.0 已于 2026-09-15 公开发行。下列发行闸条件均已满足：
+
+1. 相关检查与适当的完整检查绿。
+2. hermetic baseline check 绿。
+3. decision registry 与 workflow job 精确一致。
+4. artifact baseline 精确匹配，且 fresh-clone probe 无 dangling。
+5. CHANGELOG、版本元数据、状态文档同步。
+6. 独立评审 0 个 P0 / P1 / P2。
+
+[PR #124](https://github.com/nehcuh/vibesop-py/pull/124) merge `fb16f19b` 的检查已通过；tag `v8.5.0` 触发的 [Release workflow](https://github.com/nehcuh/vibesop-py/actions/runs/34922545572) 成功执行 CI Gate，并构建、证明来源和发布 wheel/sdist。公开状态与产物依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
+
+## 下一轮优化（顺序固定；字母 A–E 仅本文件编号，不是 2026-09-11 提案 lane）
+
+### A. 在线消费证据（先 report-only）— 8.5.0 已发行
+
+区分五件事，不要合成一句「用过了」：选择、投递/注入、实际消费/阅读、执行、机器验收。8.5.0 先交付 report-only 的 `vibe observe routing`：no_match / near_miss / decision_source 与 `vibesop.observe.routing` v1。后续仍不接门禁，不把信号折成总分。
+
+### 后续里程碑（8.5.0 不含，保持原计划）
+
+- **性能基准方法论**：热路径与其他性能基准的预算、预热、采样与报告方法；不把单次墙钟对比当叙事。
+- **第三方 action SHA 固定**：CI/release 第三方 action 的 SHA/tag 策略与复查节奏（安全关键 action 固定 SHA，通用 action 用版本 tag）。
+- **固定角色委员会 v2**：见下方 C，仍为未完成研究。
+- **stale 产物引用清理**：见下方 D，按有界批次削减。
+
+### B. 收口预注册研究债（不改判据）
+
+按原判据执行，不得事后放宽：
+
+- R3 空报告率实验
+- R4 行为阈值就绪度 / 标定
+- R8 盲评结算
+- T+21 回声复检
+
+### C. 完成固定角色委员会 v2（按实际记录）
+
+截至 2026-09-14：正式终态 **241** 条；已启动但缺终态 **4** 条；未启动 **115** 条；独立 **72** 次人数诊断未启动。完整主实验与人数诊断完成前，不得把中间发现写成普遍结论。登记：[实验索引](experiments/README.md)。
+
+### D. 按有界批次削减 468 条产物引用债务
+
+冻结基线只允许对账，不允许把新的 dangling 或新增 stale 解释成「基线如此」。消化后须 `--write-baseline` 显式刷新，且刷新前 dangling 必须为 0。
+
+### E. 统一 trust / evidence 报告（仅在原始信号稳定之后）
+
+不要把未稳定的选择、注入、消费、验收信号折成一张总分。语义画像保持 report-only；先有对照组，再考虑任何门禁。
+
+## 约束（继续有效）
+
+- 不以默认专家委员会为自动编制。
+- 不以 LLM 输出作为发行闸。
+- 无证据不扩张市场或角色。
+- 不声称记忆必然提升能力。
+- 语义层在标定完成前不做硬门禁。
+- 不为叙事跑墙钟时间对比。
+- 不把整机流水线做成 CLI。
+
+## 历史
+
+8.3.0 及更早的版本叙事、W1/W2 清单、v4–v8 功能史冻结于 [archive/roadmap-through-8.3.md](archive/roadmap-through-8.3.md)。不重写其中的历史主张。研究总账仍以 [研究综述](research/research-survey.md) 的写作时点为准。
+
+
+### docs/research/README.md
+
+# 研究索引
+
+这里汇总研究结论和证据入口。实验原始记录、阶段状态与对外文章分别管理；历史结论保留写作时间，不把中间结果当作最终结论。
+
+| 研究线 | 先读 | 证据与状态 |
+|---|---|---|
+| 技能、路由、评审、记忆的综合研究 | [研究综述](research-survey.md) | 综述保持原研究口径；后续实验见登记册 |
+| Agent Skills 外部论文 | [论文笔记](2026-09-09-agent-skills-paper.md) | 外部研究与项目实践对照 |
+| 多专家执行与固定角色委员会 | [实验登记册](../experiments/README.md) | 旧实验已结算；v2 未完成，冻结版与修订版分开 |
+| 多路评审、学习闭环与观测 | [按主题归档的评审](../archive/reviews/README.md) | 保留 brief、独立意见、合并裁决的关系 |
+| evo 优化实验 | [handback 证据](evidence/README.md) | 从退役 worktree 提取，保留原始字节及 SHA-256 |
+
+对外解读：[文章索引](../essays/README.md)。本地 `.omx/artifacts/` 继续保存历史原件和测量材料；[过程材料导航](../archive/research-artifacts.md)按主题列出入口，避免破坏已有运行路径。worktree 与冷归档恢复见[维护索引](../maintenance/README.md)。
+
+
+### docs/experiments/README.md
+
+# 实验执行索引
+
+状态索引更新：**2026-09-14**。旧多专家队列已结算；固定角色委员会 v2 已进入后续运行阶段，尚未完成。以下状态来自已有报告，本次目录整理没有重跑或补算实验。
+
+旧 360/144 不重跑、不改冻结源。早期 v2 协议中的“未启动”是设计期记录，不能作为当前状态；后续状态见 [v2 登记页](fixed-role-v2/README.md) 和 [2026-09-14 中间发现](2026-09-14-fixed-role-interim-findings.md)。
+
+| 目录 | 角色 | 样本 | 读什么 |
+|---|---|---|---|
+| [multi-expert-e2e-protocol.md](multi-expert-e2e-protocol.md) | 原始设计 + 执行后差异 | — | 先读状态段 |
+| [multi-expert-calibration/](multi-expert-calibration/README.md) | 非正式校准 | 75（45+30），**不是** 360 | 账本 |
+| [multi-expert-formal/](multi-expert-formal/REPORT.md) | 预固定主实验 | **360/360 terminal** | **主报告（两轮合读）** |
+| [multi-expert-sensitivity/](multi-expert-sensitivity/REPORT.md) | 诊断触发的探索补充 | **144 = 136 完成 + 8 中断** | 敏感性全文 |
+| [fixed-role-v2/](fixed-role-v2/README.md) | 后续：固定角色委员会与人数/适配/通信/腐化/升级 | **未完成**；09-14 00:26 中间记录：241 条正式终态，另有 4 条已启动缺终态、115 条未启动；人数诊断未启动 | [中间发现](2026-09-14-fixed-role-interim-findings.md)；[设计期协议](fixed-role-committee-v2-protocol.md)与[矩阵](fixed-role-committee-v2-matrices.md)保留原文 |
+
+旧队列入口：[multi-expert-formal/REPORT.md](multi-expert-formal/REPORT.md)。过程档案：[multi-expert-formal/report/provenance/PROCESS.md](multi-expert-formal/report/provenance/PROCESS.md)。
+
+8 次中断是 Grok headless 600s 控制器清理，按预定规则计 0，不是模型能力失败，未补跑。旧报告结论不能直接支持新协议中的四条假设。
+
+## 原始数据与恢复
+
+已结算的 calibration / formal / sensitivity `runs/` 共 20,199 个文件已移至本机 `../vibesop-py-archives/2026-09-14/experiments/`。内容校验通过，原目录保留被 Git 忽略的相对符号链接，原报告和读取脚本在本机继续可用。
+
+每个实验目录的 `evidence-manifest.json` 记录冷归档位置、文件数和完整校验清单的 SHA-256。这些大体积原始数据未提交到 Git；新机器需要一并恢复冷归档，不能把本机兼容链接当作仓库自带数据。v2 未完成运行的数据继续保留在 `.experiment/v2/`。
+
+
+### docs/architecture/verification-contract.md
+
+# 验证器与计划交付合同（Verification & Plan-Delivery Contract）
+
+> **文档版本**：2026-09-09（对齐 8.3.0）
+> **状态**：已在 8.3.0 实现并通过集成合同测试。完整验收与远程结果见
+> [验证器优化进度](../decisions/2026-09-09-verification-progress.md)。
+> 上游：`docs/specs/2026-09-09-verification-contract.md`（主控维护）。
+
+## 1. 背景与范围
+
+默认对抗计划应能使用随包提供的验收技能，不要求安装 gstack。验证必须围绕**用户原始要求与
+实际产物**——代码、文档、分析、部署任务均可使用验收；不能把通用验收偷偷换成代码评审。
+任一步骤的技能正文被现有扫描器拒绝时，所有计划交付入口都必须阻断，不能继续宣称可执行。
+
+本合同的验收结论只回答「产物是否满足用户原始要求」，不代替执行、不修改实现、不标记计划完成。
+
+## 2. 显式选择与默认值
+
+核心 API 约定：
+
+```python
+PlanBuilder.build_plan(
+    original_query,
+    sub_tasks,
+    workflow_pattern=...,
+    verifier_skill_id="builtin/verify-result",  # 可选关键字，缺省使用随包内置验收技能
+)
+```
+
+- 缺省（不传参）等价于显式 `"builtin/verify-result"`；参数默认值必须与显式无效输入可区分
+  （传 `None`/空串不是「用默认」，而是无效输入）。
+- 显式指定**非空**技能 ID 时使用指定值（例如用户/编排点名的其他验收技能）。
+- 空白、非字符串、`fallback-llm` 一律拒绝，不能静默回退默认。
+- 不增加模型调用，不读取环境变量决定验证器，不增加全局自动注入。
+- 参数只作用于 `ADVERSARIAL`：非 `ADVERSARIAL` 工作流（SEQUENTIAL / FAN_OUT /
+  TOURNAMENT / LOOP_UNTIL_DRY / 小队类）**忽略该参数**，不校验也不使用。
+- 上述显式值校验（空白/非字符串/`fallback-llm` 拒绝）只在 `ADVERSARIAL` 下发生：
+  `ADVERSARIAL` 必须有一个可用的验证器；其他 pattern 没有验证器，不存在回退。
+
+内置技能 `builtin/verify-result` 仅在显式选择或编排选择时被使用；`disable-model-invocation:
+true`，无宽泛自然语言触发器（避免被路由误自动拉起）。
+
+## 3. 验证步骤结构
+
+ADVERSARIAL 计划末尾追加的验证步骤必须：
+
+- **依赖所有原步骤**（等全部原步骤完成后才执行），保留 `is_verification_step=True`、
+  `QUARANTINE`、`pending` 与原始请求。
+- 输入向验证技能提供：各步骤的**任务类型**（沿用项目现有任务/步骤分类词，不引入
+  新枚举）、**预期产出**与**原始需求**，要求逐项证据。
+- 不能默认通过，不能自行执行未获授权的部署。
+- 验证围绕用户原始要求和实际产物展开；产物可以是代码、文档、分析、部署状态。
+
+## 4. 按任务类型验收
+
+| 任务类型 | 检查方法（正文要求） |
+| --- | --- |
+| 代码 | 测试与行为：实际测试/运行记录证明行为符合要求，而非只看 diff 形状 |
+| 文档 | 完整性与来源：覆盖原始要求各要点，来源/出处可核 |
+| 分析 | 数据和计算：原始数据、计算过程与结论一致，数字可复算 |
+| 部署 | 已有授权下的实际状态：查真实环境状态，不自行触发新的部署 |
+
+## 5. 验收结论与证据边界
+
+- 缺证据标 **blocked**；实际失败标 **failed**；只有清单全部满足才标 **passed**。
+- 模型评审与机器验收**分别记录**：机器记录（执行日志、退出码、时间、产物指纹等）是证据；
+  模型/代理的自我陈述不是证据。
+- 不能以代理自述代替证据；不自动调用其他代理；不改实现、不运行未获授权部署、不标记计划完成。
+
+## 6. 缺失与 unsafe 阻断
+
+- 步骤技能文件缺失、正文为空，或正文被运行时扫描器判不安全（含扫描器自身失败，
+  fail-closed），均视为该步骤不可交付。
+- 任一步骤不可交付 → 整份计划不可执行：`metadata.execution_ready=False`；
+  `blocked_steps` 给出阻断原因。原因按实现现状只分两类口径，不夸大细分：
+  - 可用性类——技能缺失与正文为空**共用** `not found or empty`，fallback/无技能为
+    `unresolved skill`；缺技能与空正文不做进一步区分。
+  - 安全类——扫描器判不安全与扫描器自身异常（fail-closed）**共用**同一个
+    `unsafe content` 原因，只要求能与可用性原因区分，不把扫描器异常单列。
+  同时保留全部原步骤、验证标志与来源（供诊断，不当作可执行内容）。
+- 各交付入口一致阻断：
+  - guide 只输出阻断说明、**无完成标记**（guide 没有 `has_match` 字段）；
+    hook / CLI 为 notice-only 且 `has_match=false`；
+  - manifest 抛出诊断异常——**不能把拒绝提示当成技能正文继续生成可执行 manifest**；
+  - manifest 实际读入正文后仍复核（注解与读取之间发生变更也不漏检），提示不回显危险正文。
+- 保留既有语义：安全正文、单技能、来源优先级、空文件语义均不因本合同回退。
+
+## 7. 交付合同测试
+
+`tests/integration/test_verification_delivery_contract.py` 覆盖三个场景，全部基于真实模型、
+临时文件与实际内置技能，不 mock 待验收接口：
+
+1. 默认对抗计划可交付（默认验证器为 `builtin/verify-result`，文件与正文均安全时可交付）；
+2. 显式指定缺失验证器 → 阻断（不能静默回退默认）；
+3. 安全正文被改成不安全正文 → 拒绝（`execution_ready=False`，原因含 unsafe，manifest 抛异常）。
+
+实现合流后以上三个场景均通过；开发过程中的失败记录保留在验收凭据中。
+
+
+### docs/dev/architecture-overview.md
+
+# Architecture Overview
+
+> Refreshed 2026-09-14 for the current source tree. Package and publication status: [PROJECT_STATUS.md](../PROJECT_STATUS.md).
+
+## Scope
+
+VibeSOP provides workflow tools for AI-assisted development and a repository for empirical research. SkillOS names the skill-management part of that system. The source repository also uses its own tooling for development and experiments; there is no rule that its own skills must remain uninstalled.
+
+The package and the research workspace have different boundaries: `src/vibesop/` and bundled `core/` resources provide the installable tooling; experiment branches, raw runs and research protocols are not automatically included in a wheel.
+
+## Main components
+
+| Component | Responsibility | Source |
+|---|---|---|
+| CLI | Routing, plans, skills, traces, recall, recurring tasks and diagnostics | [cli/](../../src/vibesop/cli/) |
+| Skill management | Discovery, installation, scopes, metadata, lifecycle | [core/skills/](../../src/vibesop/core/skills/), [installer/](../../src/vibesop/installer/) |
+| Routing | Explicit selection, scenario/semantic selection, LLM triage and matching; no-match is a valid outcome | [core/routing/](../../src/vibesop/core/routing/) |
+| Plans and verification | Dependencies, state, events, availability annotation and delivery contracts | [core/orchestration/](../../src/vibesop/core/orchestration/) |
+| Agent integration | Intent interception, context injection, presentation and execution guidance | [agent/runtime/](../../src/vibesop/agent/runtime/) |
+| Platform configuration | Agent-specific files, hooks, plugins and templates | [adapters/](../../src/vibesop/adapters/), [builder/](../../src/vibesop/builder/) |
+| Observability and memory | Trace storage, replay, clustering, recall and feedback | [core/observability/](../../src/vibesop/core/observability/), [core/instinct/](../../src/vibesop/core/instinct/) |
+| Recurring tasks | Specifications, scheduling, execution and persisted run state | [core/loop/](../../src/vibesop/core/loop/) |
+| Research | Protocols, reports and versioned evidence outside the package boundary | [research/](../research/README.md), [experiments/](../experiments/README.md) |
+
+## Routing and execution are separate decisions
+
+Routing uses a four-stage cascade with query-dependent branches and multiple matchers. Historical “ten-layer” diagrams count internal handlers and fallback cases differently; use the [routing guide](../architecture/routing-system.md) and current code for behavior.
+
+A match does not imply a deliverable plan. Availability and content checks annotate or reject plans; consumers must respect `execution_ready` and the [verification contract](../architecture/verification-contract.md).
+
+On the hook path, the host agent executes after receiving context. Explicit runtime, loop and validation paths can run configured work themselves. A generated adapter does not establish that every host's tool execution, authorization or completion detection is identical.
+
+## Development and integration
+
+- Install a skill pack with `vibe install <pack>`; generate agent configuration with `vibe build <platform> --output <directory>`.
+- Use `vibe route --verbose` for routing diagnostics; `--validate` checks routing configuration.
+- Inspect the [Agent Integration Guide](../agent-integration.md) for in-process LLM injection and platform contracts.
+- Read [positioning](../POSITIONING.md) and [project status](../PROJECT_STATUS.md) before describing implementation details as shipped capabilities or proven research outcomes.
+
+Skill format and conformance remain independently versioned: [SKILL.md v3.0](../skill-format-spec-v3.md). Historical implementation detail remains in [ARCHITECTURE.md](../architecture/ARCHITECTURE.md).
+
+
+### src/vibesop/llm/factory.py
+
+"""LLM provider factory.
+
+Creates LLM providers based on configuration and environment.
+"""
+
+import os
+from typing import Literal, cast
+
+from vibesop.llm.anthropic import AnthropicProvider
+from vibesop.llm.base import LLMProvider
+from vibesop.llm.models import OPENAI_DEFAULT_MODEL, PROVIDER_DEFAULT_MODELS
+from vibesop.llm.ollama import OllamaProvider
+from vibesop.llm.openai import OpenAIProvider
+from vibesop.llm.span_wrapped import SpanWrappedProvider
+
+ProviderType = Literal["anthropic", "openai", "ollama", "deepseek", "kimi", "zhipu"]
+
+# Valid providers for input validation
+_VALID_PROVIDERS: frozenset[str] = frozenset(
+    ["anthropic", "openai", "ollama", "deepseek", "kimi", "zhipu"]
+)
+
+# OpenAI-compatible providers — all routed through OpenAIProvider
+# with the appropriate base_url.
+_OPENAI_COMPATIBLE: dict[str, str] = {
+    "deepseek": "https://api.deepseek.com",
+    "kimi": "https://api.moonshot.cn/v1",
+    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+}
+
+# Default models live in vibesop.llm.models (single source of truth).
+
+
+def create_provider(
+    provider: ProviderType | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> LLMProvider:
+    """Create an LLM provider.
+
+    Args:
+        provider: Provider type ('anthropic', 'openai', 'ollama',
+                  'deepseek', 'kimi', 'zhipu'). None = auto-detect.
+        api_key: Optional API key (defaults to env var)
+        base_url: Optional custom base URL (overrides provider default)
+
+    Returns:
+        Configured LLM provider instance
+
+    Raises:
+        ValueError: If provider type is invalid
+    """
+    if provider is None:
+        provider = detect_provider_from_env()
+
+    if provider not in _VALID_PROVIDERS:
+        raise ValueError(f"Invalid provider: {provider}")
+
+    if provider == "anthropic":
+        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        return SpanWrappedProvider(AnthropicProvider(api_key=resolved_key, base_url=base_url))
+    if provider == "ollama":
+        resolved_key = api_key
+        resolved_base = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return SpanWrappedProvider(OllamaProvider(api_key=resolved_key, base_url=resolved_base))
+
+    # OpenAI and all OpenAI-compatible providers
+    resolved_key = api_key
+    if not resolved_key:
+        env_map = {"deepseek": "DEEPSEEK_API_KEY", "kimi": "KIMI_API_KEY", "zhipu": "ZHIPU_API_KEY"}
+        resolved_key = os.getenv(env_map.get(provider, "")) or os.getenv("OPENAI_API_KEY")
+    resolved_base_url = base_url or _OPENAI_COMPATIBLE.get(provider)
+    resolved_model = PROVIDER_DEFAULT_MODELS.get(provider, OPENAI_DEFAULT_MODEL)
+    return SpanWrappedProvider(
+        OpenAIProvider(api_key=resolved_key, base_url=resolved_base_url, model=resolved_model)
+    )
+
+
+def detect_provider_from_env() -> ProviderType:
+    """Detect which provider to use from environment variables.
+
+    Priority:
+        1. VIBE_LLM_PROVIDER env var (explicit override)
+        2. ANTHROPIC_API_KEY env var (first-class)
+        3. OPENAI_API_KEY env var (first-class)
+        4. DEEPSEEK_API_KEY (third-party, highest priority)
+        5. KIMI_API_KEY (third-party)
+        6. ZHIPU_API_KEY (third-party)
+        7. OLLAMA_BASE_URL or OLLAMA_MODEL env var (local fallback)
+        8. Default to 'ollama' (local, no API key required)
+
+    Third-party providers are ordered: deepseek → kimi → zhipu → ollama.
+    This matches the team's preferred provider ranking for VibeSOP routing.
+    """
+    explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
+    if explicit_provider and explicit_provider in _VALID_PROVIDERS:
+        return cast("ProviderType", explicit_provider)
+
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return "deepseek"
+
+    for provider_name in ["kimi", "zhipu"]:
+        env_key = f"{provider_name.upper()}_API_KEY"
+        if os.getenv(env_key):
+            return cast("ProviderType", provider_name)
+
+    return "ollama"
+
+
+def create_from_env(
+    preferred_provider: ProviderType | None = None,
+) -> LLMProvider:
+    """Create provider from environment configuration.
+
+    This is the recommended way to create providers for production use.
+    It will automatically detect API keys and configuration.
+
+    Args:
+        preferred_provider: Preferred provider if multiple are available
+
+    Returns:
+        Configured provider (may be unconfigured if no API keys found)
+    """
+    provider = create_provider(preferred_provider)
+    if provider.configured():
+        return provider
+
+    # Try alternatives in order
+    alternatives: list[ProviderType] = ["openai", "deepseek", "kimi", "zhipu", "ollama"]
+    for alt in alternatives:
+        if alt == preferred_provider:
+            continue
+        try:
+            p = create_provider(alt)
+            if p.configured():
+                return p
+        except (ValueError, TypeError):
+            pass
+
+    return create_provider(preferred_provider)
+
+
+### src/vibesop/core/loop/executor.py
+
+"""Loop executor — runs a single loop tick: dispatch, record, persist.
+
+Single tick flow:
+    1. Build routing query from spec (skill_id / query / workflow_id).
+    2. Call ``AgentRuntime.handle_query`` — non-interactive, exception-safe.
+    3. Build ``LoopRunRecord`` with success/error/summary.
+    4. ``LoopState.record_run(record)`` — updates failure counter + status.
+    5. ``LoopStore.save_state(state)`` — atomic persistence.
+    6. Return record.
+
+Design decisions (Phase 0 + Phase 1-1/1-2/1-3 landed):
+    - ``skill_id`` → ``/slash-route use {skill_id}`` query.
+    - ``query``    → passed through verbatim.
+    - ``workflow_id`` → ``run workflow {workflow_id}`` query.
+    - ``AgentRuntime.handle_query`` is non-interactive ✅.
+    - Persistence via ``LoopStore`` atomic writes ✅.
+
+Known v1 limitations (documented for future phases):
+    - **/slash-route semantics**: the prefix is *not* a true EXPLICIT-layer
+      invocation. ``_ROUTE_LIKE_RE`` (agent_runtime.py) strips the prefix
+      and routes the remainder through the normal 10-layer pipeline. So
+      ``/slash-route use foo`` is equivalent to routing the string
+      ``"use foo"``. The ``foo`` skill matches when keyword/scenario
+      layers pick up the skill_id as a token. v8.1 should add a real
+      explicit-invocation path (e.g. ``--skill-id`` flag on
+      ``handle_query``).
+    - **No status filter**: executor runs whatever spec it's given. The
+      caller (``CronDaemon``, CLI) is responsible for skipping
+      ``PAUSED`` / ``DEAD`` loops. Phase 1-5 will add daemon-level
+      filtering.
+
+Concurrency:
+    v1 callers must serialise ticks per loop (CronDaemon.run_once is a
+    synchronous function; CLI invokes it once per cron tick). Concurrent
+    ticks on the same loop would TOCTOU on ``load_state``.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import shlex
+import subprocess
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Protocol
+
+from vibesop.core.loop.models import (
+    FailureCategory,
+    FailureInfo,
+    LoopRunRecord,
+    LoopSpec,
+    LoopState,
+    RunHistory,
+)
+from vibesop.core.loop.store import LoopStore
+
+logger = logging.getLogger(__name__)
+
+# Keyword heuristics for failure classification. Conservative: unknown failures
+# default to PERMANENT (no retry) rather than the plan's optimistic TRANSIENT —
+# retrying an unrecognised failure wastes ticks and risks DEAD-by-retry.
+_TRANSIENT_KEYWORDS: tuple[str, ...] = (
+    "timeout",
+    "timed out",
+    "rate limit",
+    "429",
+    "503",
+    "connection",
+    "temporarily",
+    "unavailable",
+    "reset by peer",
+    "temporary",
+)
+_PERMANENT_KEYWORDS: tuple[str, ...] = (
+    "not found",
+    "no skill",
+    "no matching",
+    "config",
+    "auth",
+    "api key",
+    "import",
+    "module",
+    "syntax",
+)
+
+# Subprocess (command_args) failure classification. Inverted default relative to
+# routing: unknown command failures default to TRANSIENT — environment issues
+# (uv not on PATH, locked .venv, transient file locks) are far more common than
+# permanent ones, and we don't want a single broken tick to burn the DEAD budget.
+# Only clear-cut permanent markers (wrong subcommand, permission denied) skip retry.
+# Note: "no such file or directory" is INTENTIONALLY omitted — file races (e.g.
+# locked .venv, target file mid-write by an interactive session) surface as this
+# exact stderr and should be retryable, not burn the DEAD budget. Prefix-binary
+# missing (uv not installed) is handled separately via the OSError branch which
+# IS PERMANENT (PATH won't change mid-tick).
+_COMMAND_PERMANENT_KEYWORDS: tuple[str, ...] = (
+    "no such command",
+    "no such option",
+    "permission denied",
+    "errno 13",
+    "usage: ",
+    "invalid value",
+    "missing argument",
+)
+
+
+class LoopRunner(Protocol):
+    """Structural type for a runtime that executes a routed query.
+
+    ``AgentRuntime`` (agent layer) satisfies this. core/loop depends on the
+    Protocol, not the concrete class, so core no longer imports the agent
+    layer — fixing the Core->Agent layer inversion. The concrete runtime is
+    injected by the CLI caller (which is allowed to import agent).
+    """
+
+    def handle_query(self, query: str, *, platform: str = ..., explain: bool = ...) -> Any: ...
+
+
+def _classify_failure(error: str) -> FailureInfo:
+    """Classify an execution/routing failure into a structured FailureInfo.
+
+    Conservative default: unknown failures are PERMANENT (no retry).
+    """
+    lowered = error.lower()
+    if any(k in lowered for k in _TRANSIENT_KEYWORDS):
+        return FailureInfo(
+            category=FailureCategory.TRANSIENT,
+            reason=error,
+            suggestion="Retryable — executor backs off and retries if spec.max_retries > 0.",
+        )
+    if any(k in lowered for k in _PERMANENT_KEYWORDS):
+        return FailureInfo(
+            category=FailureCategory.PERMANENT,
+            reason=error,
+            suggestion="Not retryable — check skill/config with 'vibe doctor'.",
+        )
+    return FailureInfo(category=FailureCategory.PERMANENT, reason=error)
+
+
+def _classify_command_failure(stderr_tail: str, return_code: int | None) -> FailureInfo:
+    """Classify a subprocess (command_args) failure.
+
+    Inverted default vs routing: unknown command failures default to TRANSIENT.
+    Reason: command-target failures are usually environmental (uv not on PATH,
+    locked .venv, file races with interactive sessions) and worth a retry. Only
+    explicit usage/permission/file-not-found errors are PERMANENT.
+    """
+    lowered = stderr_tail.lower()
+    if any(k in lowered for k in _COMMAND_PERMANENT_KEYWORDS):
+        return FailureInfo(
+            category=FailureCategory.PERMANENT,
+            reason=f"command exited {return_code}: {stderr_tail}",
+            suggestion="Not retryable — check command spelling, file path, and permissions.",
+        )
+    return FailureInfo(
+        category=FailureCategory.TRANSIENT,
+        reason=f"command exited {return_code}: {stderr_tail}",
+        suggestion="Retryable — likely environmental; executor backs off if spec.max_retries > 0.",
+    )
+
+
+def _build_query(spec: LoopSpec, history: RunHistory | None = None) -> str:
+    """Construct the routing query for a loop tick.
+
+    The query shape depends on which target field is set on the spec:
+        - ``skill_id``    → ``/slash-route use {skill_id}``
+        - ``query``       → passed through verbatim
+        - ``workflow_id`` → ``run workflow {workflow_id}``
+
+    When ``history`` is provided (with recent runs), cross-run context
+    (recent success rate, failure categories, progress notes) is appended so
+    each tick's routing query is aware of prior outcomes.
+
+    LoopSpec validation guarantees exactly one target is set, so the final
+    ``else`` is a defensive guard against bypassed validation.
+    """
+    if spec.skill_id:
+        base = f"/slash-route use {spec.skill_id}"
+    elif spec.query:
+        base = spec.query
+    elif spec.workflow_id:
+        base = f"run workflow {spec.workflow_id}"
+    else:
+        raise ValueError(
+            f"Loop {spec.name!r} has no skill_id / query / workflow_id set "
+            f"(LoopSpec validation should have prevented this)"
+        )
+
+    # Injection is opt-in: it mutates the query text fed to the matchers, which
+    # can alter routing outcomes (esp. for CJK queries polluted by the English
+    # template below). Default off preserves existing matching behaviour.
+    if not spec.inject_history or not history or not history.recent_runs:
+        return base
+
+    recent = history.recent_runs[-10:]
+    successes = sum(1 for r in recent if r.success)
+    total = len(recent)
+    rate = successes / total if total else 0.0
+    parts = [
+        base,
+        "",
+        "## Cross-run context",
+        f"- Recent success rate: {rate:.0%} ({successes}/{total})",
+    ]
+
+    failed = [r for r in recent if not r.success and r.failure_info]
+    if failed:
+        cats: dict[str, int] = {}
+        for r in failed:
+            cat = r.failure_info.category.value if r.failure_info else "unknown"
+            cats[cat] = cats.get(cat, 0) + 1
+        parts.append(f"- Recent failure categories: {cats}")
+
+    if history.progress_notes:
+        parts.append("- Notes: " + "; ".join(history.progress_notes[-3:]))
+
+    return "\n".join(parts)
+
+
+def _missing_exec_root_failure(spec: LoopSpec, exec_root: Path) -> FailureInfo:
+    """PERMANENT failure for a spec whose pinned ``project_root`` no longer exists.
+
+    Deliberately PERMANENT (consumes DEAD budget): a missing ownership root is a
+    loud, observable signal that the loop needs re-pinning — silently running in
+    the ambient cwd would execute the loop against the WRONG project. The
+    suggestion is fixed by design (gate26): adopt re-pins the root, reset clears
+    the failure budget burned by the loud signal.
+    """
+    return FailureInfo(
+        category=FailureCategory.PERMANENT,
+        reason=(
+            f"loop {spec.name!r} is pinned to project_root {exec_root} "
+            f"which does not exist (deleted/moved project?)"
+        ),
+        suggestion=(
+            f"Re-pin ownership with `vibe loop adopt {spec.name}` (from the new "
+            f"project root), then clear the failure budget with "
+            f"`vibe loop reset {spec.name}`."
+        ),
+    )
+
+
+def _run_command_target(
+    spec: LoopSpec,
+    record: LoopRunRecord,
+    project_root: str | None = None,
+) -> None:
+    """Execute ``spec.command_args`` as a subprocess and mutate ``record`` in place.
+
+    Called from inside ``execute_loop_tick``'s retry loop, sharing the same
+    persistence path (caller still runs ``state.record_run(record)`` +
+    ``store.save_state(state)``). Raises no exceptions — failures are written
+    into ``record`` so the existing DEAD/FAILING state machine applies.
+
+    Args:
+        spec: Loop definition with ``command_args`` set.
+        record: Pre-constructed ``LoopRunRecord`` (loop_name + started_at) to fill.
+        project_root: Working directory (subprocess ``cwd``). ``None`` inherits
+            the ambient cwd (unscoped legacy/--global loops). Production callers
+            pass the spec's resolved pinned ``project_root``; tests may point at
+            a tmp_path.
+    """
+    # shlex.split handles quoted paths with spaces (e.g.
+    # VIBESOP_RUN_PREFIX='"/path/with space/uv" run vibe'). Plain .split()
+    # would break that into 4 args and FileNotFoundError on the binary.
+    prefix_env = os.environ.get("VIBESOP_RUN_PREFIX", "uv run vibe")
+    try:
+        prefix = shlex.split(prefix_env, posix=True)
+    except ValueError as e:
+        # Mismatched quotes — fall back to whitespace split rather than crash.
+        logger.warning("VIBESOP_RUN_PREFIX has unbalanced quotes (%r): %s", prefix_env, e)
+        prefix = prefix_env.split()
+    argv = [*prefix, *spec.command_args]
+    env = {**os.environ, **spec.env_overrides}
+
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=spec.timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        record.success = False
+        # Use shlex.join so multi-line argv / unicode args survive in logs
+        # readable and round-trippable (deep-diagnosis-2026-07-24 P1-9 —
+        # plain ' '.join corrupts on whitespace/newlines inside an arg).
+        record.error = f"command timeout after {spec.timeout_s}s: {shlex.join(spec.command_args)}"
+        record.failure_info = FailureInfo(
+            category=FailureCategory.TRANSIENT,
+            reason=record.error,
+            suggestion="Retryable — command took too long; consider raising spec.timeout_s.",
+        )
+        return
+    except OSError as e:
+        # Two distinct spawn-failure shapes used to share one misleading message:
+        #   1. missing cwd — project_root was deleted between the executor's
+        #      pre-flight check and this spawn (or pre-flight was bypassed);
+        #      the fix is re-pinning ownership, not checking uv.
+        #   2. missing prefix binary — uv not on PATH (the original meaning).
+        # Known mis-classification (gate27 pi#2/claude#3): EACCES (permission
+        # denied on the cwd or the binary) also lands here and may get the
+        # "wrong" suggestion text depending on which branch fires. Accepted:
+        # both branches are PERMANENT, so the failure budget is unaffected —
+        # only the suggestion wording can mislead, never the state machine.
+        record.success = False
+        record.error = f"command spawn failed: {e}"
+        if project_root is not None and not Path(project_root).is_dir():
+            record.failure_info = FailureInfo(
+                category=FailureCategory.PERMANENT,
+                reason=record.error,
+                suggestion=(
+                    f"working directory {project_root} is missing — re-pin with "
+                    f"`vibe loop adopt {spec.name}`, then `vibe loop reset {spec.name}`."
+                ),
+            )
+        else:
+            record.failure_info = FailureInfo(
+                category=FailureCategory.PERMANENT,
+                reason=record.error,
+                suggestion="Check VIBESOP_RUN_PREFIX / uv installation.",
+            )
+        return
+
+    stdout_tail = (result.stdout or "")[-2000:]
+    stderr_tail = (result.stderr or "")[-2000:]
+
+    if result.returncode == 0:
+        record.success = True
+        record.matched_skill = ""  # command targets have no skill
+        record.output_summary = (stdout_tail or stderr_tail)[:200]
+        record.error = ""
+        record.failure_info = None
+        return
+
+    record.success = False
+    record.error = f"command exited {result.returncode}: {stderr_tail}"
+    record.failure_info = _classify_command_failure(stderr_tail, result.returncode)
+
+
+def execute_loop_tick(
+    spec: LoopSpec,
+    runtime: LoopRunner,
+    store: LoopStore | None = None,
+) -> LoopRunRecord:
+    """Execute one loop tick and persist the result.
+
+    Args:
+        spec: Loop definition. Caller is responsible for skipping
+            ``PAUSED`` / ``DEAD`` loops — this function will execute
+            whatever it's given.
+        runtime: A ``LoopRunner`` (e.g. ``AgentRuntime``) that executes the
+            routed query. Injected by the caller (CLI) so core/loop does not
+            import the agent layer (Core->Agent inversion fix).
+        store: LoopStore instance. ``None`` creates a default instance
+            rooted at ``~/.vibe/loops/``.
+
+    Returns:
+        ``LoopRunRecord`` describing this tick. The record has already
+        been appended to the loop's persisted ``LoopState``.
+    """
+    store = store or LoopStore()
+
+    started_at = datetime.now(UTC)
+    start_wall = time.monotonic()
+    record = LoopRunRecord(loop_name=spec.name, started_at=started_at)
+
+    # Load state up-front so cross-run history can be injected into the query.
+    state = store.load_state(spec.name) or LoopState(spec=spec)
+    # state.json embeds a spec copy that may be stale (e.g. adopt re-pinned
+    # project_root after the last run). Re-bind the live spec so record_run's
+    # status machine (max_failures) and the re-saved state both see current
+    # values (gate26 review: stale-copy fix).
+    state.spec = spec
+
+    # Ownership execution root: a pinned spec executes against ITS project,
+    # never the ambient cwd. None = unscoped (legacy/--global) — unchanged
+    # behaviour (subprocess inherits cwd; routing runtime is caller-built).
+    exec_root: Path | None = Path(spec.project_root).resolve() if spec.project_root else None
+
+    if exec_root is not None and not exec_root.is_dir():
+        # Pre-flight: refuse to run in the wrong cwd. PERMANENT by design —
+        # burns DEAD budget as a loud re-pin signal (gate26 review pi#5).
+        record.success = False
+        record.failure_info = _missing_exec_root_failure(spec, exec_root)
+        record.error = record.failure_info.reason
+        record.duration_s = round(time.monotonic() - start_wall, 2)
+        record.finished_at = datetime.now(UTC)
+        state.record_run(record)
+        try:
+            store.save_state(state)
+        except Exception:
+            logger.exception(
+                "Failed to persist loop state for [%s] — failure counter may not advance",
+                spec.name,
+            )
+        return record
+
+    history = RunHistory(
+        recent_runs=list(state.recent_runs),
+        progress_notes=list(state.progress_notes),
+    )
+
+    attempt = 0
+    attempt_errors: list[str] = []  # accumulated across retries for debugging
+    failure: FailureInfo | None = None  # initialised defensively (kimi latent-risk)
+    while True:
+        err = ""
+        try:
+            if spec.command_args:
+                # Command-target path: no routing query, no AgentRuntime —
+                # direct subprocess invocation. Reuses the same record/state
+                # machine as routing so DEAD/FAILING transitions still fire.
+                # exec_root (the spec's pinned project_root, resolved) is the
+                # subprocess cwd — pre-fix this call never passed project_root,
+                # so pinned loops silently ran in the ambient cwd (gate26).
+                _run_command_target(
+                    spec, record, project_root=str(exec_root) if exec_root else None
+                )
+                if record.success:
+                    break
+                err = record.error or "command failed"
+                failure = record.failure_info or _classify_command_failure(err, return_code=None)
+            else:
+                query = _build_query(spec, history=history)
+                # explain=True populates result.decision_message so output_summary
+                # captures routing context for post-mortem debugging.
+                result = runtime.handle_query(quer

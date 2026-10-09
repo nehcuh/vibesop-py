@@ -104,3 +104,8 @@
 - [_review-sprint1-evolution-brief.md](observability/_review-sprint1-evolution-brief.md) — Pi Review Brief — Product Evolution Final + Sprint 1 Go/No-Go
 - [_review-sprint1-evolution-merged.md](observability/_review-sprint1-evolution-merged.md) — Sprint 1 Go/No-Go — Pi Review Merged
 - [_review-sprint1-evolution-pi.md](observability/_review-sprint1-evolution-pi.md) — Pi Review: Product Evolution + Sprint 1
+
+## 2026-10-09 深度诊断
+
+- [冻结诊断报告](diagnosis/2026-10-09-deep-diagnosis/REPORT.md)、[保存与恢复](diagnosis/2026-10-09-deep-diagnosis/RESTORE.md)。59 份原件完整冷归档，57 份保留 Git 副本；原 manifest 与报告字节保持原样。
+- [优化计划](../../plans/README.md#current-execution)仍在执行，归档诊断不代表修复验收完成。

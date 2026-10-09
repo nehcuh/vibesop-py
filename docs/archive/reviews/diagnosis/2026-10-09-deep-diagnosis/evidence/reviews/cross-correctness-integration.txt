@@ -1,0 +1,89 @@
+# Cross-cut correctness + integration — 独立反证
+
+基线 HEAD 49901afe；2026-10-09。依据 `/tmp/vibesop-audit-20261009-value-research.md` 及 `/tmp/vibesop-platform-repro.py`、`/tmp/vibesop-platform-more-repro.py`（检查时平台报告尚未出现）。没有修改项目源码/用户工作区；全部产物使用 TemporaryDirectory，HOME 显式隔离；只使用哑凭据，不读取或回显真实密钥。
+
+独立脚本：`/tmp/vibesop-cross-correctness-repro.py`；运行 `uv run python /tmp/vibesop-cross-correctness-repro.py`，退出 0。没有以待审实现的 mock 代替路径；边界 stub 详见每项。
+
+## Confirmed
+
+### CC-01 [P1, 高置信] frontmatter id 路径越界在真实注册 CLI 可达
+
+真实输入：`vibe skill add <local source> --global --manual-config`，source 的正常 helper SKILL.md 含 `id: ../../../outside`。没有 `--force`。
+
+- `cli/commands/skill_commands.py:618` 检测目录，`:630` 真实安全审计；`:632-649` 选择 scope；`:652` 安装；`:723-727` 使用真实 SkillInstaller。
+- `installer/skill_installer.py:93` 直接拼 `project_path / .vibe/skills / manifest.id`；`:100` copy。
+- 试验 HOME=`temp/home`，目标应局限 `temp/home/.vibe/skills`；实际目标 `temp/outside/SKILL.md` 存在。真实审计通过、CLI exit0、宣告安装完成。
+- 只模拟 questionary 返回默认 priority/确认，以及安装之后 `_verify_and_sync`（避免语义 index 访问模型）；未 mock parser、SkillSecurityAuditor、PathSafety、copy 或 installer。因此直接 API 的复現已提升为公开 CLI 的可达性证据。
+- 合法 namespace `pack/skill` 不需要禁止 slash，但应拒绝 absolute path、`..` 段，且在 write/delete 前检查 resolved target 位于安装 root，不能把来源 audit 当目标约束。
+
+复现输出：
+```
+REAL_SKILL_ADD {exit_code:0, audit_passed:true, outside_written:true, installation_complete:true}
+```
+
+### CC-02 [P1, 高置信] 普通 OpenCode build 自动把环境密钥落盘，未要求保存凭据 opt-in
+
+真实输入：`vibe build opencode --output <temporary output>`。环境仅放 `OPENAI_API_KEY=ANTHROPIC_API_KEY=AUDIT_DUMMY_ONLY`；没有真实密钥，没有保存凭据参数或交互批准。
+
+- `adapters/opencode.py:166` / `:178` 把环境值直接填 `api_key`；`adapters/file_based.py:261-264` 无条件写 `output/llm-config.json`，且 validate_security=False。
+- `cli/commands/build.py:67-68` 默认输出为项目 `.vibe/dist/opencode`；`:102-105` renderer.render 到输出目录。显式 output 也是普通可审查构建产物路径，不是“把密钥安全导入 secret store”的专用功能。
+- CLI exit0，llm-config 文件真实存在并含哑密钥；本机默认 umask 下 mode **0644**。FileBasedAdapter 默认 `_generate_llm_config` 已使用 `api_key_env`（file_based.py:165-183），说明同一继承体系有避免复制秘密的现成契约，OpenCode override 把它变回值。
+- CLI/renderer 未被 mock；只将 Path.home/environment 指到隔离目录，避免加载用户真实文件。ManifestBuilder、ConfigRenderer、OpenCodeAdapter、atomic writer 均真实执行。
+
+复现输出：
+```
+REAL_BUILD_OPENCODE {exit_code:0, file_exists:true, dummy_materialized:true, mode:0o644, credential_optin_args:false}
+```
+
+建议：默认引用环境变量；如果实际宿主确实要求原值，单独显式 opt-in、说明目标，并把文件权限固定0600。只加 `.gitignore` 或 chmod 不解决普通 build 意外复制环境秘密的根因。
+
+### CC-03 [P2, 高置信] recall 缺 skill_id 确实破坏 replay 的消费者行为
+
+真实链：Span → SpanWriter.write_span → query_recent → should_replay → CLI `_maybe_prompt_replay` → route 所需的 skill 返回值。
+
+- producer `core/observability/span_writer.py:111-134` 对 input/output/metadata JSON 编码为字符串。Span model `models.py:99-125` 无 top-level skill_id。
+- `core/observability/recall.py:400-410` 仅从 dict metadata/output 读取，故真实磁盘格式解析不出来。与 query extractor 支持 JSON string 的行为不同。
+- `cli/main.py:2446` 回退 `(unknown)`；`:2471` / `:2490` 的学习与提示条件跳过；`:2495` 返回 None；真实 route consumer `:899-908` 因 None 不设置 current_skill/habit_boosts。
+- TemporaryDirectory 内真实 learner 预置3次成功，同 task3个不同 trace、非 default project_id、状态 OK 的真实 writer 记录仅 metadata 放 builtin/systematic-debugging；固定 embedding vector 只隔离相似度/ONNX依赖。
+- should_replay 实际得到 should_prompt=True、is_gold=True、skill_id=None；把这些真实磁盘记录通过真实 should_replay 接入 `_maybe_prompt_replay`，模拟交互确认 Y 后，returned=None、prompt含unknown、真实 learner success_count 仍3（未新增 outcome）。
+- 为隔离 IO 的 stub：SpanWriter/InstinctLearner 的构造指向真实临时实例、TTY=True、typer.confirm=True、provenance emit stub；**没有 mock recall result、should_replay 输出、gold 判定或 consumer逻辑**。should_replay side-effect 仍调用真实函数，仅注入固定 cache。
+
+复现输出：
+```
+REAL_REPLAY_CONSUMER {should_prompt:true, gold:true, skill_id:null, confirmed_return:null, unknown_in_prompt:true, outcome_count:3}
+```
+
+因此缺字段不是单纯 JSON 展示小问题；“确认 Y 会优先历史 skill”的公开说明失效。原文 docstring承认 metadata branch 对磁盘记录 inert，并不使实际 replay consumer 对该字段的依赖消失。修复应解析真实 producer字符串，保留 fallback-llm 排除、损坏 JSON 容错，加入真实 writer→reader→consumer 合同测试。
+
+## Narrowed
+
+- CC-01 已证实“安装外部提供的 skill 时，攻击者控制的 frontmatter可以使安装写到root之外”。没有证实远程无需安装动作即可写任意文件。现存目标目录且无force时当前代码只报 already installed；本反例选择不存在的越界目录，无需force即可写。覆盖既有文件要 `--force` 或相关目录/文件路径状态，不能夸大为默认无条件覆盖全HOME。
+- CC-02 已证实秘密**意外落盘**，没有证实秘密已上传、被Git提交、被OpenCode发送到第三方。0644是本机默认umask的实际结果；使用077的环境可得到更严格权限，但不能否定密钥被写入构建产物。环境变量中有密钥证明进程有访问权，不等于用户选择了将其持久化/导出。
+- CC-03 不会阻止一般 route，且 `--json` / `--minimal` / `--no-replay` / 非TTY主动不走prompt；仅影响互动 gold replay 偏好闭环。skill_id丢失不影响 task query 的相似度检索和trace provenance展示，不应升级为“整个memory系统全坏”。
+
+## Refuted / 未支持
+
+- “installer缺陷只存在于私有helper，公开CLI安全审计必定拦住”：已被真实注册CLI的反例反驳。
+- “普通opencode build只有用户显式选择存储密钥才写出实际值”：无该opt-in，真实CLI的反例反驳。
+- “recall skill_id缺失仅影响显示，不影响真实消费者”：真实consumer confirmed-return=None与route条件证明不成立。
+- 未支持更强断言：任意远程无交互攻击、真实密钥外传、未确认自动回放。不能因当前审计使用哑密钥和模拟确认，把这些风险写成已发生事件。
+
+## Integration 综合判断
+
+跨lane共同问题是边界合同缺少生产形状/完整路径验证：来源 audit不约束目标path；组件生成成功不等于产物不携带秘密；内存dict测试不保证磁盘JSON string roundtrip；workflow verdict不自动进入其他bridge的terminal判定。修复应以公开CLI或真实writer产生输入，再对实际产物和consumer状态验收。不要只在被审组件接口mock相邻层，然后由绿测试推出全路径安全/正确。
+
+## Addendum：真实 DeepSeek E2E T4 的判定
+
+读取 `/tmp/vibesop-audit-20261009/evidence/deepseek-e2e.log` 与 `scripts/e2e_llm_routing.py`，没有再访问 API。
+
+**结论：目前代码语义下 0.88→0.616→62% 被接受是正常；T4 的无条件 scenario_fallback oracle 不稳定。**
+
+- `scripts/e2e_llm_routing.py:318-332` 从某次返回0.82假设衰减后0.57低于min=.6，从而无条件要求scenario_fallback。
+- 真实实现 `triage_service.py:920-923` 是 confidence×.7；`unified.py:761` 仅做 `match.confidence >= min_confidence`，不看 last_good。当前项目 `.vibe/config.toml:5` min=.6；边界 original>=.6/.7≈.85714 时 stale照样合格。
+- `_last_good_route:905-911` 文档说“confidence may fall below ... rejected”，这支持条件性拒绝；紧接着“stale result should not auto-execute”是比代码更强的语言。`degradation.py:39-40` ≥默认.6 被判AUTO，metadata保留last_good但没有强制执行门禁。路由返回/注入本身仍不等于危险外部动作已执行。
+- 独立本地实际 `_last_good_route` 和 DegradationManager：.82→.574(reject，suggest)；.88→.616(accept，auto)；.90→.63(accept，auto)；1→.7(accept，auto)。不依赖新模型调用、不是只手算。
+- script有“last-good fired”与最终层的证据，但还应检查payload.meta.last_good、last_good_original_confidence及其衰减计算，而不是匹配某个skill字符串便声称last-good成功。
+
+建议将 real-LLM E2E 的expected outcome基于**实际缓存confidence/当前threshold**计算，或把失效测试拆为固定cache confidence .82与.88两个 deterministic case。若产品希望所有stale只提示不可自动注入，则应把它写成明确hard contract并实现last_good专属门禁；靠.7乘数不保证这一点。
+
+分类：**P2 验证脚本/文档契约歧义**，没有足够证据称新P1安全漏洞。不能把6/7报告改成全绿，也不能由这个oracle失败说last-good degradation机制本身坏了。T1/T2真实模型/cache证据有效，T4需要报告“decay工作，期望终层的断言不适用于本次实际confidence”。
