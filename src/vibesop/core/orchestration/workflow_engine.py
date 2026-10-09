@@ -118,6 +118,23 @@ class SquadExecutionResult(BaseModel):
     duration_ms: float = Field(default=0.0, description="Execution duration in milliseconds")
     rounds_executed: int = Field(default=0, description="Number of rounds executed")
     verdicts: list[Any] = Field(default_factory=list, description="Review verdicts collected")
+    blocked: bool = Field(
+        default=False,
+        description="True when a genuine review hard-reject ended the run — the plan "
+        "is blocked on evidence/human input, not completed. Verdicts raised by a "
+        "degraded review gate (LLM error) do not set this flag.",
+    )
+    blocked_roles: list[str] = Field(
+        default_factory=list,
+        description="target_role values of the hard-reject verdicts (B3 shared-outcome bridge)",
+    )
+    review_status: str = Field(
+        default="accepted",
+        description="Acceptance dimension of the review gate, independent of run "
+        "completion: 'accepted' (all genuine verdicts passed), 'rejected' (a genuine "
+        "verdict failed), 'error' (the review gate itself errored and no genuine "
+        "verdict exists — the run completed but acceptance is unknown).",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -128,6 +145,9 @@ class SquadExecutionResult(BaseModel):
             "duration_ms": self.duration_ms,
             "rounds_executed": self.rounds_executed,
             "verdicts": [v.to_dict() if hasattr(v, "to_dict") else v for v in self.verdicts],
+            "blocked": self.blocked,
+            "blocked_roles": list(self.blocked_roles),
+            "review_status": self.review_status,
         }
 
 
@@ -254,6 +274,7 @@ class WorkflowEngine:
         reorchestration_rounds: int = 0,
         error: str | None = None,
         escalation_message: str | None = None,
+        review_status: str | None = None,
     ) -> None:
         """Emit the ``plan_terminal`` event closing a run.
 
@@ -262,7 +283,9 @@ class WorkflowEngine:
         ``DynamicExecutionResult.final_status`` — the result model is left
         unchanged and keeps deriving from ``_compute_final_status``.
         ``error`` is set only for crash-terminated runs; ``escalation_message``
-        only when an escalate decision ended the run.
+        only when an escalate decision ended the run. ``review_status`` is an
+        additive payload key (squad runs only) carrying the review-acceptance
+        dimension; it never redefines ``final_status``.
         """
         if self._events is None:
             return
@@ -275,6 +298,8 @@ class WorkflowEngine:
             payload["error"] = error
         if escalation_message is not None:
             payload["escalation_message"] = escalation_message
+        if review_status is not None:
+            payload["review_status"] = review_status
         self._events.append(plan.plan_id, PlanEventType.PLAN_TERMINAL, payload)
 
     def _run_guarded(
@@ -958,6 +983,11 @@ class WorkflowEngine:
         outputs: dict[str, Any] = {}
         round_num = 0
         all_verdicts: list[Any] = []
+        # Verdicts synthesized when the review gate itself errored (e.g. no LLM
+        # configured) are degraded, not genuine review outcomes — they must not
+        # be reported as blocked/hard-reject verdicts (keeps the degraded
+        # review-gate path's "run completed" semantics intact).
+        degraded_verdict_idxs: set[int] = set()
         self._start_time = time.monotonic()
 
         while protocol.should_continue(round_num, squad.max_rounds, all_verdicts):
@@ -992,6 +1022,7 @@ class WorkflowEngine:
                             target_role,
                             e,
                         )
+                        degraded_verdict_idxs.add(len(all_verdicts))
                         verdict = ReviewVerdict(
                             passed=False,
                             reviewer_role=step.role_id,
@@ -1003,17 +1034,36 @@ class WorkflowEngine:
 
             round_num += 1
 
+        # Terminal semantics (B3): plan.status keeps the run-completed contract
+        # — reaching this point means no member crashed (those propagate), so
+        # the run completed regardless of review acceptance (RR06 terminal-
+        # vocabulary debt stays registered, not expanded here). Acceptance is
+        # carried by the additive blocked/blocked_roles/review_status fields
+        # and by the genuine (non-degraded) verdicts.
+        genuine_verdicts = [v for i, v in enumerate(all_verdicts) if i not in degraded_verdict_idxs]
+        blocked_roles = [
+            v.target_role for v in genuine_verdicts if not v.passed and not v.requires_revision
+        ]
+        blocked = bool(blocked_roles)
+        reviews_failed = any(not v.passed for v in genuine_verdicts)
+        if degraded_verdict_idxs and not genuine_verdicts:
+            review_status = "error"
+        elif reviews_failed:
+            review_status = "rejected"
+        else:
+            review_status = "accepted"
         plan.status = PlanStatus.COMPLETED
 
         # Plan-level terminal event (squad members are SquadStep objects, out
-        # of step_transition scope — see events.py module docstring).
-        # Reaching this point means no member crashed (those propagate), so
-        # the run completed.
+        # of step_transition scope — see events.py module docstring). The
+        # final_status key keeps the run-completed vocabulary; the acceptance
+        # dimension is delivered via the additive review_status payload key.
         self._emit_plan_terminal(
             plan,
             final_status="completed",
             total_steps_executed=len(outputs),
             reorchestration_rounds=round_num,
+            review_status=review_status,
         )
 
         return SquadExecutionResult(
@@ -1024,6 +1074,9 @@ class WorkflowEngine:
             duration_ms=self._elapsed(),
             rounds_executed=round_num,
             verdicts=all_verdicts,
+            blocked=blocked,
+            blocked_roles=blocked_roles,
+            review_status=review_status,
         )
 
     async def _run_debate(
@@ -1095,10 +1148,19 @@ class WorkflowEngine:
             payload = protocol.handoff(payload)
             handoff_context = payload.output
 
+        # F27 compatibility (restored in the unified engine path): every squad
+        # executor receives the rendered role prompt and skill isolation for
+        # its role — the same context keys the old StepRunner._execute_squad
+        # branch supplied, now produced for the real SquadStep.
+        from vibesop.core.orchestration.role_templates import render_role_prompt
+
+        skill_ids = list(getattr(step, "skill_ids", None) or [])
         return {
             **base_context,
             "step_id": step.step_id,
             "role": step.role_id,
+            "role_prompt": render_role_prompt(step.role_id, skill_ids),
+            "skill_isolation": {"allowed_skills": skill_ids},
             "upstream_outputs": upstream_outputs,
             "handoff": handoff_context,
             "verdicts": [v.model_dump() if hasattr(v, "model_dump") else v for v in verdicts],

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible.
+
 - **B1 diagnosis optimization**: Generated OpenCode/Cursor LLM config uses api_key_env references rather than ambient secret values. Guarded atomic output uses exclusive temporary files; platform rendering rejects ancestor links before creating skill directories while preserving legal installed skill links.
 
 - **Span readers accept persisted JSON-string metadata as well as in-memory dicts**.
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B3 diagnosis optimization**: Continue fail_fast after a wholly successful parallel batch, report real dynamic execution failures, preserve role/isolation/handoff context and expose required-review errors independently of execution success. Mark only failed-dependency descendants skipped; retain resumable pending work. Map internal squad steps back to the original ExecutionStep objects for public executor callbacks.
 
 - **B1 diagnosis optimization**: Validate namespace segments before dependency processing and use one normalized project root for install/verify/uninstall. Prevent platform render and Pi namespace rewrites from modifying central installs through links; ignore pre-planted temporary file links.
 
