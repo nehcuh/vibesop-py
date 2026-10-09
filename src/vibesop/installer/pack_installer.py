@@ -628,18 +628,27 @@ class PackInstaller:
             # cmd/PowerShell (they cannot interpret sh scripts).
             # ``System32\bash.exe`` is the WSL launcher: it would run inside
             # the Linux VM where this Windows script path does not exist, so
-            # it is skipped — after resolving both the candidate and the
-            # boundary, so ``..``-laden aliases of the launcher path cannot
-            # evade the exclusion. POSIX keeps the direct executable
-            # invocation.
+            # it is skipped — after resolving the candidate and strictly
+            # resolving a genuinely existing boundary, so ``..``-laden aliases
+            # of the launcher path cannot evade the exclusion and a missing or
+            # unresolvable boundary fails closed. POSIX keeps the direct
+            # executable invocation.
             build_argv = [str(script_path)]
             if sys.platform == "win32":
                 # Windows env lookup is case-insensitive; uppercase names keep
                 # linters honest while matching ProgramFiles/SystemRoot/LocalAppData.
                 system32 = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32"
                 try:
-                    resolved_system32 = system32.resolve()
-                except OSError as exc:
+                    # Strict resolution: the exclusion boundary must genuinely
+                    # exist and fully resolve. pathlib reports a symlink loop
+                    # as RuntimeError on Python 3.12 but as a silently
+                    # unresolved path on 3.13 (non-strict) — only a strict
+                    # resolve, catching both OSError and RuntimeError, fails
+                    # closed identically on every supported interpreter. A
+                    # nonexistent boundary fails closed here too instead of
+                    # trusting a ghost path.
+                    resolved_system32 = system32.resolve(strict=True)
+                except (OSError, RuntimeError) as exc:
                     # Fail closed: without a trustworthy boundary the WSL
                     # launcher cannot be reliably excluded.
                     raise PackBuildError(
@@ -671,8 +680,12 @@ class PackInstaller:
                         continue
                     try:
                         resolved_shell = raw_shell.resolve()
-                    except OSError:
-                        # Unresolvable spelling: ignore this candidate.
+                    except (OSError, RuntimeError):
+                        # Unresolvable spelling — including a symlink loop,
+                        # which pathlib reports as RuntimeError on 3.12:
+                        # ignore this candidate. On 3.13 a loop candidate
+                        # resolves to a non-file path and is skipped by the
+                        # is_file() check below.
                         continue
                     if not resolved_shell.is_file():
                         continue
