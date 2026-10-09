@@ -6,13 +6,16 @@ import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
-from vibesop.core.routing.triage_service import TriageService
+import pytest
+
+from vibesop.core.config.manager import RoutingConfig
+from vibesop.core.models import RoutingLayer, SkillRoute
+from vibesop.core.routing.triage_cache import TriageCache
+from vibesop.core.routing.triage_service import LAST_GOOD_CONFIDENCE_DECAY, TriageService
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import ClassVar
-
-    import pytest
 
 
 def _make_service(
@@ -1341,3 +1344,120 @@ class TestNoMatchExit:
             assert version in declined_formats, f"add declined format for {version}"
             parsed = service.parse_ai_triage_response(declined_formats[version])
             assert parsed["skill_id"] is None, version
+
+
+class TestLastGoodDecayBoundary:
+    """Decay arithmetic for a stale triage entry, from the production writer.
+
+    ``TriageCache.store`` receives ``SkillRoute.to_dict()`` — the same object
+    ``try_ai_triage`` persists. A candidate-hash miss plus an LLM failure then
+    rebuilds the last-good route. The 0.7 factor and the RoutingConfig default
+    gate stay where they are.
+    """
+
+    _BASE: ClassVar = [
+        {"id": "skill-a", "intent": "alpha"},
+        {"id": "skill-b", "intent": "beta"},
+    ]
+    _QUERY = "hello world"
+    # The diagnosis gate these two sides are defined against. It is a test
+    # configuration, not RoutingConfig's default.
+    _GATE = 0.6
+
+    def _service(self, cache: TriageCache) -> TriageService:
+        config = MagicMock()
+        config.enable_ai_triage = True
+        config.ai_triage_budget_monthly = 5.0
+        config.ai_triage_log_calls = False
+        config.ai_triage_max_skills = 10
+        config.ai_triage_max_tokens = 500
+        config.ai_triage_prompt_version = "v2"
+        config.ai_triage_circuit_breaker_enabled = True
+        config.ai_triage_circuit_breaker_failure_threshold = 3
+        config.ai_triage_circuit_breaker_latency_threshold_ms = 500.0
+        config.ai_triage_circuit_breaker_cooldown_seconds = 60
+        config.ai_triage_timeout_seconds = 15.0
+        config.triage_cache_ttl_hours = 72
+        cost_tracker = MagicMock()
+        cost_tracker.get_monthly_cost.return_value = 0.0
+        service = TriageService(
+            config=config,
+            cost_tracker=cost_tracker,
+            prefilter=MagicMock(),
+            cache_manager=MagicMock(),
+            get_skill_source=lambda sid, ns: f"{ns}/{sid}",
+            triage_cache=cache,
+        )
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+        service._llm.call.side_effect = RuntimeError("LLM down")
+        return service
+
+    def _stale_last_good(self, tmp_path: Path, original_confidence: float) -> dict:
+        cache = TriageCache(tmp_path)
+        stored = SkillRoute(
+            skill_id="skill-a",
+            confidence=original_confidence,
+            layer=RoutingLayer.AI_TRIAGE,
+            source="builtin/skill-a",
+            description="alpha",
+        ).to_dict()
+        cache.store(self._QUERY, self._BASE, stored)
+        changed = [*self._BASE, {"id": "skill-c", "intent": "new"}]
+        result = self._service(cache).try_ai_triage(self._QUERY, changed)
+        assert result is not None and result.match is not None
+        body = result.match.to_dict()
+        assert body["skill_id"] == stored["skill_id"]
+        assert body["metadata"]["last_good"] is True
+        assert body["metadata"]["last_good_original_confidence"] == pytest.approx(
+            stored["confidence"]
+        )
+        assert body["confidence"] == pytest.approx(
+            stored["confidence"] * LAST_GOOD_CONFIDENCE_DECAY
+        )
+        assert body["metadata"].get("scenario_fallback") is not True
+        return body
+
+    def test_decay_constant_and_gate_sides(self) -> None:
+        """0.9*0.7 clears 0.6; 0.8*0.7 does not. The constant and default stay put."""
+        assert LAST_GOOD_CONFIDENCE_DECAY == 0.7
+        assert RoutingConfig().min_confidence == 0.3
+        assert pytest.approx(0.63) == 0.9 * LAST_GOOD_CONFIDENCE_DECAY
+        assert pytest.approx(0.56) == 0.8 * LAST_GOOD_CONFIDENCE_DECAY
+        assert 0.9 * LAST_GOOD_CONFIDENCE_DECAY >= self._GATE
+        assert 0.8 * LAST_GOOD_CONFIDENCE_DECAY < self._GATE
+        # Equality is the accept side of unified.py's >= comparison.
+        boundary = self._GATE / LAST_GOOD_CONFIDENCE_DECAY
+        assert boundary * LAST_GOOD_CONFIDENCE_DECAY == pytest.approx(self._GATE)
+
+    def test_stale_0_9_decays_to_0_63(self, tmp_path: Path) -> None:
+        body = self._stale_last_good(tmp_path, 0.9)
+        assert body["confidence"] == pytest.approx(0.63)
+        assert body["confidence"] >= self._GATE
+
+    def test_stale_0_8_decays_to_0_56(self, tmp_path: Path) -> None:
+        body = self._stale_last_good(tmp_path, 0.8)
+        assert body["confidence"] == pytest.approx(0.56)
+        assert body["confidence"] < self._GATE
+
+    def test_stale_negative_does_not_produce_last_good(self, tmp_path: Path) -> None:
+        """A real negative row stays ineligible after the candidate set changes."""
+        cache = TriageCache(tmp_path)
+        service = self._service(cache)
+        service._store_negative(self._QUERY, self._BASE)
+        changed = [*self._BASE, {"id": "skill-c", "intent": "new"}]
+        result = service.try_ai_triage(self._QUERY, changed)
+        assert service._llm.call.called
+        assert result is None
+        fresh, stale = cache.lookup(self._QUERY, changed, ttl_hours=72)
+        assert fresh is None
+        assert stale is not None
+        assert stale.get("skill_id") is None
+
+    def test_no_cache_entry_llm_down_does_not_produce_last_good(self, tmp_path: Path) -> None:
+        cache = TriageCache(tmp_path)
+        service = self._service(cache)
+        result = service.try_ai_triage(self._QUERY, self._BASE)
+        assert service._llm.call.called
+        assert result is None
+        assert cache.lookup(self._QUERY, self._BASE, ttl_hours=72) == (None, None)
