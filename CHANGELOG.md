@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Span readers accept persisted JSON-string metadata as well as in-memory dicts**.
+  Recall and dashboard skill filtering share one decoder; the writer format is unchanged.
+
 - **`RoutingConfig` enforces `ai_triage_short_query_bypass_chars >= keyword_match_max_chars`**
   (model validator). Both thresholds gate the same pre-enrichment character
   count with `<=` semantics; a bypass below the keyword threshold reopened the
@@ -21,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **Recall preserves skill identity from real disk spans**, including serialized output
+  payloads, so accepted replays can return the skill and record feedback instead of
+  displaying unknown. Malformed or non-object metadata is ignored safely.
 
 - **Triage cost log validates `selected_confidence` like the match path**:
   the log previously admitted JSON booleans (`true` → 1.0, since `bool` is an
