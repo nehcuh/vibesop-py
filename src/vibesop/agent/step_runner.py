@@ -409,14 +409,24 @@ class StepRunner:
     ) -> dict[str, Any]:
         """Execute all pending steps in topological order.
 
-        Independent steps within each batch run via ParallelScheduler.
+        Independent steps within each batch run concurrently through
+        asyncio.gather under a max_parallel semaphore.
         For dynamic plans (LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN) and
         squad-oriented patterns (AGENT_SQUAD, DEBATE, RED_TEAM), delegates
         to WorkflowEngine — squad plans enter the engine's
         handoff/review/revision gates instead of a simplified parallel branch.
 
         Args:
-            step_executor: Callable(ExecutionStep, StepRunContext) -> str (output)
+            step_executor: Callable(ExecutionStep, StepRunContext) -> str (output).
+                In parallel batches sync executors are dispatched through
+                asyncio.to_thread — real thread dispatch with the caller's
+                contextvars propagated (D14; previously sync callables ran
+                inline on the event-loop thread, so batches were effectively
+                serial). Coroutine FUNCTION executors are awaited (B5
+                extension — previously the returned coroutine was never
+                awaited and its body never ran). Async callable objects and
+                sync functions returning an Awaitable are not part of the
+                supported API.
             on_step_complete: Optional callback(ExecutionStep, output: str) called after each step
             on_step_error: Optional callback(ExecutionStep, error: Exception) called on failure.
                 Return True to continue, False to abort.
@@ -565,12 +575,25 @@ class StepRunner:
             else:
                 # Parallel batch: execute all pending steps concurrently
                 import asyncio
+                import inspect
 
                 async def exec_step(s: ExecutionStep) -> tuple[ExecutionStep, str | Exception]:
                     self.start_step(s)
                     ctx = self.get_context(s)
                     try:
-                        result = step_executor(s, ctx)
+                        if inspect.iscoroutinefunction(step_executor):
+                            # B5 extension: coroutine-function executors are
+                            # awaited — previously the returned coroutine was
+                            # never awaited (its body never ran).
+                            result = await step_executor(s, ctx)
+                        else:
+                            # D14: sync executors get real thread dispatch.
+                            # asyncio.to_thread copies the calling context, so
+                            # contextvars propagate into the worker thread
+                            # (repo-approved pattern, see tracer.py); the
+                            # semaphore below still caps concurrency at
+                            # max_parallel.
+                            result = await asyncio.to_thread(step_executor, s, ctx)
                         return (s, result)
                     except Exception as e:
                         return (s, e)

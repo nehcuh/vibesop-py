@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -450,6 +452,322 @@ class TestExecuteAll:
 
         assert result["dynamic"] is True
         assert result["failed"] == 0
+
+
+class TestParallelDispatchRealism:
+    """D14 (B5): parallel-batch sync executors get REAL thread dispatch via
+    asyncio.to_thread under the max_parallel semaphore — previously the sync
+    callable ran inline on the event-loop thread, so "parallel" batches were
+    effectively serial and two blocking callables could never overlap.
+
+    Every proof is deterministic (barrier/counter events only): no sleeps and
+    no wall-clock threshold assertions. Barrier/wait timeouts exist solely so
+    a broken implementation fails fast instead of hanging the suite.
+    Coroutine-function executors are awaited (B5 extension — previously the
+    coroutine object was never awaited and its body never ran). Async callable
+    objects and sync functions returning an Awaitable are NOT supported API
+    (pre-approved inventory boundary, not a B5 commitment).
+    """
+
+    @staticmethod
+    def _two_step_parallel_plan() -> ExecutionPlan:
+        return _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", None),
+            ],
+            execution_mode="parallel",
+        )
+
+    def test_sync_executors_really_overlap_in_threads(self):
+        """max_parallel=2: two blocking sync callables sharing a
+        threading.Barrier(2) actually meet — peak concurrency 2, both pass the
+        barrier, both steps complete with their real outputs. Before B5 both
+        workers ran on MainThread, the barrier broke and both steps failed
+        with BrokenBarrierError (peak 1)."""
+        main_thread = threading.current_thread()
+        barrier = threading.Barrier(2, timeout=5.0)
+        lock = threading.Lock()
+        events: list[tuple[str, str]] = []
+        worker_threads: dict[str, threading.Thread] = {}
+        active = 0
+        peak = 0
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+                worker_threads[step.step_id] = threading.current_thread()
+                events.append((step.step_id, "enter"))
+            try:
+                barrier.wait()
+            finally:
+                with lock:
+                    active -= 1
+                    events.append((step.step_id, "exit"))
+            return f"OK {step.step_id}"
+
+        plan = self._two_step_parallel_plan()
+        steps_by_id = {s.step_id: s for s in plan.steps}
+        received: dict[str, ExecutionStep] = {}
+
+        def recording_executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            received[step.step_id] = step
+            return executor(step, ctx)
+
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+        result = runner.execute_all(recording_executor)
+
+        # Real overlap: both workers were resident simultaneously and the
+        # barrier actually released (serial dispatch breaks it instead).
+        assert peak == 2
+        assert [e for _, e in events] == ["enter", "enter", "exit", "exit"]
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+        assert result["final_status"] == "completed"
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert {by_id["step-1"]["output"], by_id["step-2"]["output"]} == {
+            "OK step-1",
+            "OK step-2",
+        }
+        # Thread identity: the executors ran on real worker threads, distinct
+        # from the caller's thread and from each other (they met at the
+        # barrier concurrently), and received the real plan step objects.
+        for thread in worker_threads.values():
+            assert thread is not main_thread
+        assert worker_threads["step-1"] is not worker_threads["step-2"]
+        assert received["step-1"] is steps_by_id["step-1"]
+        assert received["step-2"] is steps_by_id["step-2"]
+
+    def test_max_parallel_1_sync_executors_never_overlap(self):
+        """max_parallel=1: the semaphore serializes the batch — the two
+        workers run on worker threads but never overlap (active count peaks
+        at exactly 1; each step fully exits before the next enters). No
+        2-party barrier here: under max_parallel=1 it could never be
+        satisfied and would deadlock — the events/counter pair is the
+        deterministic no-overlap proof."""
+        main_thread = threading.current_thread()
+        lock = threading.Lock()
+        events: list[tuple[str, str]] = []
+        worker_threads: dict[str, threading.Thread] = {}
+        active = 0
+        peak = 0
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+                worker_threads[step.step_id] = threading.current_thread()
+                events.append((step.step_id, "enter"))
+            with lock:
+                active -= 1
+                events.append((step.step_id, "exit"))
+            return f"OK {step.step_id}"
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=1)
+        result = runner.execute_all(executor)
+
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+        # No overlap: properly nested enter/exit pairs, peak exactly 1.
+        assert peak == 1
+        assert [e for _, e in events] == ["enter", "exit", "enter", "exit"]
+        assert events[0][0] == events[1][0]
+        assert events[2][0] == events[3][0]
+        # Still real thread dispatch (worker threads, not inline on the caller).
+        for thread in worker_threads.values():
+            assert thread is not main_thread
+
+    def test_contextvars_propagate_into_worker_threads(self):
+        """D14: a ContextVar bound in the calling context is visible inside
+        the worker-thread executor (asyncio.to_thread copies the calling
+        context), and the reader is demonstrably a different thread."""
+        main_thread_ident = threading.get_ident()
+        lane = contextvars.ContextVar("b5_lane_token", default="unset")
+        token = lane.set("caller-context-value")
+        seen: dict[str, tuple[str | None, int]] = {}
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            seen[step.step_id] = (lane.get(), threading.get_ident())
+            return "OK"
+
+        try:
+            plan = self._two_step_parallel_plan()
+            runner = StepRunner(plan, track_state=False, max_parallel=2)
+            result = runner.execute_all(executor)
+        finally:
+            lane.reset(token)
+
+        assert result["completed"] == 2
+        for step_id in ("step-1", "step-2"):
+            value, ident = seen[step_id]
+            assert value == "caller-context-value"
+            assert ident != main_thread_ident
+
+    def test_coroutine_function_executor_is_awaited(self):
+        """B5 extension (approved plan scope): an async def executor in a
+        parallel batch is awaited — its body runs and its real return value is
+        stored. Previously the unawaited coroutine object was stored as a
+        '<coroutine object ...>' repr and the body never ran."""
+        body_runs: list[str] = []
+
+        async def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            body_runs.append(step.step_id)
+            return f"ASYNC OK {step.step_id}"
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+        result = runner.execute_all(executor)
+
+        assert sorted(body_runs) == ["step-1", "step-2"]
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+        assert result["final_status"] == "completed"
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert by_id["step-1"]["output"] == "ASYNC OK step-1"
+        assert by_id["step-2"]["output"] == "ASYNC OK step-2"
+        assert not any(
+            isinstance(r["output"], str) and r["output"].startswith("<coroutine")
+            for r in result["results"]
+        )
+
+    def test_async_executors_overlap_at_max_parallel_2(self):
+        """max_parallel=2 on the await branch: both async bodies are resident
+        simultaneously — each waits until the other has entered (asyncio
+        Event rendezvous; the wait_for timeout is a pure hang guard for a
+        broken implementation, not a wall-clock assertion)."""
+        import asyncio
+
+        entered = {"step-1": asyncio.Event(), "step-2": asyncio.Event()}
+        active = 0
+        peak = 0
+
+        async def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            entered[step.step_id].set()
+            other = entered["step-2" if step.step_id == "step-1" else "step-1"]
+            await asyncio.wait_for(other.wait(), timeout=5.0)
+            active -= 1
+            return f"OK {step.step_id}"
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+        result = runner.execute_all(executor)
+
+        assert peak == 2, "both async bodies must be resident concurrently"
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+
+    def test_async_executors_never_overlap_at_max_parallel_1(self):
+        """max_parallel=1 on the await branch: the semaphore serializes the
+        async bodies too. asyncio.sleep(0) below is a zero-time cooperative
+        yield (a scheduling mechanism, not a wall-clock wait): it gives a
+        wrongly-scheduled second body the chance to interleave, so proper
+        nesting plus peak==1 is a deterministic serialization proof."""
+        import asyncio
+
+        events: list[tuple[str, str]] = []
+        active = 0
+        peak = 0
+
+        async def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            events.append((step.step_id, "enter"))
+            await asyncio.sleep(0)  # zero-time cooperative yield
+            events.append((step.step_id, "exit"))
+            active -= 1
+            return f"OK {step.step_id}"
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=1)
+        result = runner.execute_all(executor)
+
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+        assert peak == 1
+        assert [e for _, e in events] == ["enter", "exit", "enter", "exit"]
+        assert events[0][0] == events[1][0]
+        assert events[2][0] == events[3][0]
+
+    def test_worker_thread_exception_surfaces_truthfully(self):
+        """An exception raised inside a worker thread is reported as a real
+        failure: the same exception object is delivered to on_step_error (with
+        the genuine ExecutionStep identity, on the runner's thread — callbacks
+        fire after the batch, not inside workers), output None, error text
+        preserved, outcome_status failed."""
+        main_thread = threading.current_thread()
+        boom = RuntimeError("worker-thread boom")
+        callback: dict[str, object] = {}
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            if step.step_id == "step-1":
+                raise boom
+            return "OK step-2"
+
+        def on_error(step: ExecutionStep, error: Exception) -> bool:
+            callback["step"] = step
+            callback["error"] = error
+            callback["thread"] = threading.current_thread()
+            return True
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+        result = runner.execute_all(executor, on_step_error=on_error)
+
+        assert result["completed"] == 1
+        assert result["failed"] == 1
+        assert result["blocked"] == 0
+        assert result["final_status"] == "partial"
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert by_id["step-1"]["output"] is None
+        assert by_id["step-1"]["error"] == "worker-thread boom"
+        assert by_id["step-1"]["outcome_status"] == "failed"
+        assert callback["error"] is boom
+        assert callback["step"] is plan.steps[0]
+        assert callback["thread"] is main_thread
+
+    def test_blocked_dict_sentinel_survives_thread_dispatch(self):
+        """B3 contract preserved through the new dispatch: the raw dict
+        sentinel {"status": "blocked"} returned by a sync executor in the
+        parallel batch keeps its shape on the entry (recoverable for the
+        default adapter's dict-only fallback path), counts in BOTH failed and
+        blocked (F1), keeps the F2 legacy entry status, and carries
+        outcome_status blocked."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        sentinel = {"status": "blocked", "reason": "need evidence"}
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> dict[str, str] | str:
+            if step.step_id == "step-1":
+                return sentinel
+            return "OK step-2"
+
+        plan = self._two_step_parallel_plan()
+        runner = StepRunner(plan, track_state=False, max_parallel=2)
+        result = runner.execute_all(executor)
+
+        assert result["completed"] == 1
+        assert result["failed"] == 1
+        assert result["blocked"] == 1
+        assert result["final_status"] == "partial"
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert by_id["step-1"]["output"] == sentinel
+        assert by_id["step-1"]["outcome_status"] == "blocked"
+        assert by_id["step-1"]["status"] == "failed"
+        adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
+        statuses = {r.step_id: r.status for r in adapted.results}
+        assert statuses["step-1"] is StepResultStatus.BLOCKED
+        assert statuses["step-2"] is StepResultStatus.SUCCESS
 
 
 class TestStatePersistence:
