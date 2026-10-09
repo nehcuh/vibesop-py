@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B8 diagnosis optimization**: Manual routing E2E observes the actual augmented-query cache lookup key and uses its single recorded row with production decay and effective routing threshold. Live API wiring and an explicitly controlled last-good harness are reported separately.
+
 - **B2 diagnosis optimization**: Candidate cache schema v5 fingerprints the loader markdown/YAML discovery set and current governance projection. Governance changes are visible on the next lookup; skill content retains its five-second refresh interval.
 
 - **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible.
@@ -30,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B8 diagnosis optimization**: Avoid false failures when distinct queries cache the same skill at different confidence. Keep missing live positive-cache prerequisites non-passing without mutating the cache; validate accept, reject, equality, negative-cache and no-entry contracts with real producer payloads.
 
 - **B2 diagnosis optimization**: Invalidate hot and persisted candidates on skill disable, scope, lifecycle, ownership and same-timestamp edits. Clear parsed/external metadata before rebuilding under a new fingerprint; reuse parsed configuration when bytes are unchanged.
 

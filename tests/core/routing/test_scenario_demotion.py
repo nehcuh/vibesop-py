@@ -9,15 +9,22 @@ SEMANTIC_INDEX early matches keep their short-circuit behavior.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import copy
+import importlib.util
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.models import LayerDetail, RoutingLayer, SkillRoute
 from vibesop.core.routing import UnifiedRouter
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from vibesop.core.routing.triage_cache import TriageCache
+from vibesop.core.routing.triage_service import LAST_GOOD_CONFIDENCE_DECAY
 
 _SCEN_LAYER = "vibesop.core.routing._layers.try_scenario_layer"
 _INDEX_LAYER = "vibesop.core.routing._layers.try_index_layer"
@@ -486,3 +493,334 @@ class TestSystemReminderFilter:
 
         decomposer.decompose.assert_not_called()
         assert result.primary is None
+
+
+class TestLastGoodDecayScenarioBranch:
+    """Real last-good decay against a configured 0.6 gate, then scenario fallback.
+
+    The triage match is produced by the production cache writer
+    (``SkillRoute.to_dict`` → ``TriageCache.store``) and a real LLM failure on
+    a stale entry. Scenario and index are stubbed only so the cascade reaches
+    the unchanged ``min_confidence`` comparison in unified.py. The decay
+    constant and RoutingConfig's default gate are not modified; 0.6 is set on
+    this router because that is the threshold the two sides are defined against.
+    """
+
+    QUERY = "提交代码"
+    GATE = 0.6
+
+    @staticmethod
+    def _skill_candidate(tmp_path: Path, skill_id: str, description: str) -> dict[str, str]:
+        """Real skill file. filter_routable drops candidates with no source_file."""
+        path = tmp_path / "skills" / skill_id.replace("/", "-") / "SKILL.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"---\nid: {skill_id}\n---\n{description}\n", encoding="utf-8")
+        return {
+            "id": skill_id,
+            "description": description,
+            "namespace": "builtin",
+            "source_file": str(path),
+        }
+
+    def _routable_candidates(self, tmp_path: Path) -> list[dict[str, str]]:
+        return [
+            self._skill_candidate(tmp_path, "builtin/commit", "Commit code"),
+            self._skill_candidate(tmp_path, "builtin/review", "Review code"),
+        ]
+
+    def _payload(self, tmp_path: Path, original_confidence: float) -> dict[str, Any]:
+        config = RoutingConfig(enable_ai_triage=True, min_confidence=self.GATE)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+        assert router._config.min_confidence == self.GATE
+        assert RoutingConfig().min_confidence == 0.3
+        llm = MagicMock()
+        llm.configured.return_value = True
+        llm.call.side_effect = RuntimeError("LLM down")
+        router._llm = llm
+
+        base = self._routable_candidates(tmp_path)
+        stored = SkillRoute(
+            skill_id="builtin/review",
+            confidence=original_confidence,
+            layer=RoutingLayer.AI_TRIAGE,
+            source="builtin",
+            description="Review code",
+        ).to_dict()
+        cache = router._triage_service._triage_cache
+        assert cache is not None
+        cache.store(self.QUERY, base, stored)
+        # A different installed set makes the cache row stale. The stored
+        # skill stays present, which is what last-good re-validates.
+        extra = self._skill_candidate(tmp_path, "builtin/extra", "extra")
+        routed = [*base, extra]
+
+        with (
+            patch(_SCEN_LAYER, return_value=_scenario_hit()),
+            patch(_INDEX_LAYER, return_value=(None, _detail(RoutingLayer.SEMANTIC_INDEX, False))),
+        ):
+            result = router._single_skill_route(self.QUERY, candidates=routed)
+
+        payload = result.to_dict()
+        assert "primary" in payload
+        assert "layer_details" in payload
+        primary = payload["primary"]
+        assert primary is not None
+        # The producer decay is visible on the triage detail even when the
+        # gate later drops the match. The rounded percent in the reason is
+        # not the contract; the route metadata / scenario flag is.
+        triage = next(
+            detail
+            for detail in payload["layer_details"]
+            if detail["layer"] == RoutingLayer.AI_TRIAGE.value
+        )
+        assert triage["matched"] is True
+        assert "builtin/review" in triage["reason"]
+        decayed = original_confidence * LAST_GOOD_CONFIDENCE_DECAY
+        if decayed >= self.GATE:
+            assert primary["metadata"].get("last_good_original_confidence") == pytest.approx(
+                original_confidence
+            )
+            assert primary["confidence"] >= self.GATE
+        else:
+            assert primary["metadata"].get("last_good") is not True
+        return payload
+
+    def test_decayed_0_63_accepted_without_scenario_fallback(self, tmp_path: Path) -> None:
+        """0.9 * 0.7 = 0.63 >= 0.6 keeps the last-good route."""
+        payload = self._payload(tmp_path, 0.9)
+        primary = payload["primary"]
+        meta = primary["metadata"]
+        assert primary["skill_id"] == "builtin/review"
+        assert primary["layer"] == RoutingLayer.AI_TRIAGE.value
+        assert meta.get("last_good") is True
+        assert meta.get("last_good_original_confidence") == pytest.approx(0.9)
+        assert "scenario_fallback" not in meta
+        assert meta.get("scenario_fallback") is not True
+
+    def test_decayed_0_56_rejected_with_scenario_fallback(self, tmp_path: Path) -> None:
+        """0.8 * 0.7 = 0.56 < 0.6 drops last-good and flags the scenario fallback."""
+        payload = self._payload(tmp_path, 0.8)
+        primary = payload["primary"]
+        meta = primary["metadata"]
+        assert primary["skill_id"] == "builtin/commit"
+        assert primary["layer"] == RoutingLayer.SCENARIO.value
+        assert meta.get("scenario_fallback") is True
+        assert meta.get("last_good") is not True
+        assert "last_good_original_confidence" not in meta
+
+
+def _e2e_module() -> Any:
+    """Load the live script. The oracle under test is not a production import."""
+    path = Path(__file__).resolve().parents[3] / "scripts" / "e2e_llm_routing.py"
+    spec = importlib.util.spec_from_file_location("e2e_llm_routing_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_CONTROLLED_CASES = (
+    "accept",
+    "reject",
+    "equality",
+    "negative",
+    "no-entry",
+    "same-skill-two-query",
+    "context-key",
+)
+
+
+class TestCapturedKeyLastGoodOracle:
+    """Script oracle: one captured lookup key, never a skill/reason cache scan."""
+
+    def test_live_precondition_missing_is_not_a_pass(self) -> None:
+        mod = _e2e_module()
+        missing = (
+            None,
+            {"skill_id": None, "confidence": 0.0},
+            {"skill_id": "builtin/review"},
+            {"skill_id": "builtin/review", "confidence": True},
+            {"skill_id": "builtin/review", "confidence": "0.9"},
+            {"skill_id": "", "confidence": 0.9},
+        )
+        for row in missing:
+            assert mod.live_t4_precondition(row) == "PRECONDITION_MISSING"
+        assert mod.live_t4_precondition({"skill_id": "builtin/review", "confidence": 0.9}) == (
+            "POSITIVE"
+        )
+        assert "PASS" not in {
+            mod.live_t4_precondition(row) for row in (*missing, {"skill_id": "x", "confidence": 1})
+        }
+
+    def test_row_lookup_uses_captured_key_only(self) -> None:
+        mod = _e2e_module()
+        cache = {
+            "key-actual": {"skill_id": "builtin/review", "confidence": 0.8},
+            "key-other": {"skill_id": "builtin/review", "confidence": 0.9},
+        }
+        row = mod.row_for_captured_key(cache, "key-actual")
+        assert row["confidence"] == pytest.approx(0.8)
+        assert mod.row_for_captured_key(cache, "missing") is None
+        assert mod.row_for_captured_key(cache, None) is None
+        assert not hasattr(mod, "_recorded_last_good_original")
+
+    def test_observer_delegates_to_real_lookup(self, tmp_path: Path) -> None:
+        mod = _e2e_module()
+        cache = TriageCache(tmp_path)
+        query = "提交代码"
+        candidates = [{"id": "builtin/review", "description": "Review code"}]
+        stored = SkillRoute(
+            skill_id="builtin/review",
+            confidence=0.9,
+            layer=RoutingLayer.AI_TRIAGE,
+            source="builtin",
+            description="Review code",
+        ).to_dict()
+        cache.store(query, candidates, stored)
+        observed = mod.install_lookup_observer(cache)
+        fresh, stale = cache.lookup(query, candidates, 72)
+        assert observed["reached"] is True
+        assert observed["query"] == query
+        assert observed["key"] == TriageCache.key_for(query)
+        assert fresh is not None and stale is None
+        assert fresh["confidence"] == pytest.approx(0.9)
+        assert fresh["skill_id"] == "builtin/review"
+
+    def test_same_skill_two_queries_oracle_returns_that_rows_original(self, tmp_path: Path) -> None:
+        """Same skill at .8 and .9 must not make the .8 query's oracle return None."""
+        outcome = _e2e_module().controlled_same_skill_two_query(tmp_path)
+        assert outcome["marker"] == "controlled"
+        assert outcome["confidence_source"] == "controlled_fixture"
+        assert outcome["located_by"] == "captured_key"
+        assert outcome["ok"] is True
+        assert outcome["original"] == pytest.approx(0.8)
+        assert outcome["other_original"] == pytest.approx(0.9)
+        assert outcome["decayed"] == pytest.approx(outcome["original"] * LAST_GOOD_CONFIDENCE_DECAY)
+        assert outcome["decayed"] < outcome["min_confidence"]
+        assert outcome["min_confidence"] == pytest.approx(outcome["router_min_confidence"])
+        assert outcome["scenario_fallback"] is True
+        assert outcome["last_good"] is not True
+        assert outcome["stored_candidates_hash"] != "deadbeefdeadbeef"
+
+    def test_context_lookup_key_differs_from_raw_and_result_query(self, tmp_path: Path) -> None:
+        """Augmented cache query, raw prompt, and RoutingResult.query are three strings."""
+        outcome = _e2e_module().controlled_context_key(tmp_path)
+        assert outcome["marker"] == "controlled"
+        assert outcome["confidence_source"] == "controlled_fixture"
+        assert outcome["located_by"] == "captured_key"
+        assert outcome["ok"] is True
+        assert outcome["captured_query"] != outcome["raw_query"]
+        assert outcome["captured_query"] != outcome["result_query"]
+        assert outcome["raw_query"] != outcome["result_query"]
+        assert outcome["captured_key"] == TriageCache.key_for(outcome["captured_query"])
+        assert outcome["captured_key"] != TriageCache.key_for(outcome["raw_query"])
+        assert outcome["captured_key"] != TriageCache.key_for(outcome["result_query"])
+        assert outcome["raw_key_in_cache"] is True
+        assert outcome["result_query_key_in_cache"] is False
+        assert outcome["original"] == pytest.approx(0.9)
+        assert outcome["decoy_original"] == pytest.approx(0.8)
+        assert outcome["row_key"] == outcome["captured_key"]
+
+    def test_default_live_path_still_requires_api_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        script = Path(__file__).resolve().parents[3] / "scripts" / "e2e_llm_routing.py"
+        proc = subprocess.run(
+            [sys.executable, str(script), "--project-root", str(tmp_path)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            timeout=60,
+            check=False,
+        )
+        assert proc.returncode == 2
+        assert "DEEPSEEK_API_KEY" in proc.stdout
+
+    def test_controlled_cli_is_independent_of_live_and_api_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        script = Path(__file__).resolve().parents[3] / "scripts" / "e2e_llm_routing.py"
+        repo_cache = Path(__file__).resolve().parents[3] / ".vibe" / "triage_cache.json"
+        before = repo_cache.read_bytes() if repo_cache.exists() else None
+        proc = subprocess.run(
+            [sys.executable, str(script), "--controlled-lastgood"],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            timeout=180,
+            check=False,
+        )
+        after = repo_cache.read_bytes() if repo_cache.exists() else None
+        assert before == after
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        for case in _CONTROLLED_CASES:
+            assert f"controlled {case} " in proc.stdout
+        assert "CONTROLLED SUMMARY: 7/7 passed marker=controlled" in proc.stdout
+        assert "LIVE SUMMARY:" in proc.stdout
+        assert "PRECONDITION_MISSING" not in proc.stdout
+        assert "live_llm" not in proc.stdout
+        assert "controlled_fixture" in proc.stdout
+        assert "marker=controlled" in proc.stdout
+
+    def test_accept_oracle_rejects_mutated_primary_confidence_and_skill(
+        self, tmp_path: Path
+    ) -> None:
+        """Real to_dict copies: .63/.6 → .01, missing, bool, nonfinite, or wrong skill fail."""
+        mod = _e2e_module()
+        outcomes = {item["case"]: item for item in mod._controlled_outcomes(tmp_path)}
+        for name in ("accept", "equality", "context-key"):
+            outcome = outcomes[name]
+            route = outcome["route"]
+            row = outcome["row"]
+            gate = outcome["min_confidence"]
+            assert outcome["ok"] is True
+            assert mod._decay_matches_row(route, row, gate)[0] is True
+            assert route["primary"]["skill_id"] == row["skill_id"]
+            assert route["primary"]["confidence"] == pytest.approx(outcome["decayed"])
+            assert route["primary"]["confidence"] != pytest.approx(0.01)
+            replacements: tuple[object, ...] = (
+                0.01,
+                True,
+                float("nan"),
+                float("inf"),
+                float("-inf"),
+            )
+            for value in replacements:
+                damaged = copy.deepcopy(route)
+                damaged["primary"]["confidence"] = value
+                assert mod._decay_matches_row(damaged, row, gate)[0] is False
+            missing = copy.deepcopy(route)
+            del missing["primary"]["confidence"]
+            assert mod._decay_matches_row(missing, row, gate)[0] is False
+            wrong_skill = copy.deepcopy(route)
+            wrong_skill["primary"]["skill_id"] = "builtin/not-the-captured-row"
+            assert wrong_skill["primary"]["skill_id"] != row["skill_id"]
+            assert mod._decay_matches_row(wrong_skill, row, gate)[0] is False
+
+    def test_reject_oracle_does_not_require_scenario_primary_confidence(
+        self, tmp_path: Path
+    ) -> None:
+        """Scenario fallback confidence stays 0.9; it is not the decayed last-good number."""
+        mod = _e2e_module()
+        query = "提交代码"
+        outcome = mod._controlled_case(
+            tmp_path,
+            "reject",
+            query=query,
+            stores=[(query, 0.8)],
+        )
+        route = outcome["route"]
+        row = outcome["row"]
+        assert outcome["ok"] is True
+        assert route["primary"]["layer"] == RoutingLayer.SCENARIO.value
+        assert route["primary"]["skill_id"] != row["skill_id"]
+        assert route["primary"]["confidence"] == pytest.approx(0.9)
+        assert outcome["decayed"] == pytest.approx(0.8 * LAST_GOOD_CONFIDENCE_DECAY)
+        assert route["primary"]["confidence"] != pytest.approx(outcome["decayed"])
+        damaged = copy.deepcopy(route)
+        damaged["primary"]["confidence"] = 0.01
+        assert mod._decay_matches_row(damaged, row, outcome["min_confidence"])[0] is True
