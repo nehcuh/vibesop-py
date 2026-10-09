@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CI1 diagnosis optimization**: Suppress Bandit B108 on the sandbox build `--tmpfs` argument with a targeted inline `# nosec`. The `/tmp` prefix there is the container-internal mount point of a fresh tmpfs in a `--rm` read-only container, and the only host path in the Docker argv remains the isolated `mkdtemp` copy mounted at `/work`; the argv itself is unchanged and the host temp directory is never referenced.
+
 - **B5 diagnosis optimization**: Dispatch synchronous executors in parallel StepRunner batches through asyncio.to_thread, preserving semaphore limits, contextvars, and B3 outcomes.
 
 - **B6 diagnosis optimization**: Preserve concurrent feedback instead of overwriting newer disk state; reset confidence and outcome evidence on action changes, discard stale feedback for replaced actions, and prevent clear/prune resurrection.
