@@ -128,7 +128,10 @@ class CursorAdapter(FileBasedAdapter):
             "default_provider": provider,
             "providers": {
                 "anthropic": {
-                    "api_key": os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_API_KEY"),
+                    # Env var NAME only, never the value — ambient API keys
+                    # must not be copied into generated config files (D03;
+                    # parent FileBasedAdapter api_key_env convention).
+                    "api_key_env": "ANTHROPIC_API_KEY",
                     "base_url": os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
                     "models": {
                         "default": "claude-sonnet-4-20250514",
@@ -140,7 +143,7 @@ class CursorAdapter(FileBasedAdapter):
                     "enabled": bool(os.getenv("ANTHROPIC_API_KEY")),
                 },
                 "openai": {
-                    "api_key": os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY"),
+                    "api_key_env": "OPENAI_API_KEY",
                     "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
                     "models": {
                         "default": "gpt-4o",
@@ -164,6 +167,10 @@ class CursorAdapter(FileBasedAdapter):
                 "max_tokens": 4096,
             },
         }
+        if self._detect_api_key():
+            config["api_key_env"] = (
+                "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+            )
         return json.dumps(config, indent=2)
 
     def _generate_env_script(self) -> str:

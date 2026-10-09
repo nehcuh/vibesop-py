@@ -315,10 +315,15 @@ class FileBasedAdapter(PlatformAdapter):
         if not result.success:
             return result
 
-        skills_dir = output_dir / "skills"
+        skills_root = output_dir / "skills"
+        # Ancestor safety BEFORE any mkdir: a symlinked skills root must not
+        # let mkdir create directories inside a central install even when the
+        # later write_file_atomic(base_dir=output_dir) would refuse (R1/B1).
+        self._assert_safe_render_path(skills_root, output_dir)
         for skill in manifest.skills:
             dir_name = skill.id.replace("/", "-")
-            skill_dir = skills_dir / dir_name
+            skill_dir = skills_root / dir_name
+            self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
             skill_dir.mkdir(parents=True, exist_ok=True)
             self._render_skill_content(
                 skill,
@@ -326,6 +331,7 @@ class FileBasedAdapter(PlatformAdapter):
                 result,
                 dir_name=dir_name,
                 manifest=manifest,
+                base_dir=output_dir,
             )
 
         self.clean_orphan_skills(manifest, output_dir)

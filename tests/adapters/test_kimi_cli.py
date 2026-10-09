@@ -544,3 +544,130 @@ class TestKimiToolSeqHook:
         assert "PostToolUse" not in config_toml
         # route hook is unaffected
         assert (output_dir / "hooks" / "vibesop-route.sh").exists()
+
+
+class TestKimiSkillRenderBoundary:
+    """B1 corrective (R1/R2): real public render_config counterexamples for
+    the ancestor-symlink boundary and the legal per-skill link contract.
+    """
+
+    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
+    PROJECT_BODY = "# Demo\n\nPROJECT_ONLY_BODY\n"
+
+    @staticmethod
+    def _manifest(skill_id: str = "demo") -> Manifest:
+        return Manifest(
+            metadata=ManifestMetadata(platform="kimi-cli"),
+            skills=[
+                SkillSpec(
+                    id=skill_id,
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                )
+            ],
+        )
+
+    def test_ancestor_symlink_refused_before_mkdir(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        """skills/ root replaced by a link into central: fail safe before any
+        mkdir — no central dir/content/marker may appear."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        project_root = tmp_path / "proj"
+        skill_src = project_root / "skills" / "demo"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
+
+        central = tmp_path / "central"
+        central.mkdir()
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
+        (output_dir / "skills").symlink_to(central, target_is_directory=True)
+
+        adapter = KimiCliAdapter(project_root=project_root)
+        result = adapter.render_config(self._manifest(), output_dir)
+
+        assert not result.success
+        assert any("symlink" in e.lower() or "traversal" in e.lower() for e in result.errors), (
+            f"expected a symlink/traversal refusal, got: {result.errors}"
+        )
+        assert not (central / "demo").exists(), (
+            "render must validate the skills root BEFORE mkdir — no central dir may appear"
+        )
+        assert not (central / ".vibe-manifest.json").exists()
+
+    def test_existing_central_content_untouched(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        project_root = tmp_path / "proj"
+        skill_src = project_root / "skills" / "demo"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
+
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
+
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
+        (output_dir / "skills").symlink_to(central_demo.parent, target_is_directory=True)
+
+        adapter = KimiCliAdapter(project_root=project_root)
+        result = adapter.render_config(self._manifest(), output_dir)
+
+        assert not result.success
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()
+
+    def test_per_skill_link_kept_and_central_untouched(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        """Legal contract: per-skill platform link + real content survives."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        project_root = tmp_path / "proj"
+        skill_src = project_root / "skills" / "demo"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
+
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
+
+        output_dir = tmp_path / "out"
+        skill_dir = output_dir / "skills" / "demo"
+        skill_dir.parent.mkdir(parents=True)
+        skill_dir.symlink_to(central_demo, target_is_directory=True)
+
+        adapter = KimiCliAdapter(project_root=project_root)
+        result = adapter.render_config(self._manifest(), output_dir)
+
+        assert result.success, f"render failed: {result.errors}"
+        assert skill_dir.is_symlink()
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()
+
+        result2 = adapter.render_config(self._manifest(), output_dir)
+        assert result2.success, f"second render failed: {result2.errors}"
+        assert skill_dir.is_symlink()
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+
+    def test_legal_missing_source_fallback_renders(self, tmp_path: Path) -> None:
+        """Declared-but-unavailable skill still renders the generated doc."""
+        adapter = KimiCliAdapter(project_root=tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = adapter.render_config(
+            self._manifest(skill_id="b1-unique-missing-source-20261009"), output_dir
+        )
+
+        assert result.success, f"fallback render failed: {result.errors}"
+        rendered = output_dir / "skills" / "b1-unique-missing-source-20261009" / "SKILL.md"
+        assert rendered.exists()

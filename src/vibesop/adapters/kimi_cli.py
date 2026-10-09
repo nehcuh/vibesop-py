@@ -516,11 +516,15 @@ class KimiCliAdapter(FileBasedAdapter):
             return result
 
         try:
-            # Render skill definitions
+            # Render skill definitions — validate the skills root and every
+            # skill target against the trusted output root BEFORE any mkdir,
+            # then thread the root through to the write boundary (R1/R2/B1).
             skills_dir = output_dir / "skills"
+            self._assert_safe_render_path(skills_dir, output_dir)
             for skill in manifest.skills:
                 dir_name = skill.id.replace("/", "-")
                 skill_dir = skills_dir / dir_name
+                self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_skill_content(
                     skill,
@@ -528,6 +532,7 @@ class KimiCliAdapter(FileBasedAdapter):
                     result,
                     dir_name=dir_name,
                     manifest=manifest,
+                    base_dir=output_dir,
                 )
 
             # AGENTS.md context file

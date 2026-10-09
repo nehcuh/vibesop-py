@@ -15,10 +15,11 @@ from vibesop.adapters.claude_code import (
     _rewrite_legacy_hook_entry,
     bash_hook_command,
 )
-from vibesop.adapters.models import Manifest
+from vibesop.adapters.models import Manifest, ManifestMetadata
 from vibesop.builder import QuickBuilder
 from vibesop.hooks import HookInstaller
 from vibesop.hooks.points import HOOK_DEFINITIONS
+from vibesop.spec import SkillSpec
 from vibesop.utils.hook_commands import (
     VIBESOP_HOOK_SCRIPT_BASENAMES,
     command_basenames,
@@ -1031,3 +1032,183 @@ class TestGeneratorAllowlistCanary:
                 assert not ts_file.read_text(encoding="utf-8").startswith("#!"), (
                     f"{platform}: {ts_file.name} holds a bash script"
                 )
+
+
+class TestSkillContentSymlinkEscape:
+    """D02 counterexample (B1): the content-hit branch of _render_skill_content
+    must not rewrite a central pack install through a pre-existing platform
+    skill symlink (nor drop an ownership marker into the central install).
+    """
+
+    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
+
+    @staticmethod
+    def _seed(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+        """Project with real skill content + platform output whose skills/demo
+        already symlinks to a central install. Returns (project_root,
+        output_dir, skill_dir, central_dir)."""
+        project_root = tmp_path / "proj"
+        project_skill = project_root / "skills" / "demo"
+        project_skill.mkdir(parents=True)
+        (project_skill / "SKILL.md").write_text(
+            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
+        )
+
+        central_dir = tmp_path / "central" / "demo"
+        central_dir.mkdir(parents=True)
+        (central_dir / "SKILL.md").write_text(
+            TestSkillContentSymlinkEscape.CENTRAL_CONTENT, encoding="utf-8"
+        )
+
+        output_dir = tmp_path / "output"
+        skill_dir = output_dir / "skills" / "demo"
+        skill_dir.parent.mkdir(parents=True)
+        skill_dir.symlink_to(central_dir, target_is_directory=True)
+        return project_root, output_dir, skill_dir, central_dir
+
+    def test_render_does_not_overwrite_central_install(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        project_root, output_dir, skill_dir, central_dir = self._seed(tmp_path)
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="claude-code"),
+            skills=[
+                SkillSpec(
+                    id="demo",
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                )
+            ],
+        )
+
+        result = adapter.render_config(manifest, output_dir)
+
+        assert result.success, f"render failed: {result.errors}"
+        assert (central_dir / "SKILL.md").read_text(encoding="utf-8") == (self.CENTRAL_CONTENT), (
+            "render must not rewrite the central install through the skill symlink"
+        )
+        assert not (central_dir / ".vibe-manifest.json").exists(), (
+            "ownership marker must not penetrate into the central install"
+        )
+
+        # Second render is idempotent: same symlink, central install untouched.
+        result2 = adapter.render_config(manifest, output_dir)
+
+        assert result2.success, f"second render failed: {result2.errors}"
+        assert skill_dir.is_symlink()
+        assert skill_dir.resolve() == central_dir.resolve()
+        assert (central_dir / "SKILL.md").read_text(encoding="utf-8") == (self.CENTRAL_CONTENT)
+        assert not (central_dir / ".vibe-manifest.json").exists()
+
+
+class TestSkillContentAncestorSymlinkEscape:
+    """R1 counterexample (B1 Codex review): when the platform skills ROOT
+    itself is a symlink into a central install (``skills/ -> central``) and
+    the skill dir below it is a real directory, the render must refuse to
+    write through the ancestor link — the central SKILL.md and any
+    ownership marker must stay untouched. Only the caller-declared output
+    root (threaded as ``base_dir``) can tell this link apart from a macOS
+    ``/var`` system alias.
+    """
+
+    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
+
+    def test_render_refuses_symlinked_skills_root(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        project_root = tmp_path / "proj"
+        project_skill = project_root / "skills" / "demo"
+        project_skill.mkdir(parents=True)
+        (project_skill / "SKILL.md").write_text(
+            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
+        )
+
+        central_dir = tmp_path / "central"
+        demo_dir = central_dir / "demo"
+        demo_dir.mkdir(parents=True)
+        (demo_dir / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
+
+        output_dir = project_root / ".claude"
+        output_dir.mkdir(parents=True)
+        (output_dir / "skills").symlink_to(central_dir, target_is_directory=True)
+
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="claude-code"),
+            skills=[
+                SkillSpec(
+                    id="demo",
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                )
+            ],
+        )
+
+        with pytest.raises(SecurityError):
+            adapter.render_config(manifest, output_dir)
+
+        assert (demo_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT, (
+            "render must not write into the central install through a symlinked skills root"
+        )
+        assert not (demo_dir / ".vibe-manifest.json").exists(), (
+            "ownership marker must not penetrate into the central install"
+        )
+
+
+class TestSkillRenderRefusesBeforeMkdir:
+    """R1 (B1 Codex second review): the refusal for a symlinked skills root
+    must happen BEFORE any mkdir — when central/demo does not exist yet, a
+    refused render must not create it (previous rounds created it via
+    ``mkdir(parents=True)`` before the write boundary fired).
+    """
+
+    def test_refused_render_creates_nothing_in_central(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        project_root = tmp_path / "proj"
+        project_skill = project_root / "skills" / "demo"
+        project_skill.mkdir(parents=True)
+        (project_skill / "SKILL.md").write_text(
+            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
+        )
+
+        central = tmp_path / "central"
+        central.mkdir()  # exists, but central/demo must NOT be created
+        output_dir = project_root / ".claude"
+        output_dir.mkdir(parents=True)
+        (output_dir / "skills").symlink_to(central, target_is_directory=True)
+
+        adapter = ClaudeCodeAdapter(project_root=project_root)
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="claude-code"),
+            skills=[
+                SkillSpec(
+                    id="demo",
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                )
+            ],
+        )
+
+        with pytest.raises(SecurityError):
+            adapter.render_config(manifest, output_dir)
+
+        assert not (central / "demo").exists(), (
+            "validation must run before mkdir — refused render created central/demo"
+        )
+        assert not (central / ".vibe-manifest.json").exists()
