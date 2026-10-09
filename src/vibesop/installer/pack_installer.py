@@ -958,7 +958,11 @@ def _container_build_command(isolated: Path, script_name: str) -> list[str]:
         "--security-opt",
         "no-new-privileges",
         "--tmpfs",
-        "/tmp:rw,nosuid,nodev,size=64m",
+        # "/tmp" is the mount point of a container-internal tmpfs (fresh,
+        # RAM-backed, discarded with --rm) inside a --read-only sandbox, not
+        # a host temp directory; the only host path in this argv is the
+        # isolated mkdtemp copy mounted at /work below.
+        "/tmp:rw,nosuid,nodev,size=64m",  # nosec B108
     ]
     getuid = getattr(os, "getuid", None)
     getgid = getattr(os, "getgid", None)
