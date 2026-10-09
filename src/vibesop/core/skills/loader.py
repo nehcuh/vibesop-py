@@ -46,6 +46,69 @@ NON_SKILL_YAML_PARENT_DIRS = frozenset(
 _SKILL_YAML_FILENAMES = frozenset({"skill.yaml", "skill.yml"})
 
 
+def is_non_skill_yaml_path(file_path: Path) -> bool:
+    """Return True if this YAML file cannot be a skill definition.
+
+    Shared with the candidate fingerprint so ``auto-config.yaml`` /
+    ``registry.yaml`` and nested pack junk are excluded from the skill-YAML
+    hash in the same way ``_load_yaml_skill`` skips them.
+    """
+    if file_path.name in NON_SKILL_YAML_FILENAMES:
+        return True
+    if file_path.name.lower() in _SKILL_YAML_FILENAMES:
+        return False
+    return any(part.lower() in NON_SKILL_YAML_PARENT_DIRS for part in file_path.parent.parts)
+
+
+def discovery_input_files(search_paths: Sequence[str | Path]) -> list[Path]:
+    """Markdown and skill-YAML files ``discover_all`` would consider.
+
+    Matches the loader globs (``*.md``, ``*.yaml``/``*.yml`` minus non-skill
+    YAML), not the post-parse skill map. Frontmatter-less markdown is still
+    an input because a later edit can add one. Shared with the candidate
+    fingerprint so those two views cannot drift.
+    """
+    found: list[Path] = []
+    seen: set[str] = set()
+    for search_path in search_paths:
+        root = Path(search_path)
+        try:
+            exists = root.exists()
+        except OSError:
+            continue
+        if not exists:
+            continue
+        try:
+            md_files = root.rglob("*.md")
+        except OSError:
+            md_files = []
+        for md_file in md_files:
+            _append_discovery_file(found, seen, md_file)
+        for pattern in ("*.yaml", "*.yml"):
+            try:
+                yaml_files = root.rglob(pattern)
+            except OSError:
+                continue
+            for yaml_file in yaml_files:
+                if is_non_skill_yaml_path(yaml_file):
+                    continue
+                _append_discovery_file(found, seen, yaml_file)
+    return sorted(found, key=str)
+
+
+def _append_discovery_file(found: list[Path], seen: set[str], path: Path) -> None:
+    try:
+        if not path.is_file():
+            return
+        key = str(path.resolve()) if path.exists() else str(path)
+    except OSError:
+        key = str(path)
+    if key in seen:
+        return
+    seen.add(key)
+    found.append(path)
+
+
 @dataclass
 class LoadedSkill:
     """A skill definition loaded from a file."""
@@ -134,6 +197,14 @@ class SkillLoader:
     @property
     def project_hash(self) -> str:
         return self._project_hash
+
+    def discovery_search_paths(self) -> list[Path]:
+        """Search roots ``discover_all`` walks, including default extra roots."""
+        return list(self._search_paths)
+
+    def discovery_skill_files(self) -> list[Path]:
+        """Files ``discover_all`` would consider under the live search roots."""
+        return discovery_input_files(self._search_paths)
 
     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
         """Discover all available skills."""
@@ -372,11 +443,7 @@ class SkillLoader:
 
     def _is_non_skill_yaml_path(self, file_path: Path) -> bool:
         """Return True if this YAML file cannot be a skill definition."""
-        if file_path.name in NON_SKILL_YAML_FILENAMES:
-            return True
-        if file_path.name.lower() in _SKILL_YAML_FILENAMES:
-            return False
-        return any(part.lower() in NON_SKILL_YAML_PARENT_DIRS for part in file_path.parent.parts)
+        return is_non_skill_yaml_path(file_path)
 
     def _load_yaml_skill(self, file_path: Path) -> None:
         """Load a skill from a YAML file."""
@@ -488,4 +555,22 @@ class SkillLoader:
         }
 
     def clear_cache(self) -> None:
+        """Drop this loader's skill map. Does not touch the external-pack cache."""
         self._skill_cache = {}
+
+    def invalidate_discovery_cache(self) -> None:
+        """Forget discovered skills so the next ``discover_all`` re-reads disk.
+
+        Clears this loader's skill map and the external-pack cache.
+        ``clear_cache`` stays a skill-map-only reset so existing callers keep
+        their contract. ``discover_all(force_reload=True)`` is unchanged: it
+        still rebuilds the skill map but does not, by itself, drop a warm
+        external-pack cache. Candidate reload calls this method first.
+        """
+        self.clear_cache()
+        external = self._external_loader
+        if external is None:
+            return
+        clear = getattr(external, "clear_cache", None)
+        if callable(clear):
+            clear()

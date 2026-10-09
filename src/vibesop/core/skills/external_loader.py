@@ -121,6 +121,10 @@ class ExternalSkillLoader:
             pass
         return self._auditor
 
+    def clear_cache(self) -> None:
+        """Drop cached external metadata so the next discovery re-reads SKILL.md."""
+        self._cache = {}
+
     def discover_all(self, force_reload: bool = False) -> dict[str, ExternalSkillMetadata]:
         if self._cache and not force_reload:
             return self._cache

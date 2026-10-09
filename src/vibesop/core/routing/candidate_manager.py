@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,10 +20,85 @@ from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
 logger = logging.getLogger(__name__)
 
-#: Bump when the candidates cache entry format changes; mismatched caches are
-#: discarded instead of misread (old files simply miss the key → treated as
-#: foreign-format and rebuilt).
-_CANDIDATES_CACHE_SCHEMA_VERSION = 3
+#: Bump when the cache entry format or the invalidation fingerprint changes.
+#: Mismatched caches are discarded instead of misread (old files simply miss
+#: the key or carry a previous version → treated as foreign and rebuilt).
+#: v5 hashes the loader discovery inputs (``*.md`` + skill YAML, including
+#: default extra roots), registry.yaml, and the auto-config
+#: enabled/scope/lifecycle/project_hash projection. v4 hashed SKILL.md only
+#: and omitted owner hash, so an ordinary markdown skill or a public
+#: project_hash update could be served again under a stale fingerprint.
+_CANDIDATES_CACHE_SCHEMA_VERSION = 5
+
+# Semantic-index caches live on the router (``_layers.try_index_layer``),
+# which CandidateManager does not hold. A project-keyed epoch lets reload
+# invalidate those caches without a back-reference into UnifiedRouter.
+_index_cache_epochs: dict[str, int] = {}
+_index_epoch_lock = threading.Lock()
+
+
+def _index_epoch_key(project_root: object) -> str:
+    """Stable key for ``index_cache_epoch`` (resolved path when we have one)."""
+    if isinstance(project_root, Path):
+        try:
+            return str(project_root.resolve())
+        except OSError:
+            return str(project_root)
+    return str(project_root)
+
+
+def index_cache_epoch(project_root: object) -> int:
+    """Current semantic-index cache epoch for ``project_root``.
+
+    ``try_index_layer`` must treat a stored epoch other than this value as a
+    miss. The epoch starts at 0 and increases on candidate reload.
+    """
+    key = _index_epoch_key(project_root)
+    with _index_epoch_lock:
+        return _index_cache_epochs.get(key, 0)
+
+
+def _bump_index_cache_epoch(project_root: object) -> None:
+    key = _index_epoch_key(project_root)
+    with _index_epoch_lock:
+        _index_cache_epochs[key] = _index_cache_epochs.get(key, 0) + 1
+
+
+def _dedup_paths(paths: list[Path]) -> list[Path]:
+    """Drop duplicate paths, preferring resolved identity when the file exists."""
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in paths:
+        try:
+            key = str(path.resolve()) if path.exists() else str(path)
+        except OSError:
+            key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def _hash_labeled(hasher: Any, label: str, path: Path, payload: bytes) -> None:
+    """Mix a labeled path and payload into ``hasher`` without boundary collisions."""
+    raw_path = str(path).encode()
+    hasher.update(label.encode())
+    hasher.update(b"\0")
+    hasher.update(len(raw_path).to_bytes(4, "big"))
+    hasher.update(raw_path)
+    hasher.update(len(payload).to_bytes(8, "big"))
+    hasher.update(payload)
+
+
+def _read_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError:
+        try:
+            return f"unreadable:{path.stat().st_mtime_ns}".encode()
+        except OSError:
+            return b"unreadable"
 
 
 def with_source_file(metadata: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
@@ -65,50 +141,171 @@ class CandidateManager:
         self._usage_flush_count: int = 0
         self._USAGE_FLUSH_INTERVAL: int = 10
         self._path_mtimes: dict[str, float] = {}
+        self._content_fingerprint: str | None = None
+        self._governance_token_cached: str | None = None
         self._disk_cache_bypassed: bool = False
+        self._clock = time.monotonic
 
     @property
     def _disk_cache_path(self) -> Path:
         return self.project_root / ".vibe" / "cache" / "candidates_v2.json"
 
     def _compute_paths_hash(self, search_paths: list[Path]) -> str:
-        """Hash all SKILL.md paths and their mtimes for cache invalidation."""
-        h = hashlib.sha256()
-        for sp in sorted(search_paths):
-            if not sp.exists():
+        """Fingerprint every input that can change the candidate pool.
+
+        Loader discovery inputs contribute content bytes, not only mtime, so a
+        same-timestamp edit cannot keep a stale disk entry. ``auto-config.yaml``
+        contributes the enabled/scope/lifecycle/project_hash projection (usage
+        stats must not thrash the pool). ``registry.yaml`` contributes its
+        full bytes.
+        """
+        from vibesop.core.skills.loader import discovery_input_files
+
+        hasher = hashlib.sha256()
+        for skill_file in discovery_input_files(search_paths):
+            suffix = skill_file.suffix.lower()
+            label = "skill-yaml" if suffix in {".yaml", ".yml"} else "skill-md"
+            _hash_labeled(hasher, label, skill_file, _read_bytes(skill_file))
+        for registry in self._registry_files(search_paths):
+            payload = _read_bytes(registry) if registry.is_file() else b"absent"
+            _hash_labeled(hasher, "registry", registry, payload)
+        for config in self._auto_config_paths(search_paths, deep=True):
+            _hash_labeled(
+                hasher,
+                "auto-config",
+                config,
+                self._governance_projection_bytes(config),
+            )
+        return hasher.hexdigest()[:16]
+
+    def _skill_markdown_files(self, search_paths: list[Path]) -> list[Path]:
+        from vibesop.core.skills.loader import discovery_input_files
+
+        return [
+            path
+            for path in discovery_input_files(search_paths)
+            if path.suffix.lower() not in {".yaml", ".yml"}
+        ]
+
+    def _skill_yaml_files(self, search_paths: list[Path]) -> list[Path]:
+        from vibesop.core.skills.loader import discovery_input_files
+
+        return [
+            path
+            for path in discovery_input_files(search_paths)
+            if path.suffix.lower() in {".yaml", ".yml"}
+        ]
+
+    def _registry_files(self, search_paths: list[Path]) -> list[Path]:
+        """Registries whose bytes can change which skills are visible.
+
+        Includes the project installer registry, any ``registry.yaml`` under
+        the search roots, and the core registry ``ConfigManager.load_registry``
+        reads. The in-memory ``load_registry`` cache itself is not cleared
+        here (audit-only; that object is not owned by this manager).
+        """
+        found: list[Path] = [self.project_root / ".vibe" / "skills" / "registry.yaml"]
+        for search_path in search_paths:
+            if not search_path.exists():
                 continue
-            skill_files = sorted(sp.rglob("SKILL.md"), key=str)
-            for skill_file in skill_files:
-                h.update(str(skill_file).encode())
-                try:
-                    mtime = skill_file.stat().st_mtime
-                    h.update(str(mtime).encode())
-                except OSError:
+            found.extend(search_path.rglob("registry.yaml"))
+        try:
+            from vibesop.utils.bundled import bundled_core_file
+
+            found.append(bundled_core_file("registry.yaml", self.project_root))
+        except Exception:
+            logger.debug("registry fingerprint source unavailable", exc_info=True)
+        return sorted(_dedup_paths(found), key=str)
+
+    def _auto_config_paths(self, search_paths: list[Path], *, deep: bool) -> list[Path]:
+        """Auto-config files that supply enabled/scope/lifecycle.
+
+        The hot check (``deep=False``) only stats the file
+        ``SkillConfigManager`` actually writes plus the project copy. The
+        disk fingerprint also walks nested ``auto-config.yaml`` files under
+        the search roots, because the loader ignores those names as skills
+        but a nested copy can still be the file a test or tool points at.
+        """
+        found: list[Path] = []
+        try:
+            from vibesop.core.skills.config_manager import SkillConfigManager
+
+            found.append(Path(SkillConfigManager.SKILL_CONFIG_FILE))
+        except Exception:
+            logger.debug("auto-config path unavailable", exc_info=True)
+        found.append(self.project_root / ".vibe" / "skills" / "auto-config.yaml")
+        if deep:
+            for search_path in search_paths:
+                if not search_path.exists():
                     continue
-        return h.hexdigest()[:16]
+                found.extend(search_path.rglob("auto-config.yaml"))
+        return _dedup_paths(found)
+
+    @staticmethod
+    def _governance_projection_bytes(path: Path) -> bytes:
+        """Bytes that change iff enabled, scope, lifecycle, or owner hash change.
+
+        Reads the same content-addressed snapshot ``get_skill_config`` uses, so
+        a same-mtime auto-config edit cannot split the fingerprint from the
+        live reader. ``usage_stats`` is omitted so recording a route does not
+        invalidate the candidate pool.
+        """
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        return SkillConfigManager.governance_projection(path)
+
+    def _governance_token(self) -> str:
+        """Cheap stamp of the auto-config projection checked on every route."""
+        hasher = hashlib.sha256()
+        search_paths = self._search_paths if self._search_paths else []
+        for config in self._auto_config_paths(search_paths, deep=False):
+            _hash_labeled(
+                hasher,
+                "auto-config",
+                config,
+                self._governance_projection_bytes(config),
+            )
+        return hasher.hexdigest()[:16]
+
+    def _governance_changed_locked(self) -> bool:
+        """True when enabled/scope/lifecycle drifted since the pool was built.
+
+        Caller holds ``_cache_lock``. A missing baseline is not a change:
+        ``_cached_reload_locked`` records the token when it fills the pool.
+        """
+        if self._governance_token_cached is None:
+            return False
+        return self._governance_token() != self._governance_token_cached
 
     @staticmethod
     def _compute_skill_mtimes(search_paths: list[Path]) -> dict[str, float]:
-        """Return {path_str: mtime} for every SKILL.md under search_paths."""
+        """Return {path_str: mtime} for markdown the loader would consider."""
+        from vibesop.core.skills.loader import discovery_input_files
+
         mtimes: dict[str, float] = {}
-        for sp in search_paths:
-            if not sp.exists():
+        for skill_file in discovery_input_files(search_paths):
+            if skill_file.suffix.lower() in {".yaml", ".yml"}:
                 continue
-            for skill_file in sp.rglob("SKILL.md"):
-                try:
-                    mtimes[str(skill_file)] = skill_file.stat().st_mtime
-                except OSError:
-                    continue
+            try:
+                mtimes[str(skill_file)] = skill_file.stat().st_mtime
+            except OSError:
+                continue
         return mtimes
 
-    def _load_from_disk_cache(self, search_paths: list[Path]) -> list[dict[str, Any]] | None:
+    def _load_from_disk_cache(
+        self,
+        search_paths: list[Path],
+        paths_hash: str | None = None,
+    ) -> list[dict[str, Any]] | None:
         """Try loading candidates from persistent disk cache."""
         if self._disk_cache_bypassed:
             return None
         cache_path = self._disk_cache_path
         if not cache_path.exists():
             return None
-        current_hash = self._compute_paths_hash(search_paths)
+        current_hash = (
+            paths_hash if paths_hash is not None else self._compute_paths_hash(search_paths)
+        )
         try:
             data = json.loads(cache_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
@@ -180,7 +377,10 @@ class CandidateManager:
         self._candidates_cache = None
         self._last_reload_check = 0.0
         self._path_mtimes = {}
+        self._content_fingerprint = None
+        self._governance_token_cached = None
         self._disk_cache_bypassed = True
+        _bump_index_cache_epoch(self.project_root)
 
     def get_candidates(self) -> list[dict[str, Any]]:
         """Discover and return all skill candidates.
@@ -197,6 +397,7 @@ class CandidateManager:
                 project_root=self.project_root,
                 search_paths=self._search_paths,
             )
+            self._search_paths = self._fingerprint_search_paths()
 
         definitions = self._skill_loader.discover_all()
         from vibesop.core.optimization.cold_start import get_cold_start_strategy
@@ -282,16 +483,16 @@ class CandidateManager:
         """
         with self._cache_lock:
             if self._candidates_cache is not None:
-                if self._should_check_reload():
+                # Governance is one small file and must be visible on the next
+                # route. The deep skill-file walk stays on the 5s interval.
+                if self._governance_changed_locked() or self._should_check_reload():
                     return self._cached_reload_locked()
                 return self._candidates_cache
             return self._cached_reload_locked()
 
     def _should_check_reload(self) -> bool:
         """Rate-limited check: probe filesystem marker + deep skill mtimes every N seconds."""
-        import time
-
-        now = time.monotonic()
+        now = self._clock()
         if now - self._last_reload_check < self._RELOAD_CHECK_INTERVAL:
             return False
         self._last_reload_check = now
@@ -299,17 +500,54 @@ class CandidateManager:
         if self._check_reload_needed():
             return True
 
-        # Check if any SKILL.md under search paths changed
-        current_mtimes = self._compute_skill_mtimes(self._search_paths)
-        if current_mtimes != self._path_mtimes:
-            self._path_mtimes = current_mtimes
-            return True
-        return False
+        # Path set / mtime catches add, delete, and ordinary edits. The
+        # content fingerprint catches a body change that preserved mtime
+        # (same-second write, checkout that restores timestamps).
+        search_paths = self._fingerprint_search_paths()
+        current_mtimes = self._compute_skill_mtimes(search_paths)
+        current_hash = self._compute_paths_hash(search_paths)
+        mtime_changed = current_mtimes != self._path_mtimes
+        hash_changed = (
+            self._content_fingerprint is not None and current_hash != self._content_fingerprint
+        )
+        self._path_mtimes = current_mtimes
+        self._content_fingerprint = current_hash
+        return mtime_changed or hash_changed
 
     def _check_reload_needed(self) -> bool:
         """Check if a .skills_reload marker signals new skill installation."""
         marker = self.project_root / ".vibe" / ".skills_reload"
         return marker.exists()
+
+    def _invalidate_discovery_caches(self) -> None:
+        """Drop parsed skill metadata before rebuilding the candidate pool.
+
+        Mirrors ``SkillManager.reload_skills`` (clear, then rediscover) and
+        also drops ``ExternalSkillLoader._cache``, which ``clear_cache`` does
+        not. Doing this before ``get_candidates`` is what stops a new
+        fingerprint from being persisted next to the previous metadata.
+        """
+        loader = self._skill_loader
+        if loader is None:
+            return
+        invalidate = getattr(loader, "invalidate_discovery_cache", None)
+        if callable(invalidate):
+            invalidate()
+            return
+        clear = getattr(loader, "clear_cache", None)
+        if callable(clear):
+            clear()
+        external = getattr(loader, "_external_loader", None)
+        if external is None:
+            return
+        ext_clear = getattr(external, "clear_cache", None)
+        if callable(ext_clear):
+            ext_clear()
+
+    def _remember_watch_state(self, search_paths: list[Path], paths_hash: str) -> None:
+        self._path_mtimes = self._compute_skill_mtimes(search_paths)
+        self._content_fingerprint = paths_hash
+        self._governance_token_cached = self._governance_token()
 
     def _cached_reload_locked(self) -> list[dict[str, Any]]:
         """Reload candidates.  Caller MUST hold _cache_lock."""
@@ -317,20 +555,59 @@ class CandidateManager:
         with contextlib.suppress(OSError):
             marker.unlink()
         self._candidates_cache = None
+        # Clear parsed metadata before either the disk hit or the rescan.
+        # A hit must not leave the loader holding the previous body, and a
+        # miss must re-read files before the new fingerprint is written.
+        self._invalidate_discovery_caches()
+        _bump_index_cache_epoch(self.project_root)
 
-        search_paths = self._search_paths if self._search_paths else self._build_search_paths()
-        cached = self._load_from_disk_cache(search_paths)
+        if not self._search_paths:
+            # Remember the roots we actually hashed. A disk hit never calls
+            # get_candidates, and an empty _search_paths would make the next
+            # mtime walk look like a deletion and reload forever.
+            self._search_paths = list(self._build_search_paths())
+        search_paths = self._fingerprint_search_paths()
+        paths_hash = self._compute_paths_hash(search_paths)
+        cached = self._load_from_disk_cache(search_paths, paths_hash)
         if cached is not None:
             self._candidates_cache = cached
-            self._path_mtimes = self._compute_skill_mtimes(search_paths)
+            self._remember_watch_state(search_paths, paths_hash)
             return cached
 
         candidates = self.get_candidates()
+        # Hash AFTER the rescan, using the roots the loader actually walked.
+        search_paths = self._fingerprint_search_paths()
         paths_hash = self._compute_paths_hash(search_paths)
         self._candidates_cache = candidates
-        self._path_mtimes = self._compute_skill_mtimes(search_paths)
+        self._remember_watch_state(search_paths, paths_hash)
         self._save_to_disk_cache(candidates, paths_hash)
         return candidates
+
+    def _fingerprint_search_paths(self) -> list[Path]:
+        """Roots the live loader walks, else the manager's planned roots.
+
+        Fingerprint, mtime walk, and disk cache must use this set. Rehashing
+        only ``self._search_paths`` after reload cannot see default extra
+        roots SkillLoader appends when ``strict_search_paths`` is false.
+        """
+        loader = self._skill_loader
+        if loader is not None:
+            getter = getattr(loader, "discovery_search_paths", None)
+            if callable(getter):
+                paths = [Path(p) for p in getter()]
+                if paths:
+                    self._search_paths = paths
+                    return paths
+            raw = getattr(loader, "_search_paths", None)
+            if raw:
+                paths = [Path(p) for p in raw]
+                self._search_paths = paths
+                return paths
+        if self._search_paths:
+            return list(self._search_paths)
+        built = list(self._build_search_paths())
+        self._search_paths = built
+        return built
 
     def _build_search_paths(self) -> list[Path]:
         """Build the list of search paths for skill discovery."""
@@ -338,6 +615,7 @@ class CandidateManager:
 
         paths: list[Path] = [
             self.project_root / ".vibe" / "skills",
+            self.project_root / "skills",
             Path.home() / ".config" / "skills",
             Path.home() / ".config" / "opencode" / "skills",
             Path.home() / ".claude" / "skills",
@@ -349,8 +627,15 @@ class CandidateManager:
         return paths
 
     def reload(self) -> int:
-        """Invalidate cache and reload."""
+        """Invalidate memory and disk caches and rebuild candidates from disk.
+
+        The disk file is removed first so this call cannot return a stale
+        hit. ``_cached_reload_locked`` clears the loader cache before the
+        rescan and only then writes the new fingerprint.
+        """
         self._candidates_cache = None
+        self._governance_token_cached = None
+        self._content_fingerprint = None
         with contextlib.suppress(OSError):
             self._disk_cache_path.unlink()
         return len(self.get_cached_candidates())
