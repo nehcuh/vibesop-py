@@ -447,8 +447,11 @@ class StepRunner:
                   execution success and review acceptance as separate axes)
                 - results: list[dict] with step_id, output, error, status per
                   step (static/squad lanes; status keeps the legacy value
-                  domain completed/failed/skipped — F2) — the dynamic lane
-                  preserves its legacy dict shape keyed by step identity
+                  domain completed/failed/skipped — F2) plus the additive
+                  ``outcome_status`` key carrying the shared StepOutcomeStatus
+                  verdict (JSON-transportable producer fact for consumers of
+                  the plain dict) — the dynamic lane preserves its legacy dict
+                  shape keyed by step identity
                 - dynamic: bool
                 - pattern: str (squad/dynamic lanes)
         """
@@ -467,8 +470,10 @@ class StepRunner:
         results: list[dict[str, Any]] = []
         outcomes: list[StepOutcome] = []
         # Steps whose output was a blocked sentinel are persisted via
-        # mark_failed (StepStatus has no blocked member — RR06 debt), so the
-        # failed counter must exclude them to avoid double counting.
+        # mark_failed (StepStatus has no blocked member — RR06 debt), which
+        # is exactly why they land in the failed counter; per F1 they count
+        # in BOTH failed and blocked (blocked is an additional breakdown of
+        # the failed count, never a subtraction).
         blocked_ids: set[str] = set()
 
         while True:
@@ -494,6 +499,7 @@ class StepRunner:
                                 "output": output,
                                 "error": None,
                                 "status": "completed",
+                                "outcome_status": StepOutcomeStatus.SUCCESS.value,
                             }
                         )
                         outcomes.append(
@@ -513,14 +519,18 @@ class StepRunner:
                     # F2: the per-step entry status keeps the legacy value
                     # domain (completed/failed) — blocked granularity is
                     # expressed by the blocked counter, the StepOutcome status
-                    # and the adapter's blocked classification, not by a new
-                    # entry status value.
+                    # and the additive ``outcome_status`` entry key (the
+                    # producer's shared verdict, JSON-transportable), not by a
+                    # new entry status value. The raw output is preserved on
+                    # the entry (additive) so the dict sentinel shape stays
+                    # recoverable on the adapter's dict-only fallback path.
                     results.append(
                         {
                             "step_id": step.step_id,
-                            "output": None,
+                            "output": output,
                             "error": error,
                             "status": "failed",
+                            "outcome_status": status.value,
                         }
                     )
                     outcomes.append(
@@ -542,6 +552,7 @@ class StepRunner:
                             "output": None,
                             "error": str(e),
                             "status": "failed",
+                            "outcome_status": StepOutcomeStatus.FAILED.value,
                         }
                     )
                     outcomes.append(
@@ -612,6 +623,7 @@ class StepRunner:
                                 "output": None,
                                 "error": str(step_result),
                                 "status": "failed",
+                                "outcome_status": StepOutcomeStatus.FAILED.value,
                             }
                         )
                         outcomes.append(
@@ -650,13 +662,18 @@ class StepRunner:
                             should_continue = not fail_fast
                             # F2: entry status keeps the legacy value domain
                             # (completed/failed) — blocked granularity lives in
-                            # the blocked counter / StepOutcome / adapter.
+                            # the blocked counter, the StepOutcome, the
+                            # additive ``outcome_status`` entry key and the
+                            # adapter. The raw output is preserved on the entry
+                            # (additive) so the dict sentinel shape stays
+                            # recoverable on the adapter's dict-only fallback path.
                             results.append(
                                 {
                                     "step_id": step.step_id,
-                                    "output": None,
+                                    "output": step_result,
                                     "error": output,
                                     "status": "failed",
+                                    "outcome_status": status.value,
                                 }
                             )
                             outcomes.append(
@@ -685,6 +702,7 @@ class StepRunner:
                                     "output": output,
                                     "error": None,
                                     "status": "completed",
+                                    "outcome_status": StepOutcomeStatus.SUCCESS.value,
                                 }
                             )
                             outcomes.append(
@@ -811,11 +829,21 @@ class StepRunner:
         """Normalize a DynamicExecutionResult into the shared outcome (D07).
 
         The legacy ``results`` dict shape is preserved verbatim — keyed by
-        step/plan identity, never converted to a list. Only the statistics
-        are fixed: ``completed``/``failed``/``blocked`` are real counters
-        derived from the recorded values, and ``final_status`` is the
-        WorkflowEngine verdict (previously hardcoded to failed=0 and never
-        delivered).
+        step/plan identity, never converted to a list. The statistics are
+        real counters derived from the recorded values, and ``final_status``
+        is the WorkflowEngine verdict (previously hardcoded to failed=0 and
+        never delivered).
+
+        Post-corrective (P2): the bridge also syncs the runner's own state
+        with the engine results. The engine's loop stamps a step COMPLETED
+        before the sentinel classification happens and never touches the
+        runner's ``_states``, so without this sync the public counters said
+        failed/blocked while ``failed_count`` stayed 0, ``pending_steps()``
+        still returned the failed step, and a sentinel-returning step kept
+        StepStatus.COMPLETED. ``skipped`` counts only steps the engine
+        explicitly skipped (StepStatus.SKIPPED, e.g. LOOP_UNTIL_DRY
+        verification steps); steps left PENDING by an aborted run are still
+        resumable and are NOT reported as skipped.
         """
         from vibesop.core.models import StepStatus
         from vibesop.core.orchestration.verification_loop import is_acceptance_failure
@@ -827,11 +855,26 @@ class StepRunner:
         blocked = sum(1 for v in values if _is_blocked_output(v))
         failed = sum(1 for v in values if is_acceptance_failure(v))
         completed = len(values) - failed
-        skipped = sum(
-            1
-            for s in self._plan.steps
-            if s.step_id not in results_map and s.status is not StepStatus.COMPLETED
-        )
+
+        # Bring the runner state and the shared PlanOutcome.steps to the
+        # engine's side: one StepOutcome per step the engine actually
+        # recorded, and mark_failed/mark_completed so failed_count() /
+        # pending_steps() / is_complete describe the run that happened.
+        step_outcomes: list[StepOutcome] = []
+        for step in self._plan.steps:
+            if step.step_id not in results_map:
+                continue
+            value = results_map[step.step_id]
+            status = _classify_output(value)
+            if status is StepOutcomeStatus.SUCCESS:
+                self.mark_completed(step, str(value) if value is not None else "")
+                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, value))
+            else:
+                error = str(value)
+                self.mark_failed(step, error)
+                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, error=error))
+
+        skipped = sum(1 for s in self._plan.steps if s.status is StepStatus.SKIPPED)
 
         outcome = PlanOutcome(
             plan_id=self._plan.plan_id,
@@ -841,6 +884,7 @@ class StepRunner:
             blocked=blocked,
             final_status=dyn_result.final_status,
             review_status="not_required",
+            steps=step_outcomes,
         )
         self._last_plan_outcome = outcome
         return {
@@ -890,6 +934,7 @@ class StepRunner:
                         "output": None,
                         "error": None,
                         "status": "skipped",
+                        "outcome_status": StepOutcomeStatus.SKIPPED.value,
                     }
                 )
                 step_outcomes.append(
@@ -916,6 +961,7 @@ class StepRunner:
                         "output": output,
                         "error": None,
                         "status": "completed",
+                        "outcome_status": StepOutcomeStatus.SUCCESS.value,
                     }
                 )
                 step_outcomes.append(
@@ -940,13 +986,15 @@ class StepRunner:
                     on_step_error(step, RuntimeError(error))
                 # F2: entry status keeps the legacy value domain
                 # (completed/failed/skipped); blocked granularity is carried by
-                # the blocked counter, the StepOutcome status and the adapter.
+                # the blocked counter, the StepOutcome status, the additive
+                # ``outcome_status`` entry key and the adapter.
                 results.append(
                     {
                         "step_id": step.step_id,
                         "output": None,
                         "error": error,
                         "status": "failed",
+                        "outcome_status": status.value,
                     }
                 )
                 step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, error=error))
