@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from vibesop.core.observability.dev_detect import is_dev_environment
 from vibesop.core.observability.reflection import Reflection, ReflectionStore
+from vibesop.core.observability.span_utils import span_skill_id
 from vibesop.dashboard._discoveries import build_discoveries_payload
 from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
 
@@ -350,7 +351,9 @@ def create_app() -> FastAPI:
         if span_kind:
             records = [r for r in records if r.get("span_kind") == span_kind]
         if skill_id:
-            records = [r for r in records if (r.get("metadata") or {}).get("skill_id") == skill_id]
+            # metadata may be a JSON string on disk (SpanWriter serialises
+            # it) — span_skill_id tolerates both shapes (D12/B7).
+            records = [r for r in records if span_skill_id(r) == skill_id]
 
         records.reverse()
         return JSONResponse(records[:limit])
