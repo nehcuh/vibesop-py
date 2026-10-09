@@ -18,6 +18,29 @@ from vibesop.utils.atomic_writer import write_text
 logger = logging.getLogger(__name__)
 
 
+def _wilson_confidence(success_count: int, failure_count: int) -> float:
+    """Wilson score center for a Bernoulli rate.
+
+    Returns 0.5 when there is no evidence so a reset row matches
+    ``Instinct``'s default confidence. ``Instinct.update`` uses the same
+    formula for ``n > 0``.
+    """
+    n = success_count + failure_count
+    if n <= 0:
+        return 0.5
+    p = success_count / n
+    z = 1.96  # 95% confidence
+    denominator = 1 + z**2 / n
+    return (p + z**2 / (2 * n)) / denominator
+
+
+def _confidence_matches_update(success_count: int, failure_count: int, confidence: float) -> bool:
+    """True when ``confidence`` is the Wilson value ``update()`` would store."""
+    if success_count + failure_count <= 0:
+        return False
+    return confidence == _wilson_confidence(success_count, failure_count)
+
+
 @dataclass
 class Instinct:
     """A learned pattern or rule of thumb."""
@@ -57,15 +80,10 @@ class Instinct:
         else:
             self.failure_count += 1
 
-        # Update confidence based on success rate and sample size
-        # Use Wilson score interval for better small-sample behavior
-        n = self.total_applications
-        if n > 0:
-            p = self.success_rate
-            z = 1.96  # 95% confidence
-            denominator = 1 + z**2 / n
-            center = (p + z**2 / (2 * n)) / denominator
-            self.confidence = center
+        # Update confidence based on success rate and sample size.
+        # Wilson score interval for better small-sample behavior.
+        if self.total_applications > 0:
+            self.confidence = _wilson_confidence(self.success_count, self.failure_count)
 
         self.last_used = datetime.now()
 
@@ -204,6 +222,255 @@ def _is_untrusted_layer_context(context: str) -> bool:
     return normalized not in {layer.value for layer in AUTO_EXTRACT_TRUSTED_LAYERS}
 
 
+@dataclass(frozen=True)
+class _InstinctBaseline:
+    """Per-id snapshot taken at load (and refreshed after each merged save)."""
+
+    pattern: str
+    action: str
+    context: str
+    confidence: float
+    success_count: int
+    failure_count: int
+    times_matched: int
+    last_used: datetime | None
+    created_at: datetime
+    source: str
+    tags: tuple[str, ...]
+
+    @classmethod
+    def capture(cls, instinct: Instinct) -> _InstinctBaseline:
+        return cls(
+            pattern=instinct.pattern,
+            action=instinct.action,
+            context=instinct.context,
+            confidence=instinct.confidence,
+            success_count=instinct.success_count,
+            failure_count=instinct.failure_count,
+            times_matched=instinct.times_matched,
+            last_used=instinct.last_used,
+            created_at=instinct.created_at,
+            source=instinct.source,
+            tags=tuple(instinct.tags),
+        )
+
+
+@dataclass
+class _DiskInstincts:
+    """Latest ``instincts.jsonl`` snapshot read under the cross-process lock."""
+
+    rows: dict[str, Instinct]
+    membership_known: bool
+
+
+def _assign_instinct_fields(dst: Instinct, src: Instinct) -> None:
+    """Copy persisted fields onto ``dst`` without replacing the object."""
+    dst.pattern = src.pattern
+    dst.action = src.action
+    dst.context = src.context
+    dst.confidence = src.confidence
+    dst.success_count = src.success_count
+    dst.failure_count = src.failure_count
+    dst.times_matched = src.times_matched
+    dst.last_used = src.last_used
+    dst.created_at = src.created_at
+    dst.source = src.source
+    dst.tags = list(src.tags)
+
+
+def _later_datetime(left: datetime | None, right: datetime | None) -> datetime | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return left if left >= right else right
+
+
+def _evidence_key(pattern: str, action: str) -> tuple[str, str]:
+    """Success and failure belong to this pair, not to the row id alone."""
+    return (pattern, action)
+
+
+def _apply_times_matched_delta(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """``times_matched`` is neutral and is not success/failure evidence."""
+    memory.times_matched = max(0, disk.times_matched + (memory.times_matched - base.times_matched))
+
+
+def _apply_counter_delta(
+    memory: Instinct, disk: Instinct, base: _InstinctBaseline
+) -> tuple[int, int, float]:
+    """Apply ``disk + (memory - loaded)`` and return the pre-merge evidence.
+
+    Caller must already know memory, disk, and the baseline share one
+    pattern+action. A different action must not use this delta.
+    """
+    pre_success = memory.success_count
+    pre_failure = memory.failure_count
+    pre_confidence = memory.confidence
+    memory.success_count = max(0, disk.success_count + (pre_success - base.success_count))
+    memory.failure_count = max(0, disk.failure_count + (pre_failure - base.failure_count))
+    _apply_times_matched_delta(memory, disk, base)
+    return pre_success, pre_failure, pre_confidence
+
+
+def _adopt_unedited_fields(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """Keep a local edit; otherwise take the newer disk value."""
+    if memory.pattern == base.pattern:
+        memory.pattern = disk.pattern
+    if memory.action == base.action:
+        memory.action = disk.action
+    if memory.context == base.context:
+        memory.context = disk.context
+    if memory.source == base.source:
+        memory.source = disk.source
+    if tuple(memory.tags) == base.tags:
+        memory.tags = list(disk.tags)
+    if memory.created_at == base.created_at:
+        memory.created_at = disk.created_at
+    if memory.last_used == base.last_used:
+        memory.last_used = disk.last_used
+    else:
+        memory.last_used = _later_datetime(memory.last_used, disk.last_used)
+
+
+def _reconcile_confidence(
+    memory: Instinct,
+    disk: Instinct,
+    base: _InstinctBaseline,
+    pre_success: int,
+    pre_failure: int,
+    pre_confidence: float,
+) -> None:
+    counts_unchanged = memory.success_count == pre_success and memory.failure_count == pre_failure
+    if pre_confidence != base.confidence:
+        produced_by_update = _confidence_matches_update(pre_success, pre_failure, pre_confidence)
+        if produced_by_update and not counts_unchanged:
+            memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
+        else:
+            memory.confidence = pre_confidence
+        return
+    disk_counts = (
+        memory.success_count == disk.success_count and memory.failure_count == disk.failure_count
+    )
+    if disk_counts or counts_unchanged:
+        memory.confidence = disk.confidence if disk_counts else pre_confidence
+        return
+    memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
+
+
+def _merge_aligned_new_action(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """Both sides already share a new pattern+action; the baseline is the old one.
+
+    Local success/failure are that new action's own counts, starting at zero
+    when the action changed. Add them to disk. Do not subtract the previous
+    action's baseline, or a second switch to the new action wipes the peer's
+    evidence (and a zero baseline would keep the old counters).
+    """
+    pre_success = memory.success_count
+    pre_failure = memory.failure_count
+    pre_confidence = memory.confidence
+    memory.success_count = max(0, disk.success_count + pre_success)
+    memory.failure_count = max(0, disk.failure_count + pre_failure)
+    _apply_times_matched_delta(memory, disk, base)
+    _adopt_unedited_fields(memory, disk, base)
+    if pre_success == 0 and pre_failure == 0:
+        memory.confidence = disk.confidence
+        return
+    if _confidence_matches_update(pre_success, pre_failure, pre_confidence):
+        memory.confidence = _wilson_confidence(memory.success_count, memory.failure_count)
+        return
+    memory.confidence = pre_confidence
+
+
+def _merge_local_action_change(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """This process changed pattern+action. Keep the reset evidence.
+
+    Disk may still be the previous action, including feedback recorded on it
+    after this process loaded. Those counters are not the new action's evidence.
+    """
+    _apply_times_matched_delta(memory, disk, base)
+    _adopt_unedited_fields(memory, disk, base)
+
+
+def _merge_disk_action_change(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """Disk pattern+action changed. Drop this process's old-action feedback.
+
+    The in-memory row may still be the action this process loaded and then
+    accepted or rejected. That delta must not move onto the new action, and
+    the old action must not be written back. ``times_matched`` stays neutral.
+    Other local edits (context, source, tags) are kept.
+    """
+    local_context = memory.context
+    local_source = memory.source
+    local_tags = list(memory.tags)
+    local_created_at = memory.created_at
+    local_last_used = memory.last_used
+    local_matched = memory.times_matched
+    _assign_instinct_fields(memory, disk)
+    if local_context != base.context:
+        memory.context = local_context
+    if local_source != base.source:
+        memory.source = local_source
+    if tuple(local_tags) != base.tags:
+        memory.tags = local_tags
+    if local_created_at != base.created_at:
+        memory.created_at = local_created_at
+    if local_last_used != base.last_used:
+        memory.last_used = _later_datetime(local_last_used, disk.last_used)
+    memory.times_matched = max(0, disk.times_matched + (local_matched - base.times_matched))
+
+
+def _merge_shared_instinct(memory: Instinct, disk: Instinct, base: _InstinctBaseline) -> None:
+    """Merge one id that this process already loaded.
+
+    Untouched rows copy disk. Same pattern+action as the baseline uses the
+    counter delta. Any other pattern+action is a different evidence domain:
+    the side that changed action keeps that action's evidence and does not
+    inherit the other action's successes or failures.
+    """
+    if _InstinctBaseline.capture(memory) == base:
+        _assign_instinct_fields(memory, disk)
+        return
+    memory_key = _evidence_key(memory.pattern, memory.action)
+    disk_key = _evidence_key(disk.pattern, disk.action)
+    base_key = _evidence_key(base.pattern, base.action)
+    if memory_key == disk_key == base_key:
+        pre_success, pre_failure, pre_confidence = _apply_counter_delta(memory, disk, base)
+        _adopt_unedited_fields(memory, disk, base)
+        _reconcile_confidence(memory, disk, base, pre_success, pre_failure, pre_confidence)
+        return
+    if memory_key == disk_key:
+        _merge_aligned_new_action(memory, disk, base)
+        return
+    if memory_key == base_key:
+        _merge_disk_action_change(memory, disk, base)
+        return
+    _merge_local_action_change(memory, disk, base)
+
+
+def _merge_unloaded_overlap(memory: Instinct, disk: Instinct) -> None:
+    """Same id appeared on disk for a row this process did not load.
+
+    A zero-evidence ``learn()`` must not wipe another instance's counters
+    when the action matches, and must not inherit them when the action
+    differs. Non-zero local counters are an absolute upsert (``set_instinct``).
+    """
+    local_evidence = (
+        memory.success_count != 0 or memory.failure_count != 0 or memory.times_matched != 0
+    )
+    if local_evidence:
+        return
+    if memory.action == disk.action:
+        _assign_instinct_fields(memory, disk)
+        return
+    new_action = memory.action
+    _assign_instinct_fields(memory, disk)
+    memory.action = new_action
+    memory.success_count = 0
+    memory.failure_count = 0
+    memory.confidence = 0.5
+
+
 class InstinctLearner:
     """Learn and manage instincts from experience."""
 
@@ -223,6 +490,9 @@ class InstinctLearner:
         except ImportError:
             self._numpy = None
         self._lock = threading.RLock()
+        # Snapshot at load, including action. Same pattern+action applies
+        # disk + (memory - loaded) (D11). A different action does not (D13).
+        self._baselines: dict[str, _InstinctBaseline] = {}
         # Generation counter for clear() — bumped on every purge so concurrent
         # learners detect that their in-memory state is stale (loaded before
         # the clear) and drop it instead of resurrecting purged data via merge
@@ -264,6 +534,7 @@ class InstinctLearner:
                     except (json.JSONDecodeError, KeyError):
                         continue
             self._embedding_cache.clear()
+        self._refresh_baselines_locked()
         # Always probe for sequences.jsonl even when instincts.jsonl is absent
         # — otherwise a project that has recorded tool-call sequences but no
         # learned instincts would silently drop every sequence on next load
@@ -315,30 +586,22 @@ class InstinctLearner:
         except OSError as e:
             logger.warning("Failed to back up %s: %s", data_path, e)
 
-    def _merge_disk_into_memory_locked(self) -> None:
-        """Re-read ``instincts.jsonl`` from disk and merge any IDs that are
-        NOT in our in-memory ``_instincts`` dict.
+    def _refresh_baselines_locked(self) -> None:
+        """Record the post-merge counters so the next save does not re-apply them."""
+        self._baselines = {
+            instinct_id: _InstinctBaseline.capture(instinct)
+            for instinct_id, instinct in self._instincts.items()
+        }
 
-        In-memory wins for shared IDs (we just modified them). Disk-only IDs
-        are promoted so a concurrent process's writes are not clobbered when
-        we save. Called inside the cross-process lock; doesn't take
-        ``self._lock`` (caller already holds it).
-
-        Known limitation (adversarial review Phase B FLAW #2): for shared IDs,
-        this merge replaces disk's ``success_count`` / ``failure_count`` with
-        in-memory values, which silently drops a concurrent writer's counter
-        updates. A delta-based merge (tracking per-id counts at load time and
-        applying ``disk + (memory - loaded)``) is the proper fix but adds
-        non-trivial state; deferred unless the feedback loop surfaces real
-        loss. Trigger requires two writers mutating the SAME instinct's
-        counters within the same load-save window — unlikely with the daily
-        04:37 feedback-collect schedule vs daytime interactive use.
-        """
+    def _read_disk_instincts_locked(self) -> _DiskInstincts | None:
+        """Read the latest instincts file. ``None`` means the read failed."""
         if not self.storage_path.exists():
-            return
+            return _DiskInstincts(rows={}, membership_known=True)
+        rows: dict[str, Instinct] = {}
+        skipped = 0
         try:
-            with self.storage_path.open(encoding="utf-8") as f:
-                for raw_line in f:
+            with self.storage_path.open(encoding="utf-8") as handle:
+                for raw_line in handle:
                     stripped = raw_line.strip()
                     if not stripped:
                         continue
@@ -346,11 +609,58 @@ class InstinctLearner:
                         data = json.loads(stripped)
                         instinct = Instinct.from_dict(data)
                     except (json.JSONDecodeError, KeyError):
+                        skipped += 1
                         continue
-                    if instinct.id not in self._instincts:
-                        self._instincts[instinct.id] = instinct
-        except OSError as e:
-            logger.warning("Failed to re-read %s for merge: %s", self.storage_path, e)
+                    rows[instinct.id] = instinct
+        except OSError as exc:
+            logger.warning("Failed to re-read %s for merge: %s", self.storage_path, exc)
+            return None
+        # A partially unreadable file is not proof that missing ids were deleted.
+        return _DiskInstincts(rows=rows, membership_known=skipped == 0)
+
+    def _drop_untouched_deleted_ids_locked(self, disk_rows: dict[str, Instinct]) -> None:
+        """Drop loaded rows that a delete/prune/clear removed and we did not edit.
+
+        Dirty local edits and ids created after load are left in place. ``clear``
+        still drops every stale row via the epoch guard before this runs.
+        """
+        for instinct_id, memory in list(self._instincts.items()):
+            if instinct_id in disk_rows or instinct_id not in self._baselines:
+                continue
+            if _InstinctBaseline.capture(memory) == self._baselines[instinct_id]:
+                del self._instincts[instinct_id]
+
+    def _merge_disk_into_memory_locked(self) -> None:
+        """Re-read ``instincts.jsonl`` and merge it into memory.
+
+        Called inside both ``self._lock`` and the cross-process lock. Disk-only
+        ids are adopted. Shared ids whose pattern and action still match the
+        loaded baseline apply ``disk + (memory - loaded)`` to ``success_count``,
+        ``failure_count``, and ``times_matched`` (D11). Success and failure are
+        bound to pattern+action (D13): a local action change keeps its reset
+        and does not import the other action's counters; a disk action change
+        drops this process's feedback on the old action. ``times_matched`` stays
+        the neutral counter either way. An untouched row takes the disk version
+        wholesale, which also keeps a delete or prune from being rewritten.
+        Baselines, including action, are refreshed to the merged row so a later
+        save does not apply the same delta again.
+        """
+        disk = self._read_disk_instincts_locked()
+        if disk is None:
+            return
+        if disk.membership_known:
+            self._drop_untouched_deleted_ids_locked(disk.rows)
+        for instinct_id, disk_instinct in disk.rows.items():
+            memory = self._instincts.get(instinct_id)
+            if memory is None:
+                self._instincts[instinct_id] = disk_instinct
+                continue
+            base = self._baselines.get(instinct_id)
+            if base is None:
+                _merge_unloaded_overlap(memory, disk_instinct)
+            else:
+                _merge_shared_instinct(memory, disk_instinct, base)
+        self._refresh_baselines_locked()
 
     def _merge_disk_sequences_into_memory_locked(self) -> None:
         """Same merge semantics for ``sequences.jsonl``."""
@@ -388,12 +698,13 @@ class InstinctLearner:
                 )
                 self._instincts.clear()
                 self._sequences.clear()
+                self._baselines.clear()
                 self._embedding_cache.clear()
                 self._clear_epoch_at_load = current_epoch
 
-            # Pick up concurrent writes from other processes (launchd
-            # promote vs interactive learn, etc.). In-memory wins for
-            # shared IDs; disk-only IDs are preserved.
+            # Latest disk snapshot under both locks, then per-id counter delta.
+            # learn/record_outcome/save and the CLI writers that call them land
+            # here. clear() deliberately does not. routing_pending is another store.
             self._merge_disk_into_memory_locked()
             self._merge_disk_sequences_into_memory_locked()
             self._backup_locked(self.storage_path)
@@ -441,6 +752,7 @@ class InstinctLearner:
             count = len(self._instincts)
             self._instincts.clear()
             self._sequences.clear()
+            self._baselines.clear()
             self._embedding_cache.clear()
             for path in (
                 self.storage_path,
@@ -498,6 +810,7 @@ class InstinctLearner:
             if current_epoch > self._clear_epoch_at_load:
                 self._instincts.clear()
                 self._sequences.clear()
+                self._baselines.clear()
                 self._embedding_cache.clear()
                 self._clear_epoch_at_load = current_epoch
             # Merge concurrent writes first so we prune against the fullest
@@ -516,6 +829,7 @@ class InstinctLearner:
                 return victims
             for victim in victims:
                 del self._instincts[victim.id]
+                self._baselines.pop(victim.id, None)
             self._embedding_cache.clear()
             self._backup_locked(self.storage_path)
             # Write instincts.jsonl directly — NOT _save(), which re-acquires
@@ -551,10 +865,13 @@ class InstinctLearner:
         # Check if already exists
         if instinct_id in self._instincts:
             instinct = self._instincts[instinct_id]
-            # Update if action changed
+            # Evidence is bound to pattern+action. Keep the row id, but a new
+            # action must not inherit the previous action's successes (D13).
             if instinct.action != action:
                 instinct.action = action
-                instinct.confidence = 0.5  # Reset confidence
+                instinct.confidence = 0.5
+                instinct.success_count = 0
+                instinct.failure_count = 0
         else:
             instinct = Instinct(
                 id=instinct_id,

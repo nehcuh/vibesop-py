@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 import tempfile
+import threading
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -258,6 +262,70 @@ class TestInstinctLearner:
         assert first.id == second.id
         assert second.action == "new-action"
         assert second.confidence == pytest.approx(0.5)  # reset on action change
+
+    def test_learn_same_action_preserves_counters(self, learner: InstinctLearner) -> None:
+        """Re-learning the same action is not a new evidence revision."""
+        instinct = learner.learn(pattern="debug error", action="keep-action", tags=["routing"])
+        for _ in range(3):
+            learner.record_outcome(instinct.id, success=True)
+
+        again = learner.learn(pattern="debug error", action="keep-action")
+
+        assert again.id == instinct.id
+        assert again.success_count == 3
+        assert again.failure_count == 0
+        assert again.tags == ["routing"]
+        assert again.is_reliable is True
+
+    def test_action_change_resets_evidence_for_pattern_and_action(
+        self, learner: InstinctLearner
+    ) -> None:
+        """D13: a new action must not inherit the previous action's successes.
+
+        Three successes make the old action reliable. After the action change
+        the same row id remains, counters are zero, confidence is 0.5, and
+        ``is_reliable`` is false. One new success does not cross the
+        reliability gate (that needs 3 applications).
+        """
+        instinct = learner.learn(
+            pattern="review Python",
+            action="action A",
+            tags=["routing"],
+        )
+        for _ in range(3):
+            learner.record_outcome(instinct.id, success=True)
+        assert learner._instincts[instinct.id].is_reliable is True
+        # Neutral match count is not success evidence and stays on the row.
+        learner._instincts[instinct.id].times_matched = 4
+
+        changed = learner.learn(pattern="review Python", action="action B")
+
+        assert changed.id == instinct.id
+        assert changed.action == "action B"
+        assert changed.success_count == 0
+        assert changed.failure_count == 0
+        assert changed.confidence == pytest.approx(0.5)
+        assert changed.is_reliable is False
+        assert changed.tags == ["routing"]
+        assert changed.times_matched == 4
+
+        disk = _read_production_instincts(learner.storage_path)
+        stored = disk[instinct.id]
+        assert stored.action == "action B"
+        assert stored.success_count == 0
+        assert stored.failure_count == 0
+        assert stored.confidence == pytest.approx(0.5)
+        assert stored.is_reliable is False
+        assert stored.times_matched == 4
+
+        reloaded = InstinctLearner(storage_path=learner.storage_path)
+        reloaded.record_outcome(instinct.id, success=True)
+        once = reloaded.instincts[instinct.id]
+        assert once.success_count == 1
+        assert once.failure_count == 0
+        assert once.total_applications == 1
+        assert once.is_reliable is False
+        assert reloaded.find_matching("review Python") == []
 
     def test_learn_with_context_and_tags(self, learner: InstinctLearner) -> None:
         instinct = learner.learn(
@@ -732,3 +800,584 @@ class TestInstinctLearnerCrossProcessLock:
         reloaded = InstinctLearner(storage_path=storage_path)
         assert t_hash in reloaded._sequences
         assert s_hash not in reloaded._sequences
+
+
+def _read_production_instincts(path: Path) -> dict[str, Instinct]:
+    """Read ``instincts.jsonl`` through the production row schema.
+
+    Rows must come from ``InstinctLearner``'s writer. The key set is the
+    production ``Instinct.to_dict()`` schema, not a hand-built payload.
+    """
+    schema = set(Instinct(id="schema-probe", pattern="p", action="a").to_dict())
+    loaded: dict[str, Instinct] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        assert set(payload) == schema
+        instinct = Instinct.from_dict(payload)
+        loaded[instinct.id] = instinct
+    return loaded
+
+
+class TestInstinctCounterMerge:
+    """D11: stale snapshots must not drop another instance's counters."""
+
+    @pytest.fixture
+    def storage_path(self) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "instincts.jsonl"
+
+    def test_stale_holder_keeps_other_instance_success_and_new_row(
+        self, storage_path: Path
+    ) -> None:
+        """A and B both hold query A. A records a success. B adds query B.
+
+        Disk success for A stays 1, and B's new row is preserved. A later
+        save from B must not apply that delta twice.
+        """
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A")
+        learner_a = InstinctLearner(storage_path=storage_path)
+        learner_b = InstinctLearner(storage_path=storage_path)
+        assert learner_a.has_instinct(seeded.id)
+        assert learner_b.has_instinct(seeded.id)
+
+        learner_a.record_outcome(seeded.id, success=True)
+        added = learner_b.learn(pattern="query B", action="action B")
+
+        disk = _read_production_instincts(storage_path)
+        assert disk[seeded.id].success_count == 1
+        assert disk[seeded.id].failure_count == 0
+        assert disk[seeded.id].confidence > 0.5
+        assert disk[added.id].pattern == "query B"
+        assert disk[added.id].action == "action B"
+
+        learner_b.learn(pattern="query C", action="action C")
+        disk_after = _read_production_instincts(storage_path)
+        assert disk_after[seeded.id].success_count == 1
+        assert disk_after[seeded.id].confidence > 0.5
+        assert {row.pattern for row in disk_after.values()} == {"query A", "query B", "query C"}
+
+    def test_same_id_success_and_failure_deltas_accumulate(self, storage_path: Path) -> None:
+        """Two loaded instances mutating the same id must sum, not overwrite."""
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A")
+        learner_a = InstinctLearner(storage_path=storage_path)
+        learner_b = InstinctLearner(storage_path=storage_path)
+
+        learner_a.record_outcome(seeded.id, success=True)
+        learner_b.record_outcome(seeded.id, success=True)
+        both_success = InstinctLearner(storage_path=storage_path)
+        assert both_success.instincts[seeded.id].success_count == 2
+        assert both_success.instincts[seeded.id].failure_count == 0
+
+        # A's snapshot is one success behind. Saving it again must not drop
+        # B's success and must not apply A's old delta a second time.
+        learner_a.save()
+        assert InstinctLearner(storage_path=storage_path).instincts[seeded.id].success_count == 2
+
+        learner_a.record_outcome(seeded.id, success=False)
+        mixed = InstinctLearner(storage_path=storage_path)
+        assert mixed.instincts[seeded.id].success_count == 2
+        assert mixed.instincts[seeded.id].failure_count == 1
+
+    def test_stale_holder_does_not_resurrect_evidence_after_action_change(
+        self, storage_path: Path
+    ) -> None:
+        """B still holds the pre-change row. Its unrelated save must not restore it."""
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A", tags=["routing"])
+        for _ in range(3):
+            seeder.record_outcome(seeded.id, success=True)
+        holder = InstinctLearner(storage_path=storage_path)
+        changer = InstinctLearner(storage_path=storage_path)
+        assert holder.instincts[seeded.id].success_count == 3
+        assert changer.instincts[seeded.id].is_reliable is True
+
+        changer.learn(pattern="query A", action="action B")
+        holder.learn(pattern="query B", action="other")
+
+        disk = _read_production_instincts(storage_path)
+        stored = disk[seeded.id]
+        assert stored.action == "action B"
+        assert stored.success_count == 0
+        assert stored.failure_count == 0
+        assert stored.confidence == pytest.approx(0.5)
+        assert stored.is_reliable is False
+        assert stored.tags == ["routing"]
+        assert any(row.pattern == "query B" for row in disk.values())
+
+    def test_field_edit_then_save_does_not_double_count(self, storage_path: Path) -> None:
+        """Accept-style retag calls save() after record_outcome already persisted."""
+        learner = InstinctLearner(storage_path=storage_path)
+        instinct = learner.learn(pattern="query A", action="action A", source="auto_routing")
+        learner.record_outcome(instinct.id, success=True)
+        live = learner.instincts[instinct.id]
+        live.source = "routing_pending"
+        live.tags = ["routing", "pending_accept"]
+        live.context = "routing_pending_accept"
+        learner.save()
+
+        disk = _read_production_instincts(storage_path)
+        stored = disk[instinct.id]
+        assert stored.success_count == 1
+        assert stored.failure_count == 0
+        assert stored.source == "routing_pending"
+        assert stored.tags == ["routing", "pending_accept"]
+        assert stored.context == "routing_pending_accept"
+
+    def test_prune_is_not_resurrected_by_stale_save(self, storage_path: Path) -> None:
+        """An untouched stale instance must not write a pruned row back."""
+        junk = "ok ok ok ok"
+        keeper = "debug this routing error now"
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeder.learn(
+            pattern=junk,
+            action="drop",
+            context="keyword",
+            tags=["routing", "auto_extracted"],
+            source="auto_routing",
+        )
+        seeder.learn(pattern=keeper, action="keep", source="manual")
+        stale = InstinctLearner(storage_path=storage_path)
+        pruner = InstinctLearner(storage_path=storage_path)
+
+        removed = pruner.prune_auto_extracted(dry_run=False)
+
+        assert {row.pattern for row in removed} == {junk}
+        stale.learn(pattern="query B", action="action B")
+        patterns = {row.pattern for row in _read_production_instincts(storage_path).values()}
+        assert junk not in patterns
+        assert keeper in patterns
+        assert "query B" in patterns
+
+
+_QUERY = "debug this routing error now"
+_ACTION_A = "suggest builtin/systematic-debugging skill"
+_ACTION_B = "suggest builtin/code-review skill"
+
+
+def _public_disk_row(path: Path, query: str) -> Instinct:
+    """Read the row through a new learner and ``Instinct.from_dict``.
+
+    The file bytes come from ``InstinctLearner`` saves. The key set is the
+    production ``to_dict()`` schema.
+    """
+    reader = InstinctLearner(storage_path=path)
+    live = reader.get_instinct_for_query(query)
+    assert live is not None
+    decoded = _read_production_instincts(path)
+    stored = decoded[live.id]
+    assert stored.to_dict() == live.to_dict()
+    return live
+
+
+def _seed_action_a(path: Path, successes: int) -> Instinct:
+    seeder = InstinctLearner(storage_path=path)
+    seeded = seeder.learn(pattern=_QUERY, action=_ACTION_A)
+    for _ in range(successes):
+        seeder.record_outcome_for_query(_QUERY, success=True)
+    return seeded
+
+
+class TestActionEvidenceIdentity:
+    """Success and failure belong to pattern+action, not the row id alone.
+
+    Two long-lived learners load the same row. One learns a new action.
+    Feedback the other still applies to the old action must not move onto
+    the new action, in either order, for accept and reject, including a
+    zero baseline and a new action whose counter equals the old baseline.
+    """
+
+    @pytest.fixture
+    def storage_path(self) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "instincts.jsonl"
+
+    @pytest.mark.parametrize("success", [True, False])
+    @pytest.mark.parametrize("seed_successes", [0, 3])
+    def test_change_then_old_feedback_stays_on_reset(
+        self, storage_path: Path, seed_successes: int, success: bool
+    ) -> None:
+        seeded = _seed_action_a(storage_path, seed_successes)
+        holder = InstinctLearner(storage_path=storage_path)
+        changer = InstinctLearner(storage_path=storage_path)
+        assert holder.get_instinct_for_query(_QUERY) is not None
+        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
+
+        changed = changer.learn(pattern=_QUERY, action=_ACTION_B)
+        assert changed.id == seeded.id
+        assert changed.action == _ACTION_B
+        assert changed.success_count == 0
+        assert changed.failure_count == 0
+        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
+
+        holder.record_outcome_for_query(_QUERY, success=success)
+        holder.save()
+
+        row = _public_disk_row(storage_path, _QUERY)
+        assert row.id == seeded.id
+        assert row.action == _ACTION_B
+        assert row.success_count == 0
+        assert row.failure_count == 0
+        assert row.confidence == pytest.approx(0.5)
+        assert row.is_reliable is False
+
+    @pytest.mark.parametrize("success", [True, False])
+    @pytest.mark.parametrize("seed_successes", [0, 3])
+    def test_old_feedback_then_change_discards_old_action_delta(
+        self, storage_path: Path, seed_successes: int, success: bool
+    ) -> None:
+        seeded = _seed_action_a(storage_path, seed_successes)
+        holder = InstinctLearner(storage_path=storage_path)
+        changer = InstinctLearner(storage_path=storage_path)
+
+        holder.record_outcome_for_query(_QUERY, success=success)
+        changed = changer.learn(pattern=_QUERY, action=_ACTION_B)
+        assert changed.id == seeded.id
+        holder.save()
+
+        row = _public_disk_row(storage_path, _QUERY)
+        assert row.id == seeded.id
+        assert row.action == _ACTION_B
+        assert row.success_count == 0
+        assert row.failure_count == 0
+        assert row.confidence == pytest.approx(0.5)
+        assert row.is_reliable is False
+
+    @pytest.mark.parametrize("success", [True, False])
+    def test_same_counter_old_feedback_does_not_increment_new_action(
+        self, storage_path: Path, success: bool
+    ) -> None:
+        seeded = _seed_action_a(storage_path, 3)
+        holder = InstinctLearner(storage_path=storage_path)
+        changer = InstinctLearner(storage_path=storage_path)
+        changer.learn(pattern=_QUERY, action=_ACTION_B)
+        for _ in range(3):
+            changer.record_outcome_for_query(_QUERY, success=True)
+        before = _public_disk_row(storage_path, _QUERY)
+        assert before.action == _ACTION_B
+        assert before.success_count == 3
+        assert before.failure_count == 0
+        assert before.is_reliable is True
+        assert holder.get_instinct_for_query(_QUERY).action == _ACTION_A  # type: ignore[union-attr]
+
+        holder.record_outcome_for_query(_QUERY, success=success)
+        holder.save()
+
+        row = _public_disk_row(storage_path, _QUERY)
+        assert row.id == seeded.id
+        assert row.action == _ACTION_B
+        assert row.success_count == before.success_count
+        assert row.failure_count == before.failure_count
+        assert row.confidence == pytest.approx(before.confidence)
+        assert row.is_reliable is True
+
+    def test_new_action_keeps_peer_evidence_recorded_after_switch(self, storage_path: Path) -> None:
+        """A second learner switching to B must not wipe B's own successes."""
+        _seed_action_a(storage_path, 3)
+        peer = InstinctLearner(storage_path=storage_path)
+        local = InstinctLearner(storage_path=storage_path)
+        peer.learn(pattern=_QUERY, action=_ACTION_B)
+        peer.record_outcome_for_query(_QUERY, success=True)
+        peer.record_outcome_for_query(_QUERY, success=True)
+        before = _public_disk_row(storage_path, _QUERY)
+        assert before.action == _ACTION_B
+        assert before.success_count == 2
+
+        local.learn(pattern=_QUERY, action=_ACTION_B)
+
+        row = _public_disk_row(storage_path, _QUERY)
+        assert row.action == _ACTION_B
+        assert row.success_count == 2
+        assert row.failure_count == 0
+        assert row.confidence == pytest.approx(before.confidence)
+
+    def test_same_action_public_feedback_still_sums(self, storage_path: Path) -> None:
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern=_QUERY, action=_ACTION_A)
+        holder = InstinctLearner(storage_path=storage_path)
+        peer = InstinctLearner(storage_path=storage_path)
+        holder.record_outcome_for_query(_QUERY, success=True)
+        peer.record_outcome_for_query(_QUERY, success=True)
+
+        row = _public_disk_row(storage_path, _QUERY)
+        assert row.id == seeded.id
+        assert row.action == _ACTION_A
+        assert row.success_count == 2
+        assert row.failure_count == 0
+
+
+# Hang bound for real subprocesses. Not a timing assertion of the merge.
+_PROC_TIMEOUT_S = 20.0
+
+
+def _learner_script(storage: Path, body: str) -> str:
+    return "\n".join(
+        [
+            "from pathlib import Path",
+            "from vibesop.core.instinct.learner import InstinctLearner",
+            f"storage = Path({str(storage)!r})",
+            body,
+        ]
+    )
+
+
+def _start_learner_process(storage: Path, body: str) -> subprocess.Popen[str]:
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    return subprocess.Popen(
+        [sys.executable, "-c", _learner_script(storage, body)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        env=env,
+    )
+
+
+def _stop_processes(procs: list[subprocess.Popen[str]]) -> None:
+    for proc in procs:
+        if proc.poll() is None:
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                continue
+
+
+def _process_error(proc: subprocess.Popen[str]) -> str:
+    if proc.poll() is None:
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            return ""
+    if proc.stderr is None:
+        return ""
+    return proc.stderr.read()
+
+
+def _expect_line(proc: subprocess.Popen[str], expected: str) -> None:
+    if proc.stdout is None:
+        raise AssertionError("process stdout is closed")
+    holder: dict[str, str] = {}
+
+    def _read() -> None:
+        assert proc.stdout is not None
+        holder["line"] = proc.stdout.readline()
+
+    thread = threading.Thread(target=_read, daemon=True)
+    thread.start()
+    thread.join(_PROC_TIMEOUT_S)
+    if thread.is_alive():
+        proc.kill()
+        raise AssertionError(
+            f"timed out after {_PROC_TIMEOUT_S}s waiting for {expected!r}: {_process_error(proc)}"
+        )
+    line = holder.get("line", "")
+    if line.strip() != expected:
+        proc.kill()
+        raise AssertionError(f"expected {expected!r}, got {line!r}: {_process_error(proc)}")
+
+
+def _send_go(proc: subprocess.Popen[str]) -> None:
+    if proc.stdin is None:
+        raise AssertionError("process stdin is closed")
+    proc.stdin.write("GO\n")
+    proc.stdin.flush()
+
+
+def _send_line(proc: subprocess.Popen[str], line: str) -> None:
+    if proc.stdin is None:
+        raise AssertionError("process stdin is closed")
+    proc.stdin.write(line + "\n")
+    proc.stdin.flush()
+
+
+def _finish_process(proc: subprocess.Popen[str]) -> None:
+    _expect_line(proc, "DONE")
+    if proc.stdin is not None:
+        proc.stdin.close()
+    try:
+        proc.wait(timeout=_PROC_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+        raise AssertionError(f"process did not exit: {_process_error(proc)}") from None
+    if proc.returncode != 0:
+        raise AssertionError(f"exit {proc.returncode}: {_process_error(proc)}")
+
+
+_MP_RECORD_SUCCESS = """
+learner = InstinctLearner(storage)
+print("LOADED", flush=True)
+if input() != "GO":
+    raise SystemExit("missing GO")
+learner.record_outcome(learner.generate_id("query A"), success=True)
+print("DONE", flush=True)
+"""
+
+_MP_ADD_QUERY_B = """
+learner = InstinctLearner(storage)
+print("LOADED", flush=True)
+if input() != "GO":
+    raise SystemExit("missing GO")
+learner.learn(pattern="query B", action="action B")
+print("DONE", flush=True)
+"""
+
+_MP_LEARN_AFTER_CLEAR = """
+learner = InstinctLearner(storage)
+print("LOADED", flush=True)
+if input() != "GO":
+    raise SystemExit("missing GO")
+learner.learn(pattern="query B", action="action B")
+learner.learn(pattern="query B", action="action B")
+print("DONE", flush=True)
+"""
+
+# Same sibling path InstinctLearner._cross_process_lock passes to
+# vibesop.utils.file_lock.cross_process_lock: instincts.jsonl -> instincts.jsonl.lock.
+_MP_HOLD_PRODUCTION_LOCK = """
+from vibesop.utils.file_lock import cross_process_lock
+
+lock_path = storage.with_suffix(storage.suffix + ".lock")
+with cross_process_lock(lock_path):
+    print("LOCK_HELD", flush=True)
+    if input() != "RELEASE":
+        raise SystemExit("missing RELEASE")
+print("DONE", flush=True)
+"""
+
+_MP_CONTEND_THEN_LEARNER_WRITE = """
+from vibesop.utils.file_lock import CouldNotLock, cross_process_lock
+
+lock_path = storage.with_suffix(storage.suffix + ".lock")
+print("READY", flush=True)
+if input() != "GO":
+    raise SystemExit("missing GO")
+try:
+    with cross_process_lock(lock_path, blocking=False):
+        raise SystemExit("acquired production lock while holder still holds it")
+except CouldNotLock:
+    print("CONTENDED", flush=True)
+if input() != "WRITE":
+    raise SystemExit("missing WRITE")
+with cross_process_lock(lock_path):
+    print("ACQUIRED", flush=True)
+learner = InstinctLearner(storage)
+learner.record_outcome(learner.generate_id("query A"), success=True)
+learner.learn(pattern="query B", action="action B")
+print("DONE", flush=True)
+"""
+
+
+class TestInstinctMultiprocessMerge:
+    """Real OS processes. Timeouts only bound a hang; they do not score speed."""
+
+    @pytest.fixture
+    def storage_path(self) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "instincts.jsonl"
+
+    def test_processes_keep_success_when_peer_adds_a_row(self, storage_path: Path) -> None:
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A")
+        writer = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
+        peer = _start_learner_process(storage_path, _MP_ADD_QUERY_B)
+        procs = [writer, peer]
+        try:
+            _expect_line(writer, "LOADED")
+            _expect_line(peer, "LOADED")
+            _send_go(writer)
+            _finish_process(writer)
+            _send_go(peer)
+            _finish_process(peer)
+        finally:
+            _stop_processes(procs)
+
+        disk = _read_production_instincts(storage_path)
+        assert disk[seeded.id].success_count == 1
+        assert disk[seeded.id].failure_count == 0
+        assert disk[seeded.id].confidence > 0.5
+        assert {row.pattern for row in disk.values()} == {"query A", "query B"}
+
+    def test_processes_sum_same_id_successes(self, storage_path: Path) -> None:
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A")
+        first = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
+        second = _start_learner_process(storage_path, _MP_RECORD_SUCCESS)
+        procs = [first, second]
+        try:
+            _expect_line(first, "LOADED")
+            _expect_line(second, "LOADED")
+            _send_go(first)
+            _send_go(second)
+            _finish_process(first)
+            _finish_process(second)
+        finally:
+            _stop_processes(procs)
+
+        disk = _read_production_instincts(storage_path)
+        assert disk[seeded.id].success_count == 2
+        assert disk[seeded.id].failure_count == 0
+
+    def test_process_clear_does_not_resurrect_old_row(self, storage_path: Path) -> None:
+        seeder = InstinctLearner(storage_path=storage_path)
+        secret = seeder.learn(pattern="query A", action="action A")
+        stale = _start_learner_process(storage_path, _MP_LEARN_AFTER_CLEAR)
+        try:
+            _expect_line(stale, "LOADED")
+            assert InstinctLearner(storage_path=storage_path).clear() == 1
+            _send_go(stale)
+            _finish_process(stale)
+        finally:
+            _stop_processes([stale])
+
+        disk = _read_production_instincts(storage_path)
+        assert secret.id not in disk
+        assert {row.pattern for row in disk.values()} == {"query B"}
+
+    def test_held_lock_rejects_nonblocking_peer_then_learner_writes(
+        self, storage_path: Path
+    ) -> None:
+        """CouldNotLock while the holder is still inside the production lock.
+
+        LOCK_HELD is printed inside ``cross_process_lock``. RELEASE is sent
+        only after CONTENDED. The 20s joins are hang bounds, not a speed score.
+        """
+        seeder = InstinctLearner(storage_path=storage_path)
+        seeded = seeder.learn(pattern="query A", action="action A")
+        lock_path = storage_path.with_suffix(storage_path.suffix + ".lock")
+        assert lock_path.name == "instincts.jsonl.lock"
+
+        holder = _start_learner_process(storage_path, _MP_HOLD_PRODUCTION_LOCK)
+        contender = _start_learner_process(storage_path, _MP_CONTEND_THEN_LEARNER_WRITE)
+        procs = [holder, contender]
+        try:
+            _expect_line(holder, "LOCK_HELD")
+            assert holder.poll() is None
+            _expect_line(contender, "READY")
+            _send_go(contender)
+            _expect_line(contender, "CONTENDED")
+            assert holder.poll() is None
+            _send_line(holder, "RELEASE")
+            _finish_process(holder)
+            _send_line(contender, "WRITE")
+            _expect_line(contender, "ACQUIRED")
+            _finish_process(contender)
+        finally:
+            _stop_processes(procs)
+
+        disk = _read_production_instincts(storage_path)
+        stored = disk[seeded.id]
+        assert stored.action == "action A"
+        assert stored.success_count == 1
+        assert stored.failure_count == 0
+        others = [row for row in disk.values() if row.id != seeded.id]
+        assert [row.pattern for row in others] == ["query B"]
+        assert others[0].action == "action B"
+        assert others[0].id != seeded.id
