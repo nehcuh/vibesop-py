@@ -954,12 +954,12 @@ def _controlled_root_alias(raw: str) -> Path:
     root = alias / "root"
     root.mkdir()
     # Link text keeps the unresolved physical path, including /var when present.
-    # Native Windows readlink() reports an extended-length ``//?/`` prefix, so
-    # the link target is verified through real OS identity and both sides
-    # resolving instead of raw link-text equality.
+    # Native Windows readlink() reports an extended-length ``//?/`` prefix that
+    # Path.resolve() retains, so the link target is verified through real OS
+    # identity instead of resolved-text equality.
     assert alias.is_symlink()
     assert os.path.samefile(alias, physical)
-    assert alias.readlink().resolve() == physical.resolve()
+    assert os.path.samefile(alias.readlink(), physical)
     return root
 
 
@@ -976,7 +976,9 @@ def _assert_raw_temp_alias(root: Path) -> None:
     resolved = root.resolve()
     assert root != resolved
     assert str(root) != str(resolved)
-    assert resolved == (alias.readlink() / root.name).resolve()
+    # The same Windows ``//?/`` readlink prefix survives resolve(), so the
+    # resolved root is compared through real OS identity, not path text.
+    assert os.path.samefile(resolved, alias.readlink() / root.name)
 
 
 def _consume_install_tuple(installer: PackInstaller, url: str, result: tuple[bool, str]) -> str:
