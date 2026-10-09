@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B5 diagnosis optimization**: Coroutine function executors are now awaited in parallel batches; single-step batches retain their existing synchronous contract, and async callable objects/custom awaitables remain outside this scope.
+
 - **B6 diagnosis optimization**: Instinct writes merge under thread and process locks using loaded baselines; persisted row shape remains compatible. Evidence is scoped to pattern and action identity.
 
 - **B4 diagnosis optimization**: Overlay writers and validators use canonical policies.security/routing; the merger still reads historical top-level policies with canonical values taking precedence. Sandbox builds run in a writable isolated copy and publish guarded regular-file outputs after success.
@@ -36,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B5 diagnosis optimization**: Dispatch synchronous executors in parallel StepRunner batches through asyncio.to_thread, preserving semaphore limits, contextvars, and B3 outcomes.
 
 - **B6 diagnosis optimization**: Preserve concurrent feedback instead of overwriting newer disk state; reset confidence and outcome evidence on action changes, discard stale feedback for replaced actions, and prevent clear/prune resurrection.
 
