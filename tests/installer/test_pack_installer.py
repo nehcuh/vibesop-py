@@ -607,6 +607,35 @@ def _write_python_build_script(pack_dir: Path) -> Path:
     return script
 
 
+def _make_file_symlink_loop(base: Path) -> Path | None:
+    """Create a real two-node file symlink loop under *base*; None if refused.
+
+    ``Path.resolve()`` on the returned node raises ``RuntimeError`` on CPython
+    3.12 and returns an unresolved non-file path on 3.13 — the two behaviors
+    the loop-recovery tests must both survive.
+    """
+    a = base / "sh-loop-a"
+    b = base / "sh-loop-b"
+    try:
+        a.symlink_to(b)
+        b.symlink_to(a)
+    except OSError:
+        return None
+    return a
+
+
+def _make_dir_symlink_loop(base: Path) -> Path | None:
+    """Create a real two-node directory symlink loop; None if refused."""
+    a = base / "dir-loop-a"
+    b = base / "dir-loop-b"
+    try:
+        a.symlink_to(b, target_is_directory=True)
+        b.symlink_to(a, target_is_directory=True)
+    except OSError:
+        return None
+    return a
+
+
 class TestWindowsLocalBuildInterpreterSeam:
     """SIMULATIONS of the win32 interpreter-selection seam in ``_run_build_local``.
 
@@ -646,6 +675,12 @@ class TestWindowsLocalBuildInterpreterSeam:
         import vibesop.installer.pack_installer as pack_installer_module
 
         fake_root = tmp_path / "fake-win"
+        # Production resolves the System32 boundary STRICTLY and fails closed
+        # when it does not genuinely exist (a real Windows box always has
+        # C:\Windows\System32). Valid-case simulations must therefore stage a
+        # real scratch boundary directory; tests for missing/broken boundaries
+        # stage their own environment without it.
+        (fake_root / "Windows" / "System32").mkdir(parents=True, exist_ok=True)
         # Uppercase names match production's lookups (case-insensitive on
         # Windows, exact on POSIX simulation hosts).
         monkeypatch.setenv("SYSTEMROOT", str(fake_root / "Windows"))
@@ -840,6 +875,348 @@ class TestWindowsLocalBuildInterpreterSeam:
             PackInstaller._run_build_local(pack_dir, script)
         assert not ghost_sh.exists()
         assert not ghost_bash.exists()
+
+
+class TestWindowsSymlinkLoopRecovery:
+    """Symlink-loop recovery in ``_run_build_local`` — the W2R2 P2 regression.
+
+    On CPython 3.12 ``Path.resolve()`` reports a symlink loop as ``RuntimeError``
+    (not ``OSError``); on 3.13 a non-strict resolve returns the unresolved loop
+    path instead of raising, and only ``resolve(strict=True)`` raises
+    (``OSError``). ``_run_build_local`` must therefore (a) skip a loop candidate
+    rather than abort the search, and (b) treat an unresolvable or nonexistent
+    System32 boundary as ``PackBuildError`` so ``install_pack`` removes the
+    cloned tree — otherwise a failed install leaves the tree behind and a retry
+    reports "Already installed" without ever running the required build.
+
+    SIMULATIONS like the seam class above (module-local ``sys`` proxy on POSIX
+    hosts only; real ``sys.platform``/``os.name`` untouched), with two evidence
+    layers: real filesystem symlink loops (skipped only where the host cannot
+    create symlinks — the skip is reported, never counted as a pass) and
+    deterministic ``RuntimeError`` seams that patch ``Path.resolve`` on one
+    exact path, so the 3.12 exception behavior is exercised on every host and
+    interpreter. The subprocess is real wherever a build runs.
+    """
+
+    LOOP_SKIP_REASON = (
+        "real filesystem symlink loop unavailable on this host (symlink creation "
+        "raised OSError); the RuntimeError seam tests in this class exercise the "
+        "same production branch deterministically"
+    )
+
+    @staticmethod
+    def _stage_win32_env(
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        systemroot: Path,
+        discovered: dict[str, str | None],
+        *,
+        tty_stdin: bool = False,
+    ) -> None:
+        """Stage a scratch Windows env where the caller controls SYSTEMROOT.
+
+        Unlike ``TestWindowsLocalBuildInterpreterSeam._stage_win32_seam`` this
+        creates no boundary directory, so loop/ghost System32 boundaries can be
+        staged deliberately. ``tty_stdin`` adds a TTY stub to the module-local
+        ``sys`` proxy for flows that pass through ``_run_post_install``.
+        """
+        from types import SimpleNamespace
+
+        import vibesop.installer.pack_installer as pack_installer_module
+
+        fake_root = tmp_path / "fake-win"
+        monkeypatch.setenv("SYSTEMROOT", str(systemroot))
+        monkeypatch.setenv("PROGRAMFILES", str(fake_root / "Program Files"))
+        monkeypatch.setenv("PROGRAMFILES(X86)", str(fake_root / "Program Files (x86)"))
+        monkeypatch.setenv("LOCALAPPDATA", str(fake_root / "AppData" / "Local"))
+        monkeypatch.setenv("PATH", str(fake_root / "no-bin-on-path"))
+        real_which = shutil.which
+
+        def _which(cmd: str, *args: Any, **kwargs: Any) -> str | None:
+            if cmd in discovered:
+                return discovered[cmd]
+            return real_which(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(shutil, "which", _which)
+        if sys.platform != "win32":
+            if tty_stdin:
+                proxy = SimpleNamespace(
+                    platform="win32", stdin=SimpleNamespace(isatty=lambda: True)
+                )
+            else:
+                proxy = SimpleNamespace(platform="win32")
+            monkeypatch.setattr(pack_installer_module, "sys", proxy)
+
+    def test_real_loop_candidate_skipped_and_later_interpreter_executed(
+        self, tmp_path, monkeypatch
+    ):
+        """A real filesystem symlink-loop candidate is skipped, not fatal.
+
+        The later candidate is a real ``sys.executable`` child; production's
+        complete argv and subprocess kwargs are recorded around the genuine
+        call. On 3.12 the loop raises ``RuntimeError`` in ``resolve()``; on
+        3.13 it resolves to a non-file path — either way the child must run.
+        """
+        from vibesop.installer.pack_installer import PackInstaller
+
+        loop_base = tmp_path / "loops"
+        loop_base.mkdir()
+        loop_sh = _make_file_symlink_loop(loop_base)
+        if loop_sh is None:
+            pytest.skip(self.LOOP_SKIP_REASON)
+        record = tmp_path / "build-record.json"
+        monkeypatch.setenv("W2_BUILD_RECORD", str(record))
+        TestWindowsLocalBuildInterpreterSeam._stage_win32_seam(
+            monkeypatch, tmp_path, {"sh": str(loop_sh), "bash": sys.executable}
+        )
+
+        pack_dir = tmp_path / "pack with spaces"
+        pack_dir.mkdir()
+        script = _write_python_build_script(pack_dir)
+
+        real_run = subprocess.run
+        recorded: dict[str, Any] = {}
+
+        def _run(cmd: Any, *args: Any, **kwargs: Any) -> Any:
+            recorded["argv"] = list(cmd)
+            recorded["kwargs"] = dict(kwargs)
+            return real_run(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", _run)
+
+        assert PackInstaller._run_build_local(pack_dir, script) == "BUILD.sh OK"
+        TestWindowsLocalBuildInterpreterSeam._assert_child_argv(record, pack_dir, script)
+        kwargs = recorded["kwargs"]
+        assert recorded["argv"] == [str(Path(sys.executable).resolve()), script.as_posix()]
+        assert kwargs["cwd"] == pack_dir
+        assert kwargs["timeout"] == 120
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        assert kwargs["check"] is False
+        assert "shell" not in kwargs
+
+    def test_real_boundary_loop_fails_closed_as_packbuilderror_without_exec(
+        self, tmp_path, monkeypatch
+    ):
+        """A symlink-loop SYSTEMROOT must fail closed as ``PackBuildError``.
+
+        Old behavior (3.12): ``RuntimeError`` escaped ``_run_build_local``.
+        On 3.13 old non-strict resolution silently accepted the loop path. The
+        strict boundary contract raises on both versions; no child may run.
+        """
+        from vibesop.installer.pack_installer import PackBuildError, PackInstaller
+
+        loop_base = tmp_path / "loops"
+        loop_base.mkdir()
+        loop_root = _make_dir_symlink_loop(loop_base)
+        if loop_root is None:
+            pytest.skip(self.LOOP_SKIP_REASON)
+        self._stage_win32_env(monkeypatch, tmp_path, loop_root, {"sh": None, "bash": None})
+
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        script = pack_dir / "BUILD.sh"
+        script.write_text("#!/bin/sh\necho 'built'\n", encoding="utf-8")
+
+        with (
+            patch("subprocess.run", side_effect=AssertionError("must not execute")),
+            pytest.raises(
+                PackBuildError, match="cannot resolve the Windows System32 boundary"
+            ) as excinfo,
+        ):
+            PackInstaller._run_build_local(pack_dir, script)
+        assert isinstance(excinfo.value.__cause__, (OSError, RuntimeError))
+
+    def test_nonexistent_boundary_fails_closed_without_exec(self, tmp_path, monkeypatch):
+        """A SYSTEMROOT whose System32 does not exist fails closed, everywhere.
+
+        Deterministic on 3.12 and 3.13 alike: only strict resolution can tell a
+        genuine boundary from a ghost path (non-strict resolve returns both).
+        No symlink capability required.
+        """
+        from vibesop.installer.pack_installer import PackBuildError, PackInstaller
+
+        ghost_root = tmp_path / "never-created" / "Windows"
+        assert not ghost_root.exists()
+        self._stage_win32_env(monkeypatch, tmp_path, ghost_root, {"sh": None, "bash": None})
+
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        script = pack_dir / "BUILD.sh"
+        script.write_text("#!/bin/sh\necho 'built'\n", encoding="utf-8")
+
+        with (
+            patch("subprocess.run", side_effect=AssertionError("must not execute")),
+            pytest.raises(
+                PackBuildError, match="cannot resolve the Windows System32 boundary"
+            ) as excinfo,
+        ):
+            PackInstaller._run_build_local(pack_dir, script)
+        assert isinstance(excinfo.value.__cause__, OSError)
+
+    def test_runtimeerror_candidate_seam_skips_to_later_interpreter(self, tmp_path, monkeypatch):
+        """Deterministic 3.12 loop behavior: ``resolve()`` raises RuntimeError.
+
+        ``Path.resolve`` is patched on ONE exact path (the first candidate, a
+        real inert file) to raise the exact exception 3.12 pathlib raises for a
+        symlink loop. Production must catch it, skip the candidate, and run
+        the later real interpreter. No symlink capability required.
+        """
+        from vibesop.installer.pack_installer import PackInstaller
+
+        bad = _write_inert_decoy(tmp_path / "fake-win" / "bin" / "sh")
+        record = tmp_path / "build-record.json"
+        monkeypatch.setenv("W2_BUILD_RECORD", str(record))
+        TestWindowsLocalBuildInterpreterSeam._stage_win32_seam(
+            monkeypatch, tmp_path, {"sh": str(bad), "bash": sys.executable}
+        )
+
+        real_resolve = Path.resolve
+
+        def _resolve(self: Path, strict: bool = False) -> Path:
+            if self == bad:
+                raise RuntimeError(f"Symlink loop from {str(bad)!r}")
+            return real_resolve(self, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", _resolve)
+
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        script = _write_python_build_script(pack_dir)
+
+        assert PackInstaller._run_build_local(pack_dir, script) == "BUILD.sh OK"
+        TestWindowsLocalBuildInterpreterSeam._assert_child_argv(record, pack_dir, script)
+
+    def test_runtimeerror_boundary_seam_fails_closed_without_exec(self, tmp_path, monkeypatch):
+        """Deterministic 3.12 loop boundary: RuntimeError → PackBuildError.
+
+        A VALID first candidate exists, so this also proves the boundary gate
+        runs before any candidate is launched. ``Path.resolve`` is patched on
+        the exact boundary path only; no symlink capability required.
+        """
+        from vibesop.installer.pack_installer import PackBuildError, PackInstaller
+
+        TestWindowsLocalBuildInterpreterSeam._stage_win32_seam(
+            monkeypatch, tmp_path, {"sh": sys.executable, "bash": None}
+        )
+        boundary = tmp_path / "fake-win" / "Windows" / "System32"
+        real_resolve = Path.resolve
+
+        def _resolve(self: Path, strict: bool = False) -> Path:
+            if self == boundary:
+                raise RuntimeError(f"Symlink loop from {str(boundary)!r}")
+            return real_resolve(self, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", _resolve)
+
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        script = pack_dir / "BUILD.sh"
+        script.write_text("#!/bin/sh\necho 'built'\n", encoding="utf-8")
+
+        with (
+            patch("subprocess.run", side_effect=AssertionError("must not execute")),
+            pytest.raises(PackBuildError, match="cannot resolve the Windows System32 boundary"),
+        ):
+            PackInstaller._run_build_local(pack_dir, script)
+
+    def test_public_install_failure_cleans_tree_then_retry_executes_build(
+        self, tmp_path, monkeypatch
+    ):
+        """The public P2 scenario through real ``install_pack`` seams.
+
+        Real filesystem loop as the only ``sh`` candidate: the first install
+        must fail as a required build (tree removed, no child executed), and a
+        retry with a real interpreter available must re-clone and actually
+        execute the build — never "Already installed". Analysis payloads are
+        real ``RepoAnalysis`` producer objects; clone/discovery/confirmation
+        seams match the existing public-test practice.
+        """
+        from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+
+        loop_base = tmp_path / "loops"
+        loop_base.mkdir()
+        loop_sh = _make_file_symlink_loop(loop_base)
+        if loop_sh is None:
+            pytest.skip(self.LOOP_SKIP_REASON)
+
+        fake_root = tmp_path / "fake-win"
+        # Production requires a genuinely existing System32 boundary; stage a
+        # real one so the failure under test is the candidate path, not the
+        # boundary gate.
+        (fake_root / "Windows" / "System32").mkdir(parents=True)
+        discovered: dict[str, str | None] = {"sh": str(loop_sh), "bash": None}
+        self._stage_win32_env(
+            monkeypatch, tmp_path, fake_root / "Windows", discovered, tty_stdin=True
+        )
+
+        record = tmp_path / "build-record.json"
+        monkeypatch.setenv("W2_BUILD_RECORD", str(record))
+
+        def _analyze(
+            analyzer: RepoAnalyzer, url: str, pack_name: str | None = None
+        ) -> RepoAnalysis:
+            return RepoAnalysis(
+                pack_name=pack_name or "loop-pack",
+                source_url=url,
+                skill_files=[Path("SKILL.md")],
+                setup_scripts=["BUILD.sh"],
+            )
+
+        def _clone(analyzer: RepoAnalyzer, url: str, dest: Path) -> bool:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "SKILL.md").write_text(
+                "---\nname: loop-pack\ndescription: Loop rollback regression pack\n---\n# loop\n",
+                encoding="utf-8",
+            )
+            (dest / "BUILD.sh").write_text(_PY_BUILD_CHILD, encoding="utf-8", newline="\n")
+            return True
+
+        monkeypatch.setattr(RepoAnalyzer, "analyze", _analyze)
+        monkeypatch.setattr(RepoAnalyzer, "git_clone", _clone)
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        target = project_root / ".vibe" / "skills" / "loop-pack"
+
+        with patch("vibesop.installer.pack_installer.SkillSecurityAuditor") as auditor_cls:
+            mock_auditor = MagicMock()
+            mock_auditor.audit_skill_file.return_value = MagicMock(is_safe=True)
+            mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
+            auditor_cls.return_value = mock_auditor
+            installer = PackInstaller(
+                central_storage=tmp_path / "central",
+                platform_paths=[tmp_path / "platform"],
+                project_root=project_root,
+                sandbox_builds=False,
+                allow_unsafe_build=True,
+            )
+
+            with _allow_local_build():
+                ok1, msg1 = installer.install_pack(
+                    "loop-pack", "https://example.com/loop-pack", scope="project"
+                )
+
+            assert ok1 is False, msg1
+            assert "Required build failed" in msg1
+            assert "no Windows-native POSIX shell" in msg1
+            assert not target.exists(), "failed install must remove the cloned tree"
+            assert not record.exists(), "no child may execute on the failed install"
+
+            discovered["bash"] = sys.executable
+            with _allow_local_build():
+                ok2, msg2 = installer.install_pack(
+                    "loop-pack", "https://example.com/loop-pack", scope="project"
+                )
+
+        assert ok2 is True, msg2
+        assert "Already installed" not in msg2
+        assert "Installed loop-pack" in msg2
+        assert "BUILD.sh OK" in msg2
+        payload = json.loads(record.read_text(encoding="utf-8"))
+        assert Path(payload["interpreter"]).resolve() == Path(sys.executable).resolve()
+        assert payload["script_arg"] == (target / "BUILD.sh").as_posix()
+        assert Path(payload["cwd"]).resolve() == target.resolve()
 
 
 class TestSkillNameDedup:
