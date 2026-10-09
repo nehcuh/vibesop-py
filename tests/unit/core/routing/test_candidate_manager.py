@@ -399,6 +399,33 @@ class TestCacheInvalidation:
         )
         assert mgr._load_from_disk_cache([search_path]) is None
 
+        # v3 hashed mtime only. A matching paths_hash must still be discarded
+        # so a pre-fix entry cannot be reread as if it were content-addressed.
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 3,
+                    "paths_hash": paths_hash,
+                    "candidates": [{"id": "stale-v3", "description": "old"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert mgr._load_from_disk_cache([search_path]) is None
+
+        # v4 hashed SKILL.md only and omitted project_hash / ordinary markdown.
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 4,
+                    "paths_hash": paths_hash,
+                    "candidates": [{"id": "stale-v4", "description": "old"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert mgr._load_from_disk_cache([search_path]) is None
+
         mgr._save_to_disk_cache([{"id": "current"}], paths_hash)
         loaded = mgr._load_from_disk_cache([search_path])
         assert loaded == [{"id": "current"}]
@@ -441,3 +468,453 @@ class TestCacheInvalidation:
         (new_dir / "SKILL.md").write_text("id: new\n", encoding="utf-8")
 
         assert mgr._should_check_reload() is True
+
+
+def _isolated_manager(tmp_path: Path):
+    """CandidateManager whose discovery is the tiny skills dir, not the machine."""
+    from vibesop.core.skills.loader import SkillLoader
+
+    search = tmp_path / "skills"
+    search.mkdir(exist_ok=True)
+    mgr = CandidateManager(tmp_path)
+    mgr._search_paths = [search]
+    mgr._skill_loader = SkillLoader(
+        project_root=tmp_path,
+        search_paths=[search],
+        enable_external=False,
+        strict_search_paths=True,
+    )
+    return mgr, search
+
+
+def _write_skill(search: Path, skill_id: str, description: str) -> Path:
+    skill = search / skill_id / "SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text(
+        f"---\nname: {skill_id}\ndescription: {description}\n---\n# {skill_id}\n",
+        encoding="utf-8",
+    )
+    return skill
+
+
+class TestFingerprintContract:
+    """D04/D05 cache key: content, governance projection, registry, skill YAML."""
+
+    def test_content_changes_hash_preserved_mtime_does_not(self, tmp_path: Path) -> None:
+        mgr, search = _isolated_manager(tmp_path)
+        skill = _write_skill(search, "alpha", "one")
+        before = mgr._compute_paths_hash([search])
+
+        stamp = skill.stat()
+        skill.write_text(
+            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        import os
+
+        os.utime(skill, (stamp.st_atime, stamp.st_mtime))
+        assert mgr._compute_paths_hash([search]) != before
+
+        # A pure timestamp touch must not look like a new skill body.
+        current = mgr._compute_paths_hash([search])
+        os.utime(skill, (stamp.st_atime, stamp.st_mtime + 50))
+        assert mgr._compute_paths_hash([search]) == current
+
+    def test_yaml_skill_and_registry_are_in_the_fingerprint(self, tmp_path: Path) -> None:
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "one")
+        baseline = mgr._compute_paths_hash([search])
+
+        yaml_skill = search / "beta.yaml"
+        yaml_skill.write_text(
+            "id: beta\nname: beta\ndescription: from yaml\n",
+            encoding="utf-8",
+        )
+        with_yaml = mgr._compute_paths_hash([search])
+        assert with_yaml != baseline
+
+        yaml_skill.write_text(
+            "id: beta\nname: beta\ndescription: yaml edited\n",
+            encoding="utf-8",
+        )
+        assert mgr._compute_paths_hash([search]) != with_yaml
+
+        registry = search / "registry.yaml"
+        registry.write_text("skills: []\n", encoding="utf-8")
+        with_registry = mgr._compute_paths_hash([search])
+        registry.write_text("skills:\n  - id: added\n", encoding="utf-8")
+        assert mgr._compute_paths_hash([search]) != with_registry
+
+    def test_usage_stats_do_not_change_fingerprint_governance_does(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "one")
+        config_file = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
+        config_file.parent.mkdir(parents=True)
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config_file)
+
+        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "scope": "global"})
+        baseline = mgr._compute_paths_hash([search])
+        SkillConfigManager.update_skill_config("alpha", {"usage_stats": {"call_count": 4}})
+        assert mgr._compute_paths_hash([search]) == baseline
+
+        SkillConfigManager.update_skill_config("alpha", {"enabled": False})
+        disabled = mgr._compute_paths_hash([search])
+        assert disabled != baseline
+
+        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "lifecycle": "archived"})
+        assert mgr._compute_paths_hash([search]) != disabled
+
+    def test_same_mtime_edit_is_visible_to_auto_refresh(self, tmp_path: Path) -> None:
+        import os
+
+        mgr, search = _isolated_manager(tmp_path)
+        skill = _write_skill(search, "alpha", "one")
+        first = mgr.get_cached_candidates()
+        assert next(c for c in first if c["id"] == "alpha")["description"] == "one"
+
+        stamp = skill.stat()
+        skill.write_text(
+            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        os.utime(skill, (stamp.st_atime, stamp.st_mtime))
+        # Open the rate-limit gate. This does not clear either cache.
+        mgr._last_reload_check = 0.0
+        second = mgr.get_cached_candidates()
+        assert next(c for c in second if c["id"] == "alpha")["description"] == "two"
+
+    def test_reload_persists_new_metadata_under_new_fingerprint(self, tmp_path: Path) -> None:
+        mgr, search = _isolated_manager(tmp_path)
+        skill = _write_skill(search, "alpha", "one")
+        assert (
+            next(c for c in mgr.get_cached_candidates() if c["id"] == "alpha")["description"]
+            == "one"
+        )
+
+        skill.write_text(
+            "---\nname: alpha\ndescription: two\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        mgr.reload()
+        refreshed = next(c for c in mgr.get_cached_candidates() if c["id"] == "alpha")
+        assert refreshed["description"] == "two"
+
+        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
+        assert payload["paths_hash"] == mgr._compute_paths_hash(mgr._search_paths)
+        cached = next(c for c in payload["candidates"] if c["id"] == "alpha")
+        assert cached["description"] == "two"
+
+        # A second manager must hit that file, not rebuild a different body.
+        payload["candidates"].append({"id": "disk-cache-sentinel", "description": "hit"})
+        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
+        cache_path.write_text(json.dumps(payload), encoding="utf-8")
+        stamped = cache_path.stat().st_mtime_ns
+
+        fresh, _fresh_search = _isolated_manager(tmp_path)
+        # Same roots the writer hashed. pin_search_paths would bypass the disk.
+        fresh._search_paths = [search]
+        fresh._skill_loader = mgr._skill_loader
+        # The shared loader was cleared by reload; a hit must not need it.
+        ids = {c["id"] for c in fresh.get_cached_candidates()}
+        assert "disk-cache-sentinel" in ids
+        assert (
+            next(c for c in fresh.get_cached_candidates() if c["id"] == "alpha")["description"]
+            == "two"
+        )
+        assert cache_path.stat().st_mtime_ns == stamped
+
+    def test_add_and_delete_via_auto_refresh_and_reload(self, tmp_path: Path) -> None:
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "one")
+        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha"}
+
+        _write_skill(search, "beta", "two")
+        mgr._last_reload_check = 0.0
+        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha", "beta"}
+
+        (search / "beta" / "SKILL.md").unlink()
+        mgr.reload()
+        assert {c["id"] for c in mgr.get_cached_candidates()} == {"alpha"}
+        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
+        assert all(c.get("id") != "beta" for c in payload["candidates"])
+
+    def test_reload_invalidates_index_layer_cache(self, tmp_path: Path) -> None:
+        from types import SimpleNamespace
+
+        from vibesop.core.routing._layers import try_index_layer
+        from vibesop.core.routing.candidate_manager import index_cache_epoch
+
+        mgr, _search = _isolated_manager(tmp_path)
+        router = SimpleNamespace(
+            project_root=tmp_path,
+            _config=SimpleNamespace(
+                index_match_threshold=0.35,
+                index_external_match_threshold=0.5,
+            ),
+            _index_layer_cache={"stale-skill": object()},
+            _index_profile_tokens={"stale-skill": {"stale"}},
+            _index_layer_epoch=index_cache_epoch(tmp_path),
+            _get_skill_source=lambda _sid, _ns: "builtin",
+        )
+        mgr.reload()
+        _match, detail = try_index_layer(router, "review code", [])
+        assert detail.matched is False
+        assert "stale-skill" not in router._index_layer_cache
+
+
+class _Clock:
+    """Controllable monotonic clock for the declared 5s auto-refresh interval."""
+
+    def __init__(self, now: float = 100.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _write_named_markdown(search: Path, skill_id: str, filename: str, description: str) -> Path:
+    skill = search / skill_id / filename
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text(
+        f"---\nname: {skill_id}\ndescription: {description}\n---\n# {skill_id}\n",
+        encoding="utf-8",
+    )
+    return skill
+
+
+class TestDiscoveryFingerprintParity:
+    """R1–R3: fingerprint, config reader, and loader discovery stay one source."""
+
+    def test_same_mtime_config_edit_hides_skill_on_hot_and_fresh_disk(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import os
+
+        from vibesop.core.skills.config_manager import (
+            _CONFIG_FILE_CACHE,
+            SkillConfigManager,
+        )
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "before")
+        config = tmp_path / "auto-config.yaml"
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
+        _CONFIG_FILE_CACHE.clear()
+        config.write_text("skills:\n  alpha:\n    enabled: true\n", encoding="utf-8")
+
+        first = mgr.get_cached_candidates()
+        assert [c["enabled"] for c in first if c["id"] == "alpha"] == [True]
+        before = mgr._content_fingerprint
+        stamp = config.stat()
+        config.write_text("skills:\n  alpha:\n    enabled: false\n", encoding="utf-8")
+        os.utime(config, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+
+        hot = mgr.get_cached_candidates()
+        after = mgr._content_fingerprint
+        assert before != after
+        assert [c["id"] for c in hot] == []
+        assert SkillConfigManager.get_skill_config("alpha").enabled is False
+
+        _CONFIG_FILE_CACHE.clear()
+        fresh, _ = _isolated_manager(tmp_path)
+        fresh_ids = [c["id"] for c in fresh.get_cached_candidates()]
+        assert fresh_ids == []
+        assert SkillConfigManager.get_skill_config("alpha").enabled is False
+
+        cache_path = tmp_path / ".vibe" / "cache" / "candidates_v2.json"
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        assert all(c.get("id") != "alpha" for c in payload["candidates"])
+
+    def test_ordinary_markdown_edit_is_visible_after_declared_interval(
+        self, tmp_path: Path
+    ) -> None:
+        mgr, search = _isolated_manager(tmp_path)
+        skill = _write_named_markdown(search, "alpha", "alpha.md", "before")
+        clock = _Clock(100.0)
+        mgr._clock = clock
+        first = mgr.get_cached_candidates()
+        assert next(c for c in first if c["id"] == "alpha")["description"] == "before"
+        before = mgr._content_fingerprint
+        mgr._last_reload_check = clock.now
+
+        skill.write_text(
+            "---\nname: alpha\ndescription: after\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        clock.now += 1.0
+        held = mgr.get_cached_candidates()
+        assert next(c for c in held if c["id"] == "alpha")["description"] == "before"
+        assert mgr._compute_paths_hash([search]) != before
+
+        clock.now += 5.0
+        hot = mgr.get_cached_candidates()
+        fresh, _ = _isolated_manager(tmp_path)
+        assert next(c for c in hot if c["id"] == "alpha")["description"] == "after"
+        assert (
+            next(c for c in fresh.get_cached_candidates() if c["id"] == "alpha")["description"]
+            == "after"
+        )
+
+    def test_default_project_skills_root_is_fingerprinted(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
+        from vibesop.core.skills.external_loader import ExternalSkillLoader
+        from vibesop.core.skills.loader import SkillLoader
+
+        home = tmp_path / "home"
+        home.mkdir(exist_ok=True)
+        monkeypatch.setattr(Path, "home", lambda: home)
+        monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [home / "none"])
+        config = tmp_path / "auto-config.yaml"
+        config.write_text("skills: {}\n", encoding="utf-8")
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
+        _CONFIG_FILE_CACHE.clear()
+
+        project = tmp_path / "default-root"
+        search = project / "skills"
+        skill = _write_skill(search, "alpha", "before")
+        mgr = CandidateManager(project)
+        mgr._search_paths = mgr._build_search_paths()
+        mgr._skill_loader = SkillLoader(
+            project,
+            search_paths=mgr._search_paths,
+            enable_external=False,
+            strict_search_paths=False,
+        )
+        clock = _Clock(100.0)
+        mgr._clock = clock
+        mgr.get_cached_candidates()
+        before = mgr._content_fingerprint
+        assert search in mgr._search_paths
+        assert search in mgr._skill_loader._search_paths
+
+        skill.write_text(
+            "---\nname: alpha\ndescription: after\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        clock.now += 5.0
+        mgr._last_reload_check = 0.0
+        hot = mgr.get_cached_candidates()
+        fresh = CandidateManager(project)
+        fresh._search_paths = fresh._build_search_paths()
+        fresh._skill_loader = SkillLoader(
+            project,
+            search_paths=fresh._search_paths,
+            enable_external=False,
+            strict_search_paths=False,
+        )
+        assert before != mgr._compute_paths_hash(mgr._search_paths)
+        assert [c["description"] for c in hot if c["id"] == "alpha"] == ["after"]
+        assert [c["description"] for c in fresh.get_cached_candidates() if c["id"] == "alpha"] == [
+            "after"
+        ]
+
+    def test_public_owner_hash_update_hides_skill_on_hot_and_fresh(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
+        from vibesop.core.skills.loader import SkillLoader
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "before")
+        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
+        _CONFIG_FILE_CACHE.clear()
+
+        SkillConfigManager.update_skill_config(
+            "alpha",
+            {
+                "scope": "project",
+                "evaluation_context": {"project_hash": mgr._skill_loader.project_hash},
+            },
+        )
+        first = mgr.get_cached_candidates()
+        assert [c["id"] for c in first] == ["alpha"]
+        before = mgr._content_fingerprint
+
+        SkillConfigManager.update_skill_config(
+            "alpha",
+            {"evaluation_context": {"project_hash": "another-project"}},
+        )
+        mgr._last_reload_check = 0.0
+        hot = mgr.get_cached_candidates()
+        fresh, _ = _isolated_manager(tmp_path)
+        raw = SkillLoader(
+            tmp_path,
+            search_paths=[search],
+            enable_external=False,
+            strict_search_paths=True,
+        ).discover_all()
+        assert before != mgr._compute_paths_hash([search])
+        assert [c["id"] for c in hot] == []
+        assert [c["id"] for c in fresh.get_cached_candidates()] == []
+        assert list(raw) == []
+        payload = json.loads((tmp_path / ".vibe" / "cache" / "candidates_v2.json").read_text())
+        assert all(c.get("id") != "alpha" for c in payload["candidates"])
+
+    def test_metadata_project_hash_fallback_matches_loader(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
+        from vibesop.core.skills.loader import SkillLoader
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "before")
+        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
+        _CONFIG_FILE_CACHE.clear()
+
+        SkillConfigManager.update_skill_config(
+            "alpha",
+            {"scope": "project", "metadata": {"project_hash": "another-project"}},
+        )
+        assert mgr.get_cached_candidates() == []
+        raw = SkillLoader(
+            tmp_path,
+            search_paths=[search],
+            enable_external=False,
+            strict_search_paths=True,
+        ).discover_all()
+        assert list(raw) == []
+        config_obj = SkillConfigManager.get_skill_config("alpha")
+        assert config_obj.evaluation_context.get("project_hash") == "another-project"
+
+    def test_unmodified_config_does_not_reparse_yaml(self, tmp_path: Path, monkeypatch) -> None:
+        from unittest.mock import patch
+
+        import yaml
+
+        from vibesop.core.skills.config_manager import _CONFIG_FILE_CACHE, SkillConfigManager
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "alpha", "one")
+        config = tmp_path / ".vibe" / "skills" / "auto-config.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", config)
+        _CONFIG_FILE_CACHE.clear()
+        SkillConfigManager.update_skill_config("alpha", {"enabled": True, "scope": "global"})
+        mgr.get_cached_candidates()
+        mgr._last_reload_check = mgr._clock()
+
+        with patch(
+            "vibesop.core.skills.config_manager.yaml.safe_load", wraps=yaml.safe_load
+        ) as spy:
+            mgr.get_cached_candidates()
+            mgr.get_cached_candidates()
+            assert spy.call_count == 0
+
+        version = SkillConfigManager.config_content_version()
+        SkillConfigManager.invalidate_config_cache()
+        with patch(
+            "vibesop.core.skills.config_manager.yaml.safe_load", wraps=yaml.safe_load
+        ) as spy:
+            assert SkillConfigManager.get_skill_config("alpha").enabled is True
+            assert spy.call_count == 1
+        assert SkillConfigManager.config_content_version() == version

@@ -1,5 +1,6 @@
 """技能配置管理器 - 管理技能级别的 LLM 和其他配置."""
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,10 +20,39 @@ from vibesop.core.models import SkillLifecycle
 logger = logging.getLogger(__name__)
 console = Console()
 
+
 # Module-level cache for loaded skill config files.
+# Keyed by resolved path → (raw-bytes digest, parsed dict, governance bytes).
 # _load_skill_config_file() is a hot path called once per skill (395+ times
-# on cold start). Without caching, the same YAML file is parsed 395 times.
-_CONFIG_FILE_CACHE: dict[Path, tuple[float, dict[str, Any]]] = {}
+# on cold start). Same-mtime edits stay visible because the key is content,
+# not mtime; unmodified bytes skip yaml.safe_load.
+@dataclass(frozen=True, slots=True)
+class _ConfigSnapshot:
+    digest: bytes
+    data: dict[str, Any]
+    governance: bytes
+
+
+_CONFIG_FILE_CACHE: dict[Path, _ConfigSnapshot] = {}
+
+
+def _project_hash_from_entry(entry: dict[str, Any]) -> str:
+    """Project owner hash with the same fallback SkillConfig / loader consume.
+
+    ``evaluation_context`` wins when it is a non-empty mapping; otherwise
+    ``metadata``. Missing or non-dict values yield an empty string, which
+    the loader treats as "no isolation key".
+    """
+    ctx = entry.get("evaluation_context")
+    if not isinstance(ctx, dict) or not ctx:
+        ctx = entry.get("metadata")
+    if not isinstance(ctx, dict):
+        return ""
+    value = ctx.get("project_hash")
+    if value is None:
+        return ""
+    return str(value)
+
 
 # Backward-compatible alias
 SkillLifecycleState = SkillLifecycle
@@ -263,32 +293,139 @@ class SkillConfigManager:
         )
 
     @classmethod
+    def invalidate_config_cache(cls, path: Path | None = None) -> None:
+        """Drop the in-memory auto-config snapshot.
+
+        Same-mtime content edits are already visible because the cache is
+        keyed by raw bytes. Call this after an out-of-band writer that this
+        process did not make through ``update_skill_config``. Do not rewrite
+        the config file solely to flush the cache.
+        """
+        if path is None:
+            _CONFIG_FILE_CACHE.clear()
+            return
+        target = Path(path)
+        _CONFIG_FILE_CACHE.pop(target, None)
+        _CONFIG_FILE_CACHE.pop(cls._cache_key(target), None)
+
+    @classmethod
+    def config_content_version(cls, path: Path | None = None) -> str:
+        """Hex SHA-256 of the raw config bytes; empty if the file is missing."""
+        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
+        snapshot = cls._load_config_snapshot(target)
+        if snapshot is not None:
+            return snapshot.digest.hex()
+        if target.is_file():
+            try:
+                return hashlib.sha256(target.read_bytes()).hexdigest()
+            except OSError:
+                return ""
+        return ""
+
+    @classmethod
+    def governance_projection(cls, path: Path | None = None) -> bytes:
+        """enabled/scope/lifecycle/project_hash bytes from the live snapshot.
+
+        The candidate fingerprint and ``get_skill_config`` share this parse.
+        ``usage_stats`` is omitted so recording a route does not thrash the
+        pool. Parse failures fall back to a raw-bytes marker so the
+        fingerprint still moves when the file changes.
+        """
+        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
+        snapshot = cls._load_config_snapshot(target)
+        if snapshot is not None:
+            return snapshot.governance
+        if target.is_file():
+            try:
+                return b"raw\0" + target.read_bytes()
+            except OSError:
+                return b"unreadable"
+        return b"absent"
+
+    @classmethod
     def _load_skill_config_file(cls) -> dict[str, Any]:
-        config_path = cls.SKILL_CONFIG_FILE
-        if not config_path.exists():
+        snapshot = cls._load_config_snapshot()
+        if snapshot is None:
             return {}
+        return snapshot.data
+
+    @classmethod
+    def _load_config_snapshot(cls, path: Path | None = None) -> _ConfigSnapshot | None:
+        target = Path(path) if path is not None else Path(cls.SKILL_CONFIG_FILE)
+        key = cls._cache_key(target)
+        if not target.exists():
+            _CONFIG_FILE_CACHE.pop(key, None)
+            return None
 
         try:
-            mtime = config_path.stat().st_mtime
-            cached = _CONFIG_FILE_CACHE.get(config_path)
-            if cached is not None and cached[0] == mtime:
-                return cached[1]
+            raw = target.read_bytes()
+        except OSError:
+            return None
 
-            if config_path.suffix.lower() == ".toml":
-                from vibesop.utils.encoding import load_toml_with_fallback
+        digest = hashlib.sha256(raw).digest()
+        cached = _CONFIG_FILE_CACHE.get(key)
+        if cached is not None and cached.digest == digest:
+            return cached
 
-                data = load_toml_with_fallback(config_path) or {}
-            else:
-                from vibesop.utils.encoding import read_text_with_fallback
-
-                data = yaml.safe_load(read_text_with_fallback(config_path)) or {}
-            if isinstance(data, dict):
-                _CONFIG_FILE_CACHE[config_path] = (mtime, data)
-            return cast("dict[str, Any]", data)
+        try:
+            parsed: Any = cls._parse_config_bytes(target, raw)
         except Exception as e:
-            console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
+            console.print(f"[yellow]⚠ Failed to load {target}: {e}[/yellow]")
+            return None
 
-        return {}
+        data = parsed if isinstance(parsed, dict) else {}
+        snapshot = _ConfigSnapshot(
+            digest=digest,
+            data=cast("dict[str, Any]", data),
+            governance=cls._governance_bytes_from_data(parsed),
+        )
+        _CONFIG_FILE_CACHE[key] = snapshot
+        return snapshot
+
+    @staticmethod
+    def _cache_key(path: Path) -> Path:
+        try:
+            return path.resolve()
+        except OSError:
+            return path
+
+    @staticmethod
+    def _parse_config_bytes(path: Path, raw: bytes) -> Any:
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            import locale
+
+            text = raw.decode(locale.getpreferredencoding())
+        if text.startswith("\ufeff"):
+            text = text[1:]
+        if path.suffix.lower() == ".toml":
+            import tomllib
+
+            return tomllib.loads(text) or {}
+        return yaml.safe_load(text) or {}
+
+    @staticmethod
+    def _governance_bytes_from_data(data: object) -> bytes:
+        """Bytes that change iff enabled, scope, lifecycle, or owner hash change."""
+        if not isinstance(data, dict):
+            return b"nonskill-map"
+        skills = data.get("skills", {})
+        if not isinstance(skills, dict):
+            kind = type(skills).__name__
+            return f"skills-not-map:{kind}".encode()
+        lines: list[str] = []
+        for skill_id in sorted(skills, key=str):
+            entry = skills[skill_id]
+            if not isinstance(entry, dict):
+                lines.append(f"{skill_id}\t<bad>")
+                continue
+            enabled = entry.get("enabled", True)
+            scope = entry.get("scope", "global")
+            lifecycle = entry.get("lifecycle", "active")
+            project_hash = _project_hash_from_entry(entry)
+            lines.append(f"{skill_id}\t{enabled!r}\t{scope!r}\t{lifecycle!r}\t{project_hash!r}")
+        return "\n".join(lines).encode()
 
     @classmethod
     def _save_skill_config_file(cls, config_data: dict[str, Any]) -> None:
@@ -299,7 +436,7 @@ class SkillConfigManager:
         with config_file.open("w", encoding="utf-8") as f:
             yaml.dump(config_data, f, default_flow_style=False)
 
-        _CONFIG_FILE_CACHE.pop(config_file, None)
+        cls.invalidate_config_cache(config_file)
         logger.info(f"Skill config saved to: {config_file}")
 
 

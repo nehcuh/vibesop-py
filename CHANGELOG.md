@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B2 diagnosis optimization**: Candidate cache schema v5 fingerprints the loader markdown/YAML discovery set and current governance projection. Governance changes are visible on the next lookup; skill content retains its five-second refresh interval.
+
 - **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible.
 
 - **B1 diagnosis optimization**: Generated OpenCode/Cursor LLM config uses api_key_env references rather than ambient secret values. Guarded atomic output uses exclusive temporary files; platform rendering rejects ancestor links before creating skill directories while preserving legal installed skill links.
@@ -28,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B2 diagnosis optimization**: Invalidate hot and persisted candidates on skill disable, scope, lifecycle, ownership and same-timestamp edits. Clear parsed/external metadata before rebuilding under a new fingerprint; reuse parsed configuration when bytes are unchanged.
 
 - **B3-r2 diagnosis optimization**: Preserve authoritative blocked outcomes through the public execution adapter, including ordinary review rejection and structured blocked results. Align dynamic step states/counts with their shared per-step outcomes; preserve existing engine run-completed semantics and legacy failure accounting.
 

@@ -11,7 +11,7 @@ from vibesop.core.models import SkillLifecycle
 from vibesop.core.skills.base import PromptSkill, WorkflowSkill
 from vibesop.core.skills.config_manager import SkillConfig, SkillConfigManager
 from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
-from vibesop.core.skills.loader import LoadedSkill, SkillLoader
+from vibesop.core.skills.loader import LoadedSkill, SkillLoader, discovery_input_files
 from vibesop.spec.models import SkillSpec, SkillType
 
 
@@ -61,6 +61,10 @@ class TestSkillLoaderInit:
         custom = tmp_path / "custom"
         loader = SkillLoader(project_root=tmp_path, search_paths=[custom])
         assert custom in loader._search_paths
+
+    def test_discovery_search_paths_include_default_project_skills(self, tmp_path: Path):
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        assert tmp_path.resolve() / "skills" in loader.discovery_search_paths()
 
     def test_project_hash_deterministic(self, tmp_path: Path):
         loader1 = SkillLoader(project_root=tmp_path)
@@ -114,6 +118,30 @@ class TestGenerateIdFromPath:
 
 class TestDiscoverAll:
     """Test discover_all method."""
+
+    def test_discovery_input_files_include_ordinary_markdown(self, tmp_path: Path):
+        skills_dir = tmp_path / "skills" / "alpha"
+        skills_dir.mkdir(parents=True)
+        ordinary = skills_dir / "alpha.md"
+        ordinary.write_text(
+            "---\nname: alpha\ndescription: before\n---\n# alpha\n",
+            encoding="utf-8",
+        )
+        (skills_dir / "README.md").write_text("# notes\n", encoding="utf-8")
+        files = discovery_input_files([tmp_path / "skills"])
+        names = {path.name for path in files}
+        assert "alpha.md" in names
+        assert "README.md" in names
+        loader = SkillLoader(
+            project_root=tmp_path,
+            search_paths=[tmp_path / "skills"],
+            enable_external=False,
+            strict_search_paths=True,
+        )
+        discovered = {path.name for path in loader.discovery_skill_files()}
+        assert discovered == names
+        skills = loader.discover_all()
+        assert skills["alpha"].metadata.description == "before"
 
     def test_discovers_markdown_skills(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
@@ -497,6 +525,59 @@ Body
         assert len(loader._skill_cache) > 0
         loader.clear_cache()
         assert len(loader._skill_cache) == 0
+
+    def test_invalidate_discovery_cache_reloads_skill_body(self, tmp_path: Path):
+        skills_dir = tmp_path / "skills" / "demo"
+        skills_dir.mkdir(parents=True)
+        skill = skills_dir / "SKILL.md"
+        skill.write_text(
+            "---\nname: demo\ndescription: old\n---\n# old\n",
+            encoding="utf-8",
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        assert loader.discover_all()["demo"].metadata.description == "old"
+        skill.write_text(
+            "---\nname: demo\ndescription: new\n---\n# new\n",
+            encoding="utf-8",
+        )
+        assert loader.discover_all()["demo"].metadata.description == "old"
+        loader.invalidate_discovery_cache()
+        assert loader.discover_all()["demo"].metadata.description == "new"
+
+    def test_clear_cache_leaves_external_cache(self, tmp_path: Path):
+        loader = SkillLoader(project_root=tmp_path, enable_external=True)
+        assert loader._external_loader is not None
+        loader._external_loader._cache["keep"] = object()  # type: ignore[assignment]
+        loader.clear_cache()
+        assert loader._skill_cache == {}
+        assert "keep" in loader._external_loader._cache
+        loader.invalidate_discovery_cache()
+        assert loader._external_loader._cache == {}
+
+
+class TestExternalLoaderCache:
+    """External-pack metadata must not outlive an explicit cache clear."""
+
+    def test_clear_cache_rereads_skill_md(self, tmp_path: Path):
+        from vibesop.core.skills.external_loader import ExternalSkillLoader
+
+        root = tmp_path / "ext"
+        skill_dir = root / "alpha"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text(
+            "---\nname: alpha\ndescription: one\n---\nbody\n",
+            encoding="utf-8",
+        )
+        loader = ExternalSkillLoader(external_paths=[root], require_audit=False)
+        assert loader.discover_all()["alpha"].base_metadata.description == "one"
+        skill.write_text(
+            "---\nname: alpha\ndescription: two\n---\nbody\n",
+            encoding="utf-8",
+        )
+        assert loader.discover_all()["alpha"].base_metadata.description == "one"
+        loader.clear_cache()
+        assert loader.discover_all()["alpha"].base_metadata.description == "two"
 
 
 class TestValidateAlgorithms:

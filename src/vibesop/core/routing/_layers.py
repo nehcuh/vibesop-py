@@ -594,6 +594,26 @@ def _try_embedding_fallback(
     return match, detail
 
 
+def _usable_index_cache(router: Any) -> dict[str, Any] | None:
+    """Return the router's index cache when it still matches the reload epoch.
+
+    ``isinstance(cached, dict)`` keeps MagicMock routers on the load path
+    (attribute access auto-creates a Mock, which is not a dict). An empty
+    dict is a real "tried, missing" result and is returned as-is. A dict
+    stamped with an older epoch is stale and must be reloaded.
+    """
+    from vibesop.core.routing.candidate_manager import index_cache_epoch
+
+    cached = getattr(router, "_index_layer_cache", None)
+    if not isinstance(cached, dict):
+        return None
+    epoch = index_cache_epoch(getattr(router, "project_root", ""))
+    stored = getattr(router, "_index_layer_epoch", None)
+    if stored != epoch:
+        return None
+    return cached
+
+
 def try_index_layer(
     router: RoutingCore,
     query: str,
@@ -608,12 +628,18 @@ def try_index_layer(
     # profiles' combined text on every route. We check `isinstance(cached, dict)`
     # rather than `is None` so MagicMock-based unit tests (which auto-create
     # attributes on access) still take the load path on first call.
-    cached = getattr(router, "_index_layer_cache", None)
-    if not isinstance(cached, dict):
+    cached = _usable_index_cache(router)
+    if cached is None:
         indexer = SkillIndexer(project_root=router.project_root)
+        # Stamp the epoch we loaded against. A later candidate reload bumps
+        # it and the next call takes this branch again.
+        from vibesop.core.routing.candidate_manager import index_cache_epoch
+
+        epoch = index_cache_epoch(getattr(router, "project_root", ""))
         if not indexer.has_index():
             router._index_layer_cache = {}  # mark as "tried, missing"
             router._index_profile_tokens = {}
+            router._index_layer_epoch = epoch
             return None, LayerDetail(
                 layer=RoutingLayer.SEMANTIC_INDEX,
                 matched=False,
@@ -622,6 +648,7 @@ def try_index_layer(
             )
         router._index_layer_cache = indexer.load_index()
         router._index_profile_tokens = _build_profile_token_index(router._index_layer_cache)
+        router._index_layer_epoch = epoch
         cached = router._index_layer_cache
 
     index = cached
