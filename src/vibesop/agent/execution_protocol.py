@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from vibesop.core.models import ExecutionPlan
+
+if TYPE_CHECKING:
+    from vibesop.agent.step_runner import StepOutcome
 
 
 class StepResultStatus(StrEnum):
@@ -64,6 +67,7 @@ class PlanExecutionResult:
         cls,
         result: dict[str, Any],
         plan: ExecutionPlan | None = None,
+        step_outcomes: list[StepOutcome] | None = None,
     ) -> PlanExecutionResult:
         """Thin adapter: normalize a StepRunner.execute_all() legacy dict into
         the public PlanExecutionResult/StepResult face (B3).
@@ -74,25 +78,62 @@ class PlanExecutionResult:
         and the dynamic lane's dict keyed by step identity (values classified
         with the shared acceptance predicate; the legacy dict shape itself is
         never rewritten). Blocked steps carry the legacy "failed" entry status
-        (F2 value-domain contract) — their blocked granularity is recovered
-        from the recorded error text via the shared blocked predicate. The
-        additive ``review_status`` key passes through to
-        :attr:`PlanExecutionResult.review_status`. ``plan`` is optional and
-        only used to backfill ``skill_id`` for entries that lack it.
+        (F2 value-domain contract). The additive ``review_status`` key passes
+        through to :attr:`PlanExecutionResult.review_status`. ``plan`` is
+        optional and only used to backfill ``skill_id`` for entries that lack
+        it.
+
+        Post-corrective (P1): when ``step_outcomes`` — the producer's shared
+        per-step ``StepOutcome`` list (``runner.last_plan_outcome.steps``) —
+        is supplied, per-step statuses are taken from it verbatim as the
+        single source of truth. No second classification predicate runs, so
+        the adapter cannot disagree with the runner's own verdict: ordinary
+        hard-reject feedback text (no ``blocked:`` prefix) and dict sentinels
+        (``{"status": "blocked"}``) classify exactly as the producer did.
+
+        P1 corrective: the producer stamps every per-step entry it emits with
+        the additive ``outcome_status`` key — the shared ``StepOutcomeStatus``
+        verdict serialized as its enum value string (``"success"`` /
+        ``"failed"`` / ``"blocked"`` / ``"skipped"``). The adapter reads this
+        fact by DEFAULT (it survives a JSON round trip of the plain dict), so
+        the ordinary two-argument call classifies exactly as the producer did.
+        Legacy payloads written before this key existed (no ``outcome_status``
+        on the entry) keep the full fallback semantics below — nothing about
+        old serialized results changes.
+
+        Fallback order when neither the additive entry key nor
+        ``step_outcomes`` is available: recover blocked granularity from the
+        payload with the shared blocked predicate
+        (:func:`vibesop.agent.step_runner._is_blocked_output`): a blocked
+        sentinel in the recorded error text or the preserved raw output of a
+        "failed" entry, or a blocked sentinel value in the dynamic dict lane.
+        Ordinary (non-sentinel) hard-reject feedback text stays FAILED on
+        that path — producers that predate the additive key cannot be
+        distinguished from real failures dict-only, which is why the producer
+        now stamps ``outcome_status``.
         """
+        from vibesop.agent.step_runner import _is_blocked_output
         from vibesop.core.orchestration.verification_loop import is_acceptance_failure
 
         skill_by_step = {s.step_id: s.skill_id for s in plan.steps} if plan is not None else {}
 
-        def _is_blocked_text(text: Any) -> bool:
-            """Shared blocked predicate over string payloads (error text or
-            stringified outputs) — mirrors StepRunner._is_blocked_output."""
-            if not isinstance(text, str):
-                return False
-            stripped = text.strip().lower()
-            return stripped == "blocked" or stripped.startswith("blocked:")
+        # Preferred source of truth (P1): the producer's shared per-step
+        # outcomes, mapped 1:1 onto StepResultStatus by value.
+        outcome_status_by_step: dict[str, StepResultStatus] = {}
+        if step_outcomes:
+            for outcome in step_outcomes:
+                outcome_status_by_step[str(outcome.step_id)] = StepResultStatus(str(outcome.status))
 
-        def _status(value: Any, legacy: str | None, error: Any = None) -> StepResultStatus:
+        def _status(
+            value: Any,
+            legacy: str | None,
+            error: Any = None,
+            step_id: str | None = None,
+        ) -> StepResultStatus:
+            if step_id is not None:
+                shared = outcome_status_by_step.get(step_id)
+                if shared is not None:
+                    return shared
             if legacy == "completed":
                 return StepResultStatus.SUCCESS
             if legacy == "skipped":
@@ -101,17 +142,20 @@ class PlanExecutionResult:
                 return StepResultStatus.BLOCKED
             if legacy == "failed":
                 # F2: the legacy entry status value domain is completed/failed
-                # — a blocked step is persisted as "failed". Recover the
-                # blocked granularity from the recorded error text with the
-                # shared blocked predicate.
-                if _is_blocked_text(error):
+                # — a blocked step is persisted as "failed". On the fallback
+                # path the blocked granularity is recovered from the recorded
+                # error text or the preserved raw output with the shared
+                # blocked predicate; ordinary feedback text stays FAILED
+                # (use step_outcomes for those).
+                if _is_blocked_output(error) or _is_blocked_output(value):
                     return StepResultStatus.BLOCKED
                 return StepResultStatus.FAILED
             if is_acceptance_failure(value):
-                text = str(value).strip().lower() if not isinstance(value, dict) else ""
-                if text == "blocked" or text.startswith("blocked:"):
-                    return StepResultStatus.BLOCKED
-                return StepResultStatus.FAILED
+                return (
+                    StepResultStatus.BLOCKED
+                    if _is_blocked_output(value)
+                    else StepResultStatus.FAILED
+                )
             return StepResultStatus.SUCCESS
 
         steps: list[StepResult] = []
@@ -120,15 +164,32 @@ class PlanExecutionResult:
             for entry in raw_results:
                 if not isinstance(entry, dict) or "step_id" not in entry:
                     continue
+                # P1 corrective: the producer's additive per-step fact is the
+                # default source of truth — it rides inside the plain dict and
+                # survives a JSON transport. An absent or unrecognized value
+                # means a legacy payload: fall through to step_outcomes, then
+                # to the legacy classification predicate.
+                status: StepResultStatus | None = None
+                additive = entry.get("outcome_status")
+                if isinstance(additive, str):
+                    try:
+                        status = StepResultStatus(additive.strip().lower())
+                    except ValueError:
+                        status = None
+                if status is None:
+                    status = _status(
+                        entry.get("output"),
+                        entry.get("status"),
+                        entry.get("error"),
+                        step_id=str(entry["step_id"]),
+                    )
                 steps.append(
                     StepResult(
                         step_id=str(entry["step_id"]),
                         skill_id=str(
                             entry.get("skill_id") or skill_by_step.get(entry["step_id"], "")
                         ),
-                        status=_status(
-                            entry.get("output"), entry.get("status"), entry.get("error")
-                        ),
+                        status=status,
                         output="" if entry.get("output") is None else str(entry.get("output")),
                         error=entry.get("error"),
                     )
@@ -139,7 +200,7 @@ class PlanExecutionResult:
                     StepResult(
                         step_id=str(step_id),
                         skill_id=str(skill_by_step.get(step_id, "")),
-                        status=_status(value, None),
+                        status=_status(value, None, step_id=str(step_id)),
                         output="" if value is None else str(value),
                     )
                 )

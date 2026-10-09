@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from vibesop.agent.step_runner import StepRunContext, StepRunner
+from vibesop.agent.step_runner import StepOutcomeStatus, StepRunContext, StepRunner
 from vibesop.core.models import (
     AgentSquad,
     ExecutionMode,
@@ -1393,3 +1394,316 @@ class TestExecutionProtocolAdapter:
         }
         assert not adapted.all_succeeded
         assert adapted.success_count == 1
+
+
+class _PlainFeedbackRejectLLM:
+    """LLM whose review verdict is a hard reject with ORDINARY feedback text
+    (``revision_feedback="add the missing tests"`` — no ``blocked:`` sentinel
+    prefix, no issues echo). This is the real producer shape the prefix-only
+    adapter predicate missed (B3 post-corrective P1)."""
+
+    def call(self, prompt: str, **kwargs: Any) -> Any:
+        body = (
+            '{"passed": false, "issues": ["missing tests"], "score": 1.0, '
+            '"requires_revision": false, "revision_feedback": "add the missing tests"}'
+        )
+        return type("Response", (), {"content": body})()
+
+
+class TestPostCorrectiveBlockedAdapterConsistency:
+    """B3 post-corrective P1: the adapter must not drop blocked granularity
+    that the producer's shared per-step StepOutcome already decided.
+
+    Every test here drives the REAL public producer (StepRunner.execute_all)
+    and adapts the produced dict — both via the default two-argument call and
+    with the runner's shared ``last_plan_outcome.steps`` — no hand-built
+    result dicts, no ``blocked:`` prefixes added to feedback to keep
+    predicates green."""
+
+    def test_hard_reject_plain_feedback_adapter_blocked(self):
+        """Ordinary hard-reject feedback (no sentinel prefix): public dict,
+        StepOutcome and adapter must all say BLOCKED for the rejected role's
+        step, while the legacy entry keeps the F2 failed status and carries
+        the feedback text verbatim."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _build_squad_plan(
+            WorkflowPattern.AGENT_SQUAD,
+            roles=["implementer", "reviewer"],
+            protocol="review_gate",
+            skills={"implementer": ["coding"], "reviewer": ["review"]},
+        )
+        runner = StepRunner(plan, track_state=False, llm_client=_PlainFeedbackRejectLLM())
+
+        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> dict[str, Any]:
+            return {"step_id": step.step_id, "role_id": _role_of(step), "content": "work"}
+
+        result = runner.execute_all(executor)
+
+        assert result["blocked"] == 1, f"blocked counter must surface, got {result}"
+        assert result["failed"] == 1, "blocked steps count in failed too (F1)"
+        assert result["final_status"] == "blocked"
+        assert result["review_status"] == "rejected"
+        # The producer's shared per-step outcome is already BLOCKED.
+        outcome = runner.last_plan_outcome
+        assert outcome is not None
+        by_outcome = {s.step_id: s.status for s in outcome.steps}
+        impl = next(s for s in plan.steps if (s.assigned_role or "") == "implementer")
+        assert by_outcome[impl.step_id] is StepOutcomeStatus.BLOCKED
+        # F2: the legacy entry keeps the failed status; the ordinary feedback
+        # text is preserved verbatim (no forced sentinel prefix).
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert by_id[impl.step_id]["status"] == "failed"
+        assert by_id[impl.step_id]["error"] == "add the missing tests"
+        # The adapter, fed the real shared outcomes, agrees with StepOutcome.
+        adapted = PlanExecutionResult.from_step_runner_dict(
+            result, plan, step_outcomes=outcome.steps
+        )
+        adapted_by_id = {r.step_id: r.status for r in adapted.results}
+        assert adapted_by_id[impl.step_id] is StepResultStatus.BLOCKED
+        # P1 corrective: the producer stamps the shared verdict on the entry
+        # itself (additive ``outcome_status``), so the DEFAULT two-argument
+        # call — no step_outcomes — must agree too, and the same dict after a
+        # JSON transport must still agree (the opt-in third parameter is no
+        # longer the only way to get the producer's blocked granularity).
+        reviewer = next(s for s in plan.steps if (s.assigned_role or "") == "reviewer")
+        assert by_id[impl.step_id]["outcome_status"] == "blocked"
+        assert by_id[reviewer.step_id]["outcome_status"] == "success"
+        default_adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
+        default_by_id = {r.step_id: r.status for r in default_adapted.results}
+        assert default_by_id[impl.step_id] is StepResultStatus.BLOCKED
+        assert default_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
+        transported = json.loads(json.dumps(result))
+        transported_adapted = PlanExecutionResult.from_step_runner_dict(transported, plan)
+        transported_by_id = {r.step_id: r.status for r in transported_adapted.results}
+        assert transported_by_id[impl.step_id] is StepResultStatus.BLOCKED
+        assert transported_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
+        transported_impl = next(r for r in transported_adapted.results if r.step_id == impl.step_id)
+        assert transported_impl.error == "add the missing tests"
+
+    def test_default_adapter_real_exception_stays_failed(self):
+        """Genuine executor exception: the additive ``outcome_status`` fact
+        says failed, so the default two-argument adapter — including after a
+        JSON transport — must report FAILED, never blocked (no blanket
+        failed→blocked mapping)."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        runner = StepRunner(plan, track_state=False)
+
+        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> str:
+            raise RuntimeError("tool crashed")
+
+        result = runner.execute_all(executor)
+
+        assert result["failed"] == 1
+        assert result["blocked"] == 0
+        assert result["results"][0]["outcome_status"] == "failed"
+        default_adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
+        assert default_adapted.results[0].status is StepResultStatus.FAILED
+        transported = json.loads(json.dumps(result))
+        transported_adapted = PlanExecutionResult.from_step_runner_dict(transported, plan)
+        assert transported_adapted.results[0].status is StepResultStatus.FAILED
+        assert transported_adapted.results[0].error == "tool crashed"
+
+    def test_default_adapter_legacy_payload_without_outcome_status_falls_back(self):
+        """Legacy payload (entries written before the additive key existed):
+        strip ``outcome_status`` and the adapter must keep the old fallback
+        semantics — sentinel-shaped feedback still classifies blocked via the
+        shared predicate."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        runner = StepRunner(plan, track_state=False)
+        result = runner.execute_all(lambda step, ctx: {"status": "blocked"})
+        legacy = json.loads(json.dumps(result))
+        for entry in legacy["results"]:
+            entry.pop("outcome_status", None)
+        legacy_adapted = PlanExecutionResult.from_step_runner_dict(legacy, plan)
+        assert legacy_adapted.results[0].status is StepResultStatus.BLOCKED
+
+    def test_static_dict_sentinel_adapter_agrees_with_and_without_outcomes(self):
+        """Static lane returning the dict sentinel: runner state, StepStatus,
+        StepOutcome and adapter (both the shared-outcome path and the
+        dict-only fallback) must all classify the step as blocked."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
+        runner = StepRunner(plan, track_state=False)
+
+        result = runner.execute_all(lambda step, ctx: {"status": "blocked"})
+
+        assert result["blocked"] == 1
+        assert result["failed"] == 1
+        assert result["final_status"] == "blocked"
+        assert runner.failed_count == 1
+        assert plan.steps[0].status == StepStatus.FAILED
+        outcome = runner.last_plan_outcome
+        assert outcome is not None
+        assert outcome.steps[0].status is StepOutcomeStatus.BLOCKED
+        # Shared-outcome path (source of truth).
+        adapted = PlanExecutionResult.from_step_runner_dict(
+            result, plan, step_outcomes=outcome.steps
+        )
+        assert adapted.results[0].status is StepResultStatus.BLOCKED
+        # Dict-only fallback: the shared blocked predicate must recognize the
+        # dict sentinel shape (previously every dict failure fell to FAILED).
+        fallback = PlanExecutionResult.from_step_runner_dict(result, plan)
+        assert fallback.results[0].status is StepResultStatus.BLOCKED
+
+
+class TestPostCorrectiveDynamicLaneStateSync:
+    """B3 post-corrective P2: the dynamic lane must sync the runner's public
+    state with the engine's real results — skipped counts only genuine
+    SKIPPED steps, failed steps leave pending_steps(), sentinel-returning
+    steps sit on the failure side of StepStatus, and PlanOutcome.steps
+    mirrors the engine outcomes."""
+
+    def test_dynamic_dict_blocked_full_state_matrix(self):
+        """Dynamic lane returning the dict sentinel: legacy results dict
+        preserved verbatim, public counters failed+blocked, StepStatus FAILED,
+        runner.failed_count synced, PlanOutcome.steps populated, adapter
+        BLOCKED on both the shared-outcome and the dict-only fallback path."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "independent root", None),
+            ]
+        )
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        plan.dry_threshold = 1
+        runner = StepRunner(plan, track_state=False)
+        sentinel = {"status": "blocked", "reason": "need evidence"}
+
+        result = runner.execute_all(lambda step, ctx: sentinel)
+
+        # Legacy dynamic results dict shape preserved verbatim.
+        assert result["dynamic"] is True
+        assert isinstance(result["results"], dict)
+        assert result["results"]["step-1"] == sentinel
+        # Public counters.
+        assert result["failed"] == 1
+        assert result["blocked"] == 1
+        assert result["final_status"] == "failed"
+        assert plan.status == PlanStatus.FAILED
+        # Step status on the same side as the public counters (the engine
+        # loop stamps COMPLETED before the bridge classifies the sentinel).
+        assert plan.steps[0].status == StepStatus.FAILED
+        # Runner public state synced: the failed step is no longer pending,
+        # and the genuinely-PENDING independent step stays resumable.
+        assert runner.failed_count == 1
+        assert [s.step_id for s in runner.pending_steps()] == ["step-2"]
+        assert not runner.is_complete
+        # PlanOutcome.steps carries the real per-step outcomes.
+        outcome = runner.last_plan_outcome
+        assert outcome is not None
+        assert [(s.step_id, s.status) for s in outcome.steps] == [
+            ("step-1", StepOutcomeStatus.BLOCKED)
+        ]
+        adapted = PlanExecutionResult.from_step_runner_dict(
+            result, plan, step_outcomes=outcome.steps
+        )
+        assert adapted.results[0].status is StepResultStatus.BLOCKED
+        fallback = PlanExecutionResult.from_step_runner_dict(result, plan)
+        assert fallback.results[0].status is StepResultStatus.BLOCKED
+
+    def test_dynamic_failure_pending_step_not_counted_skipped(self):
+        """Dynamic lane aborted by an exception: the still-PENDING dependent
+        step must not be reported as skipped, the runner must not present the
+        engine-failed step as unrun, and PlanOutcome.steps mirrors the real
+        engine results."""
+        from vibesop.agent.execution_protocol import (
+            PlanExecutionResult,
+            StepResultStatus,
+        )
+
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "depends on a", ["step-1"]),
+            ]
+        )
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        runner = StepRunner(plan, track_state=False)
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            raise RuntimeError("dyn blew")
+
+        result = runner.execute_all(executor)
+
+        assert result["dynamic"] is True
+        assert result["failed"] == 1
+        # The early-abort leftover step is PENDING, not skipped.
+        assert result["skipped"] == 0
+        assert result["final_status"] == "failed"
+        # Legacy dynamic results dict shape preserved.
+        assert isinstance(result["results"], dict)
+        assert result["results"]["step-1"] == {"error": "dyn blew"}
+        # Engine-side step truth.
+        assert plan.steps[0].status == StepStatus.FAILED
+        assert plan.steps[1].status == StepStatus.PENDING
+        # Runner public state synced: the engine-failed step is not pending,
+        # and the genuinely-PENDING dependent step stays resumable state.
+        assert runner.failed_count == 1
+        assert runner.pending_steps() == []
+        assert not runner.is_complete
+        # PlanOutcome.steps mirrors the actual engine results.
+        outcome = runner.last_plan_outcome
+        assert outcome is not None
+        assert [(s.step_id, s.status) for s in outcome.steps] == [
+            ("step-1", StepOutcomeStatus.FAILED)
+        ]
+        adapted = PlanExecutionResult.from_step_runner_dict(
+            result, plan, step_outcomes=outcome.steps
+        )
+        assert adapted.results[0].step_id == "step-1"
+        assert adapted.results[0].status is StepResultStatus.FAILED
+
+    def test_dynamic_string_blocked_step_status_synced(self):
+        """Dynamic lane returning a blocked string sentinel: the public
+        counters report failed+blocked, so the step status and the runner's
+        failed_count must sit on the same side (previously the step stayed
+        COMPLETED while the counters said failed)."""
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "independent root", None),
+            ]
+        )
+        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
+        plan.dry_threshold = 1
+        runner = StepRunner(plan, track_state=False)
+
+        result = runner.execute_all(lambda step, ctx: "blocked: need evidence")
+
+        assert result["results"]["step-1"] == "blocked: need evidence"
+        assert result["failed"] == 1
+        assert result["blocked"] == 1
+        assert result["final_status"] == "failed"
+        # Step status and runner state on the same side as the counters.
+        assert plan.steps[0].status == StepStatus.FAILED
+        assert plan.steps[1].status == StepStatus.PENDING
+        assert runner.failed_count == 1
+        assert [s.step_id for s in runner.pending_steps()] == ["step-2"]
+        assert not runner.is_complete
+        outcome = runner.last_plan_outcome
+        assert outcome is not None
+        assert outcome.steps[0].status is StepOutcomeStatus.BLOCKED
+        assert outcome.blocked == 1 and outcome.failed == 1
