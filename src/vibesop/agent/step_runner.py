@@ -6,6 +6,15 @@ Provides a coordinated execution API for multi-step ExecutionPlans:
 - State persistence via PlanTracker for resume support
 - Configurable error recovery (skip / retry / abort)
 
+All execution lanes (static serial/parallel batches, dynamic WorkflowEngine
+plans, and squad-oriented patterns) normalize into one terminal vocabulary:
+``StepOutcome`` per step and one shared ``PlanOutcome`` aggregation. The
+legacy result dicts only gain keys (``blocked``, ``final_status``,
+``review_status``); existing keys are preserved. Counter contract: ``failed``
+counts every unsuccessful terminal step (blocked steps count in both
+``failed`` and ``blocked``); ``final_status`` derives from real failures
+(``failed - blocked``); ``review_status`` carries the review-acceptance axis.
+
 Entry points:
     StepRunner(plan)           — start a new plan execution
     StepRunner.resume(plan_id) — resume a partially completed plan
@@ -18,13 +27,120 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan, ExecutionStep
+    from vibesop.core.orchestration.workflow_engine import (
+        DynamicExecutionResult,
+        SquadExecutionResult,
+    )
 
 logger = logging.getLogger(__name__)
+
+
+class StepOutcomeStatus(StrEnum):
+    """Unified terminal status of a single step execution (B3).
+
+    ``blocked`` means the step ran but its output is a blocked sentinel
+    (``blocked: <缺什么>`` / ``{"status": "blocked"}``) — work needs human
+    input or evidence, which is distinct from a real ``failed`` outcome.
+    """
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    SKIPPED = "skipped"
+
+
+@dataclass
+class StepOutcome:
+    """Unified per-step terminal outcome emitted by every StepRunner lane."""
+
+    step_id: str
+    skill_id: str
+    status: StepOutcomeStatus
+    output: Any = None
+    error: str | None = None
+
+
+@dataclass
+class PlanOutcome:
+    """Shared terminal aggregation for a full plan execution.
+
+    Every public lane (static, dynamic, squad) reports through this single
+    structure; the legacy result dicts expose the same counters plus
+    ``final_status`` so callers never see a per-lane vocabulary.
+
+    Counter contract (Kimi B3 gate, F1): ``failed`` counts every
+    unsuccessful terminal step — a blocked-sentinel step is persisted via
+    ``mark_failed`` and therefore counts in BOTH ``failed`` and ``blocked``
+    (blocked is an additional breakdown, not a subtraction). ``final_status``
+    derives from ``real_failed = failed - blocked``.
+    """
+
+    plan_id: str
+    completed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    blocked: int = 0
+    final_status: str = "completed"
+    review_status: str = "not_required"
+    steps: list[StepOutcome] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "completed": self.completed,
+            "failed": self.failed,
+            "skipped": self.skipped,
+            "blocked": self.blocked,
+            "final_status": self.final_status,
+            "review_status": self.review_status,
+        }
+
+
+def _is_blocked_output(output: Any) -> bool:
+    """True when an executor output is a *blocked* sentinel (vs a failed one).
+
+    Mirrors the blocked branch of
+    :func:`vibesop.core.orchestration.verification_loop.is_acceptance_failure`
+    without counting ``failed`` sentinels as blocked.
+    """
+    if isinstance(output, dict):
+        return str(output.get("status", "")).strip().lower() == "blocked"
+    if output is None:
+        return False
+    text = str(output).strip().lower()
+    return text == "blocked" or text.startswith("blocked:")
+
+
+def _classify_output(output: Any) -> StepOutcomeStatus:
+    """Map a raw executor output to the unified terminal vocabulary."""
+    from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
+    if not is_acceptance_failure(output):
+        return StepOutcomeStatus.SUCCESS
+    return StepOutcomeStatus.BLOCKED if _is_blocked_output(output) else StepOutcomeStatus.FAILED
+
+
+def _derive_final_status(outcome: PlanOutcome) -> str:
+    """Shared final_status rule for lanes without an engine verdict.
+
+    ``failed`` already includes blocked steps (F1 contract), so the real-failure
+    count is ``failed - blocked``:
+    - no unsuccessful terminal step → ``completed``
+    - real failures present → ``failed`` (or ``partial`` when some steps completed)
+    - only blocked steps (no real failure) → ``blocked`` (or ``partial``)
+    """
+    real_failed = outcome.failed - outcome.blocked
+    if outcome.failed == 0 and outcome.blocked == 0:
+        return "completed"
+    if real_failed > 0:
+        return "partial" if outcome.completed > 0 else "failed"
+    return "partial" if outcome.completed > 0 else "blocked"
 
 
 @dataclass
@@ -294,7 +410,10 @@ class StepRunner:
         """Execute all pending steps in topological order.
 
         Independent steps within each batch run via ParallelScheduler.
-        For dynamic plans (LOOP_UNTIL_DRY, TOURNAMENT), delegates to WorkflowEngine.
+        For dynamic plans (LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN) and
+        squad-oriented patterns (AGENT_SQUAD, DEBATE, RED_TEAM), delegates
+        to WorkflowEngine — squad plans enter the engine's
+        handoff/review/revision gates instead of a simplified parallel branch.
 
         Args:
             step_executor: Callable(ExecutionStep, StepRunContext) -> str (output)
@@ -302,7 +421,10 @@ class StepRunner:
             on_step_error: Optional callback(ExecutionStep, error: Exception) called on failure.
                 Return True to continue, False to abort.
             fail_fast: If True, abort on first failure. If False, skip failed steps and continue.
-            context: Optional base context for squad-oriented plans.
+                Only a *real* failure (exception or failed/blocked sentinel) aborts:
+                an all-success parallel batch never stops downstream steps (D06).
+            context: Optional base context for squad-oriented plans (forwarded
+                to the WorkflowEngine run).
 
         Returns:
             Dict with:
@@ -310,89 +432,44 @@ class StepRunner:
                   carries step_id — together they let a UI deep-link a step
                   output message to the plan step that produced it)
                 - completed: int
-                - failed: int
+                - failed: int — every unsuccessful terminal step, INCLUDING
+                  blocked-sentinel steps (blocked is an additional breakdown:
+                  failed ⊇ blocked, restored HEAD contract F1)
                 - skipped: int
-                - results: list[dict] with step_id, output, error per step
+                - blocked: int (added by B3 — blocked-sentinel steps, also
+                  counted in failed)
+                - final_status: str (completed/partial/failed/blocked; derived
+                  from real failures = failed − blocked; the dynamic lane
+                  delivers the WorkflowEngine verdict)
+                - review_status: str (added by B3 — review acceptance dimension;
+                  "not_required" for static plans, accepted/rejected/error for
+                  squad plans; ``all_succeeded``-style consumers must treat
+                  execution success and review acceptance as separate axes)
+                - results: list[dict] with step_id, output, error, status per
+                  step (static/squad lanes; status keeps the legacy value
+                  domain completed/failed/skipped — F2) — the dynamic lane
+                  preserves its legacy dict shape keyed by step identity
+                - dynamic: bool
+                - pattern: str (squad/dynamic lanes)
         """
 
-        results: list[dict[str, Any]] = []
-
-        # Route squad-oriented plans through role-aware execution.
-        # F-27 note: squad mode runs ALL members eagerly (every role executes
-        # regardless of individual failures), so fail_fast / on_step_error's
-        # abort-return are intentionally NOT honored here — a squad collects
-        # every member's result. on_step_error is still called for notification.
-        is_squad = any(s.agent_squad_id for s in self._plan.steps)
-        if is_squad:
-            squad_results = self._execute_squad(self._plan.steps, context or {}, step_executor)
-            for step in self._plan.steps:
-                result = squad_results.get(step.step_id)
-                # F-27: _execute_squad records a member failure as the Exception
-                # object (instead of aborting). Distinguish here so failed steps
-                # are marked failed — previously every step was unconditionally
-                # marked completed, hiding failures and leaving them stuck.
-                if isinstance(result, Exception):
-                    self.mark_failed(step, str(result))
-                    if on_step_error:
-                        on_step_error(step, result)
-                    results.append(
-                        {
-                            "step_id": step.step_id,
-                            "output": None,
-                            "error": str(result),
-                            "status": "failed",
-                        }
-                    )
-                else:
-                    output = str(result) if result is not None else ""
-                    self.mark_completed(step, output)
-                    # F-27: mirror single-step/parallel-batch paths — notify on success.
-                    if on_step_complete:
-                        on_step_complete(step, output)
-                    results.append(
-                        {
-                            "step_id": step.step_id,
-                            "output": result,
-                            "error": None,
-                            "status": "completed",
-                        }
-                    )
-            return {
-                "plan_id": self._plan.plan_id,
-                "completed": self.completed_count,
-                "failed": self.failed_count,
-                "skipped": 0,
-                "results": results,
-                "dynamic": False,
-                "pattern": self._plan.workflow_pattern.value,
-            }
-
-        # Route dynamic plans to WorkflowEngine
-        from vibesop.core.orchestration.workflow_engine import (
-            DynamicExecutionResult,
-            WorkflowEngine,
-        )
+        # D08: engine.is_dynamic BEFORE any agent_squad_id check. Squad-oriented
+        # patterns carry agent_squad_id on their steps, but they must enter the
+        # WorkflowEngine (handoff/review/revision gates) — not a simplified
+        # parallel string-matching branch that bypasses those gates.
+        from vibesop.core.orchestration.workflow_engine import WorkflowEngine
 
         if WorkflowEngine.is_dynamic(self._plan):
-            engine = WorkflowEngine(llm_client=self._llm_client, event_log=self._event_log)
+            return self._execute_dynamic_plan(
+                step_executor, on_step_complete, on_step_error, context
+            )
 
-            # Wrap executor to accept just the step (WorkflowEngine interface)
-            def _wrap_executor(step: ExecutionStep):
-                ctx = self.get_context(step)
-                return step_executor(step, ctx)
-
-            dyn_result = engine.run(self._plan, _wrap_executor)
-            if not isinstance(dyn_result, DynamicExecutionResult):
-                raise TypeError(f"Expected DynamicExecutionResult, got {type(dyn_result).__name__}")
-            return {
-                "plan_id": self._plan.plan_id,
-                "completed": dyn_result.total_steps_executed,
-                "failed": 0,
-                "skipped": 0,
-                "results": dyn_result.results,
-                "dynamic": True,
-                "pattern": dyn_result.pattern.value,
-            }
+        results: list[dict[str, Any]] = []
+        outcomes: list[StepOutcome] = []
+        # Steps whose output was a blocked sentinel are persisted via
+        # mark_failed (StepStatus has no blocked member — RR06 debt), so the
+        # failed counter must exclude them to avoid double counting.
+        blocked_ids: set[str] = set()
 
         while True:
             batch = self.pending_steps()
@@ -405,32 +482,57 @@ class StepRunner:
                 ctx = self.get_context(step)
                 try:
                     output = step_executor(step, ctx)
-                    from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+                    status = _classify_output(output)
 
-                    if is_acceptance_failure(output):
-                        self.mark_failed(step, str(output))
+                    if status is StepOutcomeStatus.SUCCESS:
+                        self.mark_completed(step, output)
+                        if on_step_complete:
+                            on_step_complete(step, output)
                         results.append(
                             {
                                 "step_id": step.step_id,
-                                "output": None,
-                                "error": str(output),
-                                "status": "failed",
+                                "output": output,
+                                "error": None,
+                                "status": "completed",
                             }
                         )
-                        if fail_fast:
-                            break
+                        outcomes.append(
+                            StepOutcome(
+                                step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output
+                            )
+                        )
                         continue
-                    self.mark_completed(step, output)
-                    if on_step_complete:
-                        on_step_complete(step, output)
+
+                    error = str(output)
+                    self.mark_failed(step, error)
+                    if status is StepOutcomeStatus.BLOCKED:
+                        blocked_ids.add(step.step_id)
+                    # K-2 symmetry with the parallel batch path: acceptance
+                    # failures (blocked/failed sentinels) do not fire
+                    # on_step_error; only genuine exceptions do.
+                    # F2: the per-step entry status keeps the legacy value
+                    # domain (completed/failed) — blocked granularity is
+                    # expressed by the blocked counter, the StepOutcome status
+                    # and the adapter's blocked classification, not by a new
+                    # entry status value.
                     results.append(
                         {
                             "step_id": step.step_id,
-                            "output": output,
-                            "error": None,
-                            "status": "completed",
+                            "output": None,
+                            "error": error,
+                            "status": "failed",
                         }
                     )
+                    outcomes.append(
+                        StepOutcome(
+                            step.step_id,
+                            step.skill_id,
+                            status,
+                            error=error,
+                        )
+                    )
+                    if fail_fast:
+                        break
                 except Exception as e:
                     self.mark_failed(step, str(e))
                     should_continue = on_step_error(step, e) if on_step_error else not fail_fast
@@ -441,6 +543,11 @@ class StepRunner:
                             "error": str(e),
                             "status": "failed",
                         }
+                    )
+                    outcomes.append(
+                        StepOutcome(
+                            step.step_id, step.skill_id, StepOutcomeStatus.FAILED, error=str(e)
+                        )
                     )
                     if not should_continue or fail_fast:
                         break
@@ -482,6 +589,10 @@ class StepRunner:
                     asyncio.set_event_loop(old_loop)
                     loop.close()
 
+                # D06: break only on a REAL failure in this batch (mirrors the
+                # serial branch above). With fail_fast=True an all-success
+                # batch must fall through so downstream dependent steps run.
+                batch_failed = False
                 should_continue = True
                 for item in batch_results:
                     if isinstance(item, Exception):
@@ -489,6 +600,7 @@ class StepRunner:
                         continue
                     step, step_result = item  # pyright: ignore[reportGeneralTypeIssues]
                     if isinstance(step_result, Exception):
+                        batch_failed = True
                         self.mark_failed(step, str(step_result))
                         if on_step_error:
                             should_continue = on_step_error(step, step_result)
@@ -501,6 +613,14 @@ class StepRunner:
                                 "error": str(step_result),
                                 "status": "failed",
                             }
+                        )
+                        outcomes.append(
+                            StepOutcome(
+                                step.step_id,
+                                step.skill_id,
+                                StepOutcomeStatus.FAILED,
+                                error=str(step_result),
+                            )
                         )
                         if not should_continue or fail_fast:
                             # Stop processing remaining steps in this batch and break outer loop
@@ -520,14 +640,17 @@ class StepRunner:
                         # {"status": "failed"} are unreachable once str()-ed);
                         # only then stringify for storage. Mirror the serial
                         # branch: no on_step_error callback (K-2 symmetry).
-                        from vibesop.core.orchestration.verification_loop import (
-                            is_acceptance_failure,
-                        )
-
-                        if is_acceptance_failure(step_result):
+                        status = _classify_output(step_result)
+                        if status is not StepOutcomeStatus.SUCCESS:
+                            batch_failed = True
                             output = str(step_result)
                             self.mark_failed(step, output)
+                            if status is StepOutcomeStatus.BLOCKED:
+                                blocked_ids.add(step.step_id)
                             should_continue = not fail_fast
+                            # F2: entry status keeps the legacy value domain
+                            # (completed/failed) — blocked granularity lives in
+                            # the blocked counter / StepOutcome / adapter.
                             results.append(
                                 {
                                     "step_id": step.step_id,
@@ -535,6 +658,9 @@ class StepRunner:
                                     "error": output,
                                     "status": "failed",
                                 }
+                            )
+                            outcomes.append(
+                                StepOutcome(step.step_id, step.skill_id, status, error=output)
                             )
                             if not should_continue or fail_fast:
                                 for remaining_step in batch:
@@ -561,76 +687,310 @@ class StepRunner:
                                     "status": "completed",
                                 }
                             )
+                            outcomes.append(
+                                StepOutcome(
+                                    step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output
+                                )
+                            )
 
-                if not should_continue or fail_fast:
+                if batch_failed and (not should_continue or fail_fast):
                     break
+
+        # F6 (restored HEAD resume contract): only steps that can NEVER run in
+        # this plan — a (transitive) dependency failed or was itself skipped —
+        # are marked skipped. Steps that were simply not dispatched yet (the
+        # run aborted via fail_fast / on_step_error) stay PENDING so a later
+        # pending_steps()/resume() pass can still execute them.
+        def _unrunnable_due_to_dependency(step: ExecutionStep) -> bool:
+            for dep_id in step.dependencies:
+                dep_state = self._states.get(dep_id)
+                if dep_state is None:
+                    continue
+                if dep_state.failed:
+                    return True
+                if dep_state.completed and dep_state.output.startswith("[SKIPPED]"):
+                    return True
+            return False
+
+        changed = True
+        while changed:
+            changed = False
+            for step in self._plan.steps:
+                st = self._states[step.step_id]
+                if st.completed or st.failed:
+                    continue
+                if _unrunnable_due_to_dependency(step):
+                    self.mark_skipped(step, "dependency failed or was skipped")
+                    changed = True
 
         skipped = sum(
             1
             for s in self._states.values()
             if s.completed and not s.failed and s.output.startswith("[SKIPPED]")
         )
+        blocked = len(blocked_ids)
+        # F1: failed counts every unsuccessful terminal step — blocked-sentinel
+        # steps are persisted via mark_failed and count in BOTH failed and
+        # blocked (restored HEAD contract).
+        outcome = PlanOutcome(
+            plan_id=self._plan.plan_id,
+            completed=self.completed_count - skipped,
+            failed=self.failed_count,
+            skipped=skipped,
+            blocked=blocked,
+            review_status="not_required",
+            steps=outcomes,
+        )
+        outcome.final_status = _derive_final_status(outcome)
+        self._last_plan_outcome = outcome
         return {
             "plan_id": self._plan.plan_id,
-            "completed": self.completed_count - skipped,
-            "failed": self.failed_count,
-            "skipped": skipped,
+            "completed": outcome.completed,
+            "failed": outcome.failed,
+            "skipped": outcome.skipped,
+            "blocked": outcome.blocked,
+            "final_status": outcome.final_status,
+            "review_status": outcome.review_status,
             "results": results,
         }
 
-    def _execute_squad(
-        self,
-        steps: list[ExecutionStep],
-        context: dict[str, Any],
-        step_executor: Callable[..., Any],
-    ) -> dict[str, Any]:
-        """Execute squad steps grouped by role with prompt/skill injection.
+    @property
+    def last_plan_outcome(self) -> PlanOutcome | None:
+        """Terminal aggregation of the most recent execute_all() run, if any.
 
-        Steps are grouped by ``assigned_role`` so each role receives its
-        system prompt and allowed skill list once.  The enriched context is
-        passed to ``step_executor`` for every step in the group.
+        This is the shared :class:`PlanOutcome` face over whichever lane
+        executed the plan; the legacy dict returned by execute_all carries
+        the same counters (``blocked``, ``final_status`` included).
         """
-        from itertools import groupby
+        return getattr(self, "_last_plan_outcome", None)
 
-        sorted_steps = sorted(steps, key=lambda s: s.assigned_role or "")
-        grouped = {
-            role: list(role_steps)
-            for role, role_steps in groupby(sorted_steps, key=lambda s: s.assigned_role or "")
+    def _execute_dynamic_plan(
+        self,
+        step_executor: Callable[..., Any],
+        on_step_complete: Callable[..., Any] | None,
+        on_step_error: Callable[..., Any] | None,
+        context: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Route dynamic plans (incl. squad patterns) through the WorkflowEngine.
+
+        Squad-oriented plans delegate to ``WorkflowEngine.run_async`` via
+        ``WorkflowEngine.run`` — the engine owns handoff/review/revision
+        gates. There is deliberately no parallel dispatch branch here.
+        """
+        from vibesop.core.orchestration.workflow_engine import (
+            DynamicExecutionResult,
+            SquadExecutionResult,
+            WorkflowEngine,
+        )
+
+        engine = WorkflowEngine(llm_client=self._llm_client, event_log=self._event_log)
+
+        # The engine's squad paths call executor(step, context) with an
+        # internal SquadStep; non-squad engine paths call executor(step) with
+        # the plan's own ExecutionStep. The public contract is unchanged:
+        # step_executor always receives the plan's ExecutionStep (so
+        # step.skill_id / step.input_query / every other original field are
+        # available verbatim). Squad steps are translated back to the real
+        # plan step by step_id — never by skill guessing, and never by
+        # passing the SquadStep itself.
+        plan_steps_by_id = {s.step_id: s for s in self._plan.steps}
+
+        def _wrap_executor(step: Any, *args: Any) -> Any:
+            ctx = args[0] if args else self.get_context(step)
+            plan_step = plan_steps_by_id.get(getattr(step, "step_id", None))
+            return step_executor(plan_step if plan_step is not None else step, ctx)
+
+        run_result = engine.run(self._plan, _wrap_executor, context=context)
+        if isinstance(run_result, SquadExecutionResult):
+            return self._squad_result_dict(run_result, on_step_complete, on_step_error)
+        if not isinstance(run_result, DynamicExecutionResult):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(f"Expected DynamicExecutionResult, got {type(run_result).__name__}")
+        return self._dynamic_result_dict(run_result)
+
+    def _dynamic_result_dict(self, dyn_result: DynamicExecutionResult) -> dict[str, Any]:
+        """Normalize a DynamicExecutionResult into the shared outcome (D07).
+
+        The legacy ``results`` dict shape is preserved verbatim — keyed by
+        step/plan identity, never converted to a list. Only the statistics
+        are fixed: ``completed``/``failed``/``blocked`` are real counters
+        derived from the recorded values, and ``final_status`` is the
+        WorkflowEngine verdict (previously hardcoded to failed=0 and never
+        delivered).
+        """
+        from vibesop.core.models import StepStatus
+        from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+
+        results_map = dyn_result.results  # legacy dict shape — pass through unchanged
+        values = list(results_map.values())
+        # F1: failed counts every acceptance failure, INCLUDING blocked values
+        # (blocked is an additional breakdown, restored HEAD contract).
+        blocked = sum(1 for v in values if _is_blocked_output(v))
+        failed = sum(1 for v in values if is_acceptance_failure(v))
+        completed = len(values) - failed
+        skipped = sum(
+            1
+            for s in self._plan.steps
+            if s.step_id not in results_map and s.status is not StepStatus.COMPLETED
+        )
+
+        outcome = PlanOutcome(
+            plan_id=self._plan.plan_id,
+            completed=completed,
+            failed=failed,
+            skipped=skipped,
+            blocked=blocked,
+            final_status=dyn_result.final_status,
+            review_status="not_required",
+        )
+        self._last_plan_outcome = outcome
+        return {
+            "plan_id": self._plan.plan_id,
+            "completed": completed,
+            "failed": failed,
+            "skipped": skipped,
+            "blocked": blocked,
+            "final_status": dyn_result.final_status,
+            "review_status": outcome.review_status,
+            "results": results_map,
+            "dynamic": True,
+            "pattern": dyn_result.pattern.value,
         }
 
-        results: dict[str, Any] = {}
-        for role, role_steps in grouped.items():
-            role_prompt = self._get_role_prompt(role, role_steps)
-            skills = role_steps[0].role_skills if role_steps else []
-            skill_context = {"allowed_skills": skills}
+    def _squad_result_dict(
+        self,
+        squad_result: SquadExecutionResult,
+        on_step_complete: Callable[..., Any] | None,
+        on_step_error: Callable[..., Any] | None,
+    ) -> dict[str, Any]:
+        """Normalize a SquadExecutionResult into the shared outcome (D08).
 
-            enriched_context = {
-                **context,
-                "role": role,
-                "role_prompt": role_prompt,
-                "skill_isolation": skill_context,
-            }
+        Blocked review verdicts (genuine hard rejects reported by the
+        engine) surface as ``blocked`` — never as completed. Steps map by
+        step_id: the PlanBuilder squad path uses the same step ids on the
+        ExecutionPlan steps and the AgentSquad steps.
+        """
+        outputs: dict[str, Any] = squad_result.output or {}
+        verdicts = squad_result.verdicts or []
+        blocked_roles: set[str] = set(getattr(squad_result, "blocked_roles", None) or [])
+        engine_blocked = bool(getattr(squad_result, "blocked", False))
 
-            for step in role_steps:
-                try:
-                    result = step_executor(step, enriched_context)
-                except Exception as e:
-                    # F-27: don't abort the whole squad on one member's failure.
-                    # Record the exception; execute_all marks the step failed
-                    # (mirrors the parallel-batch path's Exception-as-result pattern).
-                    logger.warning("Squad step %s (role=%s) failed: %s", step.step_id, role, e)
-                    results[step.step_id] = e
-                    continue
-                results[step.step_id] = result
+        results: list[dict[str, Any]] = []
+        step_outcomes: list[StepOutcome] = []
+        completed = failed = skipped = blocked = 0
 
-        return results
+        for step in self._plan.steps:
+            role = step.assigned_role or ""
+            if step.step_id not in outputs:
+                # Revision rounds re-run only a subset; a step without a
+                # recorded output never executed.
+                self.mark_skipped(step, "not executed by squad run")
+                results.append(
+                    {
+                        "step_id": step.step_id,
+                        "output": None,
+                        "error": None,
+                        "status": "skipped",
+                    }
+                )
+                step_outcomes.append(
+                    StepOutcome(step.step_id, step.skill_id, StepOutcomeStatus.SKIPPED)
+                )
+                skipped += 1
+                continue
 
-    def _get_role_prompt(self, role: str, role_steps: list[ExecutionStep]) -> str:
-        """Return the rendered system prompt for a role."""
-        from vibesop.core.orchestration.role_templates import render_role_prompt
+            output = outputs[step.step_id]
+            status = _classify_output(output)
+            if status is StepOutcomeStatus.SUCCESS and role in blocked_roles:
+                # The review gate hard-rejected this role's work — the step
+                # ran, but the plan is blocked on evidence/revision.
+                status = StepOutcomeStatus.BLOCKED
 
-        skills = role_steps[0].role_skills if role_steps else []
-        return render_role_prompt(role, skills)
+            if status is StepOutcomeStatus.SUCCESS:
+                text = str(output) if output is not None else ""
+                self.mark_completed(step, text)
+                if on_step_complete:
+                    on_step_complete(step, text)
+                results.append(
+                    {
+                        "step_id": step.step_id,
+                        "output": output,
+                        "error": None,
+                        "status": "completed",
+                    }
+                )
+                step_outcomes.append(
+                    StepOutcome(step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output)
+                )
+                completed += 1
+            else:
+                error = str(output)
+                if status is StepOutcomeStatus.BLOCKED and role in blocked_roles:
+                    issues = [
+                        str(v.revision_feedback or ", ".join(v.issues) or "review blocked")
+                        for v in verdicts
+                        if not v.passed and not v.requires_revision and v.target_role == role
+                    ]
+                    error = (
+                        issues[-1] if issues else "blocked: review gate rejected this role's work"
+                    )
+                # StepStatus has no blocked member (RR06 terminal-vocabulary
+                # debt) — persist as failed with the blocked reason.
+                self.mark_failed(step, error)
+                if status is StepOutcomeStatus.FAILED and on_step_error:
+                    on_step_error(step, RuntimeError(error))
+                # F2: entry status keeps the legacy value domain
+                # (completed/failed/skipped); blocked granularity is carried by
+                # the blocked counter, the StepOutcome status and the adapter.
+                results.append(
+                    {
+                        "step_id": step.step_id,
+                        "output": None,
+                        "error": error,
+                        "status": "failed",
+                    }
+                )
+                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, error=error))
+                if status is StepOutcomeStatus.BLOCKED:
+                    # F1: blocked steps count in BOTH failed and blocked.
+                    blocked += 1
+                    failed += 1
+                else:
+                    failed += 1
+
+        if engine_blocked:
+            final_status = "blocked"
+        elif failed - blocked > 0:
+            final_status = "partial" if completed > 0 else "failed"
+        elif any(not v.passed and v.requires_revision for v in verdicts):
+            final_status = "partial"
+        else:
+            final_status = "completed"
+
+        review_status = str(getattr(squad_result, "review_status", None) or "accepted")
+        outcome = PlanOutcome(
+            plan_id=self._plan.plan_id,
+            completed=completed,
+            failed=failed,
+            skipped=skipped,
+            blocked=blocked,
+            final_status=final_status,
+            review_status=review_status,
+            steps=step_outcomes,
+        )
+        self._last_plan_outcome = outcome
+        return {
+            "plan_id": self._plan.plan_id,
+            "completed": completed,
+            "failed": failed,
+            "skipped": skipped,
+            "blocked": blocked,
+            "final_status": final_status,
+            "review_status": review_status,
+            "results": results,
+            "dynamic": True,
+            "pattern": self._plan.workflow_pattern.value,
+            "verdicts": [v.model_dump() if hasattr(v, "model_dump") else v for v in verdicts],
+        }
 
     def _dependencies_satisfied(self, step: ExecutionStep) -> bool:
         for dep_id in step.dependencies:

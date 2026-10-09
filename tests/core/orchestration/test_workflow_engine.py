@@ -13,6 +13,7 @@ from vibesop.core.models import (
     AgentSquad,
     ExecutionPlan,
     ExecutionStep,
+    PlanStatus,
     SquadStep,
     WorkflowPattern,
 )
@@ -132,6 +133,105 @@ class TestWorkflowEngineSquadPatterns:
 
         assert isinstance(result, SquadExecutionResult)
         assert result.rounds_executed >= 1
+
+    @pytest.mark.asyncio
+    async def test_blocked_review_verdict_surfaces_blocked_terminal(self) -> None:
+        """D08 (engine side): a genuine hard-reject review verdict must surface
+        via the additive blocked/blocked_roles fields and review_status —
+        while plan.status keeps the run-completed contract (F3): reaching the
+        terminal event means no member crashed, so the run completed; the
+        review acceptance dimension is carried by the new fields and the
+        additive review_status payload key, never by repurposing
+        final_status."""
+        from vibesop.core.orchestration import PlanEventLog, PlanEventType
+
+        plan = _make_squad_plan(WorkflowPattern.RED_TEAM)
+        log = PlanEventLog()
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content=json.dumps(
+                {
+                    "passed": False,
+                    "issues": ["no evidence"],
+                    "score": 1.0,
+                    "requires_revision": False,
+                    "revision_feedback": "blocked: no evidence",
+                }
+            )
+        )
+        engine = WorkflowEngine(llm_client=mock_llm, event_log=log)
+
+        async def executor(step: SquadStep, context: dict[str, Any]) -> dict[str, Any]:
+            return {"step_id": step.step_id, "role_id": step.role_id, "content": "work"}
+
+        result = await engine.run_async(plan, executor=executor)
+
+        assert isinstance(result, SquadExecutionResult)
+        assert result.blocked is True
+        assert result.blocked_roles == ["implementer"]
+        assert result.review_status == "rejected"
+        assert plan.status == PlanStatus.COMPLETED, "run-completed contract (F3)"
+        data = result.to_dict()
+        assert data["blocked"] is True
+        assert data["blocked_roles"] == ["implementer"]
+        assert data["review_status"] == "rejected"
+        # Terminal event: final_status keeps the run-completed vocabulary;
+        # review acceptance rides the additive payload key.
+        terminal = [
+            e
+            for e in log.replay(plan.plan_id, since_seq=0).events
+            if e.type == PlanEventType.PLAN_TERMINAL
+        ]
+        assert terminal, "plan_terminal event must be emitted"
+        assert terminal[-1].payload["final_status"] == "completed"
+        assert terminal[-1].payload["review_status"] == "rejected"
+
+    @pytest.mark.asyncio
+    async def test_degraded_review_gate_keeps_completed_semantics(self) -> None:
+        """A review gate that errors (no LLM) produces a degraded verdict —
+        it is not a genuine review outcome and must not surface as blocked;
+        acceptance is explicitly 'error' (unknown), never 'accepted'."""
+        from vibesop.core.models import PlanStatus
+
+        plan = _make_squad_plan(WorkflowPattern.RED_TEAM)
+        engine = WorkflowEngine()  # no LLM → ReviewGateProtocol.review raises LLMError
+
+        async def executor(step: SquadStep, context: dict[str, Any]) -> dict[str, Any]:
+            return {"step_id": step.step_id, "role_id": step.role_id, "content": "work"}
+
+        result = await engine.run_async(plan, executor=executor)
+
+        assert isinstance(result, SquadExecutionResult)
+        assert result.blocked is False
+        assert result.blocked_roles == []
+        assert result.review_status == "error"
+        assert plan.status == PlanStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_squad_step_context_carries_role_prompt_and_skill_isolation(self) -> None:
+        """F5 (F27 contract): the unified engine _build_step_context restores
+        the role context keys the old StepRunner._execute_squad branch
+        supplied — rendered role_prompt and skill_isolation.allowed_skills
+        from the real SquadStep — alongside the handoff/verdicts keys."""
+        from vibesop.core.orchestration.role_templates import render_role_prompt
+
+        plan = _make_squad_plan(WorkflowPattern.AGENT_SQUAD)
+        engine = WorkflowEngine()
+        contexts: dict[str, dict[str, Any]] = {}
+
+        async def executor(step: SquadStep, context: dict[str, Any]) -> dict[str, Any]:
+            contexts[step.role_id] = context
+            return {"step_id": step.step_id, "role_id": step.role_id, "content": "work"}
+
+        await engine.run_async(plan, executor=executor)
+
+        squad = AgentSquad(**plan.metadata["agent_squad"])
+        expected = {s.role_id: list(s.skill_ids) for s in squad.steps}
+        for role, ctx in contexts.items():
+            assert ctx.get("role_prompt"), f"{role} must receive a rendered role prompt"
+            assert ctx["role_prompt"] == render_role_prompt(role, expected[role])
+            assert ctx.get("skill_isolation", {}).get("allowed_skills") == expected[role]
+        assert contexts["reviewer"].get("handoff"), "handoff must still be delivered"
 
     def test_squad_execution_result_to_dict(self) -> None:
         plan = _make_squad_plan(WorkflowPattern.AGENT_SQUAD)
