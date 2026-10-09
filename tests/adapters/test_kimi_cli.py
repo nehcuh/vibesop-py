@@ -276,6 +276,13 @@ class TestKimiCliAdapter:
         if sys.platform != "win32":
             # Windows chmod only toggles read-only; hooks run via `bash <script>`.
             assert hook_path.stat().st_mode & 0o111  # executable
+        else:
+            # W1: Windows-side assertion — a real non-empty artifact.
+            # Executability there is proven by the quickstart Git Bash smoke
+            # that runs the deployed hook; POSIX mode bits must not be
+            # dressed up as a Windows ACL proof.
+            assert hook_path.is_file(), "Hook must be a regular file on Windows"
+            assert hook_path.stat().st_size > 0, "Hook artifact must be non-empty"
 
         content = hook_path.read_text(encoding="utf-8")
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
@@ -671,3 +678,68 @@ class TestKimiSkillRenderBoundary:
         assert result.success, f"fallback render failed: {result.errors}"
         rendered = output_dir / "skills" / "b1-unique-missing-source-20261009" / "SKILL.md"
         assert rendered.exists()
+
+    def test_copy_fallback_real_dir_and_central_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """W1 (Windows qualification): capability probe forced False — the
+        public render must take the REAL product copy fallback: actual
+        directory (never a link), markers, flattened name boundary, central
+        source untouched, idempotent. capability=False lane only; it does
+        NOT replace the malicious-symlink refusals above (those stay gated
+        on ``symlink_supported``)."""
+        import json
+
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
+
+        skill_id = "w1glm-20261009/demo"
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        output_dir = tmp_path / "out"
+
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="kimi-cli"),
+            skills=[
+                SkillSpec(
+                    id=skill_id,
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                    metadata={"source_path": str(central_demo)},
+                )
+            ],
+        )
+        adapter = KimiCliAdapter(project_root=project_root)
+        result = adapter.render_config(manifest, output_dir)
+
+        assert result.success, f"copy-fallback render failed: {result.errors}"
+        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
+
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+
+        copy_marker = skill_dir / ".vibe-copy-source"
+        assert copy_marker.is_file()
+        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
+        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
+        assert owner["id"] == skill_id
+        assert owner["source"]["type"] == "pack-copy"
+
+        # Name boundary: exactly the flattened dir, no nested namespace dir.
+        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
+
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()
+
+        result2 = adapter.render_config(manifest, output_dir)
+        assert result2.success, f"second render failed: {result2.errors}"
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()

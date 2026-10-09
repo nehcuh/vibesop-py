@@ -174,3 +174,75 @@ class TestRenderLegalPaths:
         assert rendered.exists()
         content = rendered.read_text(encoding="utf-8")
         assert "b1-unique-missing-source-20261009" in content
+
+
+class TestRenderCopyFallbackWithoutSymlinkCapability:
+    """W1 (Windows qualification): public ``render_config`` with the symlink
+    capability probe forced False (unprivileged Windows) must take the REAL
+    product copy fallback — actual directory (never a link), provenance and
+    ownership markers, flattened name boundary, central source untouched,
+    idempotent re-render.
+
+    Honest boundary: capability=False lane only; it does NOT replace the
+    malicious-symlink refusals above (those stay gated on
+    ``symlink_supported`` because they need real symlinks).
+    """
+
+    def test_copy_fallback_real_dir_and_central_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json
+
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
+
+        skill_id = "w1glm-20261009/demo"
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(CENTRAL_CONTENT, encoding="utf-8")
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        output_dir = project_root / ".pi"
+
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="pi"),
+            skills=[
+                SkillSpec(
+                    id=skill_id,
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                    metadata={"source_path": str(central_demo)},
+                )
+            ],
+        )
+        adapter = PiCodingAgentAdapter(project_root=project_root)
+        result = adapter.render_config(manifest, output_dir)
+
+        assert result.success, f"copy-fallback render failed: {result.errors}"
+        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
+
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
+
+        copy_marker = skill_dir / ".vibe-copy-source"
+        assert copy_marker.is_file()
+        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
+        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
+        assert owner["id"] == skill_id
+        assert owner["source"]["type"] == "pack-copy"
+
+        # Name boundary: exactly the flattened dir, no nested namespace dir.
+        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
+
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()
+
+        result2 = adapter.render_config(manifest, output_dir)
+        assert result2.success, f"second render failed: {result2.errors}"
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()

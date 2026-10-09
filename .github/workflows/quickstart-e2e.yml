@@ -266,6 +266,37 @@ jobs:
           fi
           echo "SPACED-HOME E2E PASSED"
 
+      # W1 (2026-10-09, observation only): record the actual Git Bash
+      # version and the raw LF/CRLF byte counts of the deployed hook
+      # scripts (scratch-home + spaced-home lanes) so the W-RISK-2 CRLF
+      # contradiction is resolved from real Windows run bytes. Prints
+      # counts and versions only — never file contents, never secrets.
+      # Observation never gates: every command is || true.
+      - name: Observe Git Bash version + deployed hook line endings (W1)
+        working-directory: ${{ runner.temp }}
+        env:
+          HOME: ${{ runner.temp }}/scratch-home
+          USERPROFILE: ${{ runner.temp }}/scratch-home
+          SPACED_HOME: ${{ runner.temp }}/scratch home
+        run: |
+          bash --version | sed -n '1p' || true
+          hook_scratch="$HOME/.claude/hooks/vibesop-route.sh"
+          hook_spaced="$SPACED_HOME/.claude/hooks/vibesop-route.sh"
+          uv run --no-project python -c '
+          import sys
+          for label, path in (("scratch-home", sys.argv[1]), ("spaced-home", sys.argv[2])):
+              try:
+                  data = open(path, "rb").read()
+              except OSError as e:
+                  print(label, ": hook MISSING at", path, "(", e, ")")
+                  continue
+              lf = data.count(b"\n")
+              crlf = data.count(b"\r\n")
+              cr = data.count(b"\r")
+              print(label, ": hook bytes=", len(data), " lf=", lf, " crlf=", crlf,
+                    " bare_cr=", cr - crlf, " path=", path, sep="")
+          ' "$hook_scratch" "$hook_spaced" || true
+
       - name: Dual-platform injection probe (claude-code vs grok-build)
         working-directory: ${{ runner.temp }}
         env:

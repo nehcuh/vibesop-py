@@ -217,8 +217,11 @@ jobs:
         # boundary files; running them first surfaces concrete errors before
         # the full regression completes. Same rerun
         # posture as the full Run tests step below.
+        # W1 (2026-10-09, observation only): -ra + --junitxml appended so
+        # per-test-id skip/rerun outcomes are recoverable from this step's
+        # own report; filters/reruns/gates unchanged.
         run: >-
-          uv run pytest -q --reruns 2 --reruns-delay 1
+          uv run pytest -q --reruns 2 --reruns-delay 1 -ra --junitxml=test-results-windows-boundary-py${{ matrix.python-version }}.xml
           tests/adapters/test_kimi_config_merge.py
           tests/adapters/test_pi_route_extension.py
           tests/adapters/test_route_process_boundary.py
@@ -234,7 +237,28 @@ jobs:
         # --reruns-delay 1 (gate44 pi NIT-5): Defender-style transient
         # locks are time-sensitive — an immediate rerun re-hits the same
         # window (the benchmark job already pairs these two flags).
-        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2 --reruns-delay 1
+        # W1 (2026-10-09, observation only): -ra + --junitxml appended for
+        # per-test-id outcomes; marker/rerun/gate contracts unchanged.
+        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2 --reruns-delay 1 -ra --junitxml=test-results-windows-full-py${{ matrix.python-version }}.xml
+
+      # W1 (2026-10-09, observation only): upload each step's own JUnit
+      # report so per-test-id skip/rerun/pass sets are recoverable without
+      # -q log archaeology. Reuses the workflow's existing upload-artifact
+      # pin; always() keeps reports available on red runs — upload itself
+      # gates nothing.
+      - name: Upload Windows boundary test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: windows-test-report-boundary-py${{ matrix.python-version }}
+          path: test-results-windows-boundary-py${{ matrix.python-version }}.xml
+
+      - name: Upload Windows full test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: windows-test-report-full-py${{ matrix.python-version }}
+          path: test-results-windows-full-py${{ matrix.python-version }}.xml
 
   security:
     name: Security Scan

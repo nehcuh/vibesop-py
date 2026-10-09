@@ -294,6 +294,13 @@ class TestClaudeCodeHookRendering:
         if sys.platform != "win32":
             # Windows chmod only toggles read-only; hooks run via `bash <script>`.
             assert hook_path.stat().st_mode & 0o111, "Hook should be executable"
+        else:
+            # W1: Windows-side assertion — a real non-empty artifact.
+            # Executability there is proven by the quickstart Git Bash smoke
+            # that runs the deployed hook; POSIX mode bits must not be
+            # dressed up as a Windows ACL proof.
+            assert hook_path.is_file(), "Hook must be a regular file on Windows"
+            assert hook_path.stat().st_size > 0, "Hook artifact must be non-empty"
         result.add_file.assert_called_once_with(hook_path)
         result.add_warning.assert_not_called()
 
@@ -1212,3 +1219,83 @@ class TestSkillRenderRefusesBeforeMkdir:
             "validation must run before mkdir — refused render created central/demo"
         )
         assert not (central / ".vibe-manifest.json").exists()
+
+
+class TestSkillCopyFallbackWithoutSymlinkCapability:
+    """W1 (Windows qualification): public ``render_config`` with the symlink
+    capability probe forced False (unprivileged Windows) must take the REAL
+    product copy fallback — the platform skill dir is an actual directory,
+    content comes from the declared source, provenance/ownership markers
+    are written, the central source is never mutated, the flattened name
+    boundary holds for namespaced ids, and re-rendering is idempotent.
+
+    Honest boundary: capability=False lane only — it does NOT stand in for
+    the malicious-symlink refusals above (those stay gated on
+    ``symlink_supported`` because they need real symlinks).
+    """
+
+    CENTRAL_CONTENT = "# Central Install\n\nW1 copy-fallback body — do not touch\n"
+    SKILL_ID = "w1glm-20261009/demo"
+
+    def _manifest(self, central_demo: Path) -> Manifest:
+        return Manifest(
+            metadata=ManifestMetadata(platform="claude-code"),
+            skills=[
+                SkillSpec(
+                    id=self.SKILL_ID,
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                    metadata={"source_path": str(central_demo)},
+                )
+            ],
+        )
+
+    def test_render_copies_real_dir_and_keeps_central_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json
+
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
+
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
+
+        adapter = ClaudeCodeAdapter(project_root=tmp_path / "proj")
+        (tmp_path / "proj").mkdir()
+        output_dir = tmp_path / "output"
+
+        result = adapter.render_config(self._manifest(central_demo), output_dir)
+
+        assert result.success, f"copy-fallback render failed: {result.errors}"
+        skill_dir = output_dir / "skills" / "w1glm-20261009-demo"
+
+        # Actual directory carrying the source content — never a link.
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+
+        # Production provenance + ownership markers on the copy.
+        copy_marker = skill_dir / ".vibe-copy-source"
+        assert copy_marker.is_file()
+        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central_demo.resolve()
+        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
+        assert owner["id"] == self.SKILL_ID
+        assert owner["source"]["type"] == "pack-copy"
+
+        # Name boundary: exactly the flattened dir, no nested namespace dir.
+        assert sorted(p.name for p in (output_dir / "skills").iterdir()) == [skill_dir.name]
+
+        # Central source content unchanged; render left no marker inside it.
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()
+
+        # Idempotent second render: still a real dir, central untouched.
+        result2 = adapter.render_config(self._manifest(central_demo), output_dir)
+        assert result2.success, f"second render failed: {result2.errors}"
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
+        assert not (central_demo / ".vibe-manifest.json").exists()

@@ -722,13 +722,13 @@ class TestWriteFileAtomicAncestorSymlink:
             "declared trusted root must refuse a symlinked ancestor inside it"
         )
 
-    def test_real_dir_write_with_anchor_still_works(
-        self, tmp_path: Path, symlink_supported: bool
-    ) -> None:
+    def test_real_dir_write_with_anchor_still_works(self, tmp_path: Path) -> None:
         """Compatibility: a plain real directory tree under the declared
-        anchor keeps rendering (the R1 refusal must not over-reach)."""
-        if not symlink_supported:
-            pytest.skip("directory symlinks not supported on this host")
+        anchor keeps rendering (the R1 refusal must not over-reach).
+
+        W1: unconditionally executed — the assertion writes a real directory
+        and never creates a symlink, so it must not ride the symlink
+        capability fixture."""
         adapter = DummyAdapter()
         output_root = tmp_path / "output"
         target = output_root / "skills" / "demo" / "SKILL.md"
@@ -841,3 +841,76 @@ class TestAssertSafeRenderPath:
         out.mkdir()
         adapter._assert_safe_render_path(out / "skills", out)
         adapter._assert_safe_render_path(out / "skills" / "demo", out, allow_leaf_symlink=True)
+
+
+class TestRenderCopyFallbackWithoutSymlinkCapability:
+    """W1 (Windows qualification): with the production symlink capability
+    probe forced False — the unprivileged-Windows branch — the render must
+    take the REAL product copy fallback and every fallback-visible contract
+    must still hold: the platform dir is an actual directory (never a
+    link), copy-source and ownership markers are written, the central
+    source content stays untouched, the render result records the output
+    file, and a second render is idempotent.
+
+    Honest boundary: this is the capability=False lane ONLY. It does not
+    prove the malicious-symlink refusals above — those inherently require
+    creating real symlinks and stay gated on ``symlink_supported``.
+    """
+
+    CENTRAL_BODY = "# Central Install\n\nW1 copy-fallback body\n"
+
+    def _seed_central(self, tmp_path: Path) -> Path:
+        central = tmp_path / "central" / "w1-copy-demo-20261009"
+        central.mkdir(parents=True)
+        (central / "SKILL.md").write_text(self.CENTRAL_BODY, encoding="utf-8")
+        return central
+
+    def test_copy_fallback_real_dir_markers_central_untouched_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json
+
+        # Simulate the no-symlink-privilege branch deterministically on
+        # every host (same probe the Codex audit forced False on darwin).
+        monkeypatch.setattr("vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False)
+
+        central = self._seed_central(tmp_path)
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "out" / "skills"
+        skills_dir.mkdir(parents=True)
+        skill_dir = skills_dir / "w1-copy-demo-20261009"
+        result = RenderResult(success=True)
+
+        # Real DynamicSkillDiscovery shape: source_path rides skill metadata.
+        skill = SimpleNamespace(id="w1-copy-demo-20261009", metadata={"source_path": str(central)})
+        adapter._render_skill_content(skill, skill_dir, result)
+
+        # Actual directory, not a link; content copied from the source.
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
+
+        # Provenance markers from the production fallback.
+        copy_marker = skill_dir / ".vibe-copy-source"
+        assert copy_marker.is_file()
+        assert Path(copy_marker.read_text(encoding="utf-8").strip()) == central.resolve()
+        owner = json.loads((skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8"))
+        assert owner["id"] == "w1-copy-demo-20261009"
+        assert owner["source"]["type"] == "pack-copy"
+
+        # The central install itself is never mutated.
+        assert (central / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
+        assert not (central / ".vibe-manifest.json").exists()
+
+        # Output side effect: the rendered file is recorded.
+        assert (skill_dir / "SKILL.md") in result.files_created
+
+        # Idempotent: a second render re-copies, still a real dir, central
+        # still untouched.
+        result2 = RenderResult(success=True)
+        adapter._render_skill_content(skill, skill_dir, result2)
+        assert skill_dir.is_dir()
+        assert not skill_dir.is_symlink()
+        assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
+        assert (central / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
+        assert not (central / ".vibe-manifest.json").exists()
