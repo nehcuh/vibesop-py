@@ -31,6 +31,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from vibesop.core.instinct.learner import InstinctLearner
 from vibesop.core.matching.base import MatchResult, MatcherType
 from vibesop.core.routing.optimization_service import OptimizationService
@@ -230,3 +232,83 @@ class TestRewardSignalFix:
             host.record_feedback_outcome(QUERY, success=True)
 
         assert learner.instincts[iid].is_reliable is True
+
+
+class TestActionChangeDropsInheritedEvidence:
+    """D13 at the routing consumer: one success on a new action must not boost.
+
+    ``apply_instinct_boost`` only sees instincts ``find_matching`` accepts
+    (``is_reliable`` and confidence >= 0.6). The new action still names the
+    same skill, so a row that kept the old three successes plus one new
+    success would boost. Reset evidence must not.
+    """
+
+    def test_new_action_one_success_does_not_boost(self, tmp_path: Path) -> None:
+        learner = _real_learner(tmp_path)
+        learner.learn(pattern=QUERY, action=ACTION, source="auto_routing")
+        iid = next(iter(learner.instincts))
+        for _ in range(3):
+            learner.record_outcome(iid, success=True)
+        assert learner.instincts[iid].is_reliable is True
+
+        svc = _make_service(learner)
+        before = svc.apply_instinct_boost([_match(SKILL, 0.5)], QUERY, context=None)
+        assert before[0].metadata.get("boosted") is True
+
+        new_action = f"avoid {SKILL} skill"
+        changed = learner.learn(pattern=QUERY, action=new_action, source="auto_routing")
+        assert changed.id == iid
+        assert changed.action == new_action
+        assert changed.success_count == 0
+        assert changed.failure_count == 0
+        assert changed.confidence == pytest.approx(0.5)
+        assert changed.is_reliable is False
+
+        learner.record_outcome(iid, success=True)
+        once = learner.instincts[iid]
+        assert once.success_count == 1
+        assert once.total_applications == 1
+        assert once.is_reliable is False
+
+        after = svc.apply_instinct_boost([_match(SKILL, 0.5)], QUERY, context=None)
+        assert after[0].confidence == 0.5
+        assert after[0].metadata.get("boosted") is not True
+        assert after[0].metadata.get("boost_source") != "instinct"
+
+
+_OTHER_SKILL = "builtin/code-review"
+_OTHER_ACTION = f"suggest {_OTHER_SKILL} skill"
+
+
+class TestOldActionFeedbackDoesNotCrossActions:
+    """Feedback on a loaded action A must not become evidence for action B."""
+
+    def test_old_accept_after_peer_switches_action_does_not_boost(self, tmp_path: Path) -> None:
+        storage = tmp_path / "instincts.jsonl"
+        seeder = InstinctLearner(storage_path=storage)
+        seeder.learn(pattern=QUERY, action=ACTION, source="auto_routing")
+        for _ in range(3):
+            seeder.record_outcome_for_query(QUERY, success=True)
+
+        holder = InstinctLearner(storage_path=storage)
+        changer = InstinctLearner(storage_path=storage)
+        changer.learn(pattern=QUERY, action=_OTHER_ACTION, source="auto_routing")
+        assert holder.get_instinct_for_query(QUERY) is not None
+        assert holder.get_instinct_for_query(QUERY).action == ACTION  # type: ignore[union-attr]
+
+        holder.record_outcome_for_query(QUERY, success=True)
+
+        reader = InstinctLearner(storage_path=storage)
+        row = reader.get_instinct_for_query(QUERY)
+        assert row is not None
+        assert row.action == _OTHER_ACTION
+        assert row.success_count == 0
+        assert row.failure_count == 0
+        assert row.is_reliable is False
+
+        svc = _make_service(reader)
+        boosted = svc.apply_instinct_boost(
+            [_match(SKILL, 0.5), _match(_OTHER_SKILL, 0.5)], QUERY, None
+        )
+        assert boosted[0].metadata.get("boosted") is not True
+        assert boosted[1].metadata.get("boosted") is not True

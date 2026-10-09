@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B6 diagnosis optimization**: Instinct writes merge under thread and process locks using loaded baselines; persisted row shape remains compatible. Evidence is scoped to pattern and action identity.
+
 - **B4 diagnosis optimization**: Overlay writers and validators use canonical policies.security/routing; the merger still reads historical top-level policies with canonical values taking precedence. Sandbox builds run in a writable isolated copy and publish guarded regular-file outputs after success.
 
 - **B8 diagnosis optimization**: Manual routing E2E observes the actual augmented-query cache lookup key and uses its single recorded row with production decay and effective routing threshold. Live API wiring and an explicitly controlled last-good harness are reported separately.
@@ -34,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B6 diagnosis optimization**: Preserve concurrent feedback instead of overwriting newer disk state; reset confidence and outcome evidence on action changes, discard stale feedback for replaced actions, and prevent clear/prune resurrection.
 
 - **B4 diagnosis optimization**: Preserve effective overlay policy values on round-trip and reject invalid overrides. Required build failures return false before audit/publication/index/lock, clean the failed target, and reject escaping/symlink artifacts; ordinary outputs work with macOS indirect temporary roots.
 
