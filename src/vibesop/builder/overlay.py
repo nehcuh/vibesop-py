@@ -104,8 +104,9 @@ class OverlayMerger:
         # Merge overlay
         merged = self._deep_merge(manifest_dict, overlay)
 
-        # Convert back to Manifest
-        return self._dict_to_manifest(merged)
+        # Convert back to Manifest. Pass the original overlay so legacy
+        # top-level security/routing can be read without beating policies.*.
+        return self._dict_to_manifest(merged, source_overlay=overlay)
 
     def _manifest_to_dict(self, manifest: Manifest) -> dict[str, Any]:
         """Convert Manifest to dict.
@@ -131,11 +132,18 @@ class OverlayMerger:
 
         return model_to_dict(manifest)
 
-    def _dict_to_manifest(self, data: dict[str, Any]) -> Manifest:
+    def _dict_to_manifest(
+        self,
+        data: dict[str, Any],
+        source_overlay: dict[str, Any] | None = None,
+    ) -> Manifest:
         """Convert dict to Manifest.
 
         Args:
-            data: Dictionary representation
+            data: Dictionary representation after the deep merge
+            source_overlay: Original overlay mapping. Legacy top-level
+                ``security``/``routing`` keys are still applied. Canonical
+                ``policies.security``/``policies.routing`` wins on conflicts.
 
         Returns:
             Manifest object
@@ -158,11 +166,17 @@ class OverlayMerger:
         skills_dicts = data.get("skills", [])
         skills = [SkillSpec(**s) if isinstance(s, dict) else s for s in skills_dicts]
 
-        # Convert policies
-        policies_dict = data.get("policies", {})
+        # Convert policies. Base manifest dumps always contain policies.*,
+        # so a legacy top-level key must be applied here or its values are lost.
+        policies_raw = data.get("policies", {})
+        policies_dict = policies_raw if isinstance(policies_raw, dict) else {}
         policies = PolicySet(
-            security=SecurityPolicy(**policies_dict.get("security", {})),
-            routing=RoutingPolicy(**policies_dict.get("routing", {})),
+            security=SecurityPolicy(
+                **self._resolve_policy_section(policies_dict, data, source_overlay, "security")
+            ),
+            routing=RoutingPolicy(
+                **self._resolve_policy_section(policies_dict, data, source_overlay, "routing")
+            ),
             behavior=policies_dict.get("behavior", {}),
             custom=policies_dict.get("custom", {}),
         )
@@ -205,6 +219,34 @@ class OverlayMerger:
 
         return result
 
+    @staticmethod
+    def _resolve_policy_section(
+        policies_dict: dict[str, Any],
+        data: dict[str, Any],
+        source_overlay: dict[str, Any] | None,
+        name: str,
+    ) -> dict[str, Any]:
+        """Resolve one policy section, with legacy top-level fallback.
+
+        Historical overlays stored ``security`` and ``routing`` at the top
+        level. Those values still apply. When the same overlay also sets
+        ``policies.<name>``, the canonical mapping wins key by key.
+        """
+        base = policies_dict.get(name)
+        merged: dict[str, Any] = dict(base) if isinstance(base, dict) else {}
+
+        legacy = source_overlay.get(name) if source_overlay is not None else data.get(name)
+        if isinstance(legacy, dict):
+            merged.update(legacy)
+
+        if source_overlay is not None:
+            overlay_policies = source_overlay.get("policies")
+            if isinstance(overlay_policies, dict):
+                canonical = overlay_policies.get(name)
+                if isinstance(canonical, dict):
+                    merged.update(canonical)
+        return merged
+
 
 def create_overlay(
     output_path: Path,
@@ -215,7 +257,9 @@ def create_overlay(
 ) -> None:
     """Create an overlay YAML file.
 
-    Convenience function for creating overlay files.
+    Security and routing overrides are written under the canonical
+    ``policies.security`` / ``policies.routing`` keys. Top-level
+    ``security`` / ``routing`` is the historical shape and is not emitted.
 
     Args:
         output_path: Path to write overlay file
@@ -231,13 +275,15 @@ def create_overlay(
     if skills is not None:
         overlay["skills"] = [{"id": sid} for sid in skills]
 
-    if security:
-        overlay["security"] = security
+    policies: dict[str, Any] = {}
+    if security is not None:
+        policies["security"] = security
+    if routing is not None:
+        policies["routing"] = routing
+    if policies:
+        overlay["policies"] = policies
 
-    if routing:
-        overlay["routing"] = routing
-
-    if metadata:
+    if metadata is not None:
         overlay["metadata"] = metadata
 
     # Write overlay file
@@ -249,7 +295,12 @@ def create_overlay(
 
 
 def validate_overlay(overlay_path: Path) -> list[str]:
-    """Validate an overlay file.
+    """Validate an overlay file against the canonical schema.
+
+    Accepted top-level keys are ``skills``, ``metadata``, and ``policies``.
+    Historical top-level ``security`` / ``routing`` keys are not valid for
+    new files (the merger can still read them). Policy field values are
+    checked with ``SecurityPolicy`` and ``RoutingPolicy``.
 
     Args:
         overlay_path: Path to overlay file
@@ -257,7 +308,7 @@ def validate_overlay(overlay_path: Path) -> list[str]:
     Returns:
         List of validation errors (empty if valid)
     """
-    errors = []
+    errors: list[str] = []
     overlay_path = Path(overlay_path)
 
     if not overlay_path.exists():
@@ -273,13 +324,66 @@ def validate_overlay(overlay_path: Path) -> list[str]:
             errors.append("Overlay must be a dictionary")
             return errors
 
-        # Validate known keys
-        valid_keys = {"skills", "security", "routing", "metadata", "policies"}
+        # Canonical shape only. Top-level security/routing is legacy, not blessed.
+        valid_keys = {"skills", "metadata", "policies"}
         for key in overlay_data:
             if key not in valid_keys:
                 errors.append(f"Unknown overlay key: {key}")
 
+        policies = overlay_data.get("policies")
+        if policies is not None:
+            if not isinstance(policies, dict):
+                errors.append("policies must be a dictionary")
+            else:
+                errors.extend(_validate_policy_sections(policies))
+
     except Exception as e:
         errors.append(f"Failed to validate overlay: {e}")
 
+    return errors
+
+
+def _validate_policy_sections(policies: dict[str, Any]) -> list[str]:
+    """Return errors for unknown policy sections or illegal field values."""
+    from vibesop.adapters.models import RoutingPolicy, SecurityPolicy
+
+    errors: list[str] = []
+    valid_sections = {"security", "routing", "behavior", "custom"}
+    for key in policies:
+        if key not in valid_sections:
+            errors.append(f"Unknown policies key: {key}")
+
+    if "security" in policies:
+        errors.extend(
+            _validate_policy_model("policies.security", SecurityPolicy, policies.get("security"))
+        )
+    if "routing" in policies:
+        errors.extend(
+            _validate_policy_model("policies.routing", RoutingPolicy, policies.get("routing"))
+        )
+    for name in ("behavior", "custom"):
+        if name in policies and not isinstance(policies[name], dict):
+            errors.append(f"policies.{name} must be a dictionary")
+    return errors
+
+
+def _validate_policy_model(label: str, model: Any, raw: Any) -> list[str]:
+    """Validate one policy mapping. Unknown fields and illegal values are errors."""
+    from pydantic import BaseModel, ValidationError
+
+    if not isinstance(model, type) or not issubclass(model, BaseModel):
+        return [f"{label} validator is not a policy model"]
+    policy_model: type[BaseModel] = model
+
+    if not isinstance(raw, dict):
+        return [f"{label} must be a dictionary"]
+
+    known = set(policy_model.model_fields)
+    errors = [f"Unknown {label} field: {name}" for name in sorted(set(raw) - known)]
+    try:
+        policy_model.model_validate(raw)
+    except ValidationError as exc:
+        for err in exc.errors():
+            loc = ".".join(str(part) for part in err.get("loc", ())) or label
+            errors.append(f"Invalid {label}.{loc}: {err.get('msg', 'invalid value')}")
     return errors

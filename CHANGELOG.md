@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **B4 diagnosis optimization**: Overlay writers and validators use canonical policies.security/routing; the merger still reads historical top-level policies with canonical values taking precedence. Sandbox builds run in a writable isolated copy and publish guarded regular-file outputs after success.
+
 - **B8 diagnosis optimization**: Manual routing E2E observes the actual augmented-query cache lookup key and uses its single recorded row with production decay and effective routing threshold. Live API wiring and an explicitly controlled last-good harness are reported separately.
 
 - **B2 diagnosis optimization**: Candidate cache schema v5 fingerprints the loader markdown/YAML discovery set and current governance projection. Governance changes are visible on the next lookup; skill content retains its five-second refresh interval.
@@ -32,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the bypass window).
 
 ### Fixed
+
+- **B4 diagnosis optimization**: Preserve effective overlay policy values on round-trip and reject invalid overrides. Required build failures return false before audit/publication/index/lock, clean the failed target, and reject escaping/symlink artifacts; ordinary outputs work with macOS indirect temporary roots.
 
 - **B8 diagnosis optimization**: Avoid false failures when distinct queries cache the same skill at different confidence. Keep missing live positive-cache prerequisites non-passing without mutating the cache; validate accept, reject, equality, negative-cache and no-entry contracts with real producer payloads.
 

@@ -401,11 +401,11 @@ class TestPostInstallHook:
             result = installer._run_post_install(pack_dir, object())
         assert "vibesop-build" in result
 
-    def test_package_json_bun_fallback(self, tmp_path, monkeypatch):
-        """If no build script, bun run gen:skill-docs is attempted."""
-        import shutil as _shutil
+    def test_package_json_bun_fallback_failure_is_not_success(self, tmp_path, monkeypatch):
+        """A failing bun fallback is a required-build failure, not a success string."""
+        import os
 
-        from vibesop.installer.pack_installer import PackInstaller
+        from vibesop.installer.pack_installer import PackBuildError, PackInstaller
 
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
@@ -413,17 +413,15 @@ class TestPostInstallHook:
         (pack_dir / "package.json").write_text(
             '{"scripts":{"gen:skill-docs":"echo skills"}}', encoding="utf-8"
         )
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        bun = bin_dir / "bun"
+        bun.write_text("#!/bin/sh\necho bun-failed >&2\nexit 1\n", encoding="utf-8")
+        bun.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
 
-        def _mock_which(cmd):
-            if cmd == "bun":
-                return "/usr/local/bin/bun"
-            return _shutil.which(cmd)
-
-        monkeypatch.setattr("shutil.which", _mock_which)
-
-        with _allow_local_build():
-            result = installer._run_post_install(pack_dir, object())
-        assert isinstance(result, str)
+        with _allow_local_build(), pytest.raises(PackBuildError, match="bun"):
+            installer._run_post_install(pack_dir, object())
 
     def test_setup_sh_executed(self, tmp_path):
         """setup.sh is also detected as a build script."""

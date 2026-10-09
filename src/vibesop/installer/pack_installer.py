@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -16,11 +18,25 @@ from vibesop.core.skills.storage import SkillStorage, write_copy_source_marker
 from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
+from vibesop.security.exceptions import PathTraversalError
+from vibesop.security.path_safety import PathSafety
+from vibesop.utils.atomic_writer import AtomicWriteError, AtomicWriter
 from vibesop.utils.helpers import safe_rmtree as _safe_rmtree
 from vibesop.utils.pack_name import sanitize_pack_name
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+_BUILD_IMAGE = "ubuntu:22.04"
+_PATH_SAFETY = PathSafety()
+
+
+class PackBuildError(Exception):
+    """A required pack build failed, or its artifacts were unsafe to keep.
+
+    ``install_pack`` turns this into ``(False, ...)`` and does not write the
+    pack lock or platform symlinks.
+    """
 
 
 class PackInstaller:
@@ -217,13 +233,19 @@ class PackInstaller:
             # Run build with sandbox preference. Falls back to local only when
             # no container runtime exists; otherwise runs in an isolated
             # --network=none container so the build script cannot exfiltrate.
-            build_output = self._run_post_install(
-                target_path,
-                analysis,
-                sandbox=self._sandbox_builds,
-                allow_unsafe_build=self._allow_unsafe_build,
-                pre_audit_summary=pre_audit.summary,
-            )
+            # A required build that fails must not continue into audit, links,
+            # or the pack lock — those would record a successful install.
+            try:
+                build_output = self._run_post_install(
+                    target_path,
+                    analysis,
+                    sandbox=self._sandbox_builds,
+                    allow_unsafe_build=self._allow_unsafe_build,
+                    pre_audit_summary=pre_audit.summary,
+                )
+            except PackBuildError as exc:
+                _safe_rmtree(target_path)
+                return False, f"Required build failed: {exc}"
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
             audit_results = self._audit_skills(
@@ -368,6 +390,15 @@ class PackInstaller:
             pre_audit_summary: Human-readable summary from the pre-install
                 security audit, shown during the interactive confirmation for
                 local build fallback (F-03).
+
+        Returns:
+            A human-readable build summary. An empty string means there was
+            nothing to build. Skip notices are not failures.
+
+        Raises:
+            PackBuildError: The pack has a build script and that required
+                build failed, timed out, or produced an unsafe artifact.
+                Callers must not treat this as a successful install.
         """
         if allow_unsafe_build is None:
             allow_unsafe_build = self._allow_unsafe_build
@@ -441,11 +472,18 @@ class PackInstaller:
     ) -> str:
         """Run a build script in an ephemeral, network-blocked container.
 
+        The live pack directory is never mounted. The container receives a
+        writable copy, and only verified regular files are copied back with
+        ``AtomicWriter`` after the container exits.
+
         Security properties:
         - ``--network=none`` blocks egress even if the script tries curl|sh.
-        - ``--read-only`` mount of the source tree: the script can read its
-          own files but cannot persist backdoors into the pack directory.
+        - No Docker socket, host root, or user-home mount.
+        - Container root filesystem is read-only; only the isolated copy is writable.
         - 60s timeout, 512 MB memory cap, 0.5 CPU: contains runaway builds.
+
+        Raises:
+            PackBuildError: The build failed or an artifact was unsafe to persist.
         """
         import subprocess
 
@@ -453,46 +491,51 @@ class PackInstaller:
         # execution gate in ``_confirm_unsafe_build``.
         try:
             script_path.resolve().relative_to(target_path.resolve())
-        except ValueError:
-            return f"{script_path.name} blocked: resolves outside the pack directory"
+        except ValueError as exc:
+            raise PackBuildError(
+                f"{script_path.name} blocked: resolves outside the pack directory"
+            ) from exc
 
-        image = "ubuntu:22.04"
-        # All three supported runtimes accept the docker-CLI shape for our
-        # purposes (orbstack via docker-compat, lima via its docker wrapper).
-        # We use the docker CLI regardless and let the runtime shim translate.
-        runtime_bin = "docker"
-        cmd = [
-            runtime_bin,
-            "run",
-            "--rm",
-            "-v",
-            f"{target_path}:/work:ro",
-            "-w",
-            "/work",
-            "--network",
-            "none",
-            "--memory",
-            "512m",
-            "--cpus",
-            "0.5",
-            image,
-            "/bin/sh",
-            script_path.name,
-        ]
+        isolated = _isolate_pack_tree(target_path)
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-            )
-        except (subprocess.TimeoutExpired, OSError) as e:
-            return f"{script_path.name} sandbox error: {e}"
+            try:
+                before = _index_pack_tree(isolated)
+                cmd = _container_build_command(isolated, script_path.name)
+                _assert_container_command_safe(cmd, target_path)
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        check=False,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    raise PackBuildError(f"{script_path.name} sandbox error: {exc}") from exc
+                except OSError as exc:
+                    raise PackBuildError(f"{script_path.name} sandbox error: {exc}") from exc
 
-        if result.returncode == 0:
-            return f"{script_path.name} OK (sandboxed, network blocked)"
-        return f"{script_path.name} blocked/failed in sandbox: {result.stderr.strip()[:80]}"
+                if result.returncode != 0:
+                    detail = (result.stderr or result.stdout or "").strip()
+                    raise PackBuildError(
+                        f"{script_path.name} failed in sandbox "
+                        f"(exit {result.returncode}): {detail[:200]}"
+                    )
+
+                artifacts = _diff_build_artifacts(isolated, before)
+                _persist_build_artifacts(target_path, artifacts)
+            except PackBuildError:
+                raise
+            except OSError as exc:
+                raise PackBuildError(f"{script_path.name} sandbox error: {exc}") from exc
+        finally:
+            try:
+                if isolated.exists():
+                    _safe_rmtree(isolated)
+            except OSError:
+                logger.warning("failed to remove build sandbox %s", isolated)
+
+        return f"{script_path.name} OK (sandboxed, network blocked)"
 
     @staticmethod
     def _confirm_unsafe_build(
@@ -560,19 +603,24 @@ class PackInstaller:
                     )
                     if result.returncode == 0:
                         return "bun run gen:skill-docs OK"
-                    return f"bun build failed: {result.stderr.strip()[:80]}"
+                    detail = (result.stderr or result.stdout or "").strip()
+                    raise PackBuildError(f"bun build failed: {detail[:200]}")
                 except (subprocess.TimeoutExpired, OSError) as e:
-                    return f"bun build error: {e}"
+                    raise PackBuildError(f"bun build error: {e}") from e
             return ""
 
         # Reject symlinks that escape the pack directory before mutating or
         # executing the script.
         try:
             script_path.resolve().relative_to(Path(target_path).resolve())
-        except ValueError:
-            return f"{script_path.name} blocked (resolves outside pack directory)"
-        script_path.chmod(0o755)
+        except ValueError as exc:
+            raise PackBuildError(
+                f"{script_path.name} blocked (resolves outside pack directory)"
+            ) from exc
         try:
+            # chmod can fail (read-only tree). That is a required-build failure,
+            # not a generic install error that leaves the cloned pack in place.
+            script_path.chmod(0o755)
             result = subprocess.run(
                 [str(script_path)],
                 cwd=target_path,
@@ -583,9 +631,12 @@ class PackInstaller:
             )
             if result.returncode == 0:
                 return f"{script_path.name} OK"
-            return f"{script_path.name} failed: {result.stderr.strip()[:80]}"
+            detail = (result.stderr or result.stdout or "").strip()
+            raise PackBuildError(f"{script_path.name} failed: {detail[:200]}")
+        except PackBuildError:
+            raise
         except (subprocess.TimeoutExpired, OSError) as e:
-            return f"{script_path.name} error: {e}"
+            raise PackBuildError(f"{script_path.name} error: {e}") from e
 
     def _create_symlinks(
         self,
@@ -867,3 +918,178 @@ class PackInstaller:
             console.print(
                 f"\n[yellow]⚠ Index update for '{pack_name}' failed:[/yellow] {e}\n{recovery_hint}"
             )
+
+
+def _isolate_pack_tree(target_path: Path) -> Path:
+    """Copy ``target_path`` into a fresh temp directory.
+
+    Symlinks are copied as symlinks (not followed), so a link that points
+    outside the pack is not turned into a second host mount.
+    """
+    isolated = Path(tempfile.mkdtemp(prefix="vibesop-pack-build-"))
+    try:
+        shutil.copytree(target_path, isolated, symlinks=True, dirs_exist_ok=True)
+    except OSError as exc:
+        try:
+            _safe_rmtree(isolated)
+        except OSError:
+            logger.warning("failed to remove incomplete build sandbox %s", isolated)
+        raise PackBuildError(f"failed to isolate pack for build: {exc}") from exc
+    return isolated
+
+
+def _container_build_command(isolated: Path, script_name: str) -> list[str]:
+    """Build the ``docker run`` argv for one isolated pack copy.
+
+    The only host path in the command is ``isolated``. The live pack tree,
+    the user home, ``/``, and the Docker socket are never added.
+    """
+    cmd: list[str] = [
+        "docker",
+        "run",
+        "--rm",
+        "--read-only",
+        "--network",
+        "none",
+        "--memory",
+        "512m",
+        "--cpus",
+        "0.5",
+        "--security-opt",
+        "no-new-privileges",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=64m",
+    ]
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if callable(getuid) and callable(getgid):
+        uid = getuid()
+        gid = getgid()
+        if isinstance(uid, int) and isinstance(gid, int):
+            cmd.extend(["--user", f"{uid}:{gid}"])
+    cmd.extend(
+        [
+            "-v",
+            f"{isolated}:/work:rw",
+            "-w",
+            "/work",
+            _BUILD_IMAGE,
+            "/bin/sh",
+            script_name,
+        ]
+    )
+    return cmd
+
+
+def _reject_unsafe_build_mount(mount: Path, live_tree: Path) -> None:
+    """Refuse mounts that would give the build the host root, home, or live tree."""
+    real = mount.resolve()
+    text = str(real)
+    if "docker.sock" in text:
+        raise PackBuildError("refusing to mount the Docker socket")
+    forbidden = {
+        Path("/").resolve(),
+        Path.home().resolve(),
+        live_tree.resolve(),
+    }
+    if real in forbidden:
+        raise PackBuildError(f"refusing to mount {real} into the build container")
+    if not real.is_dir():
+        raise PackBuildError("build mount is not a directory")
+
+
+def _assert_container_command_safe(cmd: list[str], live_tree: Path) -> None:
+    """Reject a build command that mounts anything except one isolated work dir."""
+    if any("docker.sock" in arg for arg in cmd):
+        raise PackBuildError("refusing to mount the Docker socket")
+    volumes = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-v" and i + 1 < len(cmd)]
+    if len(volumes) != 1:
+        raise PackBuildError("build container must mount exactly one directory")
+    spec = volumes[0]
+    marker = ":/work:rw"
+    if marker not in spec:
+        raise PackBuildError("build work mount must be the isolated copy, writable")
+    source = spec.split(marker, 1)[0]
+    if source in {"", "/"}:
+        raise PackBuildError("refusing to mount the host root")
+    _reject_unsafe_build_mount(Path(source), live_tree)
+
+
+def _index_pack_tree(root: Path) -> dict[str, tuple[str, bytes | str]]:
+    """Index regular files and symlinks without following links.
+
+    Values are ``("file", content)`` or ``("symlink", link_text)``.
+    """
+    index: dict[str, tuple[str, bytes | str]] = {}
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        kept: list[str] = []
+        for name in dirnames:
+            path = base / name
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                index[rel] = ("symlink", os.fspath(path.readlink()))
+            else:
+                kept.append(name)
+        dirnames[:] = kept
+        for name in filenames:
+            path = base / name
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                index[rel] = ("symlink", os.fspath(path.readlink()))
+            elif path.is_file():
+                index[rel] = ("file", path.read_bytes())
+    return index
+
+
+def _diff_build_artifacts(
+    root: Path,
+    before: dict[str, tuple[str, bytes | str]],
+) -> list[tuple[str, bytes]]:
+    """Return new or changed regular files. New or changed symlinks fail closed."""
+    after = _index_pack_tree(root)
+    artifacts: list[tuple[str, bytes]] = []
+    for rel, (kind, payload) in after.items():
+        previous = before.get(rel)
+        if kind == "symlink":
+            if previous != ("symlink", payload):
+                raise PackBuildError(f"refusing symlink build artifact: {rel}")
+            continue
+        if kind != "file" or not isinstance(payload, bytes):
+            raise PackBuildError(f"refusing non-file build artifact: {rel}")
+        if previous == ("file", payload):
+            continue
+        _assert_artifact_contained(root, rel)
+        artifacts.append((rel, payload))
+    return artifacts
+
+
+def _assert_artifact_contained(root: Path, rel: str) -> None:
+    """Reject artifact paths that climb out of ``root`` or cross a symlink."""
+    parts = Path(rel).parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise PackBuildError(f"unsafe artifact path: {rel}")
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise PackBuildError(f"refusing symlink build artifact: {rel}")
+
+
+def _persist_build_artifacts(target_path: Path, artifacts: list[tuple[str, bytes]]) -> None:
+    """Atomically write verified artifact bytes into the live pack tree.
+
+    ``rel`` is already a relative artifact name. PathSafety joins it to
+    ``target_path`` and resolves only that trusted base. Joining first
+    produces an absolute path whose ``/var`` prefix does not match the
+    resolved ``/private/var`` base on macOS, so a legal temporary root is
+    rejected. Resolving the full destination first would also hide a
+    symlink inside the pack.
+    """
+    writer = AtomicWriter()
+    for rel, data in artifacts:
+        try:
+            safe = _PATH_SAFETY.ensure_safe_output_path(Path(rel), target_path, create_parents=True)
+            writer.write_bytes(safe, data)
+        except (OSError, ValueError, PathTraversalError, AtomicWriteError) as exc:
+            raise PackBuildError(f"refusing to write artifact {rel}: {exc}") from exc
