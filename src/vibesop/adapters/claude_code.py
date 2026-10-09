@@ -359,14 +359,23 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         if not result.success:
             return result
 
-        (output_dir / "skills").mkdir(exist_ok=True)
+        # Validate the skills root and every skill target against the trusted
+        # output root BEFORE any mkdir — a symlinked skills root must not
+        # let mkdir create directories inside a central install even when
+        # the later write_file_atomic would refuse (R1/B1).
+        skills_root = output_dir / "skills"
+        self._assert_safe_render_path(skills_root, output_dir)
+        skills_root.mkdir(exist_ok=True)
 
         # Render skill definitions — copy actual content from core/skills/
         for skill in manifest.skills:
             dir_name = skill.id.replace("/", "-")
-            skill_dir = output_dir / "skills" / dir_name
+            skill_dir = skills_root / dir_name
+            self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
             skill_dir.mkdir(parents=True, exist_ok=True)
-            self._render_skill_content(skill, skill_dir, result, manifest=manifest)
+            self._render_skill_content(
+                skill, skill_dir, result, manifest=manifest, base_dir=output_dir
+            )
 
         return result
 
@@ -485,6 +494,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         result: RenderResult,
         dir_name: str | None = None,
         manifest: Manifest | None = None,
+        base_dir: Path | None = None,
     ) -> None:
         super()._render_skill_content(
             skill,
@@ -492,6 +502,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             result,
             dir_name=dir_name,
             manifest=manifest,
+            base_dir=base_dir,
         )
 
     def _fallback_skill_content(
@@ -502,11 +513,14 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         *,
         dir_name: str | None = None,  # noqa: ARG002
         manifest: Manifest | None = None,  # noqa: ARG002
+        base_dir: Path | None = None,
     ) -> None:
         from vibesop.adapters._shared import render_skill_md
 
         content = render_skill_md(skill)
-        self.write_file_atomic(skill_output_path, content, validate_security=False)
+        self.write_file_atomic(
+            skill_output_path, content, validate_security=False, base_dir=base_dir
+        )
         result.add_file(skill_output_path)
 
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:

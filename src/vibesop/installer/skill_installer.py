@@ -8,6 +8,9 @@ from typing import Any
 
 import yaml
 
+from vibesop.security import PathSafety
+from vibesop.security.exceptions import SecurityError
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +60,76 @@ class SkillManifest:
 class SkillInstaller:
     def __init__(self) -> None:
         self._skills_dir = Path(".vibe/skills")
+        self._path_safety = PathSafety()
+
+    def _validate_skill_id(self, skill_id: str) -> None:
+        """Validate a logical skill id before any filesystem mutation.
+
+        Per-segment validation keeps legal pack-style namespace ids
+        (``demo-scope/demo``) working; a blanket ``validate_filename`` on the
+        whole id would reject those. Rejects empty ids, absolute paths,
+        empty segments, ``.``/``..`` segments, and backslashes. Each segment
+        additionally goes through the project's existing cross-platform
+        filename validation so Windows-illegal special characters
+        (``<>|*?`` etc.) are rejected per segment while the pack/skill
+        namespace shape is preserved.
+
+        Pure validation: no directories are created and no path is joined
+        here, so it is safe to call before dependency handling (R3/B1
+        early-reject ordering).
+        """
+        if not skill_id or not skill_id.strip():
+            raise ValueError("Skill id must not be empty")
+        if "\\" in skill_id:
+            raise ValueError(f"Skill id must not contain backslashes: {skill_id!r}")
+        if Path(skill_id).is_absolute() or skill_id.startswith(("~", "/")):
+            raise ValueError(f"Skill id must be a relative namespace path: {skill_id!r}")
+        for segment in skill_id.split("/"):
+            if not segment:
+                raise ValueError(f"Skill id contains an empty namespace segment: {skill_id!r}")
+            if segment in (".", ".."):
+                raise ValueError(f"Skill id segment must not be '{segment}': {skill_id!r}")
+            try:
+                self._path_safety.validate_filename(segment)
+            except ValueError as e:
+                msg = f"Skill id segment contains illegal characters: {skill_id!r} ({e})"
+                raise ValueError(msg) from e
+
+    @staticmethod
+    def _normalize_project_root(project_path: Path) -> Path:
+        """Normalize the project root once, to a consistent absolute path.
+
+        ``ensure_safe_output_path`` resolves its ``base_dir`` but joins a
+        *relative* path argument onto that resolved base — passing a
+        relative project root therefore used to double-join (``project``
+        became ``<cwd>/project/project/...``) and split the install dir from
+        the registry. Normalizing at the public entry points keeps exactly
+        one join and one absolute trusted root for target, registry, and
+        marker alike (R3/B1).
+        """
+        return Path(project_path).expanduser().resolve()
+
+    def _validated_skill_dir(
+        self,
+        skill_id: str,
+        project_path: Path,
+        create_parents: bool = False,
+    ) -> Path:
+        """Validate a logical skill id and return its target inside the project.
+
+        ``ensure_safe_output_path`` anchors the resolved containment check at
+        the project root and refuses symlinks anywhere in the target chain
+        (an intermediate namespace segment symlinked outside the project
+        would otherwise let the copy land outside the install root).
+        """
+        self._validate_skill_id(skill_id)
+        root = self._normalize_project_root(project_path)
+        target_dir = root / self._skills_dir / skill_id
+        return self._path_safety.ensure_safe_output_path(
+            target_dir,
+            root,
+            create_parents=create_parents,
+        )
 
     def install_skill(
         self,
@@ -78,8 +151,15 @@ class SkillInstaller:
                 result["errors"].append(f"Skill path not found: {skill_path}")
                 return result
 
+            project_path = self._normalize_project_root(project_path)
+
             manifest = self._load_skill_manifest(skill_path)
             result["skill_id"] = manifest.id
+
+            # R3/B1: reject a malicious id before any dependency handling,
+            # and without creating directories — the pure validator runs
+            # before the first filesystem mutation of this install.
+            self._validate_skill_id(manifest.id)
 
             dep_result: dict[str, Any] = self._install_dependencies(
                 manifest.dependencies, project_path
@@ -90,7 +170,7 @@ class SkillInstaller:
 
             result["dependencies_installed"] = dep_result["installed"]
 
-            target_dir = project_path / self._skills_dir / manifest.id
+            target_dir = self._validated_skill_dir(manifest.id, project_path, create_parents=True)
             if target_dir.exists() and not force:
                 result["warnings"].append(f"Skill already installed at {target_dir}")
                 result["success"] = True
@@ -126,7 +206,8 @@ class SkillInstaller:
         }
 
         try:
-            skill_dir = project_path / self._skills_dir / skill_id
+            project_path = self._normalize_project_root(project_path)
+            skill_dir = self._validated_skill_dir(skill_id, project_path)
 
             if not skill_dir.exists():
                 result["errors"].append(f"Skill not found: {skill_id}")
@@ -143,6 +224,7 @@ class SkillInstaller:
         return result
 
     def list_skills(self, project_path: Path) -> list[dict[str, Any]]:
+        project_path = self._normalize_project_root(project_path)
         skills: list[dict[str, Any]] = []
         skills_dir = project_path / self._skills_dir
 
@@ -177,7 +259,13 @@ class SkillInstaller:
             "errors": [],
         }
 
-        skill_dir = project_path / self._skills_dir / skill_id
+        try:
+            project_path = self._normalize_project_root(project_path)
+            skill_dir = self._validated_skill_dir(skill_id, project_path)
+        except (ValueError, SecurityError) as e:
+            result["errors"].append(f"Invalid skill id: {e}")
+            return result
+
         if not skill_dir.exists():
             result["errors"].append(f"Skill directory not found: {skill_dir}")
             return result

@@ -610,3 +610,234 @@ class TestPlatformAdapterEdgeCases:
 
         threats = adapter.scan_for_threats("anything")
         assert threats == []
+
+
+class TestWriteFileAtomicSymlinkChain:
+    """D02 counterexamples (B1): write_file_atomic must not resolve the target
+    path first and then anchor the safety check at the resolved parent — that
+    lets a symlink inside the output tree redirect the write outside it.
+    """
+
+    @staticmethod
+    def _seed_symlinked_skill_dir(tmp_path: Path) -> tuple[Path, Path, Path]:
+        """render-root/skills/demo -> outside, mimicking a pre-existing platform
+        skill symlink. Returns (render_root, link, outside)."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        render_root = tmp_path / "render-root"
+        skills_dir = render_root / "skills"
+        skills_dir.mkdir(parents=True)
+        link = skills_dir / "demo"
+        link.symlink_to(outside, target_is_directory=True)
+        return render_root, link, outside
+
+    def test_rejects_symlink_chain_without_base_dir(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        adapter = DummyAdapter()
+        _, link, outside = self._seed_symlinked_skill_dir(tmp_path)
+
+        # This is the render-path call shape: no explicit base_dir.
+        with pytest.raises(SecurityError):
+            adapter.write_file_atomic(link / "SKILL.md", "# rendered\n", validate_security=False)
+
+        assert not (outside / "SKILL.md").exists(), (
+            "write must not land outside the output tree through a symlink"
+        )
+
+    def test_explicit_base_dir_rejects_symlink_escape(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        """Anchoring at the caller's output root must reject the escape too.
+
+        Green on the current code (resolve-first is caught when base_dir is
+        explicit) — kept as the compatibility contract for the fix.
+        """
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        adapter = DummyAdapter()
+        render_root, link, outside = self._seed_symlinked_skill_dir(tmp_path)
+
+        with pytest.raises(SecurityError):
+            adapter.write_file_atomic(
+                link / "SKILL.md",
+                "# rendered\n",
+                validate_security=False,
+                base_dir=render_root,
+            )
+
+        assert not (outside / "SKILL.md").exists()
+
+
+class TestWriteFileAtomicAncestorSymlink:
+    """R1 counterexamples (B1 Codex review): a symlinked ANCESTOR of the
+    skill dir (``skills/`` root replaced by a link into a central install,
+    the skill dir itself a real directory) must not let the write land in
+    the central tree. Only a caller-declared trusted root can distinguish
+    such a link from a macOS ``/var`` system alias, so the caller must pass
+    ``base_dir`` and every symlink at or below it must be refused.
+    """
+
+    @staticmethod
+    def _seed_ancestor_symlink(tmp_path: Path) -> tuple[Path, Path, Path]:
+        """project/.claude/skills -> central, with central/demo a REAL dir.
+        Returns (project_root, target_file, central_skill)."""
+        project_root = tmp_path / "proj"
+        central = tmp_path / "central"
+        (central / "demo").mkdir(parents=True)
+        central_skill = central / "demo" / "SKILL.md"
+        central_skill.write_text("CENTRAL ORIGINAL\n", encoding="utf-8")
+        (project_root / ".claude").mkdir(parents=True)
+        (project_root / ".claude" / "skills").symlink_to(central, target_is_directory=True)
+        target = project_root / ".claude" / "skills" / "demo" / "SKILL.md"
+        return project_root, target, central_skill
+
+    def test_caller_anchor_rejects_ancestor_symlink(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        adapter = DummyAdapter()
+        project_root, target, central_skill = self._seed_ancestor_symlink(tmp_path)
+
+        # Direct parent (demo/) is a real directory; only the skills/ root
+        # above it is a symlink — this exact shape used to write through.
+        assert not target.parent.is_symlink()
+        assert target.parent.parent.is_symlink()
+
+        with pytest.raises(SecurityError):
+            adapter.write_file_atomic(
+                target, "DUMMY ANCESTOR WRITE\n", validate_security=False, base_dir=project_root
+            )
+
+        assert central_skill.read_text(encoding="utf-8") == "CENTRAL ORIGINAL\n", (
+            "declared trusted root must refuse a symlinked ancestor inside it"
+        )
+
+    def test_real_dir_write_with_anchor_still_works(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        """Compatibility: a plain real directory tree under the declared
+        anchor keeps rendering (the R1 refusal must not over-reach)."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        adapter = DummyAdapter()
+        output_root = tmp_path / "output"
+        target = output_root / "skills" / "demo" / "SKILL.md"
+
+        adapter.write_file_atomic(
+            target, "# rendered\n", validate_security=False, base_dir=output_root
+        )
+
+        assert target.read_text(encoding="utf-8") == "# rendered\n"
+
+
+class TestWriteFileAtomicExclusiveTemp:
+    """R2 counterexamples (B1 Codex review): the temporary file must be
+    created exclusively (mkstemp/O_EXCL) inside the validated parent dir.
+    A pre-planted ``<target>.tmp`` symlink must neither receive the write
+    nor be renamed over the target.
+    """
+
+    def test_preplanted_tmp_symlink_is_not_followed(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        adapter = DummyAdapter()
+        output = tmp_path / "out"
+        output.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_text("OUTSIDE ORIGINAL\n", encoding="utf-8")
+        target = output / "SKILL.md"
+        tmp_link = target.with_suffix(".tmp")
+        tmp_link.symlink_to(outside)
+
+        adapter.write_file_atomic(
+            target, "DUMMY TEMP WRITE\n", validate_security=False, base_dir=tmp_path
+        )
+
+        assert outside.read_text(encoding="utf-8") == "OUTSIDE ORIGINAL\n", (
+            "exclusive temp creation must not follow a pre-planted .tmp symlink"
+        )
+        assert not target.is_symlink(), "target must be a real file, not the moved link"
+        assert target.read_text(encoding="utf-8") == "DUMMY TEMP WRITE\n"
+
+    def test_no_tmp_leftovers_after_write(self, tmp_path: Path) -> None:
+        """The exclusively-created temp must be consumed by the rename — no
+        ``*.tmp`` files may remain in the target directory."""
+        adapter = DummyAdapter()
+        target = tmp_path / "SKILL.md"
+
+        adapter.write_file_atomic(target, "content\n", validate_security=False)
+
+        leftovers = [p.name for p in tmp_path.glob("*.tmp")]
+        assert leftovers == [], f"unexpected temp leftovers: {leftovers}"
+
+
+class TestAssertSafeRenderPath:
+    """R1 helper contract (B1 Codex second review): pre-mkdir ancestor
+    validation must refuse symlinked components at or below the trusted
+    output root, while preserving the legal per-skill leaf symlink.
+    """
+
+    def test_refuses_symlinked_leaf(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        adapter = DummyAdapter()
+        central = tmp_path / "central"
+        central.mkdir()
+        skills_root = tmp_path / "out" / "skills"
+        skills_root.parent.mkdir(parents=True)
+        skills_root.symlink_to(central, target_is_directory=True)
+
+        with pytest.raises(SecurityError):
+            adapter._assert_safe_render_path(skills_root, tmp_path / "out")
+
+    def test_refuses_symlinked_ancestor_allows_leaf_link(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        """allow_leaf_symlink=True must refuse a symlinked skills ROOT above
+        the leaf, but tolerate the leaf itself being a legal per-skill link."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        from vibesop.security.exceptions import SecurityError
+
+        adapter = DummyAdapter()
+        central = tmp_path / "central"
+        (central / "demo").mkdir(parents=True)
+        skills_root = tmp_path / "out" / "skills"
+        skills_root.parent.mkdir(parents=True)
+        skills_root.symlink_to(central, target_is_directory=True)
+
+        # Ancestor link: refused even though the leaf itself would be exempt.
+        with pytest.raises(SecurityError):
+            adapter._assert_safe_render_path(
+                skills_root / "demo", tmp_path / "out", allow_leaf_symlink=True
+            )
+
+        # Legal per-skill link: real skills root, symlinked leaf — allowed.
+        skills_root.unlink()
+        skills_root.mkdir()
+        (skills_root / "demo").symlink_to(central / "demo", target_is_directory=True)
+        adapter._assert_safe_render_path(
+            skills_root / "demo", tmp_path / "out", allow_leaf_symlink=True
+        )
+
+    def test_clean_tree_passes(self, tmp_path: Path) -> None:
+        adapter = DummyAdapter()
+        out = tmp_path / "out"
+        out.mkdir()
+        adapter._assert_safe_render_path(out / "skills", out)
+        adapter._assert_safe_render_path(out / "skills" / "demo", out, allow_leaf_symlink=True)

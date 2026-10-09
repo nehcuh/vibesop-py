@@ -6,6 +6,7 @@ adapters must inherit from, along with shared utility methods.
 
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, ClassVar
@@ -13,6 +14,7 @@ from typing import Any, ClassVar
 from vibesop import __version__
 from vibesop.adapters.models import Manifest, RenderResult
 from vibesop.security import PathSafety, SecurityScanner
+from vibesop.security.exceptions import PathTraversalError
 
 logger = logging.getLogger(__name__)
 
@@ -370,18 +372,64 @@ class PlatformAdapter(ABC):
             ValueError: If path is unsafe or content contains threats
             IOError: If write operation fails
         """
-        path = Path(path).expanduser().resolve()
+        # Do NOT resolve the target first: a symlink inside the intended
+        # output tree would be followed silently and the safety check would
+        # re-anchor at the resolved parent — outside the tree the caller
+        # meant to protect. PathSafety works on the lexical path and refuses
+        # symlinks in the chain (v7.0.8 layered defense), so pass the
+        # unresolved path through.
+        # R1 (B1): a caller that cares about links ABOVE the file's parent
+        # (e.g. a project tree whose ``skills/`` root was replaced by a
+        # symlink into a central install) MUST pass the trusted output root
+        # explicitly as base_dir. The no-anchor fallback anchors at the
+        # lexical parent and can only refuse symlinks at or below it — a
+        # symlinked ancestor above the parent is positionally
+        # indistinguishable from a macOS ``/var`` system alias, so it cannot
+        # be rejected without a declared trusted root.
+        # NOTE: intentionally os.path.abspath (not Path.resolve) — must NOT
+        # resolve symlinks, per the lexical-anchor defense above.
+        raw_path = Path(os.path.abspath(str(Path(path).expanduser())))  # noqa: PTH100
 
-        # Determine base directory for safety check
-        base_dir = path.parent if base_dir is None else Path(base_dir).expanduser().resolve()
+        if base_dir is None:
+            # No explicit caller anchor: anchor at the lexical parent of the
+            # *intended* path, so a pre-existing platform skill symlink can
+            # no longer redirect the write into a central install (D02).
+            anchor = raw_path.parent
+            if anchor.is_symlink():
+                msg = f"Refusing to write through symlinked directory: {anchor}"
+                raise PathTraversalError(
+                    message=msg,
+                    path=str(path),
+                    base_dir=str(anchor),
+                )
+        else:
+            # Caller-declared trusted root: symlinks at or below it on the
+            # lexical path are refused by check_traversal below, including
+            # ancestors of the file's parent (R1).
+            anchor = Path(os.path.abspath(str(Path(base_dir).expanduser())))  # noqa: PTH100
 
-        # Create parent directories if needed
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # Refuse any symlink at or below the anchor on the lexical path —
+        # that is where a caller-tree link could redirect the write (D02).
+        # Symlinks strictly ABOVE the anchor (e.g. macOS /var -> /private/var)
+        # are system-level indirection and are tolerated by re-basing both
+        # anchor and path into the resolved world below.
+        if not self._path_safety.check_traversal(raw_path, anchor):
+            msg = f"Path traversal detected: {path} is not safely contained in {anchor}"
+            raise PathTraversalError(
+                message=msg,
+                path=str(path),
+                base_dir=str(anchor),
+            )
 
-        # Validate path safety (now that parent exists)
-        self._path_safety.ensure_safe_output_path(
-            path,
-            base_dir,
+        anchor_resolved = anchor.resolve()
+        rel = os.path.relpath(str(raw_path), str(anchor))
+        candidate = Path(os.path.normpath(str(anchor_resolved / rel)))
+
+        # Validate path safety (and create parents inside the validated tree)
+        safe_path = self._path_safety.ensure_safe_output_path(
+            candidate,
+            anchor_resolved,
+            create_parents=True,
         )
 
         # Validate content security if enabled
@@ -391,15 +439,70 @@ class PlatformAdapter(ABC):
                 msg = f"Content contains security threats: {scan_result.summary}"
                 raise ValueError(msg)
 
-        # Write to temporary file
-        tmp_path = path.with_suffix(".tmp")
+        # Write to an exclusively-created temporary file (R2/B1): a fixed
+        # ``<target>.tmp`` name could be pre-planted as a symlink, and
+        # ``write_text`` would then follow it and overwrite the link target
+        # before ``replace`` moved the link over the real file. mkstemp
+        # gives O_EXCL semantics on a random name inside the already
+        # validated parent directory, so the temp can never be a symlink.
+        import tempfile
+
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f"{safe_path.name}.", suffix=".tmp", dir=str(safe_path.parent)
+        )
+        tmp_path = Path(tmp_name)
         try:
-            tmp_path.write_text(content, encoding="utf-8")
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(content)
             # Atomic rename
-            tmp_path.replace(path)
+            tmp_path.replace(safe_path)
         finally:
-            # Clean up temp file if it still exists
+            # Clean up temp file only if we still own it (write/replace
+            # failed before the rename consumed it).
             tmp_path.unlink(missing_ok=True)
+
+    def _assert_safe_render_path(
+        self,
+        path: Path,
+        base_dir: Path,
+        *,
+        allow_leaf_symlink: bool = False,
+    ) -> None:
+        """Validate a render target against the trusted output root BEFORE any
+        mkdir/marker/copy side effect (R1/B1 second review).
+
+        Refuses (PathTraversalError) when any component at or below
+        ``base_dir`` on the lexical path to ``path`` is a symlink. With
+        ``allow_leaf_symlink=True`` the leaf itself is exempt: a pre-existing
+        per-skill symlink into a central pack install is a legal
+        platform-installed link whose central content must be preserved
+        (``_render_skill_content`` keeps the link and skips the central
+        rewrite); only the ancestors above the leaf must be real. The skills
+        root itself must always be validated with ``allow_leaf_symlink=False``
+        — a symlinked skills root is the ancestor-link attack, not a legal
+        per-skill link.
+
+        Production ``render_config`` callers must always pass the resolved
+        output root as ``base_dir``: the root-less write fallback in
+        ``write_file_atomic`` anchors at the direct parent and can only
+        protect that parent, never ancestors above it.
+        """
+        # NOTE: intentionally os.path.abspath (not Path.resolve) — must NOT
+        # resolve symlinks, per the lexical-anchor defense in write_file_atomic.
+        anchor = Path(os.path.abspath(str(Path(base_dir).expanduser())))  # noqa: PTH100
+        check_path = Path(path).parent if allow_leaf_symlink else Path(path)
+        raw = Path(os.path.abspath(str(Path(check_path).expanduser())))  # noqa: PTH100
+
+        if not self._path_safety.check_traversal(raw, anchor):
+            msg = (
+                f"Unsafe render target: {path} crosses a symlinked component "
+                f"inside trusted output root {anchor} — refusing before mkdir"
+            )
+            raise PathTraversalError(
+                message=msg,
+                path=str(path),
+                base_dir=str(anchor),
+            )
 
     def render_template_string(
         self,
@@ -514,6 +617,7 @@ class PlatformAdapter(ABC):
         result: RenderResult,
         dir_name: str | None = None,
         manifest: Manifest | None = None,
+        base_dir: Path | None = None,
     ) -> None:
         """Render skill content from actual skill file or central storage.
 
@@ -523,6 +627,14 @@ class PlatformAdapter(ABC):
         3. Fall back to adapter-specific template generation
 
         Subclasses override ``_fallback_skill_content()`` for step 3.
+
+        Args:
+            base_dir: Trusted platform output root declared by the caller
+                (``render_config``). Passed to ``write_file_atomic`` so any
+                symlink at or below the output root — including ancestors of
+                the skill dir, e.g. a project-tree ``skills/`` replaced by a
+                link into a central install — is refused instead of silently
+                redirecting the write outside the tree (R1/B1).
         """
         import shutil
 
@@ -533,7 +645,22 @@ class PlatformAdapter(ABC):
 
         if skill_content:
             skill_content = self._normalize_skill_type(skill_content)
-            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
+            if skill_dir.is_symlink():
+                if skill_dir.exists():
+                    # Pre-existing platform skill symlink (typically into a
+                    # central pack install). Writing the project-local content
+                    # through it would overwrite the shared central SKILL.md
+                    # and drop an ownership marker into central storage —
+                    # the same "skip the central rewrite" semantics as the
+                    # pack-installed branch below (D02). Keep the link, keep
+                    # the render idempotent, touch nothing.
+                    result.add_file(skill_output_path)
+                    return
+                # Dangling link: recreate as a real directory below.
+                skill_dir.unlink(missing_ok=True)
+            self.write_file_atomic(
+                skill_output_path, skill_content, validate_security=False, base_dir=base_dir
+            )
             # Ownership marker so clean_orphan_skills can reclaim this dir
             # once the skill leaves the manifest.
             try:
@@ -645,6 +772,7 @@ class PlatformAdapter(ABC):
             result,
             dir_name=dir_name,
             manifest=manifest,
+            base_dir=base_dir,
         )
 
     def _fallback_skill_content(
@@ -655,6 +783,7 @@ class PlatformAdapter(ABC):
         *,
         dir_name: str | None = None,
         manifest: Manifest | None = None,  # noqa: ARG002
+        base_dir: Path | None = None,
     ) -> None:
         """Generate fallback skill content when no real content exists.
 
@@ -662,5 +791,7 @@ class PlatformAdapter(ABC):
         override this to use Jinja2 templates instead.
         """
         fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
-        self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
+        self.write_file_atomic(
+            skill_output_path, fallback_content, validate_security=False, base_dir=base_dir
+        )
         result.add_file(skill_output_path)

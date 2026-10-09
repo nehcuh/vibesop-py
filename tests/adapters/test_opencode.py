@@ -1,5 +1,6 @@
 """Tests for OpenCodeAdapter."""
 
+import json
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -495,3 +496,43 @@ class TestOpenCodeSkillContentRender:
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert "Full Review Skill" in content
+
+
+class TestOpenCodeLLMConfigSecretHandling:
+    """D03 counterexample (B1): `vibe build opencode` must not copy ambient
+    API key VALUES into the generated llm-config.json — only the env var
+    NAME (the parent FileBasedAdapter ``api_key_env`` convention). Dummy
+    credentials only; no real key is involved.
+    """
+
+    DUMMY_ANTHROPIC = "sk-dummy-anthropic-value-must-not-be-written"
+    DUMMY_OPENAI = "sk-dummy-openai-value-must-not-be-written"
+
+    def test_build_does_not_write_api_key_values(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from vibesop.cli.commands.build import execute_build
+
+        project = tmp_path / "project"
+        (project / "core").mkdir(parents=True)
+        (project / "core" / "registry.yaml").write_text("skills: []\n", encoding="utf-8")
+        output = tmp_path / "output"
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", self.DUMMY_ANTHROPIC)
+        monkeypatch.setenv("OPENAI_API_KEY", self.DUMMY_OPENAI)
+        monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
+        monkeypatch.chdir(project)
+
+        execute_build("opencode", "default", output, None, verify=False)
+
+        llm_path = output / "llm-config.json"
+        assert llm_path.exists(), "vibe build opencode must produce llm-config.json"
+        raw = llm_path.read_text(encoding="utf-8")
+
+        assert self.DUMMY_ANTHROPIC not in raw
+        assert self.DUMMY_OPENAI not in raw
+
+        # Compatibility contract: the env var NAME stays available so the
+        # generated config remains functional without embedding the secret.
+        data = json.loads(raw)
+        assert data["api_key_env"] == "ANTHROPIC_API_KEY"
