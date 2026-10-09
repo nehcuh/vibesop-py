@@ -1,0 +1,7 @@
+{
+  "head": "49901afe401a3f6fd25ba33c4854ce6329e1e44c",
+  "status": " M .pi/docs/skills.md\n M .pi/extensions/vibesop-route.ts\n M .pi/extensions/vibesop-track.ts\n M .pi/prompts/vibe-help.md\n M .pi/settings.json\n M Makefile\n?? .grok/hooks/\n?? \"docs/VibeSOP-CMspark-\\351\\203\\250\\351\\227\\250\\345\\210\\206\\344\\272\\253-17\\351\\241\\265.pptx\"\n",
+  "files": 1876,
+  "bytes": 30571143,
+  "lock_sha256": "daa47446e1166da8a53a959decf8bef5a76309255e8900ac10e33e1f58adf025"
+}

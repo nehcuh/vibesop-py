@@ -1,0 +1,67 @@
+# Phase 1 交叉审：Architecture + Tests/Ops
+
+基线49901afe+脏工作区；2026-10-09。已读 routing-runtime、platform-security 和 cross-correctness-integration 报告，并独立核对主要公共入口、消费者、测试断言和容器快照条件。无源码修改；全部执行写入temp。额外反例脚本 `/tmp/vibesop-audit-20261009/evidence/probes/cross-architecture-probes.py`；value反例（补cross-id覆盖反馈与action变更）位于主控要求的 `/tmp/vibesop-audit-20261009/evidence/probes/value-probes.py`。
+
+## 独立反证裁决
+
+| Finding | 裁决 | 范围与消费者后果 |
+|---|---|---|
+| RR-03 | 确认P1 | execute_all的docstring明确fail_fast“abort on first failure”。公开AgentRouter.create_runner生成runner后，两前驱均成功，却不执行第三步verify；返回failed=0但is_complete=False。无终态“run ended”解释能让未执行验收符合这条合同。 |
+| RR-04 | 确认P1 | Dynamic engine把plan标failed且返回error，public execute_all却failed=0、runner.failed_count=0；父对象只有私有_plan.status可恢复事实，字典结果未交付final_status。显式读取results.error可规避，但公共计数不真实。 |
+| RR-05 | 确认P1，收窄为StepRunner bridge | public create_runner→ExecutionPlan.from_dict→StepRunner真实可达；squad分支用角色排序替代dependency/execution_order，handoff缺失且blocked返回被completed。不能说所有squad入口都无协作：WorkflowEngine直接入口确实有handoff/ReviewVerdict。 |
+| RR-06 | 不保留确认P1；终态/观察者语义债务 | 源码workflow_engine.py:1009–1011显式说无成员crash即“run completed”；SquadExecutionResult保留失败verdict。故completed=流程结束的解释有直接代码支持，不能宣称通过业务验收/已发布。事件仅completed，不带verdict，观察者确实不能区分拒绝，其他pattern completed是步骤成功语义，宜改合同并增加outcome。 |
+
+[executed] 公共入口反例中仅stub上游AgentRouter.orchestrate返回ExecutionPlan.to_dict；create_runner/from_dict/StepRunner/临时PlanTracker及executor调用均真实。不声称本轮使用真实LLM自动拆出上述plan。源码PlanBuilder.py:679–680给squad ExecutionStep写assigned_role/agent_squad_id，证明实际生产plan携带触发分支字段。API已公开，不需要存在CLI直接execute_all才算可达。
+
+独立输出：
+```
+PUBLIC_FAIL_FAST: calls=[a,b], completed=2, failed=0, skipped=0, is_complete=False (verify未执行)
+PUBLIC_DYNAMIC: failed=0, failed_count=0, is_complete=False, underlying_plan_status=failed, results.a.error=cross boom
+PUBLIC_SQUAD: handoff=False两成员, red output=blocked: no evidence, completed=2, failed=0, dynamic=False
+REJECTED_GATE_TERMINAL: verdict.passed=False, plan_status=completed, plan_terminal.final_status=completed
+```
+
+## RR-06的消费者边界
+
+- events.py:18–29明确SquadStep不发step_transition，观察者只得到snapshot+terminal。独立注入PlanEventLog后terminal只有final_status/step数/round数，没gate outcome。订阅者会拿到流程结束，但不能从event推断评审通过。
+- SquadExecutionResult.to_dict保留verdicts而无final_status，这是仍有真实拒绝证据的反证；可以正确消费该结果的集成无需受误报。
+- PlanStatus枚举已有failed/partial；CLI plan list把completed显示✅，但本轮没有证明WorkflowEngine squad状态自动持久化到该CLI实际查询的计划。因此“UI会把拒绝结果显示验收绿灯”仅为潜在风险，不能冒充已跑通的消费者后果。
+- 建议区分run_lifecycle=ended与delivery_outcome=passed/failed/blocked，或统一completed语义。其必要性来自接口一致性，非把LLM verdict变成发布硬闸。
+
+## 架构根因判断
+
+跨lane的确定性反例不是单个算法能力不足；是同一概念在多入口有不同合同：
+
+1. **执行入口分叉**：ParallelScheduler、StepRunner静态/动态/squad、WorkflowEngine squad、hook guide/manifest。有的分支检查acceptance sentinel，有的仅异常，有的使用最新engine final_status，有的丢字段。RR03–05证明逐分支补丁不能保证公共“执行计划”语义一致。
+2. **生产表示分叉**：SpanWriter字符串JSON→recall dict-only；overlay helper top-level→consumer policies层；skill metadata logical id→目标文件路径。组件测试不越表示边界时都能绿。
+3. **数据身份分叉**：stale snapshot与当前disk，pattern身份与action版本，中央技能内容与平台符号链接输出。文件锁、原子replace、来源安全审计各自有用，但不能替代最新状态/目标containment/证据版本合同。
+
+建议先统一StepOutcome/terminal normalization与明确存储RMW合同，再减少重复代码；不建议未验证地重写整套架构。安全边界优先PS01–03，控制/交付真实性优先RR01–05，其后存储/可观测性与安装编译truthfulness。
+
+## 为什么大量绿测试仍漏边界
+
+- tests/agent/test_step_runner.py:330的fail_fast测试只覆盖立即异常的独立两步，没有“成功fanout→依赖验收”happy路径，RR03可在所有现存fail_fast断言绿时存在。
+- :371–411动态bridge测试只断言plan_id/dynamic、成功failed=0和有terminal事件；没有failed sentinel/exception→计数+runner状态+result.final_status的联立合同，RR04被绕过。
+- :491及:546的squad测试覆盖role_prompt、allowed_skills与异常失败，未比较依赖顺序、handoff、gate和blocked/dict sentinel；直接engine测试又使用另一plan形状，故两个绿色分支不能证入口等价。
+- tests/core/orchestration/test_workflow_engine.py:119的red_team mock LLM只返回passed=True，主要断言返回类型和round数；对于false verdict与terminal语义无约束。
+- tests/e2e/test_full_workflow.py:38–44允许route完全无primary仍通过结构assert，recall acceptance_smoke采用手工同义词向量；这些是组件集成，不是宿主消费/真实模型交付的完备证明。
+- fresh-wheel quickstart CI更强：从源码外安装后执行实际部署shell，测试spaced-home。它仍是host-shaped模拟输入，不覆盖真实宿主工具消费/任务验收。此边界README已经明示，不应当成欺骗性宣传。
+
+优先的新测试是**同一生产输入+公开入口+真实输出**矩阵：OK、exception、blocked、failed dict、fanout后验收、dynamic失败、squad拒绝与handoff；同时覆盖真实磁盘roundtrip、双实例交错保存、动作修改、symlink output重建、build失败。比简单提高coverage门槛更能阻止本轮缺陷复现。
+
+## Docker snapshot / artifact gate 可复现条件
+
+check_artifact_links.py依赖tracked set来区分ok/dangling/stale。没有git可执行或没有.git时，默认git ls-files不能确定输入，**exit2=环境/输入不完整，不能解释为artifact逻辑发现缺陷**。copy-only snapshot +命令无git会导致suite中依赖此环境的用例失败。
+
+不运行Git的可复现方案：
+
+1. Host用基线index生成严格UTF-8的一行一路径清单；本轮文件 `/tmp/vibesop-audit-20261009/evidence/tracked-files.txt` 来自`git ls-files -z`，split NUL→decode→sort→newline，避开Git对CJK路径的引用转义。
+2. snapshot保留**全部tracked文件**、对应baseline与当前源码；不把ignored本地.omx证据混进“fresh checkout”副本。若要检验dirty工作区，保存dirty manifest并说明文件内容如何合入。
+3. Docker调用：`uv run --frozen python scripts/check_artifact_links.py --root /repo --tracked-list /evidence/tracked-files.txt --check-baseline /repo/ci/artifact-links-baseline.json`。不加--include-untracked，命令拒绝无targets情况下的该组合。
+4. [executed] 对主控snapshot用这份tracked-list与snapshot/ci/artifact-links-baseline.json执行**exit0**，日志 `/tmp/vibesop-audit-20261009/evidence/snapshot-artifact-gate.log`（quiet为空）。证明此快照冻结债务匹配；未宣称整个Docker suite通过。
+
+若要**完整测试suite**的Git行为，需安装git并提供真实有效metadata（例如主控已准备原HEAD浅clone metadata）；tracked-list只替代checker入口，不解决其他git-dependent测试。禁止把.git dummy目录或任意git init当原HEAD来源证据。当前本地ignored artifact存在却untracked导致403 dangling，fresh clone无这些本地文件则stale并匹配baseline，这两个结果按设计同时成立。
+
+## 最终收窄
+
+认可主控正式15项（8P1/7P2）的计数口径；不把RR06/PS06或unknown-age/schema坏行各追加一项扩大缺陷数。P1指授权目录/凭据保护、路由控制和公开执行入口的核心交付状态合同；没有宣称本轮发现P0、远程无交互攻击、真实凭据外传或自动发布误放行。V3只在默认可靠性API立即发生，生产router .6暂时挡住，保持P2。

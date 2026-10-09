@@ -1,0 +1,4 @@
+Bytecode compiled 4185 files in 65ms
+REAL_SKILL_ADD {"exit_code": 0, "exception": null, "audit_passed": true, "outside_written": true, "installation_complete": true}
+REAL_BUILD_OPENCODE {"exit_code": 0, "exception": null, "file_exists": true, "dummy_materialized": true, "mode": "0o644", "credential_optin_args": false}
+REAL_REPLAY_CONSUMER {"should_prompt": true, "gold": true, "skill_id": null, "confirmed_return": null, "unknown_in_prompt": true, "outcome_count": 3}

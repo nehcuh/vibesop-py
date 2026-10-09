@@ -1,0 +1,26 @@
+   Building vibesop @ file:///repo
+Downloading virtualenv (5.2MiB)
+Downloading numpy (14.9MiB)
+Downloading uvloop (4.1MiB)
+ Downloaded uvloop
+ Downloaded virtualenv
+ Downloaded numpy
+      Built vibesop @ file:///repo
+Prepared 10 packages in 27.13s
+Uninstalled 3 packages in 30ms
+Installed 10 packages in 155ms
+Bytecode compiled 4185 files in 260ms
+ + click==8.4.2
+ + httptools==0.8.0
+ - numpy==1.26.4
+ + numpy==2.5.2
+ - python-discovery==1.4.4
+ + python-discovery==1.6.1
+ + uvicorn==0.51.0
+ + uvloop==0.22.1
+ + vibesop==8.5.0 (from file:///repo)
+ - virtualenv==21.6.1
+ + virtualenv==21.14.5
+ + watchfiles==1.2.0
+ + websockets==16.1.1
+v24.20.0

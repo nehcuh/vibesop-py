@@ -1,0 +1,59 @@
+import sys
+# Avoid probe filenames shadowing standard-library modules.
+if sys.path:
+    sys.path.pop(0)
+import json, tempfile
+from pathlib import Path
+from unittest.mock import patch
+import numpy as np
+from vibesop.core.instinct.learner import InstinctLearner
+from vibesop.core.observability.models import Span
+from vibesop.core.observability.span_writer import SpanWriter
+from vibesop.core.observability.embedding import EmbeddingCache
+from vibesop.core.observability.recall import recall_similar
+from vibesop.core.observability.clustering import cluster_queries
+from vibesop.core.observability.gold_detection import assess_gold_status
+
+with tempfile.TemporaryDirectory() as temp:
+    root = Path(temp)
+    path = root/'instincts.jsonl'
+    a = InstinctLearner(path)
+    inst = a.learn('debug flaky tests','builtin/systematic-debugging')
+    b = InstinctLearner(path)
+    a.record_outcome(inst.id, True)
+    b.record_outcome(inst.id, True)
+    after = InstinctLearner(path).get_instinct_for_query('debug flaky tests')
+    print('COUNTER_LOSS',json.dumps({'expected_success_count':2,'actual_success_count':after.success_count}))
+    writer = SpanWriter(root/'spans.jsonl')
+    for i in range(3):
+        span = Span(id=f's{i}', trace_id=f'trace{i}', name='route:query', span_kind='task', task_id='same-task', project_id='test', input_data={'query':'debug flaky tests'}, output_data={'skill_id':'builtin/systematic-debugging'}, metadata={'skill_id':'builtin/systematic-debugging'})
+        span.set_ok()
+        writer.write_span(span)
+    cache = EmbeddingCache(root/'embed.npz')
+    with patch.object(cache,'_compute',return_value=np.ones(384,dtype=np.float32)):
+        result = recall_similar('debug flaky tests', writer.query_recent(),cache=cache,learner=InstinctLearner(path))[0]
+    print('DISK_RECALL_SKILL',json.dumps({'expected_skill':'builtin/systematic-debugging','actual_skill':result.skill_id,'is_gold':result.is_gold}))
+    corrupted = root/'bad.jsonl'
+    corrupted.write_text(json.dumps({'id':'x','pattern':'x','action':'x','created_at':'bad-date'})+'\n')
+    try:
+        InstinctLearner(corrupted)
+        print('BAD_DATE load_ok')
+    except Exception as exc:
+        print('BAD_DATE',type(exc).__name__,str(exc))
+
+with tempfile.TemporaryDirectory() as temp:
+    path = Path(temp)/'instincts.jsonl'
+    a = InstinctLearner(path)
+    inst = a.learn('query A', 'action A')
+    b = InstinctLearner(path)
+    a.record_outcome(inst.id, True)
+    b.learn('query B', 'action B')
+    disk = InstinctLearner(path)
+    print('CROSS_ID_COUNTER_LOSS', json.dumps({'expected_A_success_count':1,'actual_A_success_count':disk.get_instinct_for_query('query A').success_count,'both_patterns_preserved':set(i.pattern for i in disk.instincts.values())=={'query A','query B'}}))
+
+with tempfile.TemporaryDirectory() as temp:
+    learner = InstinctLearner(Path(temp)/'instincts.jsonl')
+    old = learner.learn('review Python','builtin/code-review')
+    for _ in range(3): learner.record_outcome(old.id, True)
+    changed = learner.learn('review Python','builtin/commit-message')
+    print('ACTION_CHANGE_EVIDENCE', json.dumps({'new_action':changed.action,'old_action_success_count_inherited':changed.success_count,'confidence':changed.confidence,'new_action_is_reliable':changed.is_reliable,'default_matches':[i.action for i in learner.find_matching('review Python')]}))

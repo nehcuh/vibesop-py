@@ -1,0 +1,74 @@
+
+🚀 VibeSOP Quickstart Wizard
+========================================
+
+╔════════════════════════════════════════════════════╗
+║     VibeSOP Quickstart Wizard                      ║
+╚════════════════════════════════════════════════════╝
+
+📁 Project Path: /scratch
+
+✓ Configuration installed
+⊘ Integrations skipped
+✓ Hooks installed: 2/2
+
+🔍 Building global skill index...
+  Indexing 37 skills ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37/37 • 0:00:06 • 0:00:00
+
+
+⚠ Index build completed with issues
+
+
+✅ Installation complete!
+
+🧭 Routing demo (no API key required)
+   Watch natural language match skills:
+
+   vibe route "help me write a commit message" → builtin/commit-message (61%)
+   vibe route "帮我写提交信息" → builtin/commit-message (72%)
+   ↑ same skill, both languages
+
+💉 Injection preview — what your agent receives
+   Replaying "help me write a commit message" through the hook pipeline:
+
+Config [llm] found but api_key is empty; configured provider/api_base (ollama/) are ignored, falling back to environment variable detection. Set api_key in the config or export the provider's API key env var.
+   │ [ACTIVE SKILL: builtin/commit-message]
+   │ You MUST follow this skill's workflow. Do not skip steps.
+   │ # Commit Message — Conventional Format, Why Over What
+   │ > Trigger: "help me write a commit message" / "帮我写提交信息"
+   │ Discipline: **the diff already says what changed; the message must say why.**
+   │ ## Core Steps
+   │ ### 1. Read the change, not the filename
+   │ - `git diff --staged` (fall back to `git diff` if nothing staged; say so).
+   │ - `git log --oneline -10` for the repo's message style — follow it.
+   │ ### 2. Classify
+   │ …
+
+   👆 Claude Code / Grok Build receive this automatically once hooks are 
+installed.
+
+
+📚 Next Steps:
+
+1. Run: vibe build grok-build --output ~/.grok
+2. Run: vibe route "your query" to find skills
+3. Run: vibe skills available to see all skills
+4. Later, add community packs: vibe install superpowers
+
+⚙️  LLM Configuration
+   Default config created at ~/.vibe/config.toml with Ollama as provider.
+   Edit this file to switch provider (Anthropic, OpenAI, DeepSeek, etc.):
+
+     
+     provider = "anthropic"
+     model = "claude-sonnet-4-6-20250514"
+     api_key = "sk-..."
+
+📖 Documentation:
+   - Quick Start: README.md
+   - Architecture: ARCHITECTURE.md
+   - Contributing: CONTRIBUTING.md
+✓ Quickstart complete
+  • platform_selection
+  • integration_selection
+  • hook_selection

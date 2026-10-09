@@ -1,0 +1,100 @@
+# VibeSOP 价值、研究、经验闭环与验证架构诊断
+
+基线：HEAD `49901afe401a3f6fd25ba33c4854ce6329e1e44c`，含主控已登记的脏工作区。只读代码审查，未修改源码，未调用外部 API。日期 2026-10-09。以下区分 executed / inspected / judgement。
+
+## 核心判断
+
+**项目值得继续，但近期价值需要围绕跨宿主的技能选择、交付边界和证据追踪来实现；“更强的多专家组织”“自动经验提高能力”仍须实证。** 这是基于代码和仓内资料的产品判断，不是外部市场份额或独创性认证。
+
+- [inspected] README:12–24、POSITIONING.md 与 PHILOSOPHY.md 已明确“可靠是目标”“SkillOS 只是子系统”“存在工具不证明自动软件工厂”。不应拿旧叙事批评当前版为笼统 production-ready。
+- [inspected] 已有可兑现模块：多平台配置生成、路由及 no-match、计划/验收合同、span/replay/recall/聚类/反馈、pool 显式跨项目检索、loop；这些构成一个工具体系，但全流程自动接通不能仅由模块存在推出。
+- [judgement] 对使用多个编码宿主、维护多个仓库和技能源的开发者，统一可追踪的选择/交付协议比再增技能数量更有价值。单宿主简单任务用户则可能只得到额外设置和读取成本。README 尚无量化外部采用/留存/返工节约数据，不能断言已达到广泛 PMF，也不能据此断言没有需求。
+- [judgement] 差异主要是工程机制组合：确定性评测/语义 report-only 分界、blocked delivery 合同、失败与中断保留、实际命令验收凭据、跨宿主证据。检索、Union-Find 聚类、启发式路由、JSONL/文件锁本身未展示算法层面的新方法。未检索外部 prior art，因此不宣称“首创”或“业界唯一”。
+
+## Mapping → Diagnosis
+
+| 子系统 | 已核对机制 | 诊断 |
+|---|---|---|
+| Instinct | JSONL 存储、原子写、跨进程锁、clear epoch、pattern→action、显式 outcome、可靠性过滤 | 有治理意识，但 stale 全量 snapshot 保存仍丢反馈；动作身份和证据身份未绑定 |
+| Recall/replay | embedding cache、绝对阈值、时间窗、task 分组、distinct trace gate、用户确认、provenance span | 检索和 gold 结构可运行；真实磁盘 payload 与 reader 不一致，技能回放偏好路径断开 |
+| Clustering/promote | project+task 复合 key、跨项目异质性呈现、候选人工筛选、失败候选保留 | 比盲目自动学习克制；cluster gold 的 span-size 与 recall 的 distinct-run-size 语义不同，需要明确；这不是直接的软件 defect |
+| 观测 | span redaction/truncation、dev/prod隔离、UTC window、Wilson区间、coverage/sample gate、eval provenance | 8.5 evidence 信号具体且可审计；no-match高低不等于任务质量高低；吞掉 JSON schema错误的 reader 与 fail-closed指标应一致说明 |
+| Storage/memory | conversation JSON、instinct JSONL、embedding NPZ、pool YAML、多种 lock/RMW手法 | 格式多样性可接受，真正风险是每条写入路径独立实现并发/坏行/来源语义；应优先统一约束与真实读写合同，非大规模换存储技术 |
+| Tests/CI | Linux/Windows、源码检查、coverage、security、hermetic routing gate、report-only live routing、fresh-wheel quickstart | 层次较完整；测试量不等于产品端到端证据，部分 e2e 实际是组件集成与手工语义 mock |
+| Research | 预注册、冻结代码、分配账本、预算、中断、exploratory labeling、档案恢复 | 方法纪律显著好于只给成功示例；外部可复现仍依赖本地冷归档，效用推广被任务/模型/作者限制 |
+
+## Confirmed defects
+
+### V1 / P2 / 置信度 1.0：stale learner 保存覆盖已落盘的反馈，甚至无需修改同一 id
+
+位置：`src/vibesop/core/instinct/learner.py:350`（共享 id 不更新）及 `_save():397` 的全量序列化。代码:327–335 已承认 same-id counter merge limitation，但把触发描述得过窄。
+
+[executed] 临时目录：A learn query A；B 在 A 后加载；A record_outcome(A,True)；B 仅 learn query B。最后重新加载，query A.success_count 为 **0**，应为 **1**，A/B 两个 pattern 均存在。A/B 都对 A 各写一次 success 则为 **1**，应为 **2**。跨进程锁只串行化写入，不让 B 的 snapshot 包含最新 A；与同时修改共享 id 无关，任何 stale learner 保存都能覆盖其旧共享记录。
+
+影响：长驻 Runtime 与 CLI/定时反馈操作交错时，已接受/拒绝的事实丢失，confidence、is_reliable、gold 与路由 boost 被污染。实际生产频率未测，不升级为 P1。应在锁内 reload+apply delta/事件，或把字段更新与 snapshot 替换分开；不能只加锁。
+
+复現：`uv run --frozen python /tmp/vibesop-value-probes.py` 包含 same-id 版本；cross-id 版本已在工具执行并留于本报告步骤。无网络、无线程竞态概率，两个实例确定性重现。
+
+### V2 / P2 / 置信度 1.0：真实 SpanWriter→Recall 丢失 skill_id，确认回放无法建立偏好
+
+位置：`src/vibesop/core/observability/recall.py:400–407`（只接受 dict）；producer `span_writer.py:106–134` 把 metadata/output_data 持久化为 JSON string。真实 hook producer `agent_runtime.py:985` 把 skill_id 放 metadata，Span model 无 top-level skill_id。
+
+[executed] 用真实 Span/SpanWriter 写入三个不同 trace、同 task 的 route span（input_data query、metadata/output_data 的 builtin/systematic-debugging 都存在），读取 query_recent 并传 recall_similar。仅 embedding backend 用固定向量替换以隔离格式问题；结果 `is_gold=True`、`skill_id=None`。预期应返回持久化的 builtin/systematic-debugging。
+
+影响：`cli/main.py:2446` 显示 unknown，`:2471` 和 `:2490` 条件不成立，确认 Y 后既不记录该 skill outcome/偏好也不返回 skill；机器能看到正确回放 provenance trace 却不能按历史 skill 优先路由。不是 recall JSON 未公开 skill_id 的小展示问题。reader 自述 metadata branch 惰性 (:390–393) 是明确已知边界，但当前 replay 的公开行为需要它工作。修复应处理真实 JSON string 并保留 fallback sentinel 排除和损坏 JSON容错。
+
+复現：`uv run --frozen python /tmp/vibesop-value-probes.py`。
+
+### V3 / P2 / 置信度 0.98：修改 action 继承旧动作成功次数，未验证动作被列为 reliable
+
+位置：`src/vibesop/core/instinct/learner.py:555–557`。pattern id 不变、action 改变时，只把 confidence 设置为 0.5，不重置/分版本保存 success/failure；`Instinct.is_reliable:49–51` 门槛刚好是 >=0.5。
+
+[executed] pattern review Python/action builtin/code-review，记录3次成功，再 learn 同 pattern/action builtin/commit-message。新 action 的 success_count=3、confidence=.5、is_reliable=True，默认 find_matching 返回新 action，无一次新 action 验收。
+
+影响边界：生产 optimization_service.py:328 用 min_confidence=.6，刚改 action时不会立即 boost；但新 action 首次 outcome(True) 会借用3次旧动作成功直接越门槛，recall/gold lookup 同样按 pattern 复用历史证据。不是“所有生产路由即刻使用新动作”的P1断言。应将 evidence 绑定 pattern+action revision，或动作改变时冷启动计数并保留旧版本审计。
+
+## Additional inspected risks, not formal defects
+
+- `learner.py:253–265` 仅捕获 JSONDecodeError/KeyError，合法 JSON 带坏 created_at 会 ValueError；[executed] probe 复现。外层路由部分 fail-soft，但直接 CLI管理/learner API会整体失败。可在下一次存储修正并处理，避免为每个坏字段单独开 finding。
+- `cli/main.py:2478` 的 positive outcome 在用户确认回放 Y 后、当前任务执行之前写入。它最多证明用户接受了选择，不能证明任务 delivery 成功。core feedback 的显式接受也是 route acceptance；gold/replay文案使用 “proven solution” 需要清楚记录 success 来源。先确立 selection acceptance / execution success / machine acceptance 的信号合同，不能直接宣称所有历史 gold 都伪造。
+- cluster gold (`gold_detection.py:100`) 仍按 span_count>=5，而 recall gold 用 distinct trace count>=3。一个 chatty执行可满足前者。promote目前提供人工候选而非自动发布，因此这里是证据单位语义需统一的架构判断，不冒充自动发布漏洞。
+- recall `_filter_recent` 有意保留不明时间戳，不严格保证 days。该行为在注释说明；只建议输出年龄未知，勿列已证明违约。
+
+## Research evidence judgement
+
+### 已确认的可信点
+
+[inspected] `multi-expert-formal/REPORT.md:13–40` 以及 checked-in supervisor JSON:主实验360 unique，各组72；A67、B65、C2、D0、E15；进入隐藏验收160全过；敏感性144=136完成+8中断，A69、D_soft61，明确7vs1不均衡中断。报告将控制器事故与模型/编排能力区分，把费用标为下界，未补跑中断。主实验阶段硬终止与敏感性软结束差别写明，并未把D0普遍化。
+
+[executed, arithmetic only] 从 checked-in supervisor task_means 用冻结 analysis.py重算20,000次cluster bootstrap，点估计 -0.9305555555555555 与 CI [-1.0,-0.8194444444444445] **精确一致**。只证实摘要与统计实现的一致性，未重跑原始模型记录、未核对所有raw runs，因此绝不能把本次称为360次独立复验。
+
+[inspected] 综述 `research-survey.md:1556–1570` 自述绝大多数技能A/B为 n=1/轮；同作者、幸存者偏差、未标定judge、R8未结算、观察性模型配置，主动承认 case-study层级。这比完整训练数据/独立抽样结论弱，但不是隐藏样本不足。
+
+### 剩余的研究限制
+
+- 对于“委员会至少+10pp”主假设，A基线93.1/95.8%使该任务集理论提升上界仅6.9/4.2pp。报告承认天花板；下一轮需要有足够headroom的任务，否则更大样本仍不能回答最低工程收益的存在。
+- 主报告所有290个进入隐验的产物均通过，主要区分流程终止/预算/所有权，而非复杂真实仓库交付质量。有效的是某个资源包络的端到端机制结论，不能用于否定 code quality审查的价值。
+- 同作者写task、hidden evaluator与harness，监督审计不消除任务构造偏差；“纯角色效果”也未被识别（D/C同时变头衔和关注面）。
+- v2 241终态+4缺终态+115未启动、72人数诊断未启动是09-14登记快照。未读取独立worktree全部新run，不能当10-09实时进度；可以结论“主线文档登记未完成，不能作正式产品证据”。
+- raw records在cold archive，manifest是本机绝对路径；Git clone/wheel没有完整复现包。README:168明确说明，所以这是研究传播/复验成本，非暗藏数据虚假。
+- 要证明 memory价值，应固定用户任务、任务难度、模型预算与验收，随机/配对对照 none/history/checklist/skill，真实采集返工、false recall、用户操作和cost，采用来源相互独立的历史资料；仅 mock recall准确性不能证明实践收益。
+
+## Tests / CI validation performed
+
+[executed] `uv run --frozen pytest -q tests/core/test_instinct_learner.py tests/core/observability/test_recall.py tests/core/observability/test_recall_acceptance_smoke.py tests/core/observability/test_gold_detection.py tests/cli/test_recall_cli.py tests/cli/test_recall_cross_project_cli.py -m 'not benchmark and not slow'` → **126 passed, 0.55 s**。本文格式 probe仍揭示真实磁盘合同失败：不能由绿测试推出该路径正确。
+
+[executed] `scripts/check_ci_decision_source.py` → **10/10 registered, exit0**。`ci/decision-source.yaml` 明示注册表只验证声明、尚未静态证明无模型依赖，并只覆盖ci.yml；不能把它说成数学证明所有发布均与LLM隔离。
+
+[executed] 当前本地 `check_artifact_links.py --check-baseline` → **exit1:403 dangling、402 baseline_drift、0 new_stale/count_increase**。注意 checker把“存在但Git未跟踪”定义dangling；例如 ab-jet-round1-report.md 本地存在但不在index。fresh clone中这些是stale，可匹配冻结baseline。该执行结果是本地环境/归档边界，不能直接断言远程CI红，不能按09-15 STATUS的0 dangling认为本地今天绿。
+
+[inspected] `tests/e2e/test_full_workflow.py:38–44` 结构断言允许完全无match仍过；recall acceptance_smoke用人工关键词向量 (:75–98)。这些是有价值组件测试，但“e2e”目录和名称并不意味着真实宿主读取/使用技能、真实模型执行或实际产物验收。相对地 quickstart-e2e.yml 从wheel安装、执行真实部署脚本且测试spaced-home，是更坚实的过程边界证据。
+
+本lane未执行Docker，容器验证由主控统一完成；本文只列 host deterministic checks。未调用DeepSeek/Grok，未输出或读取秘密。
+
+## Prioritized suggestions (judgement, not defects)
+
+1. **先修持久化真实合同**：stale writer结果合并、SpanWriter→reader roundtrip、action与evidence revision；用生产输出构造fixtures，包含失败/坏行/并发两个实例。
+2. **闭合最短有价值链**：选择→交付→宿主读取→执行→机器验收→经验检索，先证明一个宿主、一个真实仓库工作流可审计，再扩角色和平台。
+3. **为产品收益建立对照**：每个新默认功能必须同时报告人工返工、误选择/误召回、task success与cost，技能与模型规格能力分开；默认避免把更多命中率当质量。
+4. **研究先收口后扩线**：R3/R4/R8/T+21以及v2独立诊断的状态和证据包完成后，再做复杂真实repo/异质专家实验；已冻结旧实验保留，不为了好结论补跑失败。
+5. **以可下载证据包降低外部复验成本**：源码commit、lock、任务/验收/提示hash、image digest、assignment及redacted结果、失败中断log、analysis script与checksum；若原始数据不能公开，明确访问/恢复步骤及最小可公开子集。

@@ -1,0 +1,79 @@
+Bytecode compiled 4185 files in 113ms
+{"model": "deepseek-v4-flash", "input_tokens": 17185, "output_tokens": 2600}
+以下评审仅基于所给材料，不调用工具、不执行动作，也不要求安装或鉴权。所有“缺陷”均以**假设**形式提出，需后续核查；材料中未确认的内容不写成已确认缺陷。
+
+---
+
+## 1. 核心价值与最小可销售/可采用能力
+
+**核心价值（材料自述）**：把请求路由到合适技能/代理、按明确标准验证交付、记录可观测执行证据，并围绕此提供技能选择、发布放行治理、经验/知识积累（`README.md` 首段；`docs/POSITIONING.md` 一句话定位）。
+
+**最小可采用能力（从材料可推断的最小闭环）**：
+
+- **路由 + no-match 语义**：`vibe route`，且“no-match 是正常结果”（`README.md` “What you can do”表；`docs/POSITIONING.md` 对外表述规则）。这是最小可采用单元——即使不装任何技能，路由本身可被评估。
+- **技能安装/作用域/生命周期**：`vibe install`、`vibe build <platform>`（`docs/dev/architecture-overview.md` “Development and integration”）。
+- **计划与交付阻断**：`execution_ready=False` + `blocked_steps`，且各交付入口一致阻断（`docs/architecture/verification-contract.md` §6）。这是“可靠”叙事里最具体、最可被第三方验证的合同。
+- **只读观测**：`vibe observe routing`（`docs/PROJECT_STATUS.md` 8.5.0 行；`docs/ROADMAP.md` 8.5.0 切片）。report-only、不写策略，采用门槛低。
+
+**最小可销售能力（材料未直接给出定价/打包，仅从边界推断）**：目前材料更像“工程工具 + 研究项目”，而非单一可售产品。可售的最小单元应是**路由 + 验证交付合同 + 只读观测**这一组合，因为三者都有明确契约与失败语义；而“经验/知识积累”“loop 持续任务”在材料中均被标注为“不保证持续改进”“依赖配置执行器”（`README.md` “What you can do”表）。
+
+**评审意见**：材料对“最小可采用”的界定是清晰的（no-match 是正常结果、report-only 优先），但对“最小可销售”几乎没有商业侧描述——没有目标客户、定价、SLA、支持边界。若定位是开源工具，这不算缺陷；若 README 顶部“Engineering tools and empirical research”被当作产品页，则缺少可采用性证据（安装后能立刻做什么、失败时用户看到什么）。
+
+---
+
+## 2. 创新中哪些是组合工程、哪些有实验支持、哪些尚未证实
+
+按材料自述分层：
+
+**A. 组合工程（把已有能力拼装，非新机制）**
+
+- **多代理工作流编排**：路由 + 计划 + 验证 + 观测 + 治理 + 记忆的组合（`docs/POSITIONING.md` 三个组成部分表）。材料自己说“模块存在不等于从需求到交付的全过程已自动接通”（同文件）。
+- **平台适配生成**：`vibe build <platform>` 生成配置，材料明确“配置生成不等于所有平台均已端到端验证”（`docs/POSITIONING.md` 工程工具行；`README.md` Integrations 段）。
+- **OpenAI 兼容 provider 复用**：`src/vibesop/llm/factory.py` 把 deepseek/kimi/zhipu 都路由到 `OpenAIProvider` + base_url，属组合工程。
+- **CI decision-source 注册表**：把“模型输出不得作为 required job 放行依据”编码为 YAML 检查（`docs/ROADMAP.md` 8.4.0 段），是治理组合。
+
+**B. 有实验支持（材料给出数字与条件）**
+
+- **路由双向评测**：hermetic 数据集 55 条 / 53 计分 / top-1 47/53；正例 31（过拒 4）、负例 20（过灌 2）、near_miss 14（过灌 2）、已知失败 6（`docs/ROADMAP.md` 8.4.0 段）。材料明确“数字均为 2026-09-14 本 checkpoint 在本工作区执行所得”“实现可观测，不等于可靠性已被证明”。
+- **多专家主实验**：360/360 terminal（`docs/experiments/README.md` 表）。
+- **敏感性队列**：144 = 136 完成 + 8 中断，且 8 次中断被归因为 Grok headless 600s 控制器清理、按预定规则计 0（同文件）。
+- **CI decision-source 交叉核对**：10/10 job 登记通过（`docs/ROADMAP.md` 8.4.0 段）。
+- **产物引用守卫**：1109 refs / 641 ok / 468 历史非跟踪 / 0 dangling（同段）。
+
+**C. 尚未证实（材料自述为未完成/未验证/不保证）**
+
+- **固定角色委员会 v2**：241 正式终态、4 已启动缺终态、115 未启动、人数诊断未启动（`docs/experiments/README.md`；`docs/ROADMAP.md` C 段）。材料明确“完整主实验与人数诊断完成前，不得把中间发现写成普遍结论”。
+- **记忆/recall 的持续改进**：`README.md` “Retrieval is implemented; continual improvement is not guaranteed”；`docs/POSITIONING.md` “记忆只承诺可检索”。
+- **loop 持续任务的安全性**：`README.md` “Behavior depends on the configured executor, schedule and environment”；`docs/PROJECT_STATUS.md` “任意任务均能无需监督地安全完成”列为不据此推断。
+- **端到端“软件工厂”**：`README.md` 首段明确“the presence of these tools does not establish an automatic or proven end-to-end software factory”。
+- **在线消费证据**：`docs/ROADMAP.md` A 段区分“选择、投递/注入、实际消费/阅读、执行、机器验收”五件事，8.5.0 只交付 report-only 观测，消费/验收信号未稳定。
+
+**评审意见**：材料在“组合工程 vs 实验支持 vs 未证实”的自我分层上做得比多数项目诚实。但需注意：**有实验支持的部分，其样本与条件都写在材料里**（hermetic 55 条、360/360、144），这些数字不能外推为“路由可靠”“多代理有效”。材料自己也这么说（`docs/POSITIONING.md` 研究保留边界）。
+
+---
+
+## 3. 架构边界与失败语义风险
+
+**边界（材料自述）**：
+
+- **包边界 vs 研究边界**：`src/vibesop/` 与 bundled `core/` 是可安装工具；实验分支、原始 runs、研究协议不自动进 wheel（`docs/dev/architecture-overview.md` “Scope”）。
+- **Core → Agent 层反转修复**：`core/loop` 依赖 `LoopRunner` Protocol，不 import agent 层，具体 runtime 由 CLI 注入（`src/vibesop/core/loop/executor.py` 模块 docstring 与 `LoopRunner` 定义）。
+- **路由与执行分离**：match 不等于可交付计划；消费者必须尊重 `execution_ready`（`docs/dev/architecture-overview.md` “Routing and execution are separate decisions”）。
+- **hook 路径 vs 显式执行路径**：hook 把上下文交给宿主代理；Runtime/loop/validation 各有显式执行路径（`README.md` “What you can do”后段；`docs/POSITIONING.md` 对外表述规则）。
+
+**失败语义（材料自述）**：
+
+- **验证合同**：缺证据 → blocked；实际失败 → failed；全部满足 → passed；模型评审与机器验收分别记录（`docs/architecture/verification-contract.md` §5）。
+- **阻断语义**：技能缺失/空正文共用 `not found or empty`；fallback/无技能为 `unresolved skill`；扫描器判不安全与扫描器异常共用 `unsafe content`（同文件 §6）。材料明确“不夸大细分”。
+- **loop 失败分类**：路由失败未知默认 PERMANENT；命令失败未知默认 TRANSIENT；`_missing_exec_root_failure` 故意 PERMANENT 以烧 DEAD 预算作为 re-pin 信号（`src/vibesop/core/loop/executor.py` 注释与函数）。
+- **observe routing 退出码**：`0/1/2/3/4` 是标签而非严重度排序，非 Nagios 兼容；`--report-only` 只抑制 verdict，不抑制 usage(2)/fault(3)（`docs/ROADMAP.md` 8.5.0 段）。
+
+**风险（假设，需核查）**：
+
+- **R1｜失败分类的启发式边界**：`_classify_failure` 用关键词匹配，未知默认 PERMANENT；`_classify_command_failure` 未知默认 TRANSIENT。材料自己承认 EACCES 可能落到“错误”的 suggestion 分支（`executor.py` 注释：“Known mis-classification (gate27 pi#2/claude#3)”）。**假设**：关键词表对非英文错误消息（如中文 stderr）覆盖不足，可能把本应 TRANSIENT 的失败判为 PERMANENT，或反之。需核查：是否有非英文/本地化 stderr 的测试用例。
+- **R2｜`/slash-route` 语义不是真 EXPLICIT 层**：`executor.py` docstring 明确“the prefix is *not* a true EXPLICIT-layer invocation”，`/slash-route use foo` 等价于路由字符串 `"use foo"`。**假设**：当 skill_id 恰好是常见词时，可能被 keyword/scenario 层误匹配到别的技能。需核查：是否有 skill_id 与自然语言 token 冲突的回归测试。
+- **R3｜并发 TOCTOU**：`executor.py` docstring 明确“v1 callers must serialise ticks per loop”“Concurrent ticks on the same loop would TOCTOU on `load_state`”。**假设**：若 CronDaemon 或 CLI 在异常路径下并发触发同一 loop，可能丢失一次 run 记录或错误推进 failure counter。需核查：CronDaemon 是否有 per-loop 锁或幂等 tick 标记。
+- **R4｜provider 自动探测的隐式优先级**：`factory.py` 的 `detect_provider_from_env` 优先级为 anthropic → openai → deepseek → kimi → zhipu → ollama，且 `create_from_env` 在首选未配置时按固定顺序回退。**假设**：在多 key 共存环境下，用户可能未预期地落到非首选 provider（例如同时设了 ANTHROPIC 和 DEEPSEEK，但想用 deepseek）。需核查：是否有显式 `VIBE_LLM_PROVIDER` 覆盖的文档与测试。
+- **R5｜observe routing 的覆盖率闸**：`scoring_coverage >= 0.80` 与 `n_scored >= 100` 是硬闸，未过则 exit 4（`docs/ROADMAP.md` 8.5.0 段）。**假设**：小团队/单项目场景下长期无法达到 n_scored >= 100，导致该命令实际不可用。需核查：runbook 是否给出小样本下的替代路径。
+
+**评审意见**

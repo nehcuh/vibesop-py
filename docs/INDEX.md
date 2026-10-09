@@ -1,6 +1,6 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-09-15
+> **Last Updated**: 2026-10-09
 > **Current source / public package**: 8.5.0（2026-09-15 发布；发行依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
 > **Latest public release**: 8.5.0
 > **Current release**: 8.5.0 online routing-evidence observer（`vibe observe routing` + `vibesop.observe.routing` v1）；含 eval provenance fail-closed
@@ -17,6 +17,7 @@ This document serves as the central index for all VibeSOP documentation, organiz
 | 实验状态、协议、报告与原始数据位置 | [实验登记册](experiments/README.md) |
 | 对外文章及历史版本 | [文章索引](essays/README.md) |
 | 决策与历史评审 | [决策索引](decisions/README.md)、[评审归档](archive/reviews/README.md) |
+| 2026-10-09 深度诊断与本轮优化 | [诊断报告](archive/reviews/diagnosis/2026-10-09-deep-diagnosis/REPORT.md)、[计划索引](plans/README.md)；优化执行中，验收尚未完成 |
 | worktree 清理结果与恢复方法 | [维护索引](maintenance/README.md) |
 
 ---
@@ -130,6 +131,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[Agent Scenario Validation Report](dev/agent-scenario-validation-2026-07-19.md)** — Claude Code/Kimi Code/Grok Build × vibesop 两轮验证（含部署坑与模型调研）
 - **[Releasing](dev/releasing.md)** — Release process and versioning
 - **[Testing](dev/testing.md)** — Testing strategies and conventions
+- **[计划索引](plans/README.md)** — 本轮执行计划及历史计划原路径、声明时间与状态；历史声明不代表当前验收结果
 
 ### Technical Planning (archive)
 

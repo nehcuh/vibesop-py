@@ -1,0 +1,187 @@
+{
+  "B1-kimi-gate-report.md": {
+    "sha256": "10bc30fe299fa2d9f01bb898bbcb48432dc339ac253bfb06f290bca404108926",
+    "bytes": 7576,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B1-grok-post-report.md": {
+    "sha256": "c7b8f46e7a6ac460a5cfe7c7a925a6b7a1b785a2356712ab9bd7dff222805581",
+    "bytes": 8506,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B1-kimi-closure-report.md": {
+    "sha256": "34004c385bca56abdfe8ee4c17f4a89ea3dfe5eb2742153f485051344a3c731b",
+    "bytes": 5088,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B2-kimi-glm-pre-report.md": {
+    "sha256": "ddfae251227bf8fa1d510bff69738794b0261b8bcc28f61f10d333cd0a79d4a5",
+    "bytes": 9862,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B2-glm-cross-report.md": {
+    "sha256": "542244f75775586f67f00b5bd983f771a824f434503309d6e28987afb095ba6c",
+    "bytes": 11426,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B2-grok-post-report.md": {
+    "sha256": "995b3811e4e5e15ff544cabdce40fbae2100ff4055e435a4a494a6916625153d",
+    "bytes": 17551,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B2-kimi-closure-report.md": {
+    "sha256": "d30a75f04d0f6af9556b563037075f8d6e59a836cbe5fff22e97bd1d39e2ee12",
+    "bytes": 7844,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B3-r2-kimi-pre-report.md": {
+    "sha256": "ab086b7feb2dc5c50df47daa3861bfa3b5bc1b2341e2aced46a4925545ef0ec2",
+    "bytes": 6851,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B3-grok-post-report.md": {
+    "sha256": "4a5b6c8397e733299d4897cfcc1cd5722bd4df8c914372c32c90b7d651a6724f",
+    "bytes": 11451,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B3-r2-grok-post-report.md": {
+    "sha256": "01d39076920e76c59b0100adde820503d5b7f78181825b7db3887608e344f0bc",
+    "bytes": 13823,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B3-kimi-final-closure-report.md": {
+    "sha256": "bb9d0265953ce78dacd2d88aa07bda3f505e0d93d2fe542f5b2ec017a6c47aa4",
+    "bytes": 8941,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B4-kimi-final-context-report.md": {
+    "sha256": "23f5da4a9eb4b89858a367022ac294f9e31a3810c982fdd7b32d86bb7b9db609",
+    "bytes": 8149,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B4-glm-final-context-report.md": {
+    "sha256": "7e85118b4e193eaf08c99c31cc16ec832d6987d0a786c78d43b5406458fd08e1",
+    "bytes": 12889,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B4-grok-post-report.md": {
+    "sha256": "d928a3e4345b3150d21c5f400c8b5f3f4f322d3bb87f2605326fdaddf9bb194d",
+    "bytes": 11678,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B4-kimi-closure-report.md": {
+    "sha256": "7cd2446d10f5cf876fdcd4c3506794a306d517a69c94e24e0018a04bcc0bfcba",
+    "bytes": 8365,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B5-kimi-final-after-B6-report.md": {
+    "sha256": "32f291153cf9615b7efb000526c5e44fc6c1e58c39bd471663558e8ba7ffa4c8",
+    "bytes": 10400,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B5-grok-post-report.md": {
+    "sha256": "5f38896e24b7035826ae0407460f86f4ddb479b953a3df2dee9fde6352d65863",
+    "bytes": 13451,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B5-kimi-closure-report.md": {
+    "sha256": "6a1c1c00474124cd329697d77e73fd361592bb1effa7ec39ea9c3a834a3af59b",
+    "bytes": 10633,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B6-kimi-final-after-B4-report.md": {
+    "sha256": "cc807146eb53b3d52bcf185949753ea6e6902144a58aef1329c474e7281baa23",
+    "bytes": 10114,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B6-glm-final-after-B4-report.md": {
+    "sha256": "88f467658fa4846c86d4e73077f5d2a06b4c100e1449e1d1dc2e2459ac2e5f4e",
+    "bytes": 11497,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B6-grok-post-report.md": {
+    "sha256": "0b349b47ff39cd8797a0ebda16895b7d96f2dbf517b6c6824f9ac12fc02086eb",
+    "bytes": 11491,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B6-kimi-closure-report.md": {
+    "sha256": "6f0594bca4ef6e5a3fea88c3c18d41cc0b3825ef06bd499d294f92785c90e722",
+    "bytes": 6862,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B7-kimi-gate-report.md": {
+    "sha256": "047103c8f94dec89d4872521c5dacc09f807eaddcb6202014cc5e4320ccc9cca",
+    "bytes": 6036,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B7-grok-post-report.md": {
+    "sha256": "26a32917a03ee577c29ff7d6309579d494fc1f903c961906c1e71aac2d7c4bd7",
+    "bytes": 9399,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B7-kimi-closure-report.md": {
+    "sha256": "eb73ac7b5433573a0cdf85282480ec0f6222d0e602aa50a175b116a6adf84d68",
+    "bytes": 4806,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B8-kimi-final-context-report.md": {
+    "sha256": "05bd4f53528330ed8c1ff4608266182fa6de8f1df76759d7ba67caa567f264fc",
+    "bytes": 6097,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B8-glm-final-context-report.md": {
+    "sha256": "df8d7791d5e23075b9e04a186dd2a2091ab121fad49a69ec23bca6bb81c06ca0",
+    "bytes": 11410,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B8-grok-post-report.md": {
+    "sha256": "1751afe6ab7a6e26cb0a5e27a06af61e87a96c9e7bc8105626feb7b17ec51ab8",
+    "bytes": 11356,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B8-kimi-closure-report.md": {
+    "sha256": "f6445d9850a80c77ec570cdafcded73b1bf53e68a71b67fdbb6472d84ac1de1a",
+    "bytes": 7037,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "W1-kimi-final-after-B5-report.md": {
+    "sha256": "89df20a1036162268278f17f24f422557c3de2ed7b1d696b0090c0ee790e9bbb",
+    "bytes": 7438,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "W1-grok-post-report.md": {
+    "sha256": "e57df79fddc85e0cc5b66b4e7403e66e4079a9f1e5d331d099ee1cf6b98262d2",
+    "bytes": 16829,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "W1-kimi-closure-report.md": {
+    "sha256": "3a86dbdb130e2577897db1131259ca06ab602c4c1ccef157a51894ee3885d824",
+    "bytes": 10123,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "glm-kimi-role-amend-decision.md": {
+    "sha256": "27cadf95500cc34cec2dad2091029bba53ff5bf8858ccf400b22c9fcc22aafd3",
+    "bytes": 5260,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "glm-kimi-identity-verification.md": {
+    "sha256": "ba6385e1c8eb14e0db11f56abeab534845a90efc2683c986cbc13e138b3e1926",
+    "bytes": 7414,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "B8-kimi-live-validation-decision.md": {
+    "sha256": "083d6105fef03635375238757046d144a16f0272ab9dfac453461175455149fa",
+    "bytes": 8883,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "windows-kimi-verification-scope.md": {
+    "sha256": "3e57e2fb97ec9729ee329e19b94a34160e7a86b61835256faa2fe5c59beaa638",
+    "bytes": 11159,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  },
+  "W1-glm-evidence-corrective-complete.md": {
+    "sha256": "ee832d4920b925b881a383d1a2ecd8422495f0caba2e1e566d614905c71b8900",
+    "bytes": 13199,
+    "raw_evidence_archive": "optimization-execution-evidence.tar.gz (outside repository; verify final cleanup receipt)"
+  }
+}

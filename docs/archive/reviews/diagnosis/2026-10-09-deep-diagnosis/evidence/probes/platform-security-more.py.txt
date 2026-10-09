@@ -1,0 +1,21 @@
+import json,tempfile
+from pathlib import Path
+from unittest.mock import patch
+from vibesop.adapters.claude_code import ClaudeCodeAdapter
+from vibesop.adapters.opencode import OpenCodeAdapter
+from vibesop.adapters.models import Manifest,ManifestMetadata
+from vibesop.spec import SkillSpec
+from vibesop.installer.pack_installer import PackInstaller
+with tempfile.TemporaryDirectory() as t:
+ b=Path(t);p=b/'project';p.mkdir();out=b/'claude';(out/'skills').mkdir(parents=True)
+ src=p/'skills'/'demo';src.mkdir(parents=True);(src/'SKILL.md').write_text('---\nname: demo\ndescription: useful\n---\ncanonical content\n')
+ victim=b/'installed-pack'/'demo';victim.mkdir(parents=True);(victim/'SKILL.md').write_text('user-owned installed content')
+ (out/'skills'/'demo').symlink_to(victim,target_is_directory=True)
+ a=ClaudeCodeAdapter(project_root=p);r=a.render_config(Manifest(metadata=ManifestMetadata(platform='claude-code'),skills=[SkillSpec(id='demo',name='demo',description='useful')]),out)
+ print('render-symlink-writes-source', r.success, (victim/'SKILL.md').read_text().endswith('canonical content\n'),(victim/'.vibe-manifest.json').exists())
+ with patch.dict('os.environ',{'OPENAI_API_KEY':'AUDIT_DUMMY_SECRET','ANTHROPIC_API_KEY':'AUDIT_DUMMY_SECRET'}):
+  oa=OpenCodeAdapter(project_root=p);oc=b/'opencode';rr=oa.render_config_only(Manifest(metadata=ManifestMetadata(platform='opencode')),oc);lc=oc/'llm-config.json'
+  print('opencode-secret-materialized',rr.success,'AUDIT_DUMMY_SECRET' in lc.read_text(),oct(lc.stat().st_mode & 0o777))
+ pack=b/'pack';pack.mkdir();s=pack/'BUILD.sh';s.write_text('mkdir -p generated\nprintf generated > generated/output.txt\n')
+ print('container-real-build',PackInstaller._run_build_in_container(pack,s,'docker'))
+ print('container-artifact-exists',(pack/'generated'/'output.txt').exists())

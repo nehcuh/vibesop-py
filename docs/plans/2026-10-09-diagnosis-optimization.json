@@ -1,0 +1,451 @@
+{
+  "leader": "kimi",
+  "baseline": "49901afe401a3f6fd25ba33c4854ce6329e1e44c",
+  "branch": "codex/diagnosis-optimization",
+  "worktree": "/Users/huchen/.codex/worktrees/diagnosis-optimization/vibesop-py (sole controlled worktree; user's main-dir changes are NOT stashed, NOT branched, NOT taken over)",
+  "authority_boundary": "optimization-dev-only: no merge, no push to main, no deploy, no release; deliverable is 8 batch sign-offs (multiple atomic commits per batch allowed, exactly-8-commits not promised) + PR",
+  "severity": {
+    "P1": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08"
+    ],
+    "P2": [
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15"
+    ]
+  },
+  "auxiliary_debt_not_in_scope": [
+    "RR06",
+    "PS06"
+  ],
+  "batch_flow": [
+    "develop (owner model, bounded ownership files only)",
+    "full diff to Kimi pre-commit review: APPROVE required (REQUEST_CHANGES must be fixed and re-reviewed)",
+    "targeted host pytest + new Docker container tests (frozen image vibesop-audit:20261009 @ sha256:9fa60a217ea2215c956ff5a5e605e4b598cccfd95df6e76692e5d3a9c0893ef8, arm64, uv run --frozen; input is a clean clone with frozen diff applied, mounted read-only at /input then copied to container /repo — never mount the active worktree)",
+    "atomic commit (conventional message + Co-Authored-By trailer; sole controlled worktree /Users/huchen/.codex/worktrees/diagnosis-optimization/vibesop-py, single branch codex/diagnosis-optimization; never commit to main; multiple atomic commits per batch allowed, 8 batch sign-offs are the constraint)",
+    "Grok read-only second gate (git archive HEAD isolated re-run of affected tests) APPROVE",
+    "CHANGELOG.md entry",
+    "Kimi batch sign-off"
+  ],
+  "review_rules": {
+    "author_claude": {
+      "implementer": "claude",
+      "cross_reviewer": "grok",
+      "second_gate": "grok"
+    },
+    "author_grok": {
+      "implementer": "grok",
+      "cross_reviewer": "claude (pre-commit, blocking)",
+      "second_gate": "grok (evidence/process compliance only; logic doubts escalate to Kimi, no self-approval)"
+    }
+  },
+  "batches": [
+    {
+      "id": "B1",
+      "wave": "W1",
+      "findings": [
+        "D01",
+        "D02",
+        "D03"
+      ],
+      "priority": "P1",
+      "owner": "claude",
+      "paths": [
+        "src/vibesop/installer/skill_installer.py",
+        "src/vibesop/adapters/base.py",
+        "src/vibesop/adapters/opencode.py",
+        "src/vibesop/adapters/cursor.py",
+        "tests/installer/test_skill_installer.py",
+        "tests/adapters/test_base.py",
+        "tests/adapters/test_claude_code.py",
+        "tests/adapters/test_opencode.py",
+        "tests/adapters/test_cursor.py",
+        "tests/adapters/test_kimi_cli.py",
+        "src/vibesop/adapters/claude_code.py",
+        "src/vibesop/adapters/file_based.py",
+        "src/vibesop/adapters/pi_coding_agent.py",
+        "src/vibesop/adapters/kimi_cli.py",
+        "tests/adapters/test_pi_coding_agent.py"
+      ],
+      "tests": [
+        "tests/installer/test_skill_installer.py",
+        "tests/adapters/test_base.py",
+        "tests/adapters/test_claude_code.py",
+        "tests/adapters/test_opencode.py",
+        "tests/adapters/test_cursor.py",
+        "tests/adapters/test_kimi_cli.py"
+      ],
+      "docker_tests": "container re-run of the targeted test list above (symlink semantics verified on Linux)",
+      "depends_on": [],
+      "instructions": "D01: validate manifest.id in SkillInstaller.install_skill before _copy_skill_files by validating each logical namespace segment (do NOT reject the whole id via validate_filename — legal pack/skill ids with slashes like demo-scope/demo must stay compatible): reject empty segments, absolute paths, '.'/'..', backslashes, and symlink traversal; plus ensure_safe_output_path(target_dir, project_path, create_parents=True) with per-level lstat symlink check; apply the same id validation to uninstall_skill/verify_skill (skill_installer.py:120,135,170). Do NOT change skill_auditor pass/fail semantics. D02: fix write_file_atomic (base.py:351-402) resolve-first bug (anchor base_dir at platform output root or check unresolved path for symlinks before resolve); _render_skill_content content-hit branch (:532-544) must handle skill_dir.is_symlink() explicitly, reusing the pack-installed branch semantics (no rewrite of central install). D03: drop raw os.getenv fallbacks in opencode.py:166,178 and cursor.py:131,143; align with parent file_based.py api_key_env convention (env var NAME only); any literal-value path requires explicit opt-in plus 0600 contract. Regression tests must use real public entry points (real SkillInstaller, real ClaudeCodeAdapter.render_config with pre-seeded symlink, real vibe build opencode with dummy env keys asserting no key value in llm-config.json). Sibling audit (register only): SkillStorage.get_skill_path (storage.py:158), ~15 write_file_atomic base_dir=None call sites, 5 adapter render_config skill_dir creators; tests/security and tests/conformance/test_platform_adapters.py must stay green.",
+      "exit_criteria": "Kimi pre-commit APPROVE + counterexample tests green on host and container + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "corrective_scope_note": "Codex execution amendment: real ancestor-symlink R1 requires passing trusted output roots through adapter rendering and overridden fallback signatures. Allow minimal caller/interface forwarding in Claude/FileBased/Pi/Kimi adapters and Pi regression; Kimi must confirm necessity against the final full diff. Also unique exclusive temp files, relative-root normalization and early per-segment ID validation are required by reproduced R1/R2/R3.",
+      "execution_result": {
+        "actual_implementer": "Kimi",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "ed8227dc855b1f8a5c262681dc703a0f96131351",
+        "patch_sha256": "e57a62a80ca56e8083303aa3d74d23cd0492ff2787f7c0892fc01afeb5c3d366",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B1-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B2",
+      "wave": "W1",
+      "findings": [
+        "D04",
+        "D05"
+      ],
+      "priority": "P1",
+      "owner": "grok",
+      "paths": [
+        "src/vibesop/core/routing/candidate_manager.py",
+        "src/vibesop/core/skills/loader.py",
+        "src/vibesop/core/skills/external_loader.py",
+        "src/vibesop/core/routing/_layers.py",
+        "tests/unit/core/routing/test_candidate_manager.py",
+        "tests/core/skills/test_loader.py",
+        "tests/core/routing/test_skill_governance.py",
+        "tests/unit/core/routing/test_matcher_rewarm.py",
+        "tests/core/routing/test_demo_skills.py",
+        "src/vibesop/core/skills/config_manager.py"
+      ],
+      "tests": [
+        "tests/unit/core/routing/test_candidate_manager.py",
+        "tests/core/skills/test_loader.py",
+        "tests/core/routing/test_skill_governance.py",
+        "tests/unit/core/routing/test_matcher_rewarm.py",
+        "tests/core/routing/test_demo_skills.py"
+      ],
+      "docker_tests": "cold-instance (disk cache hit path) re-verification of D04/D05 inside container",
+      "depends_on": [],
+      "instructions": "D04/D05: extend fingerprint (_compute_paths_hash :74-88) to include auto-config.yaml (enabled/scope/lifecycle), registry.yaml, YAML skill files, and SKILL.md content hashes (not only mtime); CandidateManager.reload()/_cached_reload_locked must clear SkillLoader._skill_cache (mirror SkillManager.reload_skills pattern) and must never persist old metadata under a new fingerprint; sibling caches invalidated on reload: external_loader._cache, _layers.py index caches (:611-624); config/manager.py load_registry cache audit-only (register). New tests: real SkillConfigManager.update_skill_config(enabled=False) then route() on hot instance and fresh instance both exclude the skill (no private-cache poking; remove the cache-surgery workaround at test_skill_governance.py:50-52 after fix); real SKILL.md edit returns new metadata via auto-refresh and explicit reload; delete/add covered. Invariants: !disabled-skill stays unroutable (test_skill_governance.py:56-57); disable_model_invocation skills still EXPLICIT-only reachable (fail-closed A-5). Do not touch core/skills/**/SKILL.md or core/registry.yaml sources. If hermetic eval behavior shifts, escalate to Kimi before changing baseline.",
+      "exit_criteria": "Kimi pre-commit APPROVE + Claude cross-review APPROVE + counterexample tests green host/container + hermetic --check not regressed + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "corrective_scope_note": "Codex preliminary reproductions R1-R3 + hot YAML parsing overhead: permit narrowly scoped public config-cache invalidator in core/skills/config_manager.py; include loader-supported *.md/default roots and project ownership fields; Kimi pre-commit approval remains mandatory.",
+      "execution_result": {
+        "actual_implementer": "Grok",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "7d1160f0c22375c85505e12c37b1dc3a6e0ce6da",
+        "patch_sha256": "cc3a9539572b64c827d0033516f35f81e869a0aea358034ea4f44385333021df",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B2-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B3",
+      "wave": "W2",
+      "findings": [
+        "D06",
+        "D07",
+        "D08"
+      ],
+      "priority": "P1",
+      "owner": "claude",
+      "paths": [
+        "src/vibesop/agent/step_runner.py",
+        "src/vibesop/core/orchestration/workflow_engine.py",
+        "src/vibesop/agent/execution_protocol.py",
+        "src/vibesop/agent/parallel_scheduler.py",
+        "src/vibesop/agent/__init__.py",
+        "tests/agent/test_step_runner.py",
+        "tests/core/orchestration/test_workflow_engine.py",
+        "tests/core/skills/test_workflow_engine_enhanced.py"
+      ],
+      "tests": [
+        "tests/agent/test_step_runner.py",
+        "tests/core/orchestration/test_workflow_engine.py",
+        "tests/core/skills/test_workflow_engine_enhanced.py"
+      ],
+      "docker_tests": "container re-run of tests/agent + tests/core/orchestration targeted set",
+      "depends_on": [],
+      "instructions": "Unify outcomes: all three StepRunner lanes (squad :325, dynamic :384, static :397-579) emit StepOutcome (status success/failed/blocked/skipped + output + error) and one shared PlanOutcome aggregation; result dicts only ADD keys. D07: the dynamic legacy `results` DICT SHAPE MUST BE PRESERVED (keyed by step/plan identity) — only add statistics/final-status fields (real counters, final_status); do NOT change the results dict to a list and do not claim shape compatibility. D06: break only on real failure (mirror serial branch :445-446 semantics) so fail_fast=True with all-success batch still runs downstream dependent steps. D07: dynamic lane returns real counters and final_status from DynamicExecutionResult. D08: check engine is_dynamic BEFORE agent_squad_id; squad plans delegate to WorkflowEngine.run_async (existing handoff/review/revision gates); no new parallel string-matching branch; fix workflow_engine.py:1006 hardcoded COMPLETED for blocked verdicts (surface blocked in shared outcome; RR06 registered as design debt, not expanded). execution_protocol.py StepResult/PlanExecutionResult as the public face via thin adapter; audit parallel_scheduler.py and agent/__init__.py:403,419 result-shape consumers and register adaptations. New tests via public runner: PlanBuilder A||B + C-depends-on-both with fail_fast=True executes C (completed=3); LOOP_UNTIL_DRY executor exception yields failed>=1 and delivered final_status; PlanBuilder RED_TEAM/DEBATE with agent_squad_id+metadata.agent_squad through public runner: reviewer 'blocked: no evidence' surfaces blocked not completed, handoff context present, collaboration order not alphabetical. Matrix: OK/exception/failed sentinel/blocked sentinel/dependency failure/cancel across every public entry.",
+      "exit_criteria": "Kimi pre-commit APPROVE + counterexample matrix green host/container + consumer-shape audit list in batch record + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "execution_result": {
+        "actual_implementer": "Kimi",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "d9d7804ffd1dfb92f6a82138e5a07f5304a11df0",
+        "patch_sha256": "98e69209f0a6fcbb847b813b5a814a46557e8c5885c1b4cae1876b1f3f2ec96b",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B3-kimi-final-closure-report.md"
+      }
+    },
+    {
+      "id": "B4",
+      "wave": "W2",
+      "findings": [
+        "D09",
+        "D10"
+      ],
+      "priority": "P2",
+      "owner": "grok",
+      "paths": [
+        "src/vibesop/builder/overlay.py",
+        "src/vibesop/builder/manifest.py",
+        "src/vibesop/installer/pack_installer.py",
+        "tests/builder/test_overlay.py",
+        "tests/builder/test_manifest.py",
+        "tests/installer/test_pack_install_order.py",
+        "tests/installer/test_pack_installer.py"
+      ],
+      "tests": [
+        "tests/builder/test_overlay.py",
+        "tests/builder/test_manifest.py",
+        "tests/installer/test_pack_install_order.py",
+        "tests/installer/test_pack_installer.py"
+      ],
+      "docker_tests": "real arm64 docker e2e: template pack BUILD.sh generating files lands artifacts in target_path; required build failure fails install_pack (no pack-lock, no symlinks)",
+      "depends_on": [],
+      "instructions": "D09: create_overlay writes canonical policies.security/policies.routing; validate_overlay stops blessing both shapes; _dict_to_manifest keeps legacy top-level read (backward compat) but helper->merger roundtrip must carry values (0.9 in => 0.9 out); assert merged values, not YAML parseability. D10: _run_build_in_container uses writable isolated copy -> container build -> verify expected artifacts -> atomic write-back to target_path (AtomicWriter pattern); _run_post_install/install_pack propagate required-build failure as (False, ...) or exception, never return True; NEVER mount user root or Docker socket; check cli install call sites handle False within this batch. Sibling audit (register): adapters/models.py:241 same-named validate_overlay; _run_build_local (:541-588) failure propagation.",
+      "exit_criteria": "Kimi pre-commit APPROVE + Claude cross-review APPROVE + roundtrip value assertions green + real-container e2e green + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "execution_result": {
+        "actual_implementer": "Grok",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "3305bcc9aff72320db57e99e04f58c80cec6b62f",
+        "patch_sha256": "1dd4a88029e4600e0e42f66bca0aff7abc2a17a7fe2b999bab7c999b4af77429",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B4-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B5",
+      "wave": "W3",
+      "findings": [
+        "D14"
+      ],
+      "priority": "P2",
+      "owner": "claude",
+      "paths": [
+        "src/vibesop/agent/step_runner.py",
+        "tests/agent/test_step_runner.py"
+      ],
+      "tests": [
+        "tests/agent/test_step_runner.py"
+      ],
+      "docker_tests": "container re-run of tests/agent/test_step_runner.py (thread-dispatch semantics)",
+      "depends_on": [
+        "B3"
+      ],
+      "instructions": "In exec_step (:449-483) only: sync executors run via asyncio.to_thread(step_executor, s, ctx) (repo-blessed idiom per tracer.py:157-163; contextvars must propagate); coroutine executors keep await; semaphore semantics unchanged; sync callable public API preserved (docstring :300 contract). Test with barrier/concurrency counter proving real overlap of two blocking callables; NO wall-clock threshold assertions (report mandate).",
+      "exit_criteria": "Kimi pre-commit APPROVE + concurrency-counter test green host/container + atomic commit + Grok second-gate APPROVE + CHANGELOG entry; B3 signed off first",
+      "execution_result": {
+        "actual_implementer": "Claude Code (GLM-5.3)",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "e0b83a05037bb99b4157d453f59ea3e66a603a5d",
+        "patch_sha256": "759baff7b4fad44b9e92af0694104571f43b336a06e50fdd2f2d81a7b53f1d38",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B5-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B6",
+      "wave": "W3",
+      "findings": [
+        "D11",
+        "D13"
+      ],
+      "priority": "P2",
+      "owner": "grok",
+      "paths": [
+        "src/vibesop/core/instinct/learner.py",
+        "tests/core/test_instinct_learner.py",
+        "tests/unit/core/routing/test_instinct_feedback_loop.py"
+      ],
+      "tests": [
+        "tests/core/test_instinct_learner.py",
+        "tests/unit/core/routing/test_instinct_feedback_loop.py"
+      ],
+      "docker_tests": "container re-run of the two test files (two-instance scenario)",
+      "depends_on": [],
+      "instructions": "D11: _save/_merge_disk_into_memory_locked (:318-353) implement per-id delta merge per FLAW #2 docstring direction: read latest disk state under both locks and apply delta (disk + (memory - loaded)) so same-id counters from concurrent instances merge instead of being dropped. D13: action-change branch (:552-557) binds evidence to pattern+action: reset success/failure counters on action change (minimal change; keep row id), is_reliable semantics unchanged. New tests: two instances both holding query A, A records success, B adds query B -> disk success count for A stays 1 and B preserved; pattern action A (3 successes) -> action B: counters zeroed, confidence 0.5, is_reliable False, one new success does not restore reliability. Sibling audit: confirm all writers route through _save (cli/main.py:358, tool_sequences.py:214, context_mixin.py:110, instinct_cmd.py, data_cmd.py:131); routing_pending store out of scope. instincts.jsonl row schema unchanged.",
+      "exit_criteria": "Kimi pre-commit APPROVE + Claude cross-review APPROVE + two-instance tests green host/container + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "execution_result": {
+        "actual_implementer": "Grok",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "74f418628ba5bbf9729fb78bd22aa886b55e1132",
+        "patch_sha256": "f82e80c7d1556a771571ebf3552ed2394bf695c77ff96e1708144cfef0fa8fad",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B6-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B7",
+      "wave": "W4",
+      "findings": [
+        "D12"
+      ],
+      "priority": "P2",
+      "owner": "claude",
+      "paths": [
+        "src/vibesop/core/observability/recall.py",
+        "src/vibesop/core/observability/span_utils.py",
+        "src/vibesop/dashboard/server.py",
+        "tests/core/observability/test_recall.py"
+      ],
+      "tests": [
+        "tests/core/observability/test_recall.py"
+      ],
+      "docker_tests": "container re-run (real on-disk span format verification)",
+      "depends_on": [],
+      "instructions": "_extract_skill_id (:377-411) must accept JSON-string metadata from real SpanWriter payloads, mirroring skill_health.py:78-83 string-or-dict tolerance; prefer extracting a shared helper into core/observability/span_utils.py and fix the same latent shape at dashboard/server.py:353 within this ownership. Producer (span_writer.py) untouched: disk format unchanged, reader tolerance only. New test: real SpanWriter writes span with metadata.skill_id -> query_recent -> recall_similar -> RecallResult.skill_id correct -> acceptance consumer returns non-None and records an outcome (full writer->reader->consumer chain, no dict literals as the only input). Keep existing dict-literal tests. Sibling audit (register): route_observe.py, skill_consumption.py:171 and other metadata consumers.",
+      "exit_criteria": "Kimi pre-commit APPROVE + writer->reader->consumer chain test green host/container + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "execution_result": {
+        "actual_implementer": "Kimi",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "df927f4231f59fc8dc294018d1d26bf6045ef52b",
+        "patch_sha256": "b83ed66c5d0bb0c0529abeda465e2d8038c8b3a9e2ea44deff49ebbfbe9176f0",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B7-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "B8",
+      "wave": "W4",
+      "findings": [
+        "D15"
+      ],
+      "priority": "P2",
+      "owner": "grok",
+      "paths": [
+        "scripts/e2e_llm_routing.py",
+        "tests/unit/core/routing/test_triage_service.py",
+        "tests/core/routing/test_scenario_demotion.py"
+      ],
+      "tests": [
+        "tests/unit/core/routing/test_triage_service.py",
+        "tests/core/routing/test_scenario_demotion.py"
+      ],
+      "docker_tests": "manual docker e2e T0-T5 evidence run when DEEPSEEK_API_KEY available (script is not a CI gate); otherwise record skip and rely on deterministic unit tests",
+      "depends_on": [],
+      "instructions": "T4 assertion (:315-336): compute expected branch from recorded last_good_original_confidence * LAST_GOOD_CONFIDENCE_DECAY vs configured min_confidence; accept exactly one of (accepted last-good => no scenario_fallback) or (rejected => scenario_fallback=True); fix stale comment at :318-321. Production decay semantics untouched (triage_service.py, unified.py not modified). Deterministic tests: stale entry 0.9*0.7=0.63>=0.6 accepted with no scenario_fallback; 0.8*0.7=0.56<0.6 rejected with scenario_fallback=True; boundary arithmetic on LAST_GOOD_CONFIDENCE_DECAY asserted. Do not lower min_confidence default or any gate.",
+      "exit_criteria": "Kimi pre-commit APPROVE + Claude cross-review APPROVE + deterministic branch tests green + atomic commit + Grok second-gate APPROVE + CHANGELOG entry",
+      "execution_result": {
+        "actual_implementer": "Grok",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "beda9953c981336f6e2da1989307da0e94490c56",
+        "patch_sha256": "009f0fc3d7caf952749a1d4937c13161bd741871c19af0f30f4dec39073ee157",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/B8-kimi-closure-report.md"
+      }
+    },
+    {
+      "id": "W1",
+      "owner": "Claude Code (GLM-5.3)",
+      "findings": [
+        "Windows observability and capability fallback qualification"
+      ],
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/quickstart-e2e.yml",
+        "tests/adapters/test_base.py",
+        "tests/adapters/test_claude_code.py",
+        "tests/adapters/test_kimi_cli.py",
+        "tests/adapters/test_pi_coding_agent.py",
+        "tests/installer/test_skill_installer.py"
+      ],
+      "depends_on": [],
+      "wave": "Windows supplement",
+      "scope_approval": "/tmp/vibesop-opt-20261009/windows-kimi-verification-scope.md",
+      "execution_result": {
+        "actual_implementer": "Claude Code (GLM-5.3)",
+        "status": "BATCH_CLOSE_APPROVE",
+        "commit": "bb0d1147e95019fb3550df76a3fbfe85fd0d4124",
+        "patch_sha256": "60813ebd5d2e08db36329a2fbf4771527ab2c4372a0e949d98682686185a33d5",
+        "closure_report": "docs/reviews/2026-10-09-optimization/gates/W1-kimi-closure-report.md"
+      }
+    }
+  ],
+  "final_validation": [
+    "uv run ruff check . && uv run ruff format --check .",
+    "uv run basedpyright --level error (exit 0 required to be green; baseline already 0 errors with a diagnosis record — no stash/net-increase arithmetic needed)",
+    "host full suite: uv run pytest -m \"not benchmark and not slow\"",
+    "docker arm64 full suite: frozen image vibesop-audit:20261009 @ sha256:9fa60a217ea2215c956ff5a5e605e4b598cccfd95df6e76692e5d3a9c0893ef8; input is a clean clone with frozen diff applied, mounted read-only at /input then copied to container /repo (never mount the active worktree/repo); uv run --frozen pytest -m \"not benchmark and not slow\"",
+    "Node 24 suite (pi extension, process boundary, generation hook, tool-seq, layering) on frozen image vibesop-next-val:node24; host real-Docker build verification must NOT mount the Docker socket into untrusted build containers",
+    "hermetic routing eval: uv run python scripts/eval_routing.py --hermetic --check (baseline must not be STALE)",
+    "wheel cold install + two-platform quickstart from outside source tree (uv tool install)",
+    "hook shape canary (bash <posix-abs> assertion) + ci artifact-links baseline guard",
+    "CHANGELOG summary entry + evidence index update",
+    "push codex/diagnosis-optimization + gh pr create (PR only, NO merge; verify CI at job level via gh run view --json jobs)"
+  ],
+  "cleanup": {
+    "inventory_file": "docs/maintenance/cleanup-inventory-2026-10-09.json",
+    "migration_record": "docs/maintenance/cleanup-migration-2026-10-09.md",
+    "result_record": "docs/maintenance/cleanup-result-2026-10-09.md",
+    "classify": "docs/ and root files into current / historical / runtime (.vibe caches and observability ledgers excluded from git-facing cleanup)",
+    "evidence_small_into_git": [
+      "docs/archive/reviews/diagnosis/2026-10-09-deep-diagnosis/REPORT.md",
+      "docs/archive/reviews/diagnosis/2026-10-09-deep-diagnosis/evidence/manifest.json",
+      "docs/archive/reviews/diagnosis/2026-10-09-deep-diagnosis/evidence/probes/**",
+      "independent opinions",
+      "small logs (<=100KB) in evidence/ (must be force-added: git add -f)"
+    ],
+    "evidence_cold_archive": {
+      "dest": "/Users/huchen/Projects/vibesop-py-archives/2026-10-09/ (repo-adjacent, outside the repo; ~4.9MB raw coverage JSON/XML etc.)",
+      "files": [
+        "final-container-pytest.log",
+        "final-container-pytest.xml",
+        "final-container-coverage.json",
+        "deepseek-e2e.log",
+        "deepseek-review.log",
+        "eval-routing.json"
+      ],
+      "checksums": "SHA256SUMS inside the cold archive dir",
+      "location_map_and_recovery_notes": "required alongside checksums; do NOT create untracked, unexplained in-repo evidence/cold references; frozen report historical facts must not be altered; run logs and exact diffs preserved in full; dev receipts go to indexed small-summary dirs"
+    },
+    "do_not_touch": [
+      "user uncommitted files on main (.pi/*, .grok/hooks/, Makefile, demo PPTX)",
+      "stash@{0} on docs/skill-routing-explained",
+      "docs/research unfinished work",
+      ".vibe/ runtime data (except temp project_root for validation runs)"
+    ],
+    "entry_updates": [
+      "docs/INDEX.md",
+      "docs/README.md",
+      "docs/maintenance/README.md (evidence index, checksum verify command, rollback pointers)"
+    ],
+    "verification": "git status cleanliness + sha256sum -c on the cold-archive SHA256SUMS + docs link spot check"
+  },
+  "roadmap_post_round_pending_proposal": {
+    "note": "to-be-proposed directions after the 8 batches; NOT developed in this round, no unfounded numbers claimed, scope not expanded into unknown product features",
+    "directions": [
+      "cross-host execution / acceptance-contract consistency (Pi/Claude/Grok/Kimi render+hooks+acceptance contract tests)",
+      "measurable adoption / time-saved / mis-injection / human-takeover cost instrumentation",
+      "real host-task E2E acceptance",
+      "evidence & documentation recoverability (cold archive, checksums, recovery drills)"
+    ],
+    "entry_conditions": "defined per direction via diagnosis baseline + user scenarios + deterministic acceptance; PMF and algorithm novelty remain UNVALIDATED pending verification"
+  },
+  "plan_approval": {
+    "plan_approve": "2026-10-09 by Kimi; B1=Claude, B2=Grok dispatched to Codex",
+    "amendment": "2026-10-09 PLAN_AMEND_APPROVE after scheduler-verified corrections (branch/worktree, D01 segment-wise id validation, D07 dict-shape preservation, basedpyright exit-0 standard, frozen audit image + container input method, archive path + cold archive, roadmap)",
+    "batch_status": "B1-B8 and W1 actual Kimi BATCH_CLOSE_APPROVE; final native Windows CI pending; no merge/release"
+  },
+  "execution_roles": {
+    "technical_lead": "actual Kimi Code",
+    "implementers": {
+      "B1": "Kimi",
+      "B2": "Grok",
+      "B3": "Kimi",
+      "B4": "Grok",
+      "B5": "Claude Code (GLM-5.3)",
+      "B6": "Grok",
+      "B7": "Kimi",
+      "B8": "Grok",
+      "W1": "Claude Code (GLM-5.3)"
+    },
+    "blocking_grok_authored_cross_review": "actual Claude Code GLM-5.3, explicitly user authorized; client-side identity evidence only"
+  },
+  "execution_validation": {
+    "docker_passed": 7829,
+    "docker_skipped": 26,
+    "host_passed": 7839,
+    "host_skipped": 16,
+    "coverage_percent": 80.95,
+    "hermetic_new_fails": 0,
+    "hermetic_known_fails": 6,
+    "live_deepseek": "6/7 exit1 negative T4 PRECONDITION_MISSING; live positive cache branch UNVERIFIED",
+    "native_windows": "PENDING new HEAD actual native CI"
+  }
+}

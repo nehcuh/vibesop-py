@@ -1,0 +1,1853 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index e2e30d4e..47c7d45d 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Changed
+ 
++- **B1 diagnosis optimization**: Generated OpenCode/Cursor LLM config uses api_key_env references rather than ambient secret values. Guarded atomic output uses exclusive temporary files; platform rendering rejects ancestor links before creating skill directories while preserving legal installed skill links.
++
+ - **Span readers accept persisted JSON-string metadata as well as in-memory dicts**.
+   Recall and dashboard skill filtering share one decoder; the writer format is unchanged.
+ 
+@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
++- **B1 diagnosis optimization**: Validate namespace segments before dependency processing and use one normalized project root for install/verify/uninstall. Prevent platform render and Pi namespace rewrites from modifying central installs through links; ignore pre-planted temporary file links.
++
+ - **Recall preserves skill identity from real disk spans**, including serialized output
+   payloads, so accepted replays can return the skill and record feedback instead of
+   displaying unknown. Malformed or non-object metadata is ignored safely.
+diff --git a/src/vibesop/adapters/base.py b/src/vibesop/adapters/base.py
+index 9f27ffe1..e76155d4 100644
+--- a/src/vibesop/adapters/base.py
++++ b/src/vibesop/adapters/base.py
+@@ -6,6 +6,7 @@ adapters must inherit from, along with shared utility methods.
+ 
+ import json
+ import logging
++import os
+ from abc import ABC, abstractmethod
+ from pathlib import Path
+ from typing import Any, ClassVar
+@@ -13,6 +14,7 @@ from typing import Any, ClassVar
+ from vibesop import __version__
+ from vibesop.adapters.models import Manifest, RenderResult
+ from vibesop.security import PathSafety, SecurityScanner
++from vibesop.security.exceptions import PathTraversalError
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -370,18 +372,64 @@ class PlatformAdapter(ABC):
+             ValueError: If path is unsafe or content contains threats
+             IOError: If write operation fails
+         """
+-        path = Path(path).expanduser().resolve()
+-
+-        # Determine base directory for safety check
+-        base_dir = path.parent if base_dir is None else Path(base_dir).expanduser().resolve()
++        # Do NOT resolve the target first: a symlink inside the intended
++        # output tree would be followed silently and the safety check would
++        # re-anchor at the resolved parent — outside the tree the caller
++        # meant to protect. PathSafety works on the lexical path and refuses
++        # symlinks in the chain (v7.0.8 layered defense), so pass the
++        # unresolved path through.
++        # R1 (B1): a caller that cares about links ABOVE the file's parent
++        # (e.g. a project tree whose ``skills/`` root was replaced by a
++        # symlink into a central install) MUST pass the trusted output root
++        # explicitly as base_dir. The no-anchor fallback anchors at the
++        # lexical parent and can only refuse symlinks at or below it — a
++        # symlinked ancestor above the parent is positionally
++        # indistinguishable from a macOS ``/var`` system alias, so it cannot
++        # be rejected without a declared trusted root.
++        # NOTE: intentionally os.path.abspath (not Path.resolve) — must NOT
++        # resolve symlinks, per the lexical-anchor defense above.
++        raw_path = Path(os.path.abspath(str(Path(path).expanduser())))  # noqa: PTH100
++
++        if base_dir is None:
++            # No explicit caller anchor: anchor at the lexical parent of the
++            # *intended* path, so a pre-existing platform skill symlink can
++            # no longer redirect the write into a central install (D02).
++            anchor = raw_path.parent
++            if anchor.is_symlink():
++                msg = f"Refusing to write through symlinked directory: {anchor}"
++                raise PathTraversalError(
++                    message=msg,
++                    path=str(path),
++                    base_dir=str(anchor),
++                )
++        else:
++            # Caller-declared trusted root: symlinks at or below it on the
++            # lexical path are refused by check_traversal below, including
++            # ancestors of the file's parent (R1).
++            anchor = Path(os.path.abspath(str(Path(base_dir).expanduser())))  # noqa: PTH100
++
++        # Refuse any symlink at or below the anchor on the lexical path —
++        # that is where a caller-tree link could redirect the write (D02).
++        # Symlinks strictly ABOVE the anchor (e.g. macOS /var -> /private/var)
++        # are system-level indirection and are tolerated by re-basing both
++        # anchor and path into the resolved world below.
++        if not self._path_safety.check_traversal(raw_path, anchor):
++            msg = f"Path traversal detected: {path} is not safely contained in {anchor}"
++            raise PathTraversalError(
++                message=msg,
++                path=str(path),
++                base_dir=str(anchor),
++            )
+ 
+-        # Create parent directories if needed
+-        path.parent.mkdir(parents=True, exist_ok=True)
++        anchor_resolved = anchor.resolve()
++        rel = os.path.relpath(str(raw_path), str(anchor))
++        candidate = Path(os.path.normpath(str(anchor_resolved / rel)))
+ 
+-        # Validate path safety (now that parent exists)
+-        self._path_safety.ensure_safe_output_path(
+-            path,
+-            base_dir,
++        # Validate path safety (and create parents inside the validated tree)
++        safe_path = self._path_safety.ensure_safe_output_path(
++            candidate,
++            anchor_resolved,
++            create_parents=True,
+         )
+ 
+         # Validate content security if enabled
+@@ -391,16 +439,71 @@ class PlatformAdapter(ABC):
+                 msg = f"Content contains security threats: {scan_result.summary}"
+                 raise ValueError(msg)
+ 
+-        # Write to temporary file
+-        tmp_path = path.with_suffix(".tmp")
++        # Write to an exclusively-created temporary file (R2/B1): a fixed
++        # ``<target>.tmp`` name could be pre-planted as a symlink, and
++        # ``write_text`` would then follow it and overwrite the link target
++        # before ``replace`` moved the link over the real file. mkstemp
++        # gives O_EXCL semantics on a random name inside the already
++        # validated parent directory, so the temp can never be a symlink.
++        import tempfile
++
++        fd, tmp_name = tempfile.mkstemp(
++            prefix=f"{safe_path.name}.", suffix=".tmp", dir=str(safe_path.parent)
++        )
++        tmp_path = Path(tmp_name)
+         try:
+-            tmp_path.write_text(content, encoding="utf-8")
++            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
++                tmp_file.write(content)
+             # Atomic rename
+-            tmp_path.replace(path)
++            tmp_path.replace(safe_path)
+         finally:
+-            # Clean up temp file if it still exists
++            # Clean up temp file only if we still own it (write/replace
++            # failed before the rename consumed it).
+             tmp_path.unlink(missing_ok=True)
+ 
++    def _assert_safe_render_path(
++        self,
++        path: Path,
++        base_dir: Path,
++        *,
++        allow_leaf_symlink: bool = False,
++    ) -> None:
++        """Validate a render target against the trusted output root BEFORE any
++        mkdir/marker/copy side effect (R1/B1 second review).
++
++        Refuses (PathTraversalError) when any component at or below
++        ``base_dir`` on the lexical path to ``path`` is a symlink. With
++        ``allow_leaf_symlink=True`` the leaf itself is exempt: a pre-existing
++        per-skill symlink into a central pack install is a legal
++        platform-installed link whose central content must be preserved
++        (``_render_skill_content`` keeps the link and skips the central
++        rewrite); only the ancestors above the leaf must be real. The skills
++        root itself must always be validated with ``allow_leaf_symlink=False``
++        — a symlinked skills root is the ancestor-link attack, not a legal
++        per-skill link.
++
++        Production ``render_config`` callers must always pass the resolved
++        output root as ``base_dir``: the root-less write fallback in
++        ``write_file_atomic`` anchors at the direct parent and can only
++        protect that parent, never ancestors above it.
++        """
++        # NOTE: intentionally os.path.abspath (not Path.resolve) — must NOT
++        # resolve symlinks, per the lexical-anchor defense in write_file_atomic.
++        anchor = Path(os.path.abspath(str(Path(base_dir).expanduser())))  # noqa: PTH100
++        check_path = Path(path).parent if allow_leaf_symlink else Path(path)
++        raw = Path(os.path.abspath(str(Path(check_path).expanduser())))  # noqa: PTH100
++
++        if not self._path_safety.check_traversal(raw, anchor):
++            msg = (
++                f"Unsafe render target: {path} crosses a symlinked component "
++                f"inside trusted output root {anchor} — refusing before mkdir"
++            )
++            raise PathTraversalError(
++                message=msg,
++                path=str(path),
++                base_dir=str(anchor),
++            )
++
+     def render_template_string(
+         self,
+         template_string: str,
+@@ -514,6 +617,7 @@ class PlatformAdapter(ABC):
+         result: RenderResult,
+         dir_name: str | None = None,
+         manifest: Manifest | None = None,
++        base_dir: Path | None = None,
+     ) -> None:
+         """Render skill content from actual skill file or central storage.
+ 
+@@ -523,6 +627,14 @@ class PlatformAdapter(ABC):
+         3. Fall back to adapter-specific template generation
+ 
+         Subclasses override ``_fallback_skill_content()`` for step 3.
++
++        Args:
++            base_dir: Trusted platform output root declared by the caller
++                (``render_config``). Passed to ``write_file_atomic`` so any
++                symlink at or below the output root — including ancestors of
++                the skill dir, e.g. a project-tree ``skills/`` replaced by a
++                link into a central install — is refused instead of silently
++                redirecting the write outside the tree (R1/B1).
+         """
+         import shutil
+ 
+@@ -533,7 +645,22 @@ class PlatformAdapter(ABC):
+ 
+         if skill_content:
+             skill_content = self._normalize_skill_type(skill_content)
+-            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
++            if skill_dir.is_symlink():
++                if skill_dir.exists():
++                    # Pre-existing platform skill symlink (typically into a
++                    # central pack install). Writing the project-local content
++                    # through it would overwrite the shared central SKILL.md
++                    # and drop an ownership marker into central storage —
++                    # the same "skip the central rewrite" semantics as the
++                    # pack-installed branch below (D02). Keep the link, keep
++                    # the render idempotent, touch nothing.
++                    result.add_file(skill_output_path)
++                    return
++                # Dangling link: recreate as a real directory below.
++                skill_dir.unlink(missing_ok=True)
++            self.write_file_atomic(
++                skill_output_path, skill_content, validate_security=False, base_dir=base_dir
++            )
+             # Ownership marker so clean_orphan_skills can reclaim this dir
+             # once the skill leaves the manifest.
+             try:
+@@ -645,6 +772,7 @@ class PlatformAdapter(ABC):
+             result,
+             dir_name=dir_name,
+             manifest=manifest,
++            base_dir=base_dir,
+         )
+ 
+     def _fallback_skill_content(
+@@ -655,6 +783,7 @@ class PlatformAdapter(ABC):
+         *,
+         dir_name: str | None = None,
+         manifest: Manifest | None = None,  # noqa: ARG002
++        base_dir: Path | None = None,
+     ) -> None:
+         """Generate fallback skill content when no real content exists.
+ 
+@@ -662,5 +791,7 @@ class PlatformAdapter(ABC):
+         override this to use Jinja2 templates instead.
+         """
+         fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
+-        self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
++        self.write_file_atomic(
++            skill_output_path, fallback_content, validate_security=False, base_dir=base_dir
++        )
+         result.add_file(skill_output_path)
+diff --git a/src/vibesop/adapters/claude_code.py b/src/vibesop/adapters/claude_code.py
+index af55412b..a4a0d18f 100644
+--- a/src/vibesop/adapters/claude_code.py
++++ b/src/vibesop/adapters/claude_code.py
+@@ -359,14 +359,23 @@ class ClaudeCodeAdapter(HookBasedAdapter):
+         if not result.success:
+             return result
+ 
+-        (output_dir / "skills").mkdir(exist_ok=True)
++        # Validate the skills root and every skill target against the trusted
++        # output root BEFORE any mkdir — a symlinked skills root must not
++        # let mkdir create directories inside a central install even when
++        # the later write_file_atomic would refuse (R1/B1).
++        skills_root = output_dir / "skills"
++        self._assert_safe_render_path(skills_root, output_dir)
++        skills_root.mkdir(exist_ok=True)
+ 
+         # Render skill definitions — copy actual content from core/skills/
+         for skill in manifest.skills:
+             dir_name = skill.id.replace("/", "-")
+-            skill_dir = output_dir / "skills" / dir_name
++            skill_dir = skills_root / dir_name
++            self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
+             skill_dir.mkdir(parents=True, exist_ok=True)
+-            self._render_skill_content(skill, skill_dir, result, manifest=manifest)
++            self._render_skill_content(
++                skill, skill_dir, result, manifest=manifest, base_dir=output_dir
++            )
+ 
+         return result
+ 
+@@ -485,6 +494,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
+         result: RenderResult,
+         dir_name: str | None = None,
+         manifest: Manifest | None = None,
++        base_dir: Path | None = None,
+     ) -> None:
+         super()._render_skill_content(
+             skill,
+@@ -492,6 +502,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
+             result,
+             dir_name=dir_name,
+             manifest=manifest,
++            base_dir=base_dir,
+         )
+ 
+     def _fallback_skill_content(
+@@ -502,11 +513,14 @@ class ClaudeCodeAdapter(HookBasedAdapter):
+         *,
+         dir_name: str | None = None,  # noqa: ARG002
+         manifest: Manifest | None = None,  # noqa: ARG002
++        base_dir: Path | None = None,
+     ) -> None:
+         from vibesop.adapters._shared import render_skill_md
+ 
+         content = render_skill_md(skill)
+-        self.write_file_atomic(skill_output_path, content, validate_security=False)
++        self.write_file_atomic(
++            skill_output_path, content, validate_security=False, base_dir=base_dir
++        )
+         result.add_file(skill_output_path)
+ 
+     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
+diff --git a/src/vibesop/adapters/cursor.py b/src/vibesop/adapters/cursor.py
+index ae200cf9..51bd7fab 100644
+--- a/src/vibesop/adapters/cursor.py
++++ b/src/vibesop/adapters/cursor.py
+@@ -128,7 +128,10 @@ class CursorAdapter(FileBasedAdapter):
+             "default_provider": provider,
+             "providers": {
+                 "anthropic": {
+-                    "api_key": os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_API_KEY"),
++                    # Env var NAME only, never the value — ambient API keys
++                    # must not be copied into generated config files (D03;
++                    # parent FileBasedAdapter api_key_env convention).
++                    "api_key_env": "ANTHROPIC_API_KEY",
+                     "base_url": os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+                     "models": {
+                         "default": "claude-sonnet-4-20250514",
+@@ -140,7 +143,7 @@ class CursorAdapter(FileBasedAdapter):
+                     "enabled": bool(os.getenv("ANTHROPIC_API_KEY")),
+                 },
+                 "openai": {
+-                    "api_key": os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY"),
++                    "api_key_env": "OPENAI_API_KEY",
+                     "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                     "models": {
+                         "default": "gpt-4o",
+@@ -164,6 +167,10 @@ class CursorAdapter(FileBasedAdapter):
+                 "max_tokens": 4096,
+             },
+         }
++        if self._detect_api_key():
++            config["api_key_env"] = (
++                "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
++            )
+         return json.dumps(config, indent=2)
+ 
+     def _generate_env_script(self) -> str:
+diff --git a/src/vibesop/adapters/file_based.py b/src/vibesop/adapters/file_based.py
+index c3d87e0b..ca49e4b3 100644
+--- a/src/vibesop/adapters/file_based.py
++++ b/src/vibesop/adapters/file_based.py
+@@ -315,10 +315,15 @@ class FileBasedAdapter(PlatformAdapter):
+         if not result.success:
+             return result
+ 
+-        skills_dir = output_dir / "skills"
++        skills_root = output_dir / "skills"
++        # Ancestor safety BEFORE any mkdir: a symlinked skills root must not
++        # let mkdir create directories inside a central install even when the
++        # later write_file_atomic(base_dir=output_dir) would refuse (R1/B1).
++        self._assert_safe_render_path(skills_root, output_dir)
+         for skill in manifest.skills:
+             dir_name = skill.id.replace("/", "-")
+-            skill_dir = skills_dir / dir_name
++            skill_dir = skills_root / dir_name
++            self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
+             skill_dir.mkdir(parents=True, exist_ok=True)
+             self._render_skill_content(
+                 skill,
+@@ -326,6 +331,7 @@ class FileBasedAdapter(PlatformAdapter):
+                 result,
+                 dir_name=dir_name,
+                 manifest=manifest,
++                base_dir=output_dir,
+             )
+ 
+         self.clean_orphan_skills(manifest, output_dir)
+diff --git a/src/vibesop/adapters/kimi_cli.py b/src/vibesop/adapters/kimi_cli.py
+index 9d88f2ed..a9f1b755 100644
+--- a/src/vibesop/adapters/kimi_cli.py
++++ b/src/vibesop/adapters/kimi_cli.py
+@@ -516,11 +516,15 @@ class KimiCliAdapter(FileBasedAdapter):
+             return result
+ 
+         try:
+-            # Render skill definitions
++            # Render skill definitions — validate the skills root and every
++            # skill target against the trusted output root BEFORE any mkdir,
++            # then thread the root through to the write boundary (R1/R2/B1).
+             skills_dir = output_dir / "skills"
++            self._assert_safe_render_path(skills_dir, output_dir)
+             for skill in manifest.skills:
+                 dir_name = skill.id.replace("/", "-")
+                 skill_dir = skills_dir / dir_name
++                self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
+                 skill_dir.mkdir(parents=True, exist_ok=True)
+                 self._render_skill_content(
+                     skill,
+@@ -528,6 +532,7 @@ class KimiCliAdapter(FileBasedAdapter):
+                     result,
+                     dir_name=dir_name,
+                     manifest=manifest,
++                    base_dir=output_dir,
+                 )
+ 
+             # AGENTS.md context file
+diff --git a/src/vibesop/adapters/opencode.py b/src/vibesop/adapters/opencode.py
+index 03c9050e..5833c558 100644
+--- a/src/vibesop/adapters/opencode.py
++++ b/src/vibesop/adapters/opencode.py
+@@ -163,7 +163,10 @@ class OpenCodeAdapter(FileBasedAdapter):
+             "default_provider": provider,
+             "providers": {
+                 "anthropic": {
+-                    "api_key": os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_API_KEY"),
++                    # Env var NAME only, never the value — ambient API keys
++                    # must not be copied into generated config files (D03;
++                    # parent FileBasedAdapter api_key_env convention).
++                    "api_key_env": "ANTHROPIC_API_KEY",
+                     "base_url": os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+                     "models": {
+                         "default": "claude-sonnet-4-20250514",
+@@ -175,7 +178,7 @@ class OpenCodeAdapter(FileBasedAdapter):
+                     "enabled": bool(os.getenv("ANTHROPIC_API_KEY")),
+                 },
+                 "openai": {
+-                    "api_key": os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY"),
++                    "api_key_env": "OPENAI_API_KEY",
+                     "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                     "models": {
+                         "default": "gpt-4o",
+@@ -199,6 +202,10 @@ class OpenCodeAdapter(FileBasedAdapter):
+                 "max_tokens": 4096,
+             },
+         }
++        if self._detect_api_key():
++            config["api_key_env"] = (
++                "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
++            )
+         return json.dumps(config, indent=2)
+ 
+     def _generate_env_script(self) -> str:
+diff --git a/src/vibesop/adapters/pi_coding_agent.py b/src/vibesop/adapters/pi_coding_agent.py
+index 87748a64..5d6a9e7b 100644
+--- a/src/vibesop/adapters/pi_coding_agent.py
++++ b/src/vibesop/adapters/pi_coding_agent.py
+@@ -62,9 +62,15 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+             # Ensure output directory exists
+             output_dir = self.ensure_output_dir(output_dir)
+ 
++            # Validate the skills root against the trusted output root BEFORE
++            # any mkdir — a symlinked skills root must not let mkdir create
++            # directories inside a central install (R1/B1).
++            skills_root = output_dir / "skills"
++            self._assert_safe_render_path(skills_root, output_dir)
++
+             # Create directory structure
+             (output_dir / "extensions").mkdir(exist_ok=True)
+-            (output_dir / "skills").mkdir(exist_ok=True)
++            skills_root.mkdir(exist_ok=True)
+             (output_dir / "prompts").mkdir(exist_ok=True)
+             (output_dir / "docs").mkdir(exist_ok=True)
+ 
+@@ -138,9 +144,12 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+             # Render skill definitions
+             for skill in manifest.skills:
+                 dir_name = skill.id.replace("/", "-")
+-                skill_dir = output_dir / "skills" / dir_name
++                skill_dir = skills_root / dir_name
++                self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
+                 skill_dir.mkdir(parents=True, exist_ok=True)
+-                self._render_skill_content(skill, skill_dir, result, manifest=manifest)
++                self._render_skill_content(
++                    skill, skill_dir, result, manifest=manifest, base_dir=output_dir
++                )
+ 
+             # Clean orphan skills not in the current manifest
+             self.clean_orphan_skills(manifest, output_dir)
+@@ -250,6 +259,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+         result: RenderResult,
+         dir_name: str | None = None,
+         manifest: Manifest | None = None,
++        base_dir: Path | None = None,
+     ) -> None:
+         super()._render_skill_content(
+             skill,
+@@ -257,13 +267,17 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+             result,
+             dir_name=dir_name,
+             manifest=manifest,
++            base_dir=base_dir,
+         )
+ 
+         # Namespace external pack skills to avoid name collisions in pi agent.
+-        self._namespace_skill_name(skill, skill_dir)
++        # Post-processing keeps the same trusted root so a symlink swapped in
++        # after the pre-mkdir validation is still refused at write time.
++        self._namespace_skill_name(skill, skill_dir, base_dir=base_dir)
+ 
+-    @staticmethod
+-    def _namespace_skill_name(skill: Any, skill_dir: Path) -> None:
++    def _namespace_skill_name(
++        self, skill: Any, skill_dir: Path, *, base_dir: Path | None = None
++    ) -> None:
+         """Prefix external skill names with pack namespace to avoid collisions.
+ 
+         When multiple packs provide a skill named "qa", the pi agent's flat
+@@ -338,12 +352,24 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+         )
+         new_content = f"---{new_fm}---{parts[2]}"
+ 
+-        # If the file is a symlink we must replace it with a real file
+-        # so we don't mutate the original pack content.
+-        if skill_file.is_symlink():
++        # If the skill DIR is a symlink into a pack/central install (per-skill
++        # platform link) we must replace the link with a real directory so we
++        # don't mutate the original pack content — a file-level is_symlink
++        # check misses this case because SKILL.md inside a linked dir is a
++        # regular file, and a plain write_text through it would overwrite the
++        # central install. The link target stays untouched; the platform gets
++        # a private namespaced copy.
++        if skill_dir.is_symlink():
++            skill_dir.unlink()
++            skill_dir.mkdir(parents=True, exist_ok=True)
++        elif skill_file.is_symlink():
++            # File-level link inside a real dir: replace with a real file.
+             skill_file.unlink()
+ 
+-        skill_file.write_text(new_content, encoding="utf-8")
++        # Route through the guarded atomic write so the namespace rewrite
++        # honors the same trusted output root (refuses symlinks at or below
++        # it) instead of a plain write_text that would follow a swapped link.
++        self.write_file_atomic(skill_file, new_content, validate_security=False, base_dir=base_dir)
+ 
+     def _fallback_skill_content(
+         self,
+@@ -353,11 +379,14 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
+         *,
+         dir_name: str | None = None,  # noqa: ARG002
+         manifest: Manifest | None = None,  # noqa: ARG002
++        base_dir: Path | None = None,
+     ) -> None:
+         from vibesop.adapters._shared import render_skill_md
+ 
+         content = render_skill_md(skill)
+-        self.write_file_atomic(skill_output_path, content, validate_security=False)
++        self.write_file_atomic(
++            skill_output_path, content, validate_security=False, base_dir=base_dir
++        )
+         result.add_file(skill_output_path)
+ 
+     def _render_project_agents_md(self, manifest: Manifest, result: RenderResult) -> None:
+diff --git a/src/vibesop/installer/skill_installer.py b/src/vibesop/installer/skill_installer.py
+index b70d8c8f..211a2db7 100644
+--- a/src/vibesop/installer/skill_installer.py
++++ b/src/vibesop/installer/skill_installer.py
+@@ -8,6 +8,9 @@ from typing import Any
+ 
+ import yaml
+ 
++from vibesop.security import PathSafety
++from vibesop.security.exceptions import SecurityError
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+@@ -57,6 +60,76 @@ class SkillManifest:
+ class SkillInstaller:
+     def __init__(self) -> None:
+         self._skills_dir = Path(".vibe/skills")
++        self._path_safety = PathSafety()
++
++    def _validate_skill_id(self, skill_id: str) -> None:
++        """Validate a logical skill id before any filesystem mutation.
++
++        Per-segment validation keeps legal pack-style namespace ids
++        (``demo-scope/demo``) working; a blanket ``validate_filename`` on the
++        whole id would reject those. Rejects empty ids, absolute paths,
++        empty segments, ``.``/``..`` segments, and backslashes. Each segment
++        additionally goes through the project's existing cross-platform
++        filename validation so Windows-illegal special characters
++        (``<>|*?`` etc.) are rejected per segment while the pack/skill
++        namespace shape is preserved.
++
++        Pure validation: no directories are created and no path is joined
++        here, so it is safe to call before dependency handling (R3/B1
++        early-reject ordering).
++        """
++        if not skill_id or not skill_id.strip():
++            raise ValueError("Skill id must not be empty")
++        if "\\" in skill_id:
++            raise ValueError(f"Skill id must not contain backslashes: {skill_id!r}")
++        if Path(skill_id).is_absolute() or skill_id.startswith(("~", "/")):
++            raise ValueError(f"Skill id must be a relative namespace path: {skill_id!r}")
++        for segment in skill_id.split("/"):
++            if not segment:
++                raise ValueError(f"Skill id contains an empty namespace segment: {skill_id!r}")
++            if segment in (".", ".."):
++                raise ValueError(f"Skill id segment must not be '{segment}': {skill_id!r}")
++            try:
++                self._path_safety.validate_filename(segment)
++            except ValueError as e:
++                msg = f"Skill id segment contains illegal characters: {skill_id!r} ({e})"
++                raise ValueError(msg) from e
++
++    @staticmethod
++    def _normalize_project_root(project_path: Path) -> Path:
++        """Normalize the project root once, to a consistent absolute path.
++
++        ``ensure_safe_output_path`` resolves its ``base_dir`` but joins a
++        *relative* path argument onto that resolved base — passing a
++        relative project root therefore used to double-join (``project``
++        became ``<cwd>/project/project/...``) and split the install dir from
++        the registry. Normalizing at the public entry points keeps exactly
++        one join and one absolute trusted root for target, registry, and
++        marker alike (R3/B1).
++        """
++        return Path(project_path).expanduser().resolve()
++
++    def _validated_skill_dir(
++        self,
++        skill_id: str,
++        project_path: Path,
++        create_parents: bool = False,
++    ) -> Path:
++        """Validate a logical skill id and return its target inside the project.
++
++        ``ensure_safe_output_path`` anchors the resolved containment check at
++        the project root and refuses symlinks anywhere in the target chain
++        (an intermediate namespace segment symlinked outside the project
++        would otherwise let the copy land outside the install root).
++        """
++        self._validate_skill_id(skill_id)
++        root = self._normalize_project_root(project_path)
++        target_dir = root / self._skills_dir / skill_id
++        return self._path_safety.ensure_safe_output_path(
++            target_dir,
++            root,
++            create_parents=create_parents,
++        )
+ 
+     def install_skill(
+         self,
+@@ -78,9 +151,16 @@ class SkillInstaller:
+                 result["errors"].append(f"Skill path not found: {skill_path}")
+                 return result
+ 
++            project_path = self._normalize_project_root(project_path)
++
+             manifest = self._load_skill_manifest(skill_path)
+             result["skill_id"] = manifest.id
+ 
++            # R3/B1: reject a malicious id before any dependency handling,
++            # and without creating directories — the pure validator runs
++            # before the first filesystem mutation of this install.
++            self._validate_skill_id(manifest.id)
++
+             dep_result: dict[str, Any] = self._install_dependencies(
+                 manifest.dependencies, project_path
+             )
+@@ -90,7 +170,7 @@ class SkillInstaller:
+ 
+             result["dependencies_installed"] = dep_result["installed"]
+ 
+-            target_dir = project_path / self._skills_dir / manifest.id
++            target_dir = self._validated_skill_dir(manifest.id, project_path, create_parents=True)
+             if target_dir.exists() and not force:
+                 result["warnings"].append(f"Skill already installed at {target_dir}")
+                 result["success"] = True
+@@ -126,7 +206,8 @@ class SkillInstaller:
+         }
+ 
+         try:
+-            skill_dir = project_path / self._skills_dir / skill_id
++            project_path = self._normalize_project_root(project_path)
++            skill_dir = self._validated_skill_dir(skill_id, project_path)
+ 
+             if not skill_dir.exists():
+                 result["errors"].append(f"Skill not found: {skill_id}")
+@@ -143,6 +224,7 @@ class SkillInstaller:
+         return result
+ 
+     def list_skills(self, project_path: Path) -> list[dict[str, Any]]:
++        project_path = self._normalize_project_root(project_path)
+         skills: list[dict[str, Any]] = []
+         skills_dir = project_path / self._skills_dir
+ 
+@@ -177,7 +259,13 @@ class SkillInstaller:
+             "errors": [],
+         }
+ 
+-        skill_dir = project_path / self._skills_dir / skill_id
++        try:
++            project_path = self._normalize_project_root(project_path)
++            skill_dir = self._validated_skill_dir(skill_id, project_path)
++        except (ValueError, SecurityError) as e:
++            result["errors"].append(f"Invalid skill id: {e}")
++            return result
++
+         if not skill_dir.exists():
+             result["errors"].append(f"Skill directory not found: {skill_dir}")
+             return result
+diff --git a/tests/adapters/test_base.py b/tests/adapters/test_base.py
+index 50ce759f..90f4f681 100644
+--- a/tests/adapters/test_base.py
++++ b/tests/adapters/test_base.py
+@@ -610,3 +610,234 @@ class TestPlatformAdapterEdgeCases:
+ 
+         threats = adapter.scan_for_threats("anything")
+         assert threats == []
++
++
++class TestWriteFileAtomicSymlinkChain:
++    """D02 counterexamples (B1): write_file_atomic must not resolve the target
++    path first and then anchor the safety check at the resolved parent — that
++    lets a symlink inside the output tree redirect the write outside it.
++    """
++
++    @staticmethod
++    def _seed_symlinked_skill_dir(tmp_path: Path) -> tuple[Path, Path, Path]:
++        """render-root/skills/demo -> outside, mimicking a pre-existing platform
++        skill symlink. Returns (render_root, link, outside)."""
++        outside = tmp_path / "outside"
++        outside.mkdir()
++        render_root = tmp_path / "render-root"
++        skills_dir = render_root / "skills"
++        skills_dir.mkdir(parents=True)
++        link = skills_dir / "demo"
++        link.symlink_to(outside, target_is_directory=True)
++        return render_root, link, outside
++
++    def test_rejects_symlink_chain_without_base_dir(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        adapter = DummyAdapter()
++        _, link, outside = self._seed_symlinked_skill_dir(tmp_path)
++
++        # This is the render-path call shape: no explicit base_dir.
++        with pytest.raises(SecurityError):
++            adapter.write_file_atomic(link / "SKILL.md", "# rendered\n", validate_security=False)
++
++        assert not (outside / "SKILL.md").exists(), (
++            "write must not land outside the output tree through a symlink"
++        )
++
++    def test_explicit_base_dir_rejects_symlink_escape(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        """Anchoring at the caller's output root must reject the escape too.
++
++        Green on the current code (resolve-first is caught when base_dir is
++        explicit) — kept as the compatibility contract for the fix.
++        """
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        adapter = DummyAdapter()
++        render_root, link, outside = self._seed_symlinked_skill_dir(tmp_path)
++
++        with pytest.raises(SecurityError):
++            adapter.write_file_atomic(
++                link / "SKILL.md",
++                "# rendered\n",
++                validate_security=False,
++                base_dir=render_root,
++            )
++
++        assert not (outside / "SKILL.md").exists()
++
++
++class TestWriteFileAtomicAncestorSymlink:
++    """R1 counterexamples (B1 Codex review): a symlinked ANCESTOR of the
++    skill dir (``skills/`` root replaced by a link into a central install,
++    the skill dir itself a real directory) must not let the write land in
++    the central tree. Only a caller-declared trusted root can distinguish
++    such a link from a macOS ``/var`` system alias, so the caller must pass
++    ``base_dir`` and every symlink at or below it must be refused.
++    """
++
++    @staticmethod
++    def _seed_ancestor_symlink(tmp_path: Path) -> tuple[Path, Path, Path]:
++        """project/.claude/skills -> central, with central/demo a REAL dir.
++        Returns (project_root, target_file, central_skill)."""
++        project_root = tmp_path / "proj"
++        central = tmp_path / "central"
++        (central / "demo").mkdir(parents=True)
++        central_skill = central / "demo" / "SKILL.md"
++        central_skill.write_text("CENTRAL ORIGINAL\n", encoding="utf-8")
++        (project_root / ".claude").mkdir(parents=True)
++        (project_root / ".claude" / "skills").symlink_to(central, target_is_directory=True)
++        target = project_root / ".claude" / "skills" / "demo" / "SKILL.md"
++        return project_root, target, central_skill
++
++    def test_caller_anchor_rejects_ancestor_symlink(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        adapter = DummyAdapter()
++        project_root, target, central_skill = self._seed_ancestor_symlink(tmp_path)
++
++        # Direct parent (demo/) is a real directory; only the skills/ root
++        # above it is a symlink — this exact shape used to write through.
++        assert not target.parent.is_symlink()
++        assert target.parent.parent.is_symlink()
++
++        with pytest.raises(SecurityError):
++            adapter.write_file_atomic(
++                target, "DUMMY ANCESTOR WRITE\n", validate_security=False, base_dir=project_root
++            )
++
++        assert central_skill.read_text(encoding="utf-8") == "CENTRAL ORIGINAL\n", (
++            "declared trusted root must refuse a symlinked ancestor inside it"
++        )
++
++    def test_real_dir_write_with_anchor_still_works(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        """Compatibility: a plain real directory tree under the declared
++        anchor keeps rendering (the R1 refusal must not over-reach)."""
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        adapter = DummyAdapter()
++        output_root = tmp_path / "output"
++        target = output_root / "skills" / "demo" / "SKILL.md"
++
++        adapter.write_file_atomic(
++            target, "# rendered\n", validate_security=False, base_dir=output_root
++        )
++
++        assert target.read_text(encoding="utf-8") == "# rendered\n"
++
++
++class TestWriteFileAtomicExclusiveTemp:
++    """R2 counterexamples (B1 Codex review): the temporary file must be
++    created exclusively (mkstemp/O_EXCL) inside the validated parent dir.
++    A pre-planted ``<target>.tmp`` symlink must neither receive the write
++    nor be renamed over the target.
++    """
++
++    def test_preplanted_tmp_symlink_is_not_followed(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        adapter = DummyAdapter()
++        output = tmp_path / "out"
++        output.mkdir()
++        outside = tmp_path / "outside.txt"
++        outside.write_text("OUTSIDE ORIGINAL\n", encoding="utf-8")
++        target = output / "SKILL.md"
++        tmp_link = target.with_suffix(".tmp")
++        tmp_link.symlink_to(outside)
++
++        adapter.write_file_atomic(
++            target, "DUMMY TEMP WRITE\n", validate_security=False, base_dir=tmp_path
++        )
++
++        assert outside.read_text(encoding="utf-8") == "OUTSIDE ORIGINAL\n", (
++            "exclusive temp creation must not follow a pre-planted .tmp symlink"
++        )
++        assert not target.is_symlink(), "target must be a real file, not the moved link"
++        assert target.read_text(encoding="utf-8") == "DUMMY TEMP WRITE\n"
++
++    def test_no_tmp_leftovers_after_write(self, tmp_path: Path) -> None:
++        """The exclusively-created temp must be consumed by the rename — no
++        ``*.tmp`` files may remain in the target directory."""
++        adapter = DummyAdapter()
++        target = tmp_path / "SKILL.md"
++
++        adapter.write_file_atomic(target, "content\n", validate_security=False)
++
++        leftovers = [p.name for p in tmp_path.glob("*.tmp")]
++        assert leftovers == [], f"unexpected temp leftovers: {leftovers}"
++
++
++class TestAssertSafeRenderPath:
++    """R1 helper contract (B1 Codex second review): pre-mkdir ancestor
++    validation must refuse symlinked components at or below the trusted
++    output root, while preserving the legal per-skill leaf symlink.
++    """
++
++    def test_refuses_symlinked_leaf(self, tmp_path: Path, symlink_supported: bool) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        adapter = DummyAdapter()
++        central = tmp_path / "central"
++        central.mkdir()
++        skills_root = tmp_path / "out" / "skills"
++        skills_root.parent.mkdir(parents=True)
++        skills_root.symlink_to(central, target_is_directory=True)
++
++        with pytest.raises(SecurityError):
++            adapter._assert_safe_render_path(skills_root, tmp_path / "out")
++
++    def test_refuses_symlinked_ancestor_allows_leaf_link(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        """allow_leaf_symlink=True must refuse a symlinked skills ROOT above
++        the leaf, but tolerate the leaf itself being a legal per-skill link."""
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        adapter = DummyAdapter()
++        central = tmp_path / "central"
++        (central / "demo").mkdir(parents=True)
++        skills_root = tmp_path / "out" / "skills"
++        skills_root.parent.mkdir(parents=True)
++        skills_root.symlink_to(central, target_is_directory=True)
++
++        # Ancestor link: refused even though the leaf itself would be exempt.
++        with pytest.raises(SecurityError):
++            adapter._assert_safe_render_path(
++                skills_root / "demo", tmp_path / "out", allow_leaf_symlink=True
++            )
++
++        # Legal per-skill link: real skills root, symlinked leaf — allowed.
++        skills_root.unlink()
++        skills_root.mkdir()
++        (skills_root / "demo").symlink_to(central / "demo", target_is_directory=True)
++        adapter._assert_safe_render_path(
++            skills_root / "demo", tmp_path / "out", allow_leaf_symlink=True
++        )
++
++    def test_clean_tree_passes(self, tmp_path: Path) -> None:
++        adapter = DummyAdapter()
++        out = tmp_path / "out"
++        out.mkdir()
++        adapter._assert_safe_render_path(out / "skills", out)
++        adapter._assert_safe_render_path(out / "skills" / "demo", out, allow_leaf_symlink=True)
+diff --git a/tests/adapters/test_claude_code.py b/tests/adapters/test_claude_code.py
+index 22acdcc4..24abaa89 100644
+--- a/tests/adapters/test_claude_code.py
++++ b/tests/adapters/test_claude_code.py
+@@ -15,10 +15,11 @@ from vibesop.adapters.claude_code import (
+     _rewrite_legacy_hook_entry,
+     bash_hook_command,
+ )
+-from vibesop.adapters.models import Manifest
++from vibesop.adapters.models import Manifest, ManifestMetadata
+ from vibesop.builder import QuickBuilder
+ from vibesop.hooks import HookInstaller
+ from vibesop.hooks.points import HOOK_DEFINITIONS
++from vibesop.spec import SkillSpec
+ from vibesop.utils.hook_commands import (
+     VIBESOP_HOOK_SCRIPT_BASENAMES,
+     command_basenames,
+@@ -1031,3 +1032,183 @@ class TestGeneratorAllowlistCanary:
+                 assert not ts_file.read_text(encoding="utf-8").startswith("#!"), (
+                     f"{platform}: {ts_file.name} holds a bash script"
+                 )
++
++
++class TestSkillContentSymlinkEscape:
++    """D02 counterexample (B1): the content-hit branch of _render_skill_content
++    must not rewrite a central pack install through a pre-existing platform
++    skill symlink (nor drop an ownership marker into the central install).
++    """
++
++    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
++
++    @staticmethod
++    def _seed(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
++        """Project with real skill content + platform output whose skills/demo
++        already symlinks to a central install. Returns (project_root,
++        output_dir, skill_dir, central_dir)."""
++        project_root = tmp_path / "proj"
++        project_skill = project_root / "skills" / "demo"
++        project_skill.mkdir(parents=True)
++        (project_skill / "SKILL.md").write_text(
++            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
++        )
++
++        central_dir = tmp_path / "central" / "demo"
++        central_dir.mkdir(parents=True)
++        (central_dir / "SKILL.md").write_text(
++            TestSkillContentSymlinkEscape.CENTRAL_CONTENT, encoding="utf-8"
++        )
++
++        output_dir = tmp_path / "output"
++        skill_dir = output_dir / "skills" / "demo"
++        skill_dir.parent.mkdir(parents=True)
++        skill_dir.symlink_to(central_dir, target_is_directory=True)
++        return project_root, output_dir, skill_dir, central_dir
++
++    def test_render_does_not_overwrite_central_install(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root, output_dir, skill_dir, central_dir = self._seed(tmp_path)
++        adapter = ClaudeCodeAdapter(project_root=project_root)
++        manifest = Manifest(
++            metadata=ManifestMetadata(platform="claude-code"),
++            skills=[
++                SkillSpec(
++                    id="demo",
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                )
++            ],
++        )
++
++        result = adapter.render_config(manifest, output_dir)
++
++        assert result.success, f"render failed: {result.errors}"
++        assert (central_dir / "SKILL.md").read_text(encoding="utf-8") == (self.CENTRAL_CONTENT), (
++            "render must not rewrite the central install through the skill symlink"
++        )
++        assert not (central_dir / ".vibe-manifest.json").exists(), (
++            "ownership marker must not penetrate into the central install"
++        )
++
++        # Second render is idempotent: same symlink, central install untouched.
++        result2 = adapter.render_config(manifest, output_dir)
++
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_symlink()
++        assert skill_dir.resolve() == central_dir.resolve()
++        assert (central_dir / "SKILL.md").read_text(encoding="utf-8") == (self.CENTRAL_CONTENT)
++        assert not (central_dir / ".vibe-manifest.json").exists()
++
++
++class TestSkillContentAncestorSymlinkEscape:
++    """R1 counterexample (B1 Codex review): when the platform skills ROOT
++    itself is a symlink into a central install (``skills/ -> central``) and
++    the skill dir below it is a real directory, the render must refuse to
++    write through the ancestor link — the central SKILL.md and any
++    ownership marker must stay untouched. Only the caller-declared output
++    root (threaded as ``base_dir``) can tell this link apart from a macOS
++    ``/var`` system alias.
++    """
++
++    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
++
++    def test_render_refuses_symlinked_skills_root(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        project_root = tmp_path / "proj"
++        project_skill = project_root / "skills" / "demo"
++        project_skill.mkdir(parents=True)
++        (project_skill / "SKILL.md").write_text(
++            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
++        )
++
++        central_dir = tmp_path / "central"
++        demo_dir = central_dir / "demo"
++        demo_dir.mkdir(parents=True)
++        (demo_dir / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
++
++        output_dir = project_root / ".claude"
++        output_dir.mkdir(parents=True)
++        (output_dir / "skills").symlink_to(central_dir, target_is_directory=True)
++
++        adapter = ClaudeCodeAdapter(project_root=project_root)
++        manifest = Manifest(
++            metadata=ManifestMetadata(platform="claude-code"),
++            skills=[
++                SkillSpec(
++                    id="demo",
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                )
++            ],
++        )
++
++        with pytest.raises(SecurityError):
++            adapter.render_config(manifest, output_dir)
++
++        assert (demo_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT, (
++            "render must not write into the central install through a symlinked skills root"
++        )
++        assert not (demo_dir / ".vibe-manifest.json").exists(), (
++            "ownership marker must not penetrate into the central install"
++        )
++
++
++class TestSkillRenderRefusesBeforeMkdir:
++    """R1 (B1 Codex second review): the refusal for a symlinked skills root
++    must happen BEFORE any mkdir — when central/demo does not exist yet, a
++    refused render must not create it (previous rounds created it via
++    ``mkdir(parents=True)`` before the write boundary fired).
++    """
++
++    def test_refused_render_creates_nothing_in_central(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++        from vibesop.security.exceptions import SecurityError
++
++        project_root = tmp_path / "proj"
++        project_skill = project_root / "skills" / "demo"
++        project_skill.mkdir(parents=True)
++        (project_skill / "SKILL.md").write_text(
++            "# Demo Skill\n\nproject-local content\n", encoding="utf-8"
++        )
++
++        central = tmp_path / "central"
++        central.mkdir()  # exists, but central/demo must NOT be created
++        output_dir = project_root / ".claude"
++        output_dir.mkdir(parents=True)
++        (output_dir / "skills").symlink_to(central, target_is_directory=True)
++
++        adapter = ClaudeCodeAdapter(project_root=project_root)
++        manifest = Manifest(
++            metadata=ManifestMetadata(platform="claude-code"),
++            skills=[
++                SkillSpec(
++                    id="demo",
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                )
++            ],
++        )
++
++        with pytest.raises(SecurityError):
++            adapter.render_config(manifest, output_dir)
++
++        assert not (central / "demo").exists(), (
++            "validation must run before mkdir — refused render created central/demo"
++        )
++        assert not (central / ".vibe-manifest.json").exists()
+diff --git a/tests/adapters/test_kimi_cli.py b/tests/adapters/test_kimi_cli.py
+index 8c7c1860..5f0aa941 100644
+--- a/tests/adapters/test_kimi_cli.py
++++ b/tests/adapters/test_kimi_cli.py
+@@ -544,3 +544,130 @@ class TestKimiToolSeqHook:
+         assert "PostToolUse" not in config_toml
+         # route hook is unaffected
+         assert (output_dir / "hooks" / "vibesop-route.sh").exists()
++
++
++class TestKimiSkillRenderBoundary:
++    """B1 corrective (R1/R2): real public render_config counterexamples for
++    the ancestor-symlink boundary and the legal per-skill link contract.
++    """
++
++    CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
++    PROJECT_BODY = "# Demo\n\nPROJECT_ONLY_BODY\n"
++
++    @staticmethod
++    def _manifest(skill_id: str = "demo") -> Manifest:
++        return Manifest(
++            metadata=ManifestMetadata(platform="kimi-cli"),
++            skills=[
++                SkillSpec(
++                    id=skill_id,
++                    name="Demo",
++                    description="Demo skill",
++                    trigger_when="testing",
++                )
++            ],
++        )
++
++    def test_ancestor_symlink_refused_before_mkdir(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        """skills/ root replaced by a link into central: fail safe before any
++        mkdir — no central dir/content/marker may appear."""
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = tmp_path / "proj"
++        skill_src = project_root / "skills" / "demo"
++        skill_src.mkdir(parents=True)
++        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
++
++        central = tmp_path / "central"
++        central.mkdir()
++        output_dir = tmp_path / "out"
++        output_dir.mkdir()
++        (output_dir / "skills").symlink_to(central, target_is_directory=True)
++
++        adapter = KimiCliAdapter(project_root=project_root)
++        result = adapter.render_config(self._manifest(), output_dir)
++
++        assert not result.success
++        assert any("symlink" in e.lower() or "traversal" in e.lower() for e in result.errors), (
++            f"expected a symlink/traversal refusal, got: {result.errors}"
++        )
++        assert not (central / "demo").exists(), (
++            "render must validate the skills root BEFORE mkdir — no central dir may appear"
++        )
++        assert not (central / ".vibe-manifest.json").exists()
++
++    def test_existing_central_content_untouched(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = tmp_path / "proj"
++        skill_src = project_root / "skills" / "demo"
++        skill_src.mkdir(parents=True)
++        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
++
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
++
++        output_dir = tmp_path / "out"
++        output_dir.mkdir()
++        (output_dir / "skills").symlink_to(central_demo.parent, target_is_directory=True)
++
++        adapter = KimiCliAdapter(project_root=project_root)
++        result = adapter.render_config(self._manifest(), output_dir)
++
++        assert not result.success
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++    def test_per_skill_link_kept_and_central_untouched(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        """Legal contract: per-skill platform link + real content survives."""
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = tmp_path / "proj"
++        skill_src = project_root / "skills" / "demo"
++        skill_src.mkdir(parents=True)
++        (skill_src / "SKILL.md").write_text(self.PROJECT_BODY, encoding="utf-8")
++
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(self.CENTRAL_CONTENT, encoding="utf-8")
++
++        output_dir = tmp_path / "out"
++        skill_dir = output_dir / "skills" / "demo"
++        skill_dir.parent.mkdir(parents=True)
++        skill_dir.symlink_to(central_demo, target_is_directory=True)
++
++        adapter = KimiCliAdapter(project_root=project_root)
++        result = adapter.render_config(self._manifest(), output_dir)
++
++        assert result.success, f"render failed: {result.errors}"
++        assert skill_dir.is_symlink()
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++        result2 = adapter.render_config(self._manifest(), output_dir)
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_symlink()
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_CONTENT
++
++    def test_legal_missing_source_fallback_renders(self, tmp_path: Path) -> None:
++        """Declared-but-unavailable skill still renders the generated doc."""
++        adapter = KimiCliAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(
++            self._manifest(skill_id="b1-unique-missing-source-20261009"), output_dir
++        )
++
++        assert result.success, f"fallback render failed: {result.errors}"
++        rendered = output_dir / "skills" / "b1-unique-missing-source-20261009" / "SKILL.md"
++        assert rendered.exists()
+diff --git a/tests/adapters/test_opencode.py b/tests/adapters/test_opencode.py
+index fa5f0905..5e5bfc1b 100644
+--- a/tests/adapters/test_opencode.py
++++ b/tests/adapters/test_opencode.py
+@@ -1,5 +1,6 @@
+ """Tests for OpenCodeAdapter."""
+ 
++import json
+ import sys
+ from pathlib import Path
+ from typing import ClassVar
+@@ -495,3 +496,43 @@ class TestOpenCodeSkillContentRender:
+         assert skill_dir.is_symlink(), "Symlink was lost on second build"
+         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+         assert "Full Review Skill" in content
++
++
++class TestOpenCodeLLMConfigSecretHandling:
++    """D03 counterexample (B1): `vibe build opencode` must not copy ambient
++    API key VALUES into the generated llm-config.json — only the env var
++    NAME (the parent FileBasedAdapter ``api_key_env`` convention). Dummy
++    credentials only; no real key is involved.
++    """
++
++    DUMMY_ANTHROPIC = "sk-dummy-anthropic-value-must-not-be-written"
++    DUMMY_OPENAI = "sk-dummy-openai-value-must-not-be-written"
++
++    def test_build_does_not_write_api_key_values(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from vibesop.cli.commands.build import execute_build
++
++        project = tmp_path / "project"
++        (project / "core").mkdir(parents=True)
++        (project / "core" / "registry.yaml").write_text("skills: []\n", encoding="utf-8")
++        output = tmp_path / "output"
++
++        monkeypatch.setenv("ANTHROPIC_API_KEY", self.DUMMY_ANTHROPIC)
++        monkeypatch.setenv("OPENAI_API_KEY", self.DUMMY_OPENAI)
++        monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
++        monkeypatch.chdir(project)
++
++        execute_build("opencode", "default", output, None, verify=False)
++
++        llm_path = output / "llm-config.json"
++        assert llm_path.exists(), "vibe build opencode must produce llm-config.json"
++        raw = llm_path.read_text(encoding="utf-8")
++
++        assert self.DUMMY_ANTHROPIC not in raw
++        assert self.DUMMY_OPENAI not in raw
++
++        # Compatibility contract: the env var NAME stays available so the
++        # generated config remains functional without embedding the secret.
++        data = json.loads(raw)
++        assert data["api_key_env"] == "ANTHROPIC_API_KEY"
+diff --git a/tests/installer/test_skill_installer.py b/tests/installer/test_skill_installer.py
+index f6938c0a..a68f4a1c 100644
+--- a/tests/installer/test_skill_installer.py
++++ b/tests/installer/test_skill_installer.py
+@@ -4,6 +4,8 @@ from __future__ import annotations
+ 
+ from typing import TYPE_CHECKING
+ 
++import pytest
++
+ from vibesop.installer.skill_installer import SkillInstaller, SkillManifest
+ 
+ if TYPE_CHECKING:
+@@ -254,3 +256,256 @@ class TestSkillInstaller:
+ 
+         assert (dst / "SKILL.md").exists()
+         assert (dst / "templates" / "template.txt").exists()
++
++
++class TestSkillInstallerIdValidation:
++    """D01 counterexamples (B1): a malicious skill id must never let
++    ``install_skill`` / ``uninstall_skill`` / ``verify_skill`` touch files
++    outside ``<project>/.vibe/skills``.
++
++    Legal pack-style namespace ids (``demo-scope/demo``) must keep working —
++    the validation is per logical segment, not a blanket ``validate_filename``
++    on the whole id.
++    """
++
++    @staticmethod
++    def _make_skill(tmp_path: Path, dir_name: str, skill_id: str) -> Path:
++        skill_dir = tmp_path / dir_name
++        skill_dir.mkdir()
++        (skill_dir / "SKILL.md").write_text(
++            f"---\nid: {skill_id}\nname: Evil Skill\n---\n# Evil\n",
++            encoding="utf-8",
++        )
++        return skill_dir
++
++    def test_install_rejects_traversal_manifest_id(self, tmp_path: Path) -> None:
++        installer = SkillInstaller()
++        skill_dir = self._make_skill(tmp_path, "evil-skill", "../../../outside")
++        project_path = tmp_path / "project"
++        project_path.mkdir()
++
++        result = installer.install_skill(skill_dir, project_path)
++
++        assert result["success"] is False
++        # project/.vibe/skills/../../../outside resolves to <tmp>/outside —
++        # the install root must not be escaped.
++        assert not (tmp_path / "outside").exists()
++
++    @pytest.mark.parametrize("id_kind", ["absolute", "empty-segment", "backslash"])
++    def test_install_rejects_malformed_ids(self, tmp_path: Path, id_kind: str) -> None:
++        if id_kind == "absolute":
++            skill_id = str(tmp_path / "evil-abs")
++            escaped = tmp_path / "evil-abs"
++        elif id_kind == "empty-segment":
++            skill_id = "demo-scope//demo"
++            escaped = tmp_path / "project" / ".vibe" / "skills" / "demo-scope" / "demo"
++        else:
++            skill_id = "evil\\segment"
++            escaped = tmp_path / "project" / ".vibe" / "skills" / "evil\\segment"
++
++        installer = SkillInstaller()
++        skill_dir = self._make_skill(tmp_path, f"src-{id_kind}", skill_id)
++        project_path = tmp_path / "project"
++        project_path.mkdir()
++
++        result = installer.install_skill(skill_dir, project_path)
++
++        assert result["success"] is False
++        assert not escaped.exists()
++
++    def test_install_rejects_symlinked_namespace_segment(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        installer = SkillInstaller()
++        skill_dir = self._make_skill(tmp_path, "link-escape-src", "link-escape/demo")
++        project_path = tmp_path / "project"
++        skills_dir = project_path / ".vibe" / "skills"
++        skills_dir.mkdir(parents=True)
++
++        outside = tmp_path / "outside"
++        outside.mkdir()
++        (skills_dir / "link-escape").symlink_to(outside, target_is_directory=True)
++
++        result = installer.install_skill(skill_dir, project_path)
++
++        assert result["success"] is False
++        # The intermediate symlink must not let the copy land outside the project.
++        assert not (outside / "demo").exists()
++
++    def test_uninstall_and_verify_reject_traversal_id(self, tmp_path: Path) -> None:
++        installer = SkillInstaller()
++        project_path = tmp_path / "project"
++        # The lexical chain must exist or the kernel refuses to resolve ".."
++        # and the escape never becomes reachable.
++        skills_root = project_path / ".vibe" / "skills"
++        skills_root.mkdir(parents=True)
++        outside = tmp_path / "outside"
++        outside.mkdir()
++        (outside / "keep.txt").write_text("keep", encoding="utf-8")
++
++        # project/.vibe/skills/../../../outside resolves to <tmp>/outside.
++        uninstall = installer.uninstall_skill("../../../outside", project_path)
++        verify = installer.verify_skill("../../../outside", project_path)
++
++        assert uninstall["success"] is False
++        assert (outside / "keep.txt").exists(), "uninstall must not remove outside the skills root"
++        assert verify["installed"] is False
++
++    def test_install_namespaced_id_still_works(self, tmp_path: Path) -> None:
++        """Legal pack/skill namespace ids (demo-scope/demo) stay compatible."""
++        installer = SkillInstaller()
++        skill_dir = tmp_path / "demo"
++        skill_dir.mkdir()
++        (skill_dir / "SKILL.md").write_text(
++            "---\nid: demo-scope/demo\nname: Demo\n---\n", encoding="utf-8"
++        )
++        project_path = tmp_path / "project"
++        project_path.mkdir()
++
++        result = installer.install_skill(skill_dir, project_path)
++
++        assert result["success"] is True
++        installed = project_path / ".vibe" / "skills" / "demo-scope" / "demo"
++        assert (installed / "SKILL.md").exists()
++
++
++class TestSkillInstallerProjectRootNormalization:
++    """R3 counterexamples (B1 Codex review): a legal RELATIVE project root
++    must install, verify, and uninstall at exactly one location — the old
++    code double-joined (``project/project/.vibe/skills/...``) and split the
++    install dir from the registry.
++    """
++
++    def test_relative_project_path_install_verify_uninstall_roundtrip(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from pathlib import Path
++
++        monkeypatch.chdir(tmp_path)
++        installer = SkillInstaller()
++        src = tmp_path / "src-demo"
++        src.mkdir()
++        (src / "SKILL.md").write_text(
++            "---\nid: demo\nname: Demo\ndescription: Dummy\n---\n# dummy\n", encoding="utf-8"
++        )
++        relative_project = Path("project")
++        relative_project.mkdir()
++
++        result = installer.install_skill(src, relative_project)
++
++        assert result["success"] is True, result["errors"]
++        installed = tmp_path / "project" / ".vibe" / "skills" / "demo"
++        assert (installed / "SKILL.md").exists(), "single join: skill lands in project/.vibe/skills"
++        assert result["installed_path"] == str(installed)
++        assert not (tmp_path / "project" / "project").exists(), "no double-joined project/project"
++        assert (tmp_path / "project" / ".vibe" / "skills" / "registry.yaml").exists(), (
++            "registry must live beside the installed skill"
++        )
++
++        # Verify agrees whether the caller passes the relative or the
++        # absolute project root.
++        assert installer.verify_skill("demo", relative_project)["installed"] is True
++        assert installer.verify_skill("demo", tmp_path / "project")["installed"] is True
++
++        removed = installer.uninstall_skill("demo", relative_project)
++        assert removed["success"] is True, removed["errors"]
++        assert not installed.exists()
++        assert "demo" not in (
++            tmp_path / "project" / ".vibe" / "skills" / "registry.yaml"
++        ).read_text(encoding="utf-8")
++
++
++class TestSkillInstallerEarlyIdRejection:
++    """R3 early-reject ordering (B1 Codex review): the logical id must be
++    validated BEFORE any dependency handling, and validation must not
++    create directories.
++    """
++
++    def _recording_installer(self) -> tuple[SkillInstaller, list[str]]:
++        events: list[str] = []
++
++        class RecordingInstaller(SkillInstaller):
++            def _validate_skill_id(self, skill_id: str) -> None:
++                events.append(f"validate:{skill_id}")
++                super()._validate_skill_id(skill_id)
++
++            def _install_dependencies(self, dependencies, project_path):  # type: ignore[no-untyped-def]
++                events.append(f"dependencies:{dependencies!r}")
++                return super()._install_dependencies(dependencies, project_path)
++
++        return RecordingInstaller(), events
++
++    def test_invalid_id_rejected_before_dependencies_without_creating_dirs(
++        self, tmp_path: Path
++    ) -> None:
++        installer, events = self._recording_installer()
++        bad_src = tmp_path / "bad-src"
++        bad_src.mkdir()
++        (bad_src / "SKILL.md").write_text(
++            "---\nid: ../../outside\nname: bad\ndescription: Dummy\n---\n# dummy\n",
++            encoding="utf-8",
++        )
++        project_path = tmp_path / "project"
++
++        result = installer.install_skill(bad_src, project_path)
++
++        assert result["success"] is False
++        assert events == ["validate:../../outside"], (
++            f"id validation must run (and fail) before dependency handling: {events}"
++        )
++        assert not (project_path / ".vibe").exists(), "rejection must not create directories"
++        assert not (tmp_path / "outside").exists()
++
++    def test_valid_id_still_installs_dependencies_after_validation(self, tmp_path: Path) -> None:
++        installer, events = self._recording_installer()
++        src = tmp_path / "src-demo"
++        src.mkdir()
++        (src / "SKILL.md").write_text(
++            "---\nid: demo\nname: Demo\ndescription: Dummy\n---\n# dummy\n", encoding="utf-8"
++        )
++        project_path = tmp_path / "project"
++        project_path.mkdir()
++
++        result = installer.install_skill(src, project_path)
++
++        assert result["success"] is True, result["errors"]
++        # The id is validated early (before dependencies) and again when the
++        # target dir is computed — ordering is what matters here.
++        assert events[0] == "validate:demo", events
++        assert "dependencies:[]" in events, events
++
++
++class TestSkillInstallerWindowsSpecialCharSegments:
++    """Each id segment goes through the project's existing cross-platform
++    filename validation: Windows-illegal special characters are rejected
++    per segment while the pack/skill namespace shape stays legal.
++    """
++
++    @pytest.mark.parametrize(
++        "bad_segment", ["bad|seg", "bad?seg", "bad*seg", "bad<seg>", "bad;seg"]
++    )
++    def test_install_rejects_windows_special_char_segment(
++        self, tmp_path: Path, bad_segment: str
++    ) -> None:
++        installer = SkillInstaller()
++        skill_dir = tmp_path / "evil"
++        skill_dir.mkdir()
++        (skill_dir / "SKILL.md").write_text(
++            f"---\nid: {bad_segment}\nname: Evil\n---\n# Evil\n", encoding="utf-8"
++        )
++        project_path = tmp_path / "project"
++        project_path.mkdir()
++
++        result = installer.install_skill(skill_dir, project_path)
++
++        assert result["success"] is False
++        assert not (project_path / ".vibe").exists(), "rejection must not create directories"
++
++    def test_verify_rejects_windows_special_char_segment(self, tmp_path: Path) -> None:
++        installer = SkillInstaller()
++        result = installer.verify_skill("bad|seg", tmp_path)
++        assert result["installed"] is False
++        assert result["errors"], "verify must report the invalid id"
+diff --git a/tests/adapters/test_cursor.py b/tests/adapters/test_cursor.py
+new file mode 100644
+index 00000000..2c00f614
+--- /dev/null
++++ b/tests/adapters/test_cursor.py
+@@ -0,0 +1,45 @@
++"""Tests for CursorAdapter."""
++
++import json
++from pathlib import Path
++
++import pytest
++
++from vibesop.adapters.cursor import CursorAdapter
++from vibesop.adapters.models import Manifest, ManifestMetadata
++
++
++class TestCursorLLMConfigSecretHandling:
++    """D03 counterexample (B1, cursor sibling): rendering the Cursor config
++    must not copy ambient API key VALUES into llm-config.json — only the env
++    var NAME (the parent FileBasedAdapter ``api_key_env`` convention). Dummy
++    credentials only; no real key is involved.
++    """
++
++    DUMMY_ANTHROPIC = "sk-dummy-anthropic-value-must-not-be-written"
++    DUMMY_OPENAI = "sk-dummy-openai-value-must-not-be-written"
++
++    def test_render_does_not_write_api_key_values(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        adapter = CursorAdapter()
++        manifest = Manifest(metadata=ManifestMetadata(platform="cursor"))
++
++        monkeypatch.setenv("ANTHROPIC_API_KEY", self.DUMMY_ANTHROPIC)
++        monkeypatch.setenv("OPENAI_API_KEY", self.DUMMY_OPENAI)
++        monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
++
++        result = adapter.render_config(manifest, tmp_path)
++
++        assert result.success, f"render failed: {result.errors}"
++        llm_path = tmp_path / "llm-config.json"
++        assert llm_path.exists(), "render must produce llm-config.json"
++        raw = llm_path.read_text(encoding="utf-8")
++
++        assert self.DUMMY_ANTHROPIC not in raw
++        assert self.DUMMY_OPENAI not in raw
++
++        # Compatibility contract: the env var NAME stays available so the
++        # generated config remains functional without embedding the secret.
++        data = json.loads(raw)
++        assert data["api_key_env"] == "ANTHROPIC_API_KEY"
+diff --git a/tests/adapters/test_pi_coding_agent.py b/tests/adapters/test_pi_coding_agent.py
+new file mode 100644
+index 00000000..1da6e9a6
+--- /dev/null
++++ b/tests/adapters/test_pi_coding_agent.py
+@@ -0,0 +1,176 @@
++"""Tests for PiCodingAgentAdapter skill render boundary (B1 corrective).
++
++Real public ``render_config`` counterexamples (no mocked render/content
++lookups): a symlinked skills ROOT must be refused before any mkdir touches
++the central install; a legal per-skill symlink must keep its
++skip-central-rewrite contract; a legal missing-source fallback must render
++(R3 signature contract).
++"""
++
++from pathlib import Path
++
++import pytest
++
++from vibesop.adapters.models import Manifest, ManifestMetadata
++from vibesop.adapters.pi_coding_agent import PiCodingAgentAdapter
++from vibesop.spec import SkillSpec
++
++CENTRAL_CONTENT = "# Central Install\n\nprecious central content — do not touch\n"
++PROJECT_BODY = "# Demo\n\nPROJECT_ONLY_BODY\n"
++
++
++def _manifest(skill_id: str = "demo") -> Manifest:
++    return Manifest(
++        metadata=ManifestMetadata(platform="pi"),
++        skills=[
++            SkillSpec(
++                id=skill_id,
++                name="Demo",
++                description="Demo skill",
++                trigger_when="testing",
++            )
++        ],
++    )
++
++
++def _seed_project(tmp_path: Path, skill_id: str = "demo") -> Path:
++    """Project with real, discoverable skill content."""
++    project_root = tmp_path / "proj"
++    name_only = skill_id.split("/", 1)[1] if "/" in skill_id else skill_id
++    skill_dir = project_root / "skills" / name_only
++    skill_dir.mkdir(parents=True)
++    (skill_dir / "SKILL.md").write_text(PROJECT_BODY, encoding="utf-8")
++    return project_root
++
++
++class TestRenderAncestorSymlinkRefused:
++    """R1/R2 counterexamples: ``skills/`` root replaced by a symlink into a
++    central install. The render must fail safe BEFORE any mkdir — the
++    central install must not gain directories, content, or markers.
++    """
++
++    def test_refuses_before_creating_central_dir(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = _seed_project(tmp_path)
++        central = tmp_path / "central"
++        central.mkdir()
++        output_dir = project_root / ".pi"
++        output_dir.mkdir(parents=True)
++        (output_dir / "skills").symlink_to(central, target_is_directory=True)
++
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(_manifest(), output_dir)
++
++        assert not result.success
++        assert any("symlink" in e.lower() or "traversal" in e.lower() for e in result.errors), (
++            f"expected a symlink/traversal refusal, got: {result.errors}"
++        )
++        assert not (central / "demo").exists(), (
++            "render must validate the skills root BEFORE mkdir — no central dir may appear"
++        )
++        assert not (central / ".vibe-manifest.json").exists()
++
++    def test_existing_central_content_untouched(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = _seed_project(tmp_path)
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(CENTRAL_CONTENT, encoding="utf-8")
++
++        output_dir = project_root / ".pi"
++        output_dir.mkdir(parents=True)
++        (output_dir / "skills").symlink_to(central_demo.parent, target_is_directory=True)
++
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(_manifest(), output_dir)
++
++        assert not result.success
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT, (
++            "render must not rewrite the central install through a symlinked skills root"
++        )
++        assert not (central_demo / ".vibe-manifest.json").exists(), (
++            "ownership marker must not penetrate into the central install"
++        )
++
++
++class TestRenderPerSkillSymlinkPreserved:
++    """Legal contract (D02): a pre-existing per-skill symlink into a central
++    install with real content must survive the render — no central rewrite,
++    no central marker, idempotent second render.
++    """
++
++    def test_per_skill_link_kept_and_central_untouched(
++        self, tmp_path: Path, symlink_supported: bool
++    ) -> None:
++        if not symlink_supported:
++            pytest.skip("directory symlinks not supported on this host")
++
++        project_root = _seed_project(tmp_path)
++        central_demo = tmp_path / "central" / "demo"
++        central_demo.mkdir(parents=True)
++        (central_demo / "SKILL.md").write_text(CENTRAL_CONTENT, encoding="utf-8")
++
++        output_dir = project_root / ".pi"
++        skill_dir = output_dir / "skills" / "demo"
++        skill_dir.parent.mkdir(parents=True)
++        skill_dir.symlink_to(central_demo, target_is_directory=True)
++
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(_manifest(), output_dir)
++
++        assert result.success, f"render failed: {result.errors}"
++        assert skill_dir.is_symlink(), "per-skill platform link must be preserved"
++        assert skill_dir.resolve() == central_demo.resolve()
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++        # Second render is idempotent: same link, central install untouched.
++        result2 = adapter.render_config(_manifest(), output_dir)
++        assert result2.success, f"second render failed: {result2.errors}"
++        assert skill_dir.is_symlink()
++        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
++        assert not (central_demo / ".vibe-manifest.json").exists()
++
++
++class TestRenderLegalPaths:
++    """R3 regression + plain legal renders through the public entry point."""
++
++    def test_legal_real_content_renders(self, tmp_path: Path) -> None:
++        project_root = _seed_project(tmp_path)
++        output_dir = project_root / ".pi"
++
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(_manifest(), output_dir)
++
++        assert result.success, f"render failed: {result.errors}"
++        rendered = output_dir / "skills" / "demo" / "SKILL.md"
++        assert rendered.exists()
++        # The render path wrote the real project content (not a stub).
++        assert "PROJECT_ONLY_BODY" in rendered.read_text(encoding="utf-8")
++
++    def test_legal_missing_source_fallback_renders(self, tmp_path: Path) -> None:
++        """R3: fallback must accept the caller-threaded base_dir keyword and
++        still produce the generated skill doc for a declared-but-unavailable
++        skill (no project source, no central link)."""
++        project_root = tmp_path / "proj"
++        project_root.mkdir()
++        output_dir = project_root / ".pi"
++
++        adapter = PiCodingAgentAdapter(project_root=project_root)
++        result = adapter.render_config(
++            _manifest(skill_id="b1-unique-missing-source-20261009"), output_dir
++        )
++
++        assert result.success, f"fallback render failed: {result.errors}"
++        rendered = output_dir / "skills" / "b1-unique-missing-source-20261009" / "SKILL.md"
++        assert rendered.exists()
++        content = rendered.read_text(encoding="utf-8")
++        assert "b1-unique-missing-source-20261009" in content

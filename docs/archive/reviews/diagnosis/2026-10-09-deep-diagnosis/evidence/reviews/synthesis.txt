@@ -1,0 +1,27 @@
+# Phase 1 独立 synthesis 终核
+
+审查对象：`docs/reviews/2026-10-09-deep-diagnosis/REPORT.md` 草案，以及 routing-runtime、platform-security、value-research 三主报告与 cross-architecture-tests、cross-correctness-integration 两份交叉报告。只读，无源码/正式报告修改；Validation占位由主控补齐，未将占位当缺陷。
+
+## 必须纠正：源码位置需要以当前 HEAD 核准
+
+1. **D10 table 中 `installer/pack_installer.py:270` 应改 `:267`**。当前 `:267` 才是 `return True, msg`；`:270` 是 `raise`（PackIntegrityError分支）。这是重要的证据引用错误，会让读者点进去看到相反的行为。`:220` build调用和`:469` read-only mount正确。
+2. **D09 table 中 merger 位置 `builder/overlay.py:155` 应改 `:162`（或`:163`）**。`:155` 只是 ManifestMetadata constructor；`:162` 才读取 `data.get("policies", {})`，`:163`继续构建typed policy。helper `:234` 写顶层security正确。
+3. **D04 table 中 `candidate_manager.py:444` 应改 `:459`**。`:444` 是函数返回类型行，`:459` 才是 `if not c.get("enabled",True)`（从cached candidate读取启用状态）。`:75` cache dependency hash位置正确。它不影响结论，但正式报告承诺file:line证据，宜直接指向相关行为。
+
+## 无须再收窄的核心裁决
+
+- **主清单15项、8 P1/7 P2准确**：D01–D08为8项P1，D09–D15为7项P2。RR06（engine squad completed终态）和PS06（rollback helper）没有偷偷混进计数。
+- RR06降为终态语义债务是公允的交叉审结果：既有 `_run_agent_squad` 注释确实把completed解释为流程结束，返回结果保留verdict；没有证明发布因此放行。报告同时指出其他pattern语义不一致，既不掩盖问题也不冒充已确认安全漏洞。
+- D01安全边界正确：公开CLI真实audit后，无force新目标越界已独立执行；报告没有声称无安装动作/远程零交互攻击或默认覆盖所有现存文件。
+- D02完整render沿预存symlink改写中央内容已真实复现；报告明确写错文件/来源变更，不将其夸成未经证实远程exploit。
+- D03落盘与opt-in边界正确：普通build写环境值，dummy secret证明实际路径；0644是常见umask下结果，报告未声称真实密钥已外传或Git提交。更严格umask不否定默认复制秘密的事实。
+- D04/05缓存、D06/07/08桥接不一致都有确定性行为反例；无需真实外部模型才能确认。报告对D07保留底层plan仍failed的事实，避免说所有失败必然误放行。
+- D12已超出小显示问题：真实writer/reader/should_replay/CLI consumer确认Y后skill返回None，router条件不成立。报告清楚说明固定embedding仅隔离相似度依赖，并未替换生产payload。
+- D13明确生产优化.6阈值暂挡新动作，保持P2合理；没有扩大为所有路由即时使用未验证动作。
+- D15真实模型0.88衰减为.616符合当前阈值，脚本oracle不稳定；报告不把6/7改成全绿、不把它称为新安全漏洞，判断准确。
+
+## 综合专业意见
+
+报告价值、架构与创新判断公允：核心问题是跨入口状态/表示/身份合同不一致，不是“Python代码多”“没有新算法所以没价值”；它承认来源控制、阻断交付、观测证据与实验失败保留的实际工程贡献，也把市场需求、记忆收益、自治可靠性与算法首创留在未证明范围。研究部分明确没有独立重跑360模型run，只重算已提交摘要，外推边界足够。
+
+除上述3处file:line纠正外，没有必须删除、升降级或进一步收窄的核心结论。报告可以作为诊断交付；容器总量/特定机制验证和完整证据manifest仍须由主控按真实结果补上，不能使用专项绿测试替代未执行的原生宿主产物验收。

@@ -1,0 +1,102 @@
+# Routing / LLM / runtime / workflow / loop 深度评审
+
+审计基线：`49901afe` 与用户当前脏工作区；此 lane 没有修改项目源码、用户改动、配置或凭据。范围：`src/vibesop/core/routing`、`llm`、`agent/runtime`、`agent/step_runner.py`、`core/orchestration`、`core/loop`，以及相应合同和测试。日期：2026-10-09。
+
+## 价值与架构映射
+
+| 子系统 | 用户价值契约 | 实现 | 主判断 |
+|---|---|---|---|
+| routing | 自然语言找到实际可读、允许使用的技能，避免全量技能消耗上下文 | explicit → scenario/index → triage → matcher/fallback；候选管理、持久缓存、trace/cost 分离 | 主产品价值扎实：不是替代 LLM，而是管理约束与知识注入。近期 threshold、flattened slash ID、selected_confidence 修复未重复报。候选缓存的新鲜度仍违反配置控制契约。 |
+| LLM | 为路由、拆解、评审提供统一模型接入与成本证据 | OpenAI-compatible/Anthropic/Ollama + SpanWrappedProvider | 清楚、可替换；timeout/成本/可用性已有考虑。DeepSeek sync/acall 请求参数存在差异，但未验证外部 API，故不作为缺陷。 |
+| agent/runtime | 在各平台交付真实 SKILL.md 与阻断通知 | RuntimeResult 序列化重新校验、SkillInjector 内容扫描、PlanExecutor guide/manifest 门禁 | 文件路径真实性与 fail-closed 的合同明显强于仅拼 prompt。仍是交付/引导系统；prompt 无法强迫平台遵循计划，源码有明确说明。 |
+| orchestration | 多意图→依赖图→多种执行策略→验收/反馈 | PlanBuilder + ParallelScheduler + WorkflowEngine + StepRunner | 概念充分，实际存在 3 套执行状态机。修复往往落在其中一个分支，其他入口保留旧行为；下列缺陷是可运行反例。 |
+| verification | blocked/failed 不能转成 success | is_acceptance_failure、verify-result、review protocol | 静态串/并行已有统一 predicate，squad/dynamic 路径一致性不足。 |
+| loop/scheduler | 定时触发、归属隔离、跨 run 记录/退避 | cron、LoopStore、command subprocess / Runtime.handle_query | command target 真执行，skill/query target 只得到路由/注入结果；不能把 matched_skill 成功解释成外部项目诊断已执行。这是产品边界/设计取舍，当前执行器注释清楚，不作为新 bug。 |
+
+创新主要在技能发现、确定性显式控制、路由解释与证据收集、跨平台注入、计划/验收合同；不是新调度算法，也不等于自治 agent 已获可靠执行能力。差异化的下一步应是证明不同平台/入口遵守同一合同，而非继续增加 pattern。
+
+架构风险：routing 模块约 10k 行、orchestration 约 10k 行、runtime+loop 约 7k 行；文件数量本身不是缺陷，但 `UnifiedRouter` 1,614 行、`AgentRuntime` 1,314 行、`WorkflowEngine` 1,176 行，同时存在 guide、manifest、ExecutionProtocol、StepRunner、ParallelScheduler、WorkflowEngine 多入口。下述真实不一致说明功能增长已超出契约覆盖。建议建立单一 StepOutcome/终态判定与执行入口适配器，减少自复制的状态解释。
+
+## 已证实缺陷
+
+所有反例均为本地注入 executor 或临时 skill 文件，没有真实外部 API、危险 workflow、shell 执行目标。
+
+### RR-01 [P1] 禁用/归档配置变更不会使候选磁盘缓存失效
+
+- 位置：`src/vibesop/core/routing/candidate_manager.py:75`（hash 只读 SKILL.md 路径+mtime）、`:111`（按此 hash 命中磁盘）、`:291`（热 cache）、`:444`（仅读 cached enabled）。配置更新：`src/vibesop/core/skills/config_manager.py:294`；CLI `src/vibesop/cli/commands/skills_commands/_config.py:70`。
+- 触发：先路由使候选落盘，再 `SkillConfigManager.set_enabled('project/demo', False)`（等价于 CLI disable 的更新）；SKILL.md 不变；用同一或新 CandidateManager 路由。
+- 实际：demo 仍在 routable 集合，候选 enabled 还是 True；新进程读磁盘缓存也如此。临时隔离 config/skill 反例中集合 132→132，显式删除磁盘 cache 后重新发现才变 131。
+- 期望：disable 明示“excluded from routing candidates”；热/新进程均即时尊重新值；归档/scope 同理。
+- 根因：candidate cache 的依赖是 source metadata + auto-config，但 fingerprint 和 reload check 仅追踪前者，filter 不重新读取配置。
+- 置信度：高；测试没有覆盖真实配置更新→缓存→路由序列，现有 disabled tests 直接传手工 enabled=False candidate。
+- 验证命令：`uv run python /tmp/vibesop-routing-runtime-repro.py`，看 `DISABLE_CACHE`。修复后将这一序列加真实 CLI/route 合同测试。
+
+### RR-02 [P1] 检测到 SKILL.md 改动仍重建出旧 metadata；显式 reload 也失效
+
+- 位置：`src/vibesop/core/routing/candidate_manager.py:328` → `get_candidates()` → `:204` `discover_all()`；`src/vibesop/core/skills/loader.py:140` 已有 `_skill_cache` 时直接返回。
+- 触发：长活路由器发现 project/demo，SKILL.md description 从 first 改 second（mtime 已变化）；下次自动刷新或调用 CandidateManager.reload()。
+- 实际：自动和显式 reload description 始终 first；新 hash 可把旧 metadata 再落盘。新增 skill 的 reload marker 同样可能重用旧 loader 缓存。
+- 期望：reload 后 reflects modified/added skills，否则代理读新正文、路由按旧触发词选择，match→inject 契约失真。
+- 置信度：高；严格 pinned temporary search path 下重现，没有 home skills 干扰。
+- 验证：同脚本 `HOT_RELOAD` 输出 `first / first / first`；理应 `first / second / second`。
+
+### RR-03 [P1] fail_fast=True 在全成功并行 batch 后退出，漏掉下游步骤
+
+- 位置：`src/vibesop/agent/step_runner.py:565` `if not should_continue or fail_fast: break`。
+- 触发：s1、s2 无依赖；s3 依赖两者；executor 全返回 OK；`execute_all(..., fail_fast=True)`。
+- 实际：仅执行 s1/s2，返回 completed=2, failed=0, skipped=0；s3 留 pending。
+- 期望：fail_fast 仅在失败后终止；应 completed=3。该情形会漏掉 fan-out synthesis 或后续验收。
+- 置信度：高；当前 fail_fast test 只有失败情形，所以绿灯没覆盖 happy path。
+- 验证：同脚本 `FAIL_FAST_SUCCESS`。
+
+### RR-04 [P1] 动态执行失败在 StepRunner 结果/内部状态中被隐藏
+
+- 位置：`src/vibesop/agent/step_runner.py:384-394`，硬编码 failed=0/skipped=0，并没有把引擎更新同步回 `_states`。
+- 触发：单步 LOOP_UNTIL_DRY，executor 抛 ValueError('boom')。
+- 实际：WorkflowEngine 正确把 step/plan 标 failed，结果含 error；但 StepRunner 返回 completed=0, failed=0, skipped=0，failed_count=0、is_complete=False。DynamicExecutionResult.final_status 未交付给调用者。
+- 期望：统一的 execute_all 返回 failed=1，状态属性/回调/持久状态与引擎一致，明确 failed final_status。
+- 置信度：高；engine 本身最近 F-26 改善了终态，但 bridge 没采用新字段。
+- 验证：同脚本 `DYNAMIC_FAILURE`。
+
+### RR-05 [P1] squad 的 StepRunner 入口绕开协作/验收，blocked 被标 completed
+
+- 位置：`src/vibesop/agent/step_runner.py:325-367` 在动态路由前抢先处理所有 `agent_squad_id`；`:595` 按角色字母排序；`:607` 仅注入 role/allowlist。
+- 触发：PlanBuilder 对 RED_TEAM/DEBATE 正常生成含 agent_squad_id 的 ExecutionStep（`plan_builder.py:679-680`）；经 AgentRouter.create_runner/StepRunner.execute_all 执行。临时 squad impl→red，red executor 返回 `blocked: missing evidence`。
+- 实际：结果 dynamic=False，completed=2, failed=0；两个 ctx 均无 handoff/upstream_outputs/verdicts；blocked 被标 completed。协作协议、execution_order、input_from、review gate 和修订轮次没有执行。某些角色名排序也会破坏规划的依赖顺序。
+- 期望：Squad 类 pattern 使用 WorkflowEngine 同一协作协议；对验收失败采取与静态串/并行一致的结果判定。现有 F-27 注释明确容许成员失败时继续收集，这是设计选择；本缺陷是 gate/上下文/结果判定完全缺失，不以 fail_fast 为由提出。
+- 置信度：高；真实 PlanBuilder 字段与 bridge 分支可直接串联，测试只有 role prompt/异常失败，不覆盖 handoff/gate 与 acceptance sentinel。
+- 验证：同脚本 `SQUAD_BRIDGE`。
+
+### RR-06 [P1] 真正的 squad 引擎对 review gate 拒绝仍发 completed 终态
+
+- 位置：`src/vibesop/core/orchestration/workflow_engine.py:1007` 无条件 `plan.status=COMPLETED`，`:1014` terminal completed；`:983-1000` 已收集失败 verdict。
+- 触发：RED_TEAM、review_gate 协议；无 LLM，protocol.review 正确抛错，engine 捕获并生成 passed=False 的拒绝 verdict；或注入 LLM 恒返回 passed=False 且要求修改直到 max_rounds。
+- 实际：失败 verdict 已明确记录，但 plan.status/plan_terminal 都 completed。
+- 期望：缺评审能力为 blocked/failed；明确拒绝为 failed/partial；达到 max_rounds 且最后仍失败不能汇报 completed。Completed 可表示 run ended 的歧义与当前引擎 `_compute_final_status` 合同冲突，消费者必须能识别成功/失败。
+- 置信度：高。只证实 workflow verdict 与 terminal 的不一致，不声称恶意内容已被执行。
+- 验证：同脚本 `SQUAD_GATE_REJECTED` 输出 passed=False 与 completed；对带 event_log 入口补终态合同测试。
+
+### RR-07 [P2] StepRunner 承诺并行但同步 callable 实际串行阻塞
+
+- 位置：`src/vibesop/agent/step_runner.py:451-456` async coroutine 内直接调用同步 executor，没有 await/thread/process；所有任务跑同一 event loop。
+- 触发：两个独立步骤，同步 executor 各 sleep(.2)，max_parallel≥2。
+- 实际：总耗时 .41s；理论并行约 .2s。CPU/IO blocking executor 都串行；async executor 返回 coroutine 则未 await 即被 stringify。
+- 期望：API 明确同步执行，或将 sync callable dispatch 至 thread/实现 async contract；当前 execute_all doc 宣称 concurrent/ParallelScheduler，却未委托。
+- 置信度：高（机制与两步计时），严重度 P2：功能仍执行，只是并行收益没有兑现。
+- 验证：同脚本 `PARALLEL_SYNC_SECONDS`；不要写硬时间阈值测试，可用 barrier/concurrency counter。
+
+## 待交叉评审 / 设计问题（不计已证实 defect）
+
+1. 静态依赖失败后下游一直 pending，execute_all 返回 skipped=0、is_complete=False；ParallelScheduler 则级联 skipped。现象已重现 (`DEPENDENCY_FAILURE`)，但是否希望保留 pending 供人工重试须确认 API 终态契约；建议统一明确 blocked。
+2. resume 初始化不恢复 failed flag（仅恢复 completed/skipped），故此前 failed 会被自动再次执行 (`RESUME_FAILED`)。若 resume 的语义有意包含重试则属取舍；需 docs/test 明示，尤其外部有副作用 executor。
+3. SkillConfigManager 是 classmethod + CWD 相对配置路径；CandidateManager/Runtime 使用显式 project_root。跨项目 runtime/config 边界值得下一轮验证，不能由单项目测试保证。
+4. triage persistent fingerprint 只有 skill id 集合，同 ID 的 description/triggers 改变不使 positive/negative cache stale；这是进一步的新鲜度取舍，需要定义 TTL 与编辑生效的产品契约。
+5. Loop 的 skill/query 路由成功与 command execution 成功共用 success 字段；调度层没有外部 agent 执行器。建议把 routable、delivered、executed、verified 四个证据阶段区分，避免产品说明将路由检查当成项目健康检查。
+
+## 验证记录与行动顺序
+
+- `uv run pytest tests/agent/test_step_runner.py tests/core/orchestration/test_parallel_scheduler.py tests/core/orchestration/test_workflow_engine.py tests/core/loop/test_scheduler.py tests/integration/test_verification_delivery_contract.py -q --no-header` → **100 passed**。
+- `uv run pytest tests/unit/core/routing/test_candidate_manager.py tests/unit/core/routing/test_triage_cache.py tests/unit/core/routing/test_triage_service.py tests/llm/test_llm_factory.py tests/core/loop -q --no-header` → **371 passed, 1 skipped**。
+- 定制反例：`/tmp/vibesop-routing-runtime-repro.py`，上述 7 findings 在相同源码上重现；Docker 留给主控集中隔离验证，可挂该脚本作同命令验证。
+- 总计 **471 passed, 1 skipped** 仅证明现有断言绿；反例证明未覆盖缓存跨状态、happy-path fail_fast、squad gate 和 dynamic bridge。
+- 建议先修 RR-01/02（routing 控制真实性），再 RR-03/04/05/06（终态与验收真实性），最后 RR-07（性能契约）。采用同一结果 normalization/terminal 汇总，针对每个公开执行入口跑真实模型的同一矩阵：OK / exception / failed sentinel / blocked sentinel / deps fail / resume / cancellation。不要复制各分支判定再靠单元测试单独绿灯。

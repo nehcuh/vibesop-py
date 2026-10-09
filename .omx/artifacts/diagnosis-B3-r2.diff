@@ -1,0 +1,734 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 9d3f01cd..b1f089d6 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
++- **B3-r2 diagnosis optimization**: Preserve authoritative blocked outcomes through the public execution adapter, including ordinary review rejection and structured blocked results. Align dynamic step states/counts with their shared per-step outcomes; preserve existing engine run-completed semantics and legacy failure accounting.
++
+ - **B3 diagnosis optimization**: Continue fail_fast after a wholly successful parallel batch, report real dynamic execution failures, preserve role/isolation/handoff context and expose required-review errors independently of execution success. Mark only failed-dependency descendants skipped; retain resumable pending work. Map internal squad steps back to the original ExecutionStep objects for public executor callbacks.
+ 
+ - **B1 diagnosis optimization**: Validate namespace segments before dependency processing and use one normalized project root for install/verify/uninstall. Prevent platform render and Pi namespace rewrites from modifying central installs through links; ignore pre-planted temporary file links.
+diff --git a/src/vibesop/agent/execution_protocol.py b/src/vibesop/agent/execution_protocol.py
+index 4d747966..52a9ab96 100644
+--- a/src/vibesop/agent/execution_protocol.py
++++ b/src/vibesop/agent/execution_protocol.py
+@@ -9,10 +9,13 @@ from __future__ import annotations
+ 
+ from dataclasses import dataclass, field
+ from enum import StrEnum
+-from typing import Any
++from typing import TYPE_CHECKING, Any
+ 
+ from vibesop.core.models import ExecutionPlan
+ 
++if TYPE_CHECKING:
++    from vibesop.agent.step_runner import StepOutcome
++
+ 
+ class StepResultStatus(StrEnum):
+     """Status of a single step execution."""
+@@ -64,6 +67,7 @@ class PlanExecutionResult:
+         cls,
+         result: dict[str, Any],
+         plan: ExecutionPlan | None = None,
++        step_outcomes: list[StepOutcome] | None = None,
+     ) -> PlanExecutionResult:
+         """Thin adapter: normalize a StepRunner.execute_all() legacy dict into
+         the public PlanExecutionResult/StepResult face (B3).
+@@ -74,25 +78,62 @@ class PlanExecutionResult:
+         and the dynamic lane's dict keyed by step identity (values classified
+         with the shared acceptance predicate; the legacy dict shape itself is
+         never rewritten). Blocked steps carry the legacy "failed" entry status
+-        (F2 value-domain contract) — their blocked granularity is recovered
+-        from the recorded error text via the shared blocked predicate. The
+-        additive ``review_status`` key passes through to
+-        :attr:`PlanExecutionResult.review_status`. ``plan`` is optional and
+-        only used to backfill ``skill_id`` for entries that lack it.
++        (F2 value-domain contract). The additive ``review_status`` key passes
++        through to :attr:`PlanExecutionResult.review_status`. ``plan`` is
++        optional and only used to backfill ``skill_id`` for entries that lack
++        it.
++
++        Post-corrective (P1): when ``step_outcomes`` — the producer's shared
++        per-step ``StepOutcome`` list (``runner.last_plan_outcome.steps``) —
++        is supplied, per-step statuses are taken from it verbatim as the
++        single source of truth. No second classification predicate runs, so
++        the adapter cannot disagree with the runner's own verdict: ordinary
++        hard-reject feedback text (no ``blocked:`` prefix) and dict sentinels
++        (``{"status": "blocked"}``) classify exactly as the producer did.
++
++        P1 corrective: the producer stamps every per-step entry it emits with
++        the additive ``outcome_status`` key — the shared ``StepOutcomeStatus``
++        verdict serialized as its enum value string (``"success"`` /
++        ``"failed"`` / ``"blocked"`` / ``"skipped"``). The adapter reads this
++        fact by DEFAULT (it survives a JSON round trip of the plain dict), so
++        the ordinary two-argument call classifies exactly as the producer did.
++        Legacy payloads written before this key existed (no ``outcome_status``
++        on the entry) keep the full fallback semantics below — nothing about
++        old serialized results changes.
++
++        Fallback order when neither the additive entry key nor
++        ``step_outcomes`` is available: recover blocked granularity from the
++        payload with the shared blocked predicate
++        (:func:`vibesop.agent.step_runner._is_blocked_output`): a blocked
++        sentinel in the recorded error text or the preserved raw output of a
++        "failed" entry, or a blocked sentinel value in the dynamic dict lane.
++        Ordinary (non-sentinel) hard-reject feedback text stays FAILED on
++        that path — producers that predate the additive key cannot be
++        distinguished from real failures dict-only, which is why the producer
++        now stamps ``outcome_status``.
+         """
++        from vibesop.agent.step_runner import _is_blocked_output
+         from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+ 
+         skill_by_step = {s.step_id: s.skill_id for s in plan.steps} if plan is not None else {}
+ 
+-        def _is_blocked_text(text: Any) -> bool:
+-            """Shared blocked predicate over string payloads (error text or
+-            stringified outputs) — mirrors StepRunner._is_blocked_output."""
+-            if not isinstance(text, str):
+-                return False
+-            stripped = text.strip().lower()
+-            return stripped == "blocked" or stripped.startswith("blocked:")
+-
+-        def _status(value: Any, legacy: str | None, error: Any = None) -> StepResultStatus:
++        # Preferred source of truth (P1): the producer's shared per-step
++        # outcomes, mapped 1:1 onto StepResultStatus by value.
++        outcome_status_by_step: dict[str, StepResultStatus] = {}
++        if step_outcomes:
++            for outcome in step_outcomes:
++                outcome_status_by_step[str(outcome.step_id)] = StepResultStatus(str(outcome.status))
++
++        def _status(
++            value: Any,
++            legacy: str | None,
++            error: Any = None,
++            step_id: str | None = None,
++        ) -> StepResultStatus:
++            if step_id is not None:
++                shared = outcome_status_by_step.get(step_id)
++                if shared is not None:
++                    return shared
+             if legacy == "completed":
+                 return StepResultStatus.SUCCESS
+             if legacy == "skipped":
+@@ -101,17 +142,20 @@ class PlanExecutionResult:
+                 return StepResultStatus.BLOCKED
+             if legacy == "failed":
+                 # F2: the legacy entry status value domain is completed/failed
+-                # — a blocked step is persisted as "failed". Recover the
+-                # blocked granularity from the recorded error text with the
+-                # shared blocked predicate.
+-                if _is_blocked_text(error):
++                # — a blocked step is persisted as "failed". On the fallback
++                # path the blocked granularity is recovered from the recorded
++                # error text or the preserved raw output with the shared
++                # blocked predicate; ordinary feedback text stays FAILED
++                # (use step_outcomes for those).
++                if _is_blocked_output(error) or _is_blocked_output(value):
+                     return StepResultStatus.BLOCKED
+                 return StepResultStatus.FAILED
+             if is_acceptance_failure(value):
+-                text = str(value).strip().lower() if not isinstance(value, dict) else ""
+-                if text == "blocked" or text.startswith("blocked:"):
+-                    return StepResultStatus.BLOCKED
+-                return StepResultStatus.FAILED
++                return (
++                    StepResultStatus.BLOCKED
++                    if _is_blocked_output(value)
++                    else StepResultStatus.FAILED
++                )
+             return StepResultStatus.SUCCESS
+ 
+         steps: list[StepResult] = []
+@@ -120,15 +164,32 @@ class PlanExecutionResult:
+             for entry in raw_results:
+                 if not isinstance(entry, dict) or "step_id" not in entry:
+                     continue
++                # P1 corrective: the producer's additive per-step fact is the
++                # default source of truth — it rides inside the plain dict and
++                # survives a JSON transport. An absent or unrecognized value
++                # means a legacy payload: fall through to step_outcomes, then
++                # to the legacy classification predicate.
++                status: StepResultStatus | None = None
++                additive = entry.get("outcome_status")
++                if isinstance(additive, str):
++                    try:
++                        status = StepResultStatus(additive.strip().lower())
++                    except ValueError:
++                        status = None
++                if status is None:
++                    status = _status(
++                        entry.get("output"),
++                        entry.get("status"),
++                        entry.get("error"),
++                        step_id=str(entry["step_id"]),
++                    )
+                 steps.append(
+                     StepResult(
+                         step_id=str(entry["step_id"]),
+                         skill_id=str(
+                             entry.get("skill_id") or skill_by_step.get(entry["step_id"], "")
+                         ),
+-                        status=_status(
+-                            entry.get("output"), entry.get("status"), entry.get("error")
+-                        ),
++                        status=status,
+                         output="" if entry.get("output") is None else str(entry.get("output")),
+                         error=entry.get("error"),
+                     )
+@@ -139,7 +200,7 @@ class PlanExecutionResult:
+                     StepResult(
+                         step_id=str(step_id),
+                         skill_id=str(skill_by_step.get(step_id, "")),
+-                        status=_status(value, None),
++                        status=_status(value, None, step_id=str(step_id)),
+                         output="" if value is None else str(value),
+                     )
+                 )
+diff --git a/src/vibesop/agent/step_runner.py b/src/vibesop/agent/step_runner.py
+index b0b29288..938cb16b 100644
+--- a/src/vibesop/agent/step_runner.py
++++ b/src/vibesop/agent/step_runner.py
+@@ -447,8 +447,11 @@ class StepRunner:
+                   execution success and review acceptance as separate axes)
+                 - results: list[dict] with step_id, output, error, status per
+                   step (static/squad lanes; status keeps the legacy value
+-                  domain completed/failed/skipped — F2) — the dynamic lane
+-                  preserves its legacy dict shape keyed by step identity
++                  domain completed/failed/skipped — F2) plus the additive
++                  ``outcome_status`` key carrying the shared StepOutcomeStatus
++                  verdict (JSON-transportable producer fact for consumers of
++                  the plain dict) — the dynamic lane preserves its legacy dict
++                  shape keyed by step identity
+                 - dynamic: bool
+                 - pattern: str (squad/dynamic lanes)
+         """
+@@ -467,8 +470,10 @@ class StepRunner:
+         results: list[dict[str, Any]] = []
+         outcomes: list[StepOutcome] = []
+         # Steps whose output was a blocked sentinel are persisted via
+-        # mark_failed (StepStatus has no blocked member — RR06 debt), so the
+-        # failed counter must exclude them to avoid double counting.
++        # mark_failed (StepStatus has no blocked member — RR06 debt), which
++        # is exactly why they land in the failed counter; per F1 they count
++        # in BOTH failed and blocked (blocked is an additional breakdown of
++        # the failed count, never a subtraction).
+         blocked_ids: set[str] = set()
+ 
+         while True:
+@@ -494,6 +499,7 @@ class StepRunner:
+                                 "output": output,
+                                 "error": None,
+                                 "status": "completed",
++                                "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                             }
+                         )
+                         outcomes.append(
+@@ -513,14 +519,18 @@ class StepRunner:
+                     # F2: the per-step entry status keeps the legacy value
+                     # domain (completed/failed) — blocked granularity is
+                     # expressed by the blocked counter, the StepOutcome status
+-                    # and the adapter's blocked classification, not by a new
+-                    # entry status value.
++                    # and the additive ``outcome_status`` entry key (the
++                    # producer's shared verdict, JSON-transportable), not by a
++                    # new entry status value. The raw output is preserved on
++                    # the entry (additive) so the dict sentinel shape stays
++                    # recoverable on the adapter's dict-only fallback path.
+                     results.append(
+                         {
+                             "step_id": step.step_id,
+-                            "output": None,
++                            "output": output,
+                             "error": error,
+                             "status": "failed",
++                            "outcome_status": status.value,
+                         }
+                     )
+                     outcomes.append(
+@@ -542,6 +552,7 @@ class StepRunner:
+                             "output": None,
+                             "error": str(e),
+                             "status": "failed",
++                            "outcome_status": StepOutcomeStatus.FAILED.value,
+                         }
+                     )
+                     outcomes.append(
+@@ -612,6 +623,7 @@ class StepRunner:
+                                 "output": None,
+                                 "error": str(step_result),
+                                 "status": "failed",
++                                "outcome_status": StepOutcomeStatus.FAILED.value,
+                             }
+                         )
+                         outcomes.append(
+@@ -650,13 +662,18 @@ class StepRunner:
+                             should_continue = not fail_fast
+                             # F2: entry status keeps the legacy value domain
+                             # (completed/failed) — blocked granularity lives in
+-                            # the blocked counter / StepOutcome / adapter.
++                            # the blocked counter, the StepOutcome, the
++                            # additive ``outcome_status`` entry key and the
++                            # adapter. The raw output is preserved on the entry
++                            # (additive) so the dict sentinel shape stays
++                            # recoverable on the adapter's dict-only fallback path.
+                             results.append(
+                                 {
+                                     "step_id": step.step_id,
+-                                    "output": None,
++                                    "output": step_result,
+                                     "error": output,
+                                     "status": "failed",
++                                    "outcome_status": status.value,
+                                 }
+                             )
+                             outcomes.append(
+@@ -685,6 +702,7 @@ class StepRunner:
+                                     "output": output,
+                                     "error": None,
+                                     "status": "completed",
++                                    "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                                 }
+                             )
+                             outcomes.append(
+@@ -811,11 +829,21 @@ class StepRunner:
+         """Normalize a DynamicExecutionResult into the shared outcome (D07).
+ 
+         The legacy ``results`` dict shape is preserved verbatim — keyed by
+-        step/plan identity, never converted to a list. Only the statistics
+-        are fixed: ``completed``/``failed``/``blocked`` are real counters
+-        derived from the recorded values, and ``final_status`` is the
+-        WorkflowEngine verdict (previously hardcoded to failed=0 and never
+-        delivered).
++        step/plan identity, never converted to a list. The statistics are
++        real counters derived from the recorded values, and ``final_status``
++        is the WorkflowEngine verdict (previously hardcoded to failed=0 and
++        never delivered).
++
++        Post-corrective (P2): the bridge also syncs the runner's own state
++        with the engine results. The engine's loop stamps a step COMPLETED
++        before the sentinel classification happens and never touches the
++        runner's ``_states``, so without this sync the public counters said
++        failed/blocked while ``failed_count`` stayed 0, ``pending_steps()``
++        still returned the failed step, and a sentinel-returning step kept
++        StepStatus.COMPLETED. ``skipped`` counts only steps the engine
++        explicitly skipped (StepStatus.SKIPPED, e.g. LOOP_UNTIL_DRY
++        verification steps); steps left PENDING by an aborted run are still
++        resumable and are NOT reported as skipped.
+         """
+         from vibesop.core.models import StepStatus
+         from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+@@ -827,11 +855,26 @@ class StepRunner:
+         blocked = sum(1 for v in values if _is_blocked_output(v))
+         failed = sum(1 for v in values if is_acceptance_failure(v))
+         completed = len(values) - failed
+-        skipped = sum(
+-            1
+-            for s in self._plan.steps
+-            if s.step_id not in results_map and s.status is not StepStatus.COMPLETED
+-        )
++
++        # Bring the runner state and the shared PlanOutcome.steps to the
++        # engine's side: one StepOutcome per step the engine actually
++        # recorded, and mark_failed/mark_completed so failed_count() /
++        # pending_steps() / is_complete describe the run that happened.
++        step_outcomes: list[StepOutcome] = []
++        for step in self._plan.steps:
++            if step.step_id not in results_map:
++                continue
++            value = results_map[step.step_id]
++            status = _classify_output(value)
++            if status is StepOutcomeStatus.SUCCESS:
++                self.mark_completed(step, str(value) if value is not None else "")
++                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, value))
++            else:
++                error = str(value)
++                self.mark_failed(step, error)
++                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, error=error))
++
++        skipped = sum(1 for s in self._plan.steps if s.status is StepStatus.SKIPPED)
+ 
+         outcome = PlanOutcome(
+             plan_id=self._plan.plan_id,
+@@ -841,6 +884,7 @@ class StepRunner:
+             blocked=blocked,
+             final_status=dyn_result.final_status,
+             review_status="not_required",
++            steps=step_outcomes,
+         )
+         self._last_plan_outcome = outcome
+         return {
+@@ -890,6 +934,7 @@ class StepRunner:
+                         "output": None,
+                         "error": None,
+                         "status": "skipped",
++                        "outcome_status": StepOutcomeStatus.SKIPPED.value,
+                     }
+                 )
+                 step_outcomes.append(
+@@ -916,6 +961,7 @@ class StepRunner:
+                         "output": output,
+                         "error": None,
+                         "status": "completed",
++                        "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                     }
+                 )
+                 step_outcomes.append(
+@@ -940,13 +986,15 @@ class StepRunner:
+                     on_step_error(step, RuntimeError(error))
+                 # F2: entry status keeps the legacy value domain
+                 # (completed/failed/skipped); blocked granularity is carried by
+-                # the blocked counter, the StepOutcome status and the adapter.
++                # the blocked counter, the StepOutcome status, the additive
++                # ``outcome_status`` entry key and the adapter.
+                 results.append(
+                     {
+                         "step_id": step.step_id,
+                         "output": None,
+                         "error": error,
+                         "status": "failed",
++                        "outcome_status": status.value,
+                     }
+                 )
+                 step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, error=error))
+diff --git a/tests/agent/test_step_runner.py b/tests/agent/test_step_runner.py
+index 68e9dbfc..35a8efe6 100644
+--- a/tests/agent/test_step_runner.py
++++ b/tests/agent/test_step_runner.py
+@@ -2,13 +2,14 @@
+ 
+ from __future__ import annotations
+ 
++import json
+ import uuid
+ from pathlib import Path
+ from typing import Any
+ 
+ import pytest
+ 
+-from vibesop.agent.step_runner import StepRunContext, StepRunner
++from vibesop.agent.step_runner import StepOutcomeStatus, StepRunContext, StepRunner
+ from vibesop.core.models import (
+     AgentSquad,
+     ExecutionMode,
+@@ -1393,3 +1394,316 @@ class TestExecutionProtocolAdapter:
+         }
+         assert not adapted.all_succeeded
+         assert adapted.success_count == 1
++
++
++class _PlainFeedbackRejectLLM:
++    """LLM whose review verdict is a hard reject with ORDINARY feedback text
++    (``revision_feedback="add the missing tests"`` — no ``blocked:`` sentinel
++    prefix, no issues echo). This is the real producer shape the prefix-only
++    adapter predicate missed (B3 post-corrective P1)."""
++
++    def call(self, prompt: str, **kwargs: Any) -> Any:
++        body = (
++            '{"passed": false, "issues": ["missing tests"], "score": 1.0, '
++            '"requires_revision": false, "revision_feedback": "add the missing tests"}'
++        )
++        return type("Response", (), {"content": body})()
++
++
++class TestPostCorrectiveBlockedAdapterConsistency:
++    """B3 post-corrective P1: the adapter must not drop blocked granularity
++    that the producer's shared per-step StepOutcome already decided.
++
++    Every test here drives the REAL public producer (StepRunner.execute_all)
++    and adapts the produced dict — both via the default two-argument call and
++    with the runner's shared ``last_plan_outcome.steps`` — no hand-built
++    result dicts, no ``blocked:`` prefixes added to feedback to keep
++    predicates green."""
++
++    def test_hard_reject_plain_feedback_adapter_blocked(self):
++        """Ordinary hard-reject feedback (no sentinel prefix): public dict,
++        StepOutcome and adapter must all say BLOCKED for the rejected role's
++        step, while the legacy entry keeps the F2 failed status and carries
++        the feedback text verbatim."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _build_squad_plan(
++            WorkflowPattern.AGENT_SQUAD,
++            roles=["implementer", "reviewer"],
++            protocol="review_gate",
++            skills={"implementer": ["coding"], "reviewer": ["review"]},
++        )
++        runner = StepRunner(plan, track_state=False, llm_client=_PlainFeedbackRejectLLM())
++
++        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> dict[str, Any]:
++            return {"step_id": step.step_id, "role_id": _role_of(step), "content": "work"}
++
++        result = runner.execute_all(executor)
++
++        assert result["blocked"] == 1, f"blocked counter must surface, got {result}"
++        assert result["failed"] == 1, "blocked steps count in failed too (F1)"
++        assert result["final_status"] == "blocked"
++        assert result["review_status"] == "rejected"
++        # The producer's shared per-step outcome is already BLOCKED.
++        outcome = runner.last_plan_outcome
++        assert outcome is not None
++        by_outcome = {s.step_id: s.status for s in outcome.steps}
++        impl = next(s for s in plan.steps if (s.assigned_role or "") == "implementer")
++        assert by_outcome[impl.step_id] is StepOutcomeStatus.BLOCKED
++        # F2: the legacy entry keeps the failed status; the ordinary feedback
++        # text is preserved verbatim (no forced sentinel prefix).
++        by_id = {r["step_id"]: r for r in result["results"]}
++        assert by_id[impl.step_id]["status"] == "failed"
++        assert by_id[impl.step_id]["error"] == "add the missing tests"
++        # The adapter, fed the real shared outcomes, agrees with StepOutcome.
++        adapted = PlanExecutionResult.from_step_runner_dict(
++            result, plan, step_outcomes=outcome.steps
++        )
++        adapted_by_id = {r.step_id: r.status for r in adapted.results}
++        assert adapted_by_id[impl.step_id] is StepResultStatus.BLOCKED
++        # P1 corrective: the producer stamps the shared verdict on the entry
++        # itself (additive ``outcome_status``), so the DEFAULT two-argument
++        # call — no step_outcomes — must agree too, and the same dict after a
++        # JSON transport must still agree (the opt-in third parameter is no
++        # longer the only way to get the producer's blocked granularity).
++        reviewer = next(s for s in plan.steps if (s.assigned_role or "") == "reviewer")
++        assert by_id[impl.step_id]["outcome_status"] == "blocked"
++        assert by_id[reviewer.step_id]["outcome_status"] == "success"
++        default_adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
++        default_by_id = {r.step_id: r.status for r in default_adapted.results}
++        assert default_by_id[impl.step_id] is StepResultStatus.BLOCKED
++        assert default_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
++        transported = json.loads(json.dumps(result))
++        transported_adapted = PlanExecutionResult.from_step_runner_dict(transported, plan)
++        transported_by_id = {r.step_id: r.status for r in transported_adapted.results}
++        assert transported_by_id[impl.step_id] is StepResultStatus.BLOCKED
++        assert transported_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
++        transported_impl = next(r for r in transported_adapted.results if r.step_id == impl.step_id)
++        assert transported_impl.error == "add the missing tests"
++
++    def test_default_adapter_real_exception_stays_failed(self):
++        """Genuine executor exception: the additive ``outcome_status`` fact
++        says failed, so the default two-argument adapter — including after a
++        JSON transport — must report FAILED, never blocked (no blanket
++        failed→blocked mapping)."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
++        runner = StepRunner(plan, track_state=False)
++
++        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> str:
++            raise RuntimeError("tool crashed")
++
++        result = runner.execute_all(executor)
++
++        assert result["failed"] == 1
++        assert result["blocked"] == 0
++        assert result["results"][0]["outcome_status"] == "failed"
++        default_adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
++        assert default_adapted.results[0].status is StepResultStatus.FAILED
++        transported = json.loads(json.dumps(result))
++        transported_adapted = PlanExecutionResult.from_step_runner_dict(transported, plan)
++        assert transported_adapted.results[0].status is StepResultStatus.FAILED
++        assert transported_adapted.results[0].error == "tool crashed"
++
++    def test_default_adapter_legacy_payload_without_outcome_status_falls_back(self):
++        """Legacy payload (entries written before the additive key existed):
++        strip ``outcome_status`` and the adapter must keep the old fallback
++        semantics — sentinel-shaped feedback still classifies blocked via the
++        shared predicate."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
++        runner = StepRunner(plan, track_state=False)
++        result = runner.execute_all(lambda step, ctx: {"status": "blocked"})
++        legacy = json.loads(json.dumps(result))
++        for entry in legacy["results"]:
++            entry.pop("outcome_status", None)
++        legacy_adapted = PlanExecutionResult.from_step_runner_dict(legacy, plan)
++        assert legacy_adapted.results[0].status is StepResultStatus.BLOCKED
++
++    def test_static_dict_sentinel_adapter_agrees_with_and_without_outcomes(self):
++        """Static lane returning the dict sentinel: runner state, StepStatus,
++        StepOutcome and adapter (both the shared-outcome path and the
++        dict-only fallback) must all classify the step as blocked."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _make_plan([("skill-a", "step 1", "do step 1", None)])
++        runner = StepRunner(plan, track_state=False)
++
++        result = runner.execute_all(lambda step, ctx: {"status": "blocked"})
++
++        assert result["blocked"] == 1
++        assert result["failed"] == 1
++        assert result["final_status"] == "blocked"
++        assert runner.failed_count == 1
++        assert plan.steps[0].status == StepStatus.FAILED
++        outcome = runner.last_plan_outcome
++        assert outcome is not None
++        assert outcome.steps[0].status is StepOutcomeStatus.BLOCKED
++        # Shared-outcome path (source of truth).
++        adapted = PlanExecutionResult.from_step_runner_dict(
++            result, plan, step_outcomes=outcome.steps
++        )
++        assert adapted.results[0].status is StepResultStatus.BLOCKED
++        # Dict-only fallback: the shared blocked predicate must recognize the
++        # dict sentinel shape (previously every dict failure fell to FAILED).
++        fallback = PlanExecutionResult.from_step_runner_dict(result, plan)
++        assert fallback.results[0].status is StepResultStatus.BLOCKED
++
++
++class TestPostCorrectiveDynamicLaneStateSync:
++    """B3 post-corrective P2: the dynamic lane must sync the runner's public
++    state with the engine's real results — skipped counts only genuine
++    SKIPPED steps, failed steps leave pending_steps(), sentinel-returning
++    steps sit on the failure side of StepStatus, and PlanOutcome.steps
++    mirrors the engine outcomes."""
++
++    def test_dynamic_dict_blocked_full_state_matrix(self):
++        """Dynamic lane returning the dict sentinel: legacy results dict
++        preserved verbatim, public counters failed+blocked, StepStatus FAILED,
++        runner.failed_count synced, PlanOutcome.steps populated, adapter
++        BLOCKED on both the shared-outcome and the dict-only fallback path."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _make_plan(
++            [
++                ("skill-a", "step 1", "do step 1", None),
++                ("skill-b", "step 2", "independent root", None),
++            ]
++        )
++        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
++        plan.dry_threshold = 1
++        runner = StepRunner(plan, track_state=False)
++        sentinel = {"status": "blocked", "reason": "need evidence"}
++
++        result = runner.execute_all(lambda step, ctx: sentinel)
++
++        # Legacy dynamic results dict shape preserved verbatim.
++        assert result["dynamic"] is True
++        assert isinstance(result["results"], dict)
++        assert result["results"]["step-1"] == sentinel
++        # Public counters.
++        assert result["failed"] == 1
++        assert result["blocked"] == 1
++        assert result["final_status"] == "failed"
++        assert plan.status == PlanStatus.FAILED
++        # Step status on the same side as the public counters (the engine
++        # loop stamps COMPLETED before the bridge classifies the sentinel).
++        assert plan.steps[0].status == StepStatus.FAILED
++        # Runner public state synced: the failed step is no longer pending,
++        # and the genuinely-PENDING independent step stays resumable.
++        assert runner.failed_count == 1
++        assert [s.step_id for s in runner.pending_steps()] == ["step-2"]
++        assert not runner.is_complete
++        # PlanOutcome.steps carries the real per-step outcomes.
++        outcome = runner.last_plan_outcome
++        assert outcome is not None
++        assert [(s.step_id, s.status) for s in outcome.steps] == [
++            ("step-1", StepOutcomeStatus.BLOCKED)
++        ]
++        adapted = PlanExecutionResult.from_step_runner_dict(
++            result, plan, step_outcomes=outcome.steps
++        )
++        assert adapted.results[0].status is StepResultStatus.BLOCKED
++        fallback = PlanExecutionResult.from_step_runner_dict(result, plan)
++        assert fallback.results[0].status is StepResultStatus.BLOCKED
++
++    def test_dynamic_failure_pending_step_not_counted_skipped(self):
++        """Dynamic lane aborted by an exception: the still-PENDING dependent
++        step must not be reported as skipped, the runner must not present the
++        engine-failed step as unrun, and PlanOutcome.steps mirrors the real
++        engine results."""
++        from vibesop.agent.execution_protocol import (
++            PlanExecutionResult,
++            StepResultStatus,
++        )
++
++        plan = _make_plan(
++            [
++                ("skill-a", "step 1", "do step 1", None),
++                ("skill-b", "step 2", "depends on a", ["step-1"]),
++            ]
++        )
++        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
++        runner = StepRunner(plan, track_state=False)
++
++        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
++            raise RuntimeError("dyn blew")
++
++        result = runner.execute_all(executor)
++
++        assert result["dynamic"] is True
++        assert result["failed"] == 1
++        # The early-abort leftover step is PENDING, not skipped.
++        assert result["skipped"] == 0
++        assert result["final_status"] == "failed"
++        # Legacy dynamic results dict shape preserved.
++        assert isinstance(result["results"], dict)
++        assert result["results"]["step-1"] == {"error": "dyn blew"}
++        # Engine-side step truth.
++        assert plan.steps[0].status == StepStatus.FAILED
++        assert plan.steps[1].status == StepStatus.PENDING
++        # Runner public state synced: the engine-failed step is not pending,
++        # and the genuinely-PENDING dependent step stays resumable state.
++        assert runner.failed_count == 1
++        assert runner.pending_steps() == []
++        assert not runner.is_complete
++        # PlanOutcome.steps mirrors the actual engine results.
++        outcome = runner.last_plan_outcome
++        assert outcome is not None
++        assert [(s.step_id, s.status) for s in outcome.steps] == [
++            ("step-1", StepOutcomeStatus.FAILED)
++        ]
++        adapted = PlanExecutionResult.from_step_runner_dict(
++            result, plan, step_outcomes=outcome.steps
++        )
++        assert adapted.results[0].step_id == "step-1"
++        assert adapted.results[0].status is StepResultStatus.FAILED
++
++    def test_dynamic_string_blocked_step_status_synced(self):
++        """Dynamic lane returning a blocked string sentinel: the public
++        counters report failed+blocked, so the step status and the runner's
++        failed_count must sit on the same side (previously the step stayed
++        COMPLETED while the counters said failed)."""
++        plan = _make_plan(
++            [
++                ("skill-a", "step 1", "do step 1", None),
++                ("skill-b", "step 2", "independent root", None),
++            ]
++        )
++        plan.workflow_pattern = WorkflowPattern.LOOP_UNTIL_DRY
++        plan.dry_threshold = 1
++        runner = StepRunner(plan, track_state=False)
++
++        result = runner.execute_all(lambda step, ctx: "blocked: need evidence")
++
++        assert result["results"]["step-1"] == "blocked: need evidence"
++        assert result["failed"] == 1
++        assert result["blocked"] == 1
++        assert result["final_status"] == "failed"
++        # Step status and runner state on the same side as the counters.
++        assert plan.steps[0].status == StepStatus.FAILED
++        assert plan.steps[1].status == StepStatus.PENDING
++        assert runner.failed_count == 1
++        assert [s.step_id for s in runner.pending_steps()] == ["step-2"]
++        assert not runner.is_complete
++        outcome = runner.last_plan_outcome
++        assert outcome is not None
++        assert outcome.steps[0].status is StepOutcomeStatus.BLOCKED
++        assert outcome.blocked == 1 and outcome.failed == 1

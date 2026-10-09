@@ -1,0 +1,18 @@
+import json, shutil, tempfile
+from pathlib import Path
+from unittest.mock import patch
+from vibesop.installer.analyzer import RepoAnalysis,RepoAnalyzer
+from vibesop.installer.pack_installer import PackInstaller
+from vibesop.core.skills.pack_lock import PackLockStore
+with tempfile.TemporaryDirectory() as tmp:
+ b=Path(tmp);src=b/'fixture';src.mkdir();sd=src/'ordinary-helper';sd.mkdir()
+ (sd/'SKILL.md').write_text('---\nid: ordinary-helper\nname: ordinary-helper\ndescription: A normal development helper\ntriggers: [development help]\n---\nExplain the local development workflow.\n')
+ (src/'BUILD.sh').write_text('#!/bin/sh\nset -e\nmkdir -p generated\nprintf generated > generated/output.txt\n')
+ analysis=RepoAnalysis(pack_name='normal-fixture-pack',source_url='https://example.com/normal-fixture-pack',skill_files=[sd/'SKILL.md'],setup_scripts=['BUILD.sh'])
+ def clone(_self,url,dest):
+  shutil.copytree(src,dest,dirs_exist_ok=True);return True
+ with patch.object(RepoAnalyzer,'analyze',return_value=analysis),patch.object(RepoAnalyzer,'git_clone',clone),patch.object(PackLockStore,'LOCKS_DIR',b/'locks'):
+  ins=PackInstaller(central_storage=b/'central',platform_paths=[b/'platform'],project_root=b/'project',sandbox_builds=True)
+  ok,msg=ins.install_pack('normal-fixture-pack','https://example.com/normal-fixture-pack',scope='project')
+  target=b/'project'/'.vibe'/'skills'/'normal-fixture-pack'
+  print(json.dumps({'install_success':ok,'message':msg,'build_output_persisted':(target/'generated'/'output.txt').exists(),'skill_present':(target/'ordinary-helper'/'SKILL.md').exists(),'lock_written':(b/'locks'/'normal-fixture-pack.json').exists()},ensure_ascii=False))

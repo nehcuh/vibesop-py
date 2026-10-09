@@ -1,0 +1,67 @@
+# Correctness / operations cross-review
+
+2026-10-09, baseline 49901afe + current dirty workspace. Parent narrowed this phase to ordinary functionality only. No attack probes, credential handling, source edits, real external API calls, or real network clone. Independent reproduction and comparison, rather than reusing earlier report assertions as proof.
+
+## Pack build: full installer chain, real Docker
+
+Probe: `/tmp/vibesop-pack-functional-repro.py` uses an ordinary legitimate skill plus `BUILD.sh` with `set -e; mkdir -p generated; printf generated > generated/output.txt`. Only RepoAnalyzer.analyze/git_clone are stubbed to a local fixture; real planner, checksum, pre-auditor, post auditor, Docker runtime, build executor, message formatter, project-scoped install, and pack-lock writer run. PackLockStore location, central storage and project root are temporary. No platform symlink/home changes. Docker uses existing ubuntu:22.04 on native linux/aarch64.
+
+Actual output:
+
+```json
+{"install_success": true,
+ "message": "Installed normal-fixture-pack ...; Skills found: 1; Pre-audit (2 files): 2 file(s) scanned, no critical/high threats; Audit: ordinary-helper: PASS; Build: BUILD.sh blocked/failed in sandbox: mkdir: cannot create directory 'generated': Read-only file system",
+ "build_output_persisted": false,
+ "skill_present": true,
+ "lock_written": true}
+```
+
+PS-05 confirmed. A valid write-producing build cannot finish because `/work` is read-only (`pack_installer.py:469`), and required build failure is represented as an informational string (`:495`) rather than install failure. `install_pack` continues to lock/publish a pre-build snapshot and returns True (`:220-270`). This is not a claim that any pre-existing markdown skill is unusable: a pack with ready-to-use SKILL.md can remain partially usable. The violated contract is that discovered build scripts run successfully and generated outputs become available, with truthful completion status. Severity P2 unless a release/deployment depends on required generated output, when it becomes a concrete release blocker.
+
+Recommended repair: writable isolated work copy, keep network/resource controls, validate generated outputs, copy allowed build outputs back atomically, and return typed build outcome (not a string-only status) so install can distinguish optional skipped builds, required failure, and complete success. Add clean Docker functional contract test of a legitimate generator, both happy path and shell nonzero, asserting installed artifact content and installer status.
+
+## RR-03 independent confirmation: fail_fast stops a successful dependency graph
+
+Probe `/tmp/vibesop-functional-cross-repro.py` creates two independent steps mapping/architecture and a dependent review step. All executors return OK. Same plan shape with only flag changed:
+
+| fail_fast | Calls | completed / failed / skipped | is_complete |
+|---|---|---|---|
+| False | mapping, architecture, review | 3 / 0 / 0 | True |
+| True | mapping, architecture | 2 / 0 / 0 | False |
+
+`StepRunner.execute_all` documents "If True, abort on first failure" (`step_runner.py:304`), but at `:565` breaks after a parallel batch unconditionally when fail_fast=True. Confirmed P1 correctness. High confidence; no model/protocol interpretation involved. User impact: synthesis, verification, packaging or any dependent final step can be silently omitted even with no earlier failures. Summary says failed=0 while pending work remains. Do not exaggerate into a public CLI command defect: StepRunner is a documented library execution bridge, publicly created via AgentRouter.create_runner (`agent/__init__.py:419-446`), while plain route/guide paths do not invoke this branch.
+
+## RR-04 independent confirmation: dynamic failure has contradictory caller state
+
+Same probe uses one LOOP_UNTIL_DRY step with executor raising ordinary ValueError. No LLM configured; documented degraded dynamic execution still correctly invokes the executor and detects its error.
+
+```json
+{"returned_completed":0,"returned_failed":0,"runner_failed_count":0,
+ "runner_is_complete":false,"plan_status":"failed","step_status":"failed",
+ "results":{"mapping":{"error":"ordinary fixture failure"}}}
+```
+
+`step_runner.py:384-394` hardcodes failed/skipped to zero and does not sync engine-updated statuses into `_states`. The engine correctly determines failure; only bridge observability/summary is wrong. Confirmed P1 because callers branching on failed_count or return summary can fail to notify/retry/escalate, and a monitor waits for completion forever. It does not prove the error is totally erased: the nested results and plan statuses expose it. Fix by normalize_dynamic_result and syncing states/callbacks, deliver final_status consistently. Add same exception/sentinel outcome contracts across serial, parallel, dynamic and squad.
+
+## RR-05 independent confirmation: same blocked result becomes success in squad
+
+Probe supplies the exact same verifier return `{status: blocked, reason: ordinary missing test evidence}` in the final review step, once through ordinary sequential plan and once a RED_TEAM plan with agent_squad_id/assigned_role. `is_acceptance_failure` returns True for the raw dict in both cases.
+
+| plan entry | completed / failed | final review step | dependency outputs in reviewer context |
+|---|---|---|---|
+| ordinary StepRunner | 2 / 1 | failed | present |
+| squad StepRunner | 3 / 0 | completed | absent |
+
+The squad branch at `step_runner.py:325-367` treats every non-Exception as completed; static branch checks the raw predicate. The squad helper at `:595-620` groups roles alphabetically and injects role prompts but not the dependency outputs/review verdict/handoff contract. This directly refutes "only a fail_fast design decision": fail_fast was False in both, no exceptions, the actual blocked acceptance result changed interpretation. Confirmed P1 result-contract bug. User impact: review says missing evidence while progress UI/state machine says all 3 complete. A consumer checking summary rather than parsing every free-form result can proceed on a failed acceptance. Do not claim an actual deployment happened or unsafe action executed: the probes use only pure fixture executors.
+
+The broader requirement that this branch fully implement WorkflowEngine collaboration is an architectural contract concern; the blocked→completed inconsistency alone is independently sufficient and actionable. Fix shared raw-result normalization before counting/marking states; preserve ability to collect all role results without reclassifying blocked as success. Then align context/handoff/role ordering through one orchestration engine adapter.
+
+## Priorities and inference boundary
+
+The repeatable pattern is distinct execution branches interpreting output differently: duplicated status logic leads to contradictory records. One common typed StepOutcome (success/failed/blocked/skipped), one terminal aggregation and explicit build outcome should come before adding more patterns or lanes. Repair RR-03/04/05 as a single-contract family with atomic tests for each ingress. PS-05 can be a separate installer batch.
+
+Existing test results are recorded by parent/other lane; independent selected suite is running in this lane and will be appended when complete. The two fixture scripts test real Python execution and actual Docker build, not scanner pattern counts. No actual provider/platform-native consumer was executed, so native consumer compatibility remains unverified here.
+
+## Independent selected suite outcome
+
+`uv run --frozen pytest tests/installer/test_pack_installer.py tests/adapters/test_opencode.py tests/installer/test_skill_installer.py tests/builder/test_overlay.py tests/agent/test_step_runner.py -q --no-header` → **94 passed in 4.00s**. Green existing assertions coexist with the deterministic ordinary-function regressions above; these state transitions are missing from current coverage.

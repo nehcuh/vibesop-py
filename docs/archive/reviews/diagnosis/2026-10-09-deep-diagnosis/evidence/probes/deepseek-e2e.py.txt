@@ -1,0 +1,10 @@
+import os, subprocess, sys, json
+from pathlib import Path
+key=os.environ.get("DEEPSEEK_API_KEY", "")
+if not key: print("missing-key"); sys.exit(2)
+p=subprocess.run([sys.executable,"scripts/e2e_llm_routing.py","--project-root","/repo"],capture_output=True,text=True,timeout=220)
+text=p.stdout+p.stderr
+text=text.replace(key,"[REDACTED]")
+print(text)
+print("SCRIPT_EXIT",p.returncode)
+sys.exit(p.returncode)

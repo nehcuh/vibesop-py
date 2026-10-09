@@ -1,0 +1,400 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 44db7938..e2e30d4e 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Changed
+ 
++- **Span readers accept persisted JSON-string metadata as well as in-memory dicts**.
++  Recall and dashboard skill filtering share one decoder; the writer format is unchanged.
++
+ - **`RoutingConfig` enforces `ai_triage_short_query_bypass_chars >= keyword_match_max_chars`**
+   (model validator). Both thresholds gate the same pre-enrichment character
+   count with `<=` semantics; a bypass below the keyword threshold reopened the
+@@ -22,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
++- **Recall preserves skill identity from real disk spans**, including serialized output
++  payloads, so accepted replays can return the skill and record feedback instead of
++  displaying unknown. Malformed or non-object metadata is ignored safely.
++
+ - **Triage cost log validates `selected_confidence` like the match path**:
+   the log previously admitted JSON booleans (`true` → 1.0, since `bool` is an
+   `int` subclass) and out-of-range values (42, -3), while the match path
+diff --git a/src/vibesop/core/observability/recall.py b/src/vibesop/core/observability/recall.py
+index 729b8fd5..510fb7be 100644
+--- a/src/vibesop/core/observability/recall.py
++++ b/src/vibesop/core/observability/recall.py
+@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
+ from vibesop.core.observability._span_fields import span_timestamp
+ from vibesop.core.observability.clustering import _cosine
+ from vibesop.core.observability.embedding import EmbeddingCache, get_embedding_cache
++from vibesop.core.observability.span_utils import span_skill_id
+ 
+ if TYPE_CHECKING:
+     from vibesop.core.instinct.learner import InstinctLearner
+@@ -382,33 +383,35 @@ def _extract_skill_id(span: dict) -> str | None:
+     - ``metadata.skill_id`` (current main.py:786 pattern)
+     - ``output_data.skill_id`` (route decision result)
+ 
++    Both ``metadata`` and ``output_data`` may be dicts (in-memory
++    ``Span.to_dict()`` records) or JSON-encoded strings — SpanWriter
++    serialises them on disk — and both shapes are tolerated here
++    (D12/B7; shared decode in ``span_utils``).
++
+     Returns None if no skill_id is found. The ``fallback-llm`` sentinel
+     is NOT a skill (gate40 项4 — a fallback is a routing miss whose
+     outcomes are discovery-queue signals), so it is excluded here:
+     pre-gate40 producers wrote it into span metadata (活洞群 B), and the
+     metadata branch must never surface it as a skill in recall / W3
+-    replay. (Today disk spans carry metadata as a JSON-encoded string —
+-    SpanWriter serialises it — so the metadata branch is inert for them;
+-    the guard is for the top-level/output_data branches and any future
+-    dict-metadata activation.)
++    replay.
+     """
+-    candidate: str | None = None
+-    top = span.get("skill_id")
+-    if isinstance(top, str) and top:
+-        candidate = top
+-    if candidate is None:
+-        metadata = span.get("metadata")
+-        if isinstance(metadata, dict):
+-            sk = metadata.get("skill_id")
+-            if isinstance(sk, str) and sk:
+-                candidate = sk
++    candidate = span_skill_id(span)
+     if candidate is None:
+         output = span.get("output_data")
++        if isinstance(output, str):
++            try:
++                output = json.loads(output)
++            except (TypeError, ValueError):
++                output = None
+         if isinstance(output, dict):
+             sk = output.get("skill_id")
+             if isinstance(sk, str) and sk:
+                 candidate = sk
+-    return candidate if candidate != "fallback-llm" else None
++    # Malformed metadata must not hide a valid top-level/output skill_id,
++    # but a sentinel anywhere is still not a skill.
++    if candidate == "fallback-llm":
++        return None
++    return candidate
+ 
+ 
+ def _extract_query(span: dict) -> str | None:
+diff --git a/src/vibesop/dashboard/server.py b/src/vibesop/dashboard/server.py
+index 60ca4b4b..714d58cf 100644
+--- a/src/vibesop/dashboard/server.py
++++ b/src/vibesop/dashboard/server.py
+@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
+ 
+ from vibesop.core.observability.dev_detect import is_dev_environment
+ from vibesop.core.observability.reflection import Reflection, ReflectionStore
++from vibesop.core.observability.span_utils import span_skill_id
+ from vibesop.dashboard._discoveries import build_discoveries_payload
+ from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
+ 
+@@ -350,7 +351,9 @@ def create_app() -> FastAPI:
+         if span_kind:
+             records = [r for r in records if r.get("span_kind") == span_kind]
+         if skill_id:
+-            records = [r for r in records if (r.get("metadata") or {}).get("skill_id") == skill_id]
++            # metadata may be a JSON string on disk (SpanWriter serialises
++            # it) — span_skill_id tolerates both shapes (D12/B7).
++            records = [r for r in records if span_skill_id(r) == skill_id]
+ 
+         records.reverse()
+         return JSONResponse(records[:limit])
+diff --git a/tests/core/observability/test_recall.py b/tests/core/observability/test_recall.py
+index 1cb331f4..150d9f8d 100644
+--- a/tests/core/observability/test_recall.py
++++ b/tests/core/observability/test_recall.py
+@@ -14,6 +14,7 @@ Contract:
+ from __future__ import annotations
+ 
+ import hashlib
++import json
+ from datetime import UTC, datetime, timedelta
+ from pathlib import Path
+ from unittest.mock import MagicMock, patch
+@@ -643,3 +644,215 @@ class TestW3RealInstinctLearnerIntegration:
+         assert len(results) == 1
+         assert results[0].is_gold is True
+         assert results[0].gold_success_count >= 1
++
++
++class TestSpanUtilsSharedDecode:
++    """B7/D12: shared span_utils helpers — string-or-dict tolerance."""
++
++    def test_decode_span_metadata_dict_passthrough(self) -> None:
++        from vibesop.core.observability.span_utils import decode_span_metadata
++
++        assert decode_span_metadata({"metadata": {"skill_id": "a"}}) == {"skill_id": "a"}
++
++    def test_decode_span_metadata_json_string(self) -> None:
++        from vibesop.core.observability.span_utils import decode_span_metadata
++
++        span = {"metadata": json.dumps({"skill_id": "disk_skill", "has_match": True})}
++        assert decode_span_metadata(span) == {"skill_id": "disk_skill", "has_match": True}
++
++    def test_decode_span_metadata_malformed_or_missing(self) -> None:
++        from vibesop.core.observability.span_utils import decode_span_metadata
++
++        assert decode_span_metadata({"metadata": "{not json"}) == {}
++        assert decode_span_metadata({"metadata": json.dumps(["not", "a", "dict"])}) == {}
++        assert decode_span_metadata({}) == {}
++        assert decode_span_metadata({"metadata": 42}) == {}
++
++    def test_span_skill_id_prefers_top_level(self) -> None:
++        from vibesop.core.observability.span_utils import span_skill_id
++
++        span = {"skill_id": "top", "metadata": json.dumps({"skill_id": "meta"})}
++        assert span_skill_id(span) == "top"
++
++    def test_span_skill_id_from_json_string_metadata(self) -> None:
++        from vibesop.core.observability.span_utils import span_skill_id
++
++        assert span_skill_id({"metadata": json.dumps({"skill_id": "meta"})}) == "meta"
++
++    def test_span_skill_id_none_when_absent_or_empty(self) -> None:
++        from vibesop.core.observability.span_utils import span_skill_id
++
++        assert span_skill_id({}) is None
++        assert span_skill_id({"metadata": json.dumps({"skill_id": ""})}) is None
++        assert span_skill_id({"metadata": json.dumps({"skill_id": 42})}) is None
++
++
++class TestD12StringMetadataSkillId:
++    """D12 (B7): real SpanWriter serialises metadata to a JSON string;
++    recall must still surface ``metadata.skill_id`` (reader tolerance only —
++    the on-disk producer format is unchanged)."""
++
++    @staticmethod
++    def _span_with_metadata(metadata: object) -> dict:
++        return {
++            "task_id": "t1",
++            "input_data": {"query": "hello"},
++            "name": "route:query",
++            "timestamp": datetime.now(UTC).isoformat(),
++            "metadata": metadata,
++            "project_id": "test",
++        }
++
++    def test_skill_id_from_json_string_metadata(self, tmp_path: Path) -> None:
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        spans = [self._span_with_metadata(json.dumps({"skill_id": "disk_skill"}))]
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [r] = recall_similar("hello", spans, cache=cache)
++        assert r.skill_id == "disk_skill", (
++            "recall must read metadata.skill_id from a JSON-string metadata "
++            "payload (the real SpanWriter disk shape)"
++        )
++
++    def test_fallback_sentinel_in_json_string_metadata_excluded(self, tmp_path: Path) -> None:
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        spans = [self._span_with_metadata(json.dumps({"skill_id": "fallback-llm"}))]
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [r] = recall_similar("hello", spans, cache=cache)
++        assert r.skill_id is None, "fallback-llm sentinel must never surface as a skill"
++
++    def test_malformed_metadata_string_tolerated(self, tmp_path: Path) -> None:
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        spans = [self._span_with_metadata("{not json")]
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [r] = recall_similar("hello", spans, cache=cache)
++        assert r.skill_id is None
++
++    def test_skill_id_from_json_string_output_data(self, tmp_path: Path) -> None:
++        """output_data is serialised to a JSON string on disk too."""
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        span = self._span_with_metadata(None)
++        span.pop("metadata")
++        span["output_data"] = json.dumps({"skill_id": "output_skill"})
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [r] = recall_similar("hello", [span], cache=cache)
++        assert r.skill_id == "output_skill"
++
++    def test_dict_metadata_still_supported(self, tmp_path: Path) -> None:
++        """Historical in-memory shape (Span.to_dict records) must keep working."""
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        spans = [self._span_with_metadata({"skill_id": "dict_skill"})]
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [r] = recall_similar("hello", spans, cache=cache)
++        assert r.skill_id == "dict_skill"
++
++
++class TestD12RealSpanWriterConsumerChain:
++    """B7/D12 regression: full producer → reader → consumer chain with the
++    REAL components — SpanWriter, SpanWriter.query_recent, recall_similar /
++    should_replay, and the CLI replay acceptance consumer
++    (``_maybe_prompt_replay``, cli/main.py). Locks the real on-disk span
++    format (metadata as a JSON string) as the fixture input: no dict-literal
++    span stands in for the producer.
++
++    Pre-fix behaviour (D12): RecallResult.skill_id was None because
++    ``_extract_skill_id`` only accepted dict metadata, so the acceptance
++    consumer displayed "(unknown)", returned None and recorded no outcome.
++    """
++
++    def test_writer_reader_consumer_chain(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        import typer
++        from rich.console import Console
++
++        from vibesop.cli.main import _maybe_prompt_replay
++        from vibesop.core.instinct.learner import InstinctLearner
++        from vibesop.core.observability.models import Span
++        from vibesop.core.observability.recall import recall_similar
++        from vibesop.core.observability.replay import should_replay
++        from vibesop.core.observability.span_writer import SpanWriter
++        from vibesop.core.observability.tracer import ObservabilityTracer
++
++        query = "rotate cmspark api credentials safely"
++        skill_id = "cmspark-rotate-keys"
++
++        # Redirect all default-path file IO (spans + instincts) into tmp so
++        # the consumer's own default-path SpanWriter()/InstinctLearner() hit
++        # the files this test wrote — no class substitution.
++        monkeypatch.chdir(tmp_path)
++        monkeypatch.setenv("VIBESOP_OBSERVABILITY_MODE", "prod")
++
++        # 1. Producer: real SpanWriter, metadata.skill_id, 3 distinct traces
++        #    (3 runs = the W3 gold size unit).
++        writer = SpanWriter()
++        for i in range(3):
++            span = Span(
++                id=Span.new_id(),
++                trace_id=f"T-d12-{i}",
++                name="route:query",
++                span_kind="task",
++                task_id="t_d12_chain",
++                input_data={"query": query},
++                metadata={"skill_id": skill_id, "has_match": True},
++                project_id="test",
++            )
++            span.set_ok()
++            writer.write_span(span)
++
++        # 2. Reader: query_recent returns the real disk shape — metadata is
++        #    a JSON-encoded string. Asserted so the test fails loudly if the
++        #    producer format ever changes and this fixture needs re-anchoring.
++        spans = writer.query_recent(limit=500)
++        assert len(spans) == 3
++        assert all(isinstance(s.get("metadata"), str) for s in spans), (
++            "SpanWriter must serialise metadata to a JSON string; if this "
++            "fails the on-disk contract changed"
++        )
++
++        # Real learner with one recorded success (gold population).
++        learner = InstinctLearner()
++        learner.learn(pattern=query, action=f"suggest {skill_id} skill")
++        learner.record_outcome_for_query(query, success=True)
++
++        # Deterministic embeddings isolate the similarity dependency (same
++        # method as the D12 evidence probe); writer/reader/consumer under
++        # test are all real.
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        monkeypatch.setattr("vibesop.core.observability.recall.get_embedding_cache", lambda: cache)
++
++        # 3. Recall: RecallResult.skill_id must come from the JSON-string
++        #    metadata (this is exactly what was None pre-fix).
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            [result] = recall_similar(query, spans, learner=learner, threshold=0.30)
++        assert result.skill_id == skill_id, (
++            "D12: real disk span carries metadata as a JSON string; recall "
++            "must still surface metadata.skill_id"
++        )
++
++        # Replay decision must see a gold match carrying the skill.
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            decision = should_replay(query=query, spans=spans, learner=learner)
++        assert decision.should_prompt is True
++        assert decision.reason == "gold_match"
++        assert decision.top_match is not None
++        assert decision.top_match.skill_id == skill_id
++
++        # 4. Consumer: user accepts (Y). Pre-fix this returned None and
++        #    recorded no outcome because top.skill_id was None.
++        monkeypatch.setattr("vibesop.cli.main._is_interactive_stdio", lambda: True)
++        monkeypatch.setattr(typer, "confirm", lambda *args, **kwargs: True)
++        tracer = ObservabilityTracer(storage_path=tmp_path / "replay_spans.jsonl", enabled=False)
++
++        returned = _maybe_prompt_replay(tracer, query, Console())
++
++        assert returned == skill_id, (
++            "acceptance consumer must return the recalled skill_id; pre-fix "
++            "it returned None (displayed '(unknown)', no outcome recorded)"
++        )
++
++        # 5. Outcome recorded for next time: a fresh learner loading from
++        #    disk sees a success for this query.
++        fresh = InstinctLearner()
++        instinct = fresh.get_instinct_for_query(query.lower().strip())
++        assert instinct is not None, "consumer must record an outcome instinct on Y"
++        assert instinct.success_count >= 1
+diff --git a/src/vibesop/core/observability/span_utils.py b/src/vibesop/core/observability/span_utils.py
+new file mode 100644
+index 00000000..bb761062
+--- /dev/null
++++ b/src/vibesop/core/observability/span_utils.py
+@@ -0,0 +1,55 @@
++"""Shared span-record payload helpers (reader-side tolerance).
++
++``SpanWriter`` serialises ``metadata`` (and ``input_data`` / ``output_data``)
++to JSON-encoded strings on disk (span_writer.py:116-133), while in-memory
++``Span.to_dict()`` records carry dicts. Every disk reader must tolerate both
++shapes. Several modules already re-implement this decode locally
++(``skill_health.py:78-83``, ``skill_consumption.py:180``,
++``route_observe.py:217``, ``aggregator.py:368-378``); this module is the
++shared copy for consumers going forward (D12/B7: recall + dashboard).
++"""
++
++from __future__ import annotations
++
++import json
++from typing import Any
++
++__all__ = ["decode_span_metadata", "span_skill_id"]
++
++
++def decode_span_metadata(span: dict[str, Any]) -> dict[str, Any]:
++    """Return the span's ``metadata`` as a dict.
++
++    Tolerates both on-disk shapes:
++    - ``dict`` (in-memory ``Span.to_dict()`` records)
++    - JSON-encoded ``str`` (``SpanWriter`` serialisation)
++
++    Malformed JSON, non-dict payloads, or missing metadata → ``{}``
++    (never raises — mirrors the string-or-dict tolerance of
++    ``skill_health._route_hit_skill_id_raw``).
++    """
++    raw = span.get("metadata")
++    if isinstance(raw, dict):
++        return raw
++    if isinstance(raw, str):
++        try:
++            parsed = json.loads(raw)
++        except (TypeError, ValueError):
++            return {}
++        if isinstance(parsed, dict):
++            return parsed
++    return {}
++
++
++def span_skill_id(span: dict[str, Any]) -> str | None:
++    """Skill id recorded on the span, or None.
++
++    Checks the top-level ``skill_id`` field first (newer schema), then
++    ``metadata.skill_id`` — tolerating the writer's JSON-string metadata
++    shape via :func:`decode_span_metadata`. Empty/non-string values → None.
++    """
++    top = span.get("skill_id")
++    if isinstance(top, str) and top:
++        return top
++    sk = decode_span_metadata(span).get("skill_id")
++    return sk if isinstance(sk, str) and sk else None

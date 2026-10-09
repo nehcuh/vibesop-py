@@ -1,0 +1,11 @@
+import os,json
+from pathlib import Path
+from vibesop.llm.factory import create_provider
+key=os.environ.get("DEEPSEEK_API_KEY", "")
+p=create_provider("deepseek")
+try:
+ r=p.call(Path("/evidence/grok-review-prompt.txt").read_text(),max_tokens=2600,temperature=0)
+ print(json.dumps({"model":r.model,"input_tokens":r.input_tokens,"output_tokens":r.output_tokens},ensure_ascii=False))
+ print(r.content.replace(key,"[REDACTED]"))
+except Exception as e:
+ print(type(e).__name__,str(e).replace(key,"[REDACTED]")); raise SystemExit(1)

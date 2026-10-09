@@ -1,0 +1,4 @@
+render-symlink-writes-source True True True
+opencode-secret-materialized True True 0o644
+container-real-build BUILD.sh sandbox error: [Errno 2] No such file or directory: 'docker'
+container-artifact-exists False
