@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from vibesop.adapters.models import Manifest, ManifestMetadata
+from vibesop.adapters.models import Manifest, ManifestMetadata, RoutingPolicy
 from vibesop.builder import (
     ManifestBuilder,
     OverlayMerger,
@@ -323,3 +323,18 @@ skills:
         builder = ManifestBuilder(project_root=Path())
         assert builder._extract_trigger_from_description("") == ""
         assert builder._extract_trigger_from_description("No trigger here.") == ""
+
+
+class TestApplyOverlayRoundtrip:
+    """ManifestBuilder.apply_overlay must carry canonical policy values."""
+
+    def test_apply_overlay_keeps_confidence_threshold(self, tmp_path: Path) -> None:
+        overlay_path = tmp_path / "overlay.yaml"
+        create_overlay(overlay_path, routing={"confidence_threshold": 0.9})
+        base = QuickBuilder.minimal(platform="claude-code")
+        base.policies.routing = RoutingPolicy(confidence_threshold=0.6, max_candidates=7)
+
+        merged = ManifestBuilder(project_root=tmp_path).apply_overlay(base, overlay_path)
+
+        assert merged.policies.routing.confidence_threshold == 0.9
+        assert merged.policies.routing.max_candidates == 7
