@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **W1 diagnosis optimization**: Retain Windows CI gates while collecting per-case JUnit/skip evidence and deployed Git Bash hook byte diagnostics; qualify platform copy fallback without claiming symlink or Windows ACL proof.
+
 - **B5 diagnosis optimization**: Coroutine function executors are now awaited in parallel batches; single-step batches retain their existing synchronous contract, and async callable objects/custom awaitables remain outside this scope.
 
 - **B6 diagnosis optimization**: Instinct writes merge under thread and process locks using loaded baselines; persisted row shape remains compatible. Evidence is scoped to pattern and action identity.
