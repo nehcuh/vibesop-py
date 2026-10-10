@@ -43,6 +43,10 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 # citations; stale multiset unchanged.
 # Re-observed 2026-09-21 after merging the local session memory: +3 stale
 # citations from memory/session.md; ok citations unchanged.
+# Re-observed 2026-10-10 on clean cc3079a9: 1185 refs, 723 ok, 0 dangling,
+# stale multiset unchanged. The 7dedc2b8 bump (+39 refs / +39 ok from the
+# diagnosis-evidence docs) had landed without a provenance entry; this entry
+# re-measures and confirms those constants.
 FROZEN_REF_TOTAL = 1185
 FROZEN_OK = 723
 FROZEN_STALE_OCCURRENCES = 462

@@ -442,15 +442,24 @@ class PlatformAdapter(ABC):
         # Write to an exclusively-created temporary file (R2/B1): a fixed
         # ``<target>.tmp`` name could be pre-planted as a symlink, and
         # ``write_text`` would then follow it and overwrite the link target
-        # before ``replace`` moved the link over the real file. mkstemp
-        # gives O_EXCL semantics on a random name inside the already
-        # validated parent directory, so the temp can never be a symlink.
-        import tempfile
+        # before ``replace`` moved the link over the real file. O_CREAT|O_EXCL
+        # on a random name inside the already validated parent directory gives
+        # the same never-a-symlink guarantee as mkstemp, while mode 0o666
+        # keeps umask-based permissions (mkstemp forces 0600, which silently
+        # tightened rendered configs on POSIX).
+        import secrets
 
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=f"{safe_path.name}.", suffix=".tmp", dir=str(safe_path.parent)
-        )
-        tmp_path = Path(tmp_name)
+        fd: int | None = None
+        tmp_path = safe_path.parent
+        for _ in range(5):
+            tmp_path = safe_path.parent / f"{safe_path.name}.{secrets.token_hex(8)}.tmp"
+            try:
+                fd = os.open(tmp_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+                break
+            except FileExistsError:
+                continue
+        if fd is None:
+            raise OSError(f"could not exclusively create a temp file for {safe_path}")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
                 tmp_file.write(content)
@@ -503,6 +512,43 @@ class PlatformAdapter(ABC):
                 path=str(path),
                 base_dir=str(anchor),
             )
+
+        # The leaf exemption exists for legal per-skill SYMLINKS into a
+        # central install. A directory junction is never one of those (the
+        # installer renders real copies on Windows, never junctions), and
+        # junctions need no symlink privilege to create — refuse a junction
+        # leaf even under the exemption, or every junction-based chain
+        # defense upstream is void the moment the junction IS the leaf.
+        if allow_leaf_symlink and Path(path).is_junction():
+            msg = (
+                f"Unsafe render target: {path} is a directory junction inside "
+                f"trusted output root {anchor} — junctions are not legal "
+                "per-skill links"
+            )
+            raise PathTraversalError(
+                message=msg,
+                path=str(path),
+                base_dir=str(anchor),
+            )
+
+    def _prepare_skill_dir(self, skill_dir: Path) -> None:
+        """Make ``skill_dir`` a real directory, recovering dangling leaf links.
+
+        A dangling per-skill symlink (its target was deleted) makes
+        ``mkdir(exist_ok=True)`` raise ``FileExistsError`` — the link exists
+        but is not a directory. Unlink it first so the render can recreate a
+        real directory. The same applies to a dangling Windows junction
+        (``is_symlink()`` is False for junctions; ``rmdir`` removes only the
+        reparse point, never the target). Live links are left untouched;
+        keeping or replacing them is the render path's decision. Call after
+        ``_assert_safe_render_path``, before any mkdir.
+        """
+        if skill_dir.is_symlink():
+            if not skill_dir.exists():
+                skill_dir.unlink()
+        elif skill_dir.is_junction() and not skill_dir.exists():
+            skill_dir.rmdir()
+        skill_dir.mkdir(parents=True, exist_ok=True)
 
     def render_template_string(
         self,
@@ -789,7 +835,20 @@ class PlatformAdapter(ABC):
 
         Default: use the shared fallback generator. Subclasses (e.g. ClaudeCode)
         override this to use Jinja2 templates instead.
+
+        A pre-existing legal per-skill symlink (typically into a central pack
+        install) is kept and left untouched, mirroring the main render path —
+        writing through it would both mutate the central content and trip the
+        ``write_file_atomic`` leaf-link refusal, aborting the whole render.
         """
+        skill_dir = skill_output_path.parent
+        if skill_dir.is_symlink():
+            if skill_dir.exists():
+                result.add_file(skill_output_path)
+                return
+            # Dangling link: drop it so the write below recreates a real dir.
+            skill_dir.unlink(missing_ok=True)
+
         fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
         self.write_file_atomic(
             skill_output_path, fallback_content, validate_security=False, base_dir=base_dir

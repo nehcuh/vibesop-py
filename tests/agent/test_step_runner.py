@@ -1633,6 +1633,32 @@ class TestStaticLaneOutcomeMatrix:
         assert plan.steps[1].status == StepStatus.PENDING
         assert not runner.is_complete
 
+    def test_matrix_cancel_propagates_from_parallel_lane(self):
+        """L5 regression: in a multi-step dependency-free batch the executor's
+        CancelledError must propagate out of execute_all as CancelledError —
+        not be turned into a TypeError by the results unpack (CancelledError
+        is a BaseException, so gather(return_exceptions=True) returns it as a
+        list item that the isinstance(item, Exception) guard cannot catch)."""
+        import asyncio
+
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", None),
+            ]
+        )
+        runner = StepRunner(plan, track_state=False)
+
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
+            raise asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            runner.execute_all(executor)
+
+        # Same abort semantics as the serial lane: started steps are left
+        # in_progress (no cleanup), so callers treat cancel as a run abort.
+        assert plan.steps[0].status == StepStatus.IN_PROGRESS
+
 
 class TestExecutionProtocolAdapter:
     """B3: StepResult/PlanExecutionResult is the public face over the legacy

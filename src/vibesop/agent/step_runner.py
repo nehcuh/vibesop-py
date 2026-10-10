@@ -462,7 +462,8 @@ class StepRunner:
                   verdict (JSON-transportable producer fact for consumers of
                   the plain dict) — the dynamic lane preserves its legacy dict
                   shape keyed by step identity
-                - dynamic: bool
+                - dynamic: bool (dynamic lane only; the static lane's legacy
+                  dict shape omits it)
                 - pattern: str (squad/dynamic lanes)
         """
 
@@ -626,6 +627,14 @@ class StepRunner:
                 # D06: break only on a REAL failure in this batch (mirrors the
                 # serial branch above). With fail_fast=True an all-success
                 # batch must fall through so downstream dependent steps run.
+                # Cancellation is not a per-step failure: CancelledError is a
+                # BaseException, so return_exceptions=True places it in the
+                # results list where the isinstance(item, Exception) guard
+                # below would miss it and the tuple unpack would turn it into
+                # a TypeError. Propagate it like the serial lane does.
+                for item in batch_results:
+                    if isinstance(item, asyncio.CancelledError):
+                        raise item
                 batch_failed = False
                 should_continue = True
                 for item in batch_results:

@@ -158,6 +158,8 @@ class PackInstaller:
         planner = InstallPlanner(base_target=install_base)
         plan = planner.plan(analysis)
 
+        cloned_here = False
+        target_path: Path | None = None
         try:
             target_path = plan.target_path
 
@@ -193,7 +195,14 @@ class PackInstaller:
             repo_url, _ = parse_github_url(pack_url)
             clone_ok = analyzer.git_clone(repo_url, target_path)
             if not clone_ok:
+                # Remove the directory this run uses: a partial clone that
+                # left SKILL.md behind would make a retry report "Already
+                # installed" without ever building. Reaching here means the
+                # target was created above or verified empty, so this never
+                # deletes user content.
+                _safe_rmtree(target_path)
                 return False, f"Failed to clone {repo_url} to {target_path}"
+            cloned_here = True
 
             # F-02: capture the commit SHA BEFORE removing .git (rev-parse needs
             # the object database), then remove .git and compute a deterministic
@@ -291,6 +300,17 @@ class PackInstaller:
         except PackIntegrityError:
             raise  # F-02: propagate to the CLI (actionable, not a generic install error)
         except Exception as e:
+            # A failed install must not leave this run's cloned tree behind:
+            # a retry would find the SKILL.md files and report "Already
+            # installed" without ever running the required build (the W2R2
+            # hole shape). Only trees cloned by this run are removed — a
+            # pre-existing installation (the already-installed branch above)
+            # is never touched.
+            if cloned_here and target_path is not None:
+                try:
+                    _safe_rmtree(target_path)
+                except OSError:
+                    logger.warning("failed to remove failed install tree %s", target_path)
             return False, f"Failed to install {pack_name}: {e}"
 
     def _audit_skills(
@@ -526,7 +546,7 @@ class PackInstaller:
                 _persist_build_artifacts(target_path, artifacts)
             except PackBuildError:
                 raise
-            except OSError as exc:
+            except (OSError, MemoryError) as exc:
                 raise PackBuildError(f"{script_path.name} sandbox error: {exc}") from exc
         finally:
             try:
@@ -1004,12 +1024,19 @@ def _isolate_pack_tree(target_path: Path) -> Path:
     """Copy ``target_path`` into a fresh temp directory.
 
     Symlinks are copied as symlinks (not followed), so a link that points
-    outside the pack is not turned into a second host mount.
+    outside the pack is not turned into a second host mount. Resource
+    failures (``mkdtemp`` OSError, copy MemoryError) surface as
+    ``PackBuildError`` so the caller's rollback path runs — escaping as a
+    generic error would leave the cloned tree behind and make a retry
+    report "Already installed" without ever building.
     """
-    isolated = Path(tempfile.mkdtemp(prefix="vibesop-pack-build-"))
+    try:
+        isolated = Path(tempfile.mkdtemp(prefix="vibesop-pack-build-"))
+    except OSError as exc:
+        raise PackBuildError(f"failed to create build sandbox: {exc}") from exc
     try:
         shutil.copytree(target_path, isolated, symlinks=True, dirs_exist_ok=True)
-    except OSError as exc:
+    except (OSError, MemoryError) as exc:
         try:
             _safe_rmtree(isolated)
         except OSError:
@@ -1099,12 +1126,26 @@ def _assert_container_command_safe(cmd: list[str], live_tree: Path) -> None:
     _reject_unsafe_build_mount(Path(source), live_tree)
 
 
-def _index_pack_tree(root: Path) -> dict[str, tuple[str, bytes | str]]:
+# Host-side indexing budget for the sandbox build's before/after tree
+# snapshots. The isolated copy is indexed on the host with no container
+# memory cap helping here; a runaway or malicious build could otherwise fill
+# the work mount and exhaust host RAM via ``read_bytes``. Sizes are accounted
+# from ``stat`` before any read, so an oversize file is rejected without
+# being loaded.
+_MAX_INDEX_BYTES = 256 * 1024 * 1024
+
+
+def _index_pack_tree(
+    root: Path, max_bytes: int = _MAX_INDEX_BYTES
+) -> dict[str, tuple[str, bytes | str]]:
     """Index regular files and symlinks without following links.
 
     Values are ``("file", content)`` or ``("symlink", link_text)``.
+    Raises ``PackBuildError`` when the cumulative file size would exceed
+    ``max_bytes`` — fail closed instead of buffering an unbounded tree.
     """
     index: dict[str, tuple[str, bytes | str]] = {}
+    total = 0
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         base = Path(dirpath)
         kept: list[str] = []
@@ -1122,6 +1163,12 @@ def _index_pack_tree(root: Path) -> dict[str, tuple[str, bytes | str]]:
             if path.is_symlink():
                 index[rel] = ("symlink", os.fspath(path.readlink()))
             elif path.is_file():
+                total += path.stat().st_size
+                if total > max_bytes:
+                    raise PackBuildError(
+                        f"pack tree exceeds the sandbox index budget "
+                        f"({max_bytes} bytes, per snapshot) at {rel}"
+                    )
                 index[rel] = ("file", path.read_bytes())
     return index
 

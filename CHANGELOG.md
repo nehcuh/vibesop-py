@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **B2 diagnosis optimization**: Candidate cache schema v5 fingerprints the loader markdown/YAML discovery set and current governance projection. Governance changes are visible on the next lookup; skill content retains its five-second refresh interval.
 
-- **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible.
+- **B3 diagnosis optimization**: StepRunner delegates squad work to the shared workflow engine and adds blocked/final_status/review_status outcome dimensions. The legacy failed count still includes blocked steps; engine run-completed semantics and existing per-step status values remain compatible. **Behavior change (disclosed by adversarial review 2026-10-10, M2)**: a squad member executor exception now propagates out of `execute_all` (the engine re-raises after the terminal event) instead of being collected as a per-member failure — the pre-B3 collect-all contract is removed, and callers that relied on it must treat a raised exception as a run abort.
 
 - **B1 diagnosis optimization**: Generated OpenCode/Cursor LLM config uses api_key_env references rather than ambient secret values. Guarded atomic output uses exclusive temporary files; platform rendering rejects ancestor links before creating skill directories while preserving legal installed skill links.
 
@@ -64,6 +64,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B3 diagnosis optimization**: Continue fail_fast after a wholly successful parallel batch, report real dynamic execution failures, preserve role/isolation/handoff context and expose required-review errors independently of execution success. Mark only failed-dependency descendants skipped; retain resumable pending work. Map internal squad steps back to the original ExecutionStep objects for public executor callbacks.
 
 - **B1 diagnosis optimization**: Validate namespace segments before dependency processing and use one normalized project root for install/verify/uninstall. Prevent platform render and Pi namespace rewrites from modifying central installs through links; ignore pre-planted temporary file links.
+
+- **Adversarial review 2026-10-10 fixes** (five-lane panel + Claude/Grok dual
+  external re-review of `58692f70..cc3079a9`; synthesis COMMENT, 0H/4M/8L):
+  - (M1) The Pi namespace rewrite through a legal per-skill dir symlink now
+    materializes a private copy of the ENTIRE central skill dir — writing
+    only SKILL.md silently dropped pack auxiliary files (references/,
+    scripts/) from the platform tree. The copy is staged next to the target
+    and swapped by rename (POSIX: atomic replace with no unlink window;
+    win32: unlink-then-rename fails closed against re-planted targets), a
+    failed copy leaves the original link intact, and the staged dir is
+    reset to the rendered-dir norm 0755. The branch is test-covered for the
+    first time, including the rollback path.
+  - (M3) Sandbox-build rollback no longer latches "Already installed":
+    `mkdtemp` OSError and tree-indexing MemoryError convert to
+    `PackBuildError` (so the cloned target is cleaned), and any other
+    post-clone failure cleans the tree cloned by this run — a pre-existing
+    install is never touched; a failed clone removes its fresh (partial)
+    target for the same reason.
+  - (M4) Host-side sandbox indexing carries a per-snapshot byte budget
+    (default 256 MiB) accounted from `stat` before any `read_bytes`, so an
+    oversized work mount fails closed as `PackBuildError` instead of
+    exhausting host RAM.
+  - (L1) The no-content fallback keeps a pre-existing legal per-skill
+    symlink instead of aborting the whole render at the write-time leaf-link
+    refusal, matching `_assert_safe_render_path`'s documented keep contract.
+  - (L2) `write_file_atomic` temp creation uses O_EXCL with mode 0o666,
+    preserving umask-derived permissions on POSIX (mkstemp's forced 0600 was
+    an undocumented tightening).
+  - (L3) Dangling per-skill symlinks are unlinked before the adapters'
+    `mkdir(exist_ok=True)` via `_prepare_skill_dir`; the recovery is no
+    longer unreachable dead code behind a FileExistsError.
+  - (L4) The render-boundary chain walk also refuses Windows directory
+    junctions (`is_junction`, 3.12+): junctions redirect the chain yet need
+    no symlink privilege, so `is_symlink()` alone was evadable on win32
+    (verified on Windows: `mklink /J` succeeds, `is_symlink()` is False).
+    A junction AS the leaf is refused even under the legal-leaf exemption
+    (junctions are never legal per-skill links — the installer renders real
+    copies on win32), and `_prepare_skill_dir` recovers a dangling junction
+    with `rmdir` (removes only the reparse point).
+  - (L5) A `CancelledError` raised inside a parallel executor batch (static
+    lane) now propagates out of `execute_all` as-is;
+    `gather(return_exceptions=True)` returns it as a list item that
+    previously fell through the `isinstance(item, Exception)` guard and
+    unpacked into a TypeError.
+  - (L6) The artifact-links baseline provenance comment again matches its
+    frozen constants (1185/723 re-observed on clean cc3079a9).
+  - (L7) `_merge_unloaded_overlap` (same-id create/create race) is pinned:
+    zero-evidence local rows adopt disk counters for a matching action and
+    keep their own action with reset counters for a differing one.
+  - (L8) `execute_all` docstring qualifies `dynamic` as a dynamic-lane-only
+    key; the static lane omits it.
 
 - **Recall preserves skill identity from real disk spans**, including serialized output
   payloads, so accepted replays can return the skill and record feedback instead of

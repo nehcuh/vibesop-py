@@ -525,7 +525,7 @@ class KimiCliAdapter(FileBasedAdapter):
                 dir_name = skill.id.replace("/", "-")
                 skill_dir = skills_dir / dir_name
                 self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
-                skill_dir.mkdir(parents=True, exist_ok=True)
+                self._prepare_skill_dir(skill_dir)
                 self._render_skill_content(
                     skill,
                     skill_dir,

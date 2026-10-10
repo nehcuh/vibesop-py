@@ -1219,6 +1219,232 @@ class TestWindowsSymlinkLoopRecovery:
         assert Path(payload["cwd"]).resolve() == target.resolve()
 
 
+class TestSandboxResourceBounds:
+    """M3/M4: sandbox resource failures must fail closed with rollback.
+
+    A non-PackBuildError escape (mkdtemp OSError, MemoryError while buffering
+    the tree) used to skip ``_safe_rmtree(target_path)``; a retry then found
+    the cloned SKILL.md and reported "Already installed" without building.
+    """
+
+    def test_isolate_mkdtemp_oserror_is_packbuilderror(self, tmp_path, monkeypatch):
+        from vibesop.installer import pack_installer as pi
+
+        target = tmp_path / "pack"
+        target.mkdir()
+        (target / "SKILL.md").write_text("---\nname: p\n---\n# p\n", encoding="utf-8")
+
+        def _boom(*args, **kwargs):
+            raise OSError("simulated TMPDIR failure")
+
+        monkeypatch.setattr(pi.tempfile, "mkdtemp", _boom)
+        with pytest.raises(pi.PackBuildError, match="failed to create build sandbox"):
+            pi._isolate_pack_tree(target)
+
+    def test_isolate_copytree_memoryerror_converted_and_cleans(self, tmp_path, monkeypatch):
+        from vibesop.installer import pack_installer as pi
+
+        target = tmp_path / "pack"
+        target.mkdir()
+        (target / "SKILL.md").write_text("---\nname: p\n---\n# p\n", encoding="utf-8")
+
+        created: list[str] = []
+        real_mkdtemp = tempfile.mkdtemp
+
+        def _mkdtemp(*args, **kwargs):
+            path = real_mkdtemp(*args, **kwargs)
+            created.append(path)
+            return path
+
+        def _oom(*args, **kwargs):
+            raise MemoryError()
+
+        monkeypatch.setattr(pi.tempfile, "mkdtemp", _mkdtemp)
+        monkeypatch.setattr(pi.shutil, "copytree", _oom)
+        with pytest.raises(pi.PackBuildError, match="failed to isolate pack"):
+            pi._isolate_pack_tree(target)
+        assert created, "real mkdtemp should have run"
+        assert not Path(created[0]).exists(), "partial sandbox copy must be removed"
+
+    def test_index_budget_rejects_before_reading_oversize_file(self, tmp_path, monkeypatch):
+        from vibesop.installer import pack_installer as pi
+
+        (tmp_path / "big.bin").write_bytes(b"x" * 64)
+
+        def _no_read(self, *args, **kwargs):
+            raise AssertionError("read_bytes must not run once the budget is exceeded")
+
+        monkeypatch.setattr(Path, "read_bytes", _no_read)
+        with pytest.raises(pi.PackBuildError, match="sandbox index budget"):
+            pi._index_pack_tree(tmp_path, max_bytes=8)
+
+    def test_index_within_budget_indexes_normally(self, tmp_path):
+        from vibesop.installer import pack_installer as pi
+
+        (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
+        (tmp_path / "b.txt").write_text("world", encoding="utf-8")
+        index = pi._index_pack_tree(tmp_path, max_bytes=1024)
+        assert index["a.txt"] == ("file", b"hello")
+        assert index["b.txt"] == ("file", b"world")
+
+    def test_index_budget_boundary_allows_exact_fit(self, tmp_path):
+        from vibesop.installer import pack_installer as pi
+
+        (tmp_path / "a.bin").write_bytes(b"x" * 4)
+        (tmp_path / "b.bin").write_bytes(b"y" * 4)
+        index = pi._index_pack_tree(tmp_path, max_bytes=8)
+        assert len(index) == 2
+        with pytest.raises(pi.PackBuildError, match="sandbox index budget"):
+            pi._index_pack_tree(tmp_path, max_bytes=7)
+
+    def test_sandbox_index_memoryerror_is_packbuilderror_and_sandbox_removed(
+        self, tmp_path, monkeypatch
+    ):
+        from vibesop.installer import pack_installer as pi
+
+        target = tmp_path / "pack"
+        target.mkdir()
+        script = target / "BUILD.sh"
+        script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8", newline="\n")
+
+        def _oom(root, max_bytes=pi._MAX_INDEX_BYTES):
+            raise MemoryError()
+
+        monkeypatch.setattr(pi, "_index_pack_tree", _oom)
+        temp_root = Path(tempfile.gettempdir())
+        before = set(temp_root.glob("vibesop-pack-build-*"))
+        with pytest.raises(pi.PackBuildError, match="sandbox error"):
+            pi.PackInstaller._run_build_in_container(target, script, "docker")
+        after = set(temp_root.glob("vibesop-pack-build-*"))
+        assert after == before, "isolated sandbox copy must be removed on failure"
+
+    def test_generic_post_clone_failure_cleans_tree_then_retry_succeeds(
+        self, tmp_path, monkeypatch
+    ):
+        """Public M3 regression through real ``install_pack`` seams: an
+        unforeseen post-clone error (not PackBuildError) must still remove the
+        cloned tree — otherwise the retry reports "Already installed" without
+        ever running the build."""
+        import vibesop.core.skills.pack_lock as pack_lock_mod
+        from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+
+        def _analyze(analyzer, url, pack_name=None):
+            return RepoAnalysis(
+                pack_name=pack_name or "generic-fail-pack",
+                source_url=url,
+                skill_files=[Path("SKILL.md")],
+                setup_scripts=[],
+            )
+
+        def _clone(analyzer, url, dest):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "SKILL.md").write_text(
+                "---\nname: generic-fail-pack\ndescription: x\n---\n# x\n",
+                encoding="utf-8",
+            )
+            return True
+
+        monkeypatch.setattr(RepoAnalyzer, "analyze", _analyze)
+        monkeypatch.setattr(RepoAnalyzer, "git_clone", _clone)
+        real_store_cls = pack_lock_mod.PackLockStore
+        monkeypatch.setattr(
+            pack_lock_mod, "PackLockStore", lambda: real_store_cls(locks_dir=tmp_path / "locks")
+        )
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        target = project_root / ".vibe" / "skills" / "generic-fail-pack"
+
+        with patch("vibesop.installer.pack_installer.SkillSecurityAuditor") as auditor_cls:
+            mock_auditor = MagicMock()
+            mock_auditor.audit_skill_file.return_value = MagicMock(is_safe=True)
+            mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
+            auditor_cls.return_value = mock_auditor
+            installer = PackInstaller(
+                central_storage=tmp_path / "central",
+                platform_paths=[tmp_path / "platform"],
+                project_root=project_root,
+                sandbox_builds=False,
+            )
+
+            calls = {"n": 0}
+            real_run = PackInstaller._run_post_install
+
+            def _flaky(self, *args, **kwargs):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise RuntimeError("simulated unforeseen post-clone failure")
+                return real_run(self, *args, **kwargs)
+
+            monkeypatch.setattr(PackInstaller, "_run_post_install", _flaky)
+
+            ok1, msg1 = installer.install_pack(
+                "generic-fail-pack", "https://example.com/generic-fail-pack", scope="project"
+            )
+            assert ok1 is False
+            assert "Failed to install" in msg1
+            assert not target.exists(), "generic post-clone failure must remove the cloned tree"
+
+            ok2, msg2 = installer.install_pack(
+                "generic-fail-pack", "https://example.com/generic-fail-pack", scope="project"
+            )
+
+        assert ok2 is True, msg2
+        assert "Already installed" not in msg2
+        assert "Installed generic-fail-pack" in msg2
+
+    def test_existing_install_survives_generic_error_in_already_installed_branch(
+        self, tmp_path, monkeypatch
+    ):
+        """Reverse pin for the ``cloned_here`` guard: a generic failure while
+        auditing a PRE-EXISTING install must not delete that install."""
+        import vibesop.core.skills.pack_lock as pack_lock_mod
+        from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+
+        def _analyze(analyzer, url, pack_name=None):
+            return RepoAnalysis(
+                pack_name=pack_name or "existing-pack",
+                source_url=url,
+                skill_files=[Path("SKILL.md")],
+                setup_scripts=[],
+            )
+
+        monkeypatch.setattr(RepoAnalyzer, "analyze", _analyze)
+        real_store_cls = pack_lock_mod.PackLockStore
+        monkeypatch.setattr(
+            pack_lock_mod, "PackLockStore", lambda: real_store_cls(locks_dir=tmp_path / "locks")
+        )
+
+        project_root = tmp_path / "proj"
+        target = project_root / ".vibe" / "skills" / "existing-pack"
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text(
+            "---\nname: existing-pack\ndescription: x\n---\n# x\n", encoding="utf-8"
+        )
+
+        with patch("vibesop.installer.pack_installer.SkillSecurityAuditor") as auditor_cls:
+            auditor_cls.return_value = MagicMock()
+            installer = PackInstaller(
+                central_storage=tmp_path / "central",
+                platform_paths=[tmp_path / "platform"],
+                project_root=project_root,
+                sandbox_builds=False,
+            )
+
+            def _boom(self, *args, **kwargs):
+                raise RuntimeError("simulated audit crash on existing install")
+
+            monkeypatch.setattr(PackInstaller, "_audit_skills", _boom)
+
+            ok, msg = installer.install_pack(
+                "existing-pack", "https://example.com/existing-pack", scope="project"
+            )
+
+        assert ok is False
+        assert "Failed to install" in msg
+        assert (target / "SKILL.md").exists(), "pre-existing install must be preserved"
+
+
 class TestSkillNameDedup:
     """Tests for cross-pack deduplication by frontmatter ``name:``."""
 

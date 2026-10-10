@@ -1,5 +1,7 @@
 """Tests for PlatformAdapter base class."""
 
+import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -914,3 +916,188 @@ class TestRenderCopyFallbackWithoutSymlinkCapability:
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
         assert (central / "SKILL.md").read_text(encoding="utf-8") == self.CENTRAL_BODY
         assert not (central / ".vibe-manifest.json").exists()
+
+
+class TestWriteFileAtomicPermissions:
+    """L2: the exclusive-temp write must keep umask-derived permissions on
+    POSIX (the pre-hardening ``write_text`` semantics); mkstemp's forced 0600
+    was an undocumented tightening."""
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission semantics")
+    def test_rendered_file_keeps_umask_permissions(self, tmp_path: Path) -> None:
+        import stat as stat_mod
+
+        adapter = DummyAdapter()
+        target = tmp_path / "SKILL.md"
+        previous = os.umask(0o022)
+        try:
+            adapter.write_file_atomic(target, "content\n", validate_security=False)
+        finally:
+            os.umask(previous)
+
+        mode = stat_mod.S_IMODE(target.stat().st_mode)
+        assert mode == 0o644, f"expected umask-derived 0o644, got {oct(mode)}"
+
+
+class TestPrepareSkillDir:
+    """L3: dangling per-skill leaf links must be recovered BEFORE mkdir, so
+    ``mkdir(exist_ok=True)`` never trips FileExistsError on the link; live
+    links stay untouched for the render path to keep or replace."""
+
+    def test_recovers_dangling_leaf_link(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        adapter = DummyAdapter()
+        missing_target = tmp_path / "deleted-central"
+        leaf = tmp_path / "out" / "skills" / "demo"
+        leaf.parent.mkdir(parents=True)
+        leaf.symlink_to(missing_target, target_is_directory=True)
+        assert leaf.is_symlink() and not leaf.exists(), "fixture must be a dangling link"
+
+        adapter._prepare_skill_dir(leaf)
+
+        assert leaf.is_dir() and not leaf.is_symlink(), (
+            "dangling link must be replaced by a real directory"
+        )
+
+    def test_keeps_live_leaf_link(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        adapter = DummyAdapter()
+        central = tmp_path / "central" / "demo"
+        central.mkdir(parents=True)
+        leaf = tmp_path / "out" / "skills" / "demo"
+        leaf.parent.mkdir(parents=True)
+        leaf.symlink_to(central, target_is_directory=True)
+
+        adapter._prepare_skill_dir(leaf)
+
+        assert leaf.is_symlink() and leaf.resolve() == central.resolve(), (
+            "live per-skill links belong to the render path, not to preparation"
+        )
+
+    def test_plain_dir_is_idempotent(self, tmp_path: Path) -> None:
+        adapter = DummyAdapter()
+        leaf = tmp_path / "out" / "skills" / "demo"
+        adapter._prepare_skill_dir(leaf)
+        adapter._prepare_skill_dir(leaf)
+        assert leaf.is_dir()
+
+
+class TestJunctionChainRefused:
+    """L4: a Windows directory junction inside the trusted output root is a
+    reparse point that redirects the chain yet needs no symlink privilege —
+    the render boundary must refuse it exactly like a symlink."""
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+    def test_junction_ancestor_refused(self, tmp_path: Path) -> None:
+        import subprocess
+
+        from vibesop.security.exceptions import SecurityError
+
+        real = tmp_path / "real"
+        real.mkdir()
+        out = tmp_path / "out"
+        junction = out / "skills"
+        out.mkdir()
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(junction), str(real)],
+            check=True,
+            capture_output=True,
+        )
+        assert junction.is_junction() and not junction.is_symlink(), (
+            "fixture must be a junction, not a symlink"
+        )
+
+        adapter = DummyAdapter()
+        with pytest.raises(SecurityError):
+            adapter._assert_safe_render_path(junction / "demo", out)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+    def test_junction_leaf_refused_even_with_leaf_exemption(self, tmp_path: Path) -> None:
+        """A junction AS the leaf is not a legal per-skill link (the installer
+        renders real copies on Windows, never junctions) and needs no symlink
+        privilege — allow_leaf_symlink must not exempt it."""
+        import subprocess
+
+        from vibesop.security.exceptions import SecurityError
+
+        real = tmp_path / "real"
+        real.mkdir()
+        out = tmp_path / "out"
+        (out / "skills").mkdir(parents=True)
+        leaf = out / "skills" / "demo"
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(leaf), str(real)],
+            check=True,
+            capture_output=True,
+        )
+
+        adapter = DummyAdapter()
+        with pytest.raises(SecurityError):
+            adapter._assert_safe_render_path(leaf, out, allow_leaf_symlink=True)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+    def test_prepare_skill_dir_recovers_dangling_junction(self, tmp_path: Path) -> None:
+        """A dangling junction (is_symlink()=False, exists()=False) must be
+        removed with rmdir — mkdir(exist_ok=True) would crash the render with
+        FileExistsError."""
+        import subprocess
+
+        leaf = tmp_path / "out" / "skills" / "demo"
+        leaf.parent.mkdir(parents=True)
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(leaf), str(tmp_path / "gone")],
+            check=True,
+            capture_output=True,
+        )
+        assert leaf.is_junction() and not leaf.exists(), "fixture must be a dangling junction"
+
+        adapter = DummyAdapter()
+        adapter._prepare_skill_dir(leaf)
+
+        assert leaf.is_dir() and not leaf.is_junction(), (
+            "dangling junction must be replaced by a real directory"
+        )
+
+
+class TestFallbackDanglingLeafRecovery:
+    """The fallback's own dangling-leaf branch (base.py): a per-skill link
+    whose target vanished must be dropped so the fallback content writes into
+    a fresh real directory instead of crashing the render."""
+
+    def test_fallback_recreates_real_dir_for_dangling_leaf(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        adapter = DummyAdapter()
+        skills_root = tmp_path / "out" / "skills"
+        skills_root.mkdir(parents=True)
+        leaf = skills_root / "demo"
+        leaf.symlink_to(tmp_path / "deleted-central", target_is_directory=True)
+        assert leaf.is_symlink() and not leaf.exists()
+
+        skill = {"id": "demo", "metadata": {}}
+        result = RenderResult(success=True)
+        adapter._fallback_skill_content(skill, leaf / "SKILL.md", result, base_dir=tmp_path / "out")
+
+        assert leaf.is_dir() and not leaf.is_symlink()
+        assert (leaf / "SKILL.md").exists()
+
+
+class TestWriteFileAtomicNewlineIntegrity:
+    """Byte-level pin: the exclusive-temp write must never double-translate
+    newlines on Windows (mkstemp's binary fd and os.open must agree) nor
+    alter POSIX bytes."""
+
+    def test_written_bytes_match_platform_newline_contract(self, tmp_path: Path) -> None:
+        adapter = DummyAdapter()
+        target = tmp_path / "SKILL.md"
+
+        adapter.write_file_atomic(target, "a\nb\n", validate_security=False)
+
+        data = target.read_bytes()
+        assert b"\r\r\n" not in data, "double CRLF translation detected"
+        assert data in (b"a\nb\n", b"a\r\nb\r\n")

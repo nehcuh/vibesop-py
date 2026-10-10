@@ -7,6 +7,7 @@ skip-central-rewrite contract; a legal missing-source fallback must render
 (R3 signature contract).
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -246,3 +247,162 @@ class TestRenderCopyFallbackWithoutSymlinkCapability:
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
         assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
         assert not (central_demo / ".vibe-manifest.json").exists()
+
+
+class TestNamespaceRewriteThroughPerSkillLink:
+    """M1: the pi namespace rewrite through a legal per-skill dir symlink must
+    materialize a private copy of the ENTIRE central skill dir (auxiliary
+    pack files included), rewrite the name in the copy, and leave the central
+    install untouched. Writing only SKILL.md silently drops references/ and
+    scripts/ from the platform tree.
+    """
+
+    def test_namespaced_copy_keeps_auxiliary_files(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        skill_id = "nspack-20261010/demo"
+        central_skill = tmp_path / "central" / "demo"
+        (central_skill / "references").mkdir(parents=True)
+        (central_skill / "SKILL.md").write_text(
+            "---\nname: demo\ndescription: Central pack skill\n---\n# Pack Demo\n",
+            encoding="utf-8",
+        )
+        (central_skill / "references" / "ref.md").write_text(
+            "AUXILIARY_REFERENCE\n", encoding="utf-8"
+        )
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        output_dir = project_root / ".pi"
+        skill_dir = output_dir / "skills" / "nspack-20261010-demo"
+        skill_dir.parent.mkdir(parents=True)
+        skill_dir.symlink_to(central_skill, target_is_directory=True)
+
+        manifest = Manifest(
+            metadata=ManifestMetadata(platform="pi"),
+            skills=[
+                SkillSpec(
+                    id=skill_id,
+                    name="Demo",
+                    description="Demo skill",
+                    trigger_when="testing",
+                    metadata={"source_path": str(central_skill)},
+                )
+            ],
+        )
+        adapter = PiCodingAgentAdapter(project_root=project_root)
+        result = adapter.render_config(manifest, output_dir)
+
+        assert result.success, f"namespaced render failed: {result.errors}"
+        assert skill_dir.is_dir() and not skill_dir.is_symlink(), (
+            "the link must be replaced by a private real directory"
+        )
+        assert (skill_dir / "references" / "ref.md").read_text(encoding="utf-8") == (
+            "AUXILIARY_REFERENCE\n"
+        ), "auxiliary pack files must survive the namespaced copy"
+        rendered = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+        assert "name: nspack-20261010-demo" in rendered
+        assert (central_skill / "SKILL.md").read_text(encoding="utf-8") == (
+            "---\nname: demo\ndescription: Central pack skill\n---\n# Pack Demo\n"
+        ), "central install content must stay untouched"
+
+
+class TestFallbackKeepsLegalPerSkillLink:
+    """L1: the no-content fallback must keep a pre-existing legal per-skill
+    symlink (same skip-rewrite semantics as the main render path) instead of
+    tripping the write-time leaf-link refusal and aborting the render."""
+
+    def test_fallback_preserves_legal_leaf_link(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        central_demo = tmp_path / "central" / "demo"
+        central_demo.mkdir(parents=True)
+        (central_demo / "SKILL.md").write_text(CENTRAL_CONTENT, encoding="utf-8")
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        output_dir = project_root / ".pi"
+        skill_dir = output_dir / "skills" / "l1lone-20261010"
+        skill_dir.parent.mkdir(parents=True)
+        skill_dir.symlink_to(central_demo, target_is_directory=True)
+
+        adapter = PiCodingAgentAdapter(project_root=project_root)
+        result = adapter.render_config(_manifest(skill_id="l1lone-20261010"), output_dir)
+
+        assert result.success, f"fallback render must keep the legal link: {result.errors}"
+        assert skill_dir.is_symlink(), "legal per-skill link must be preserved"
+        assert (central_demo / "SKILL.md").read_text(encoding="utf-8") == CENTRAL_CONTENT
+
+
+class TestNamespaceRewriteRollback:
+    """M1 round-2: a failed staged copy must leave the original legal link
+    intact and remove the staging dir; a successful swap leaves a 0755 dir."""
+
+    def _stage_namespaced_link(self, tmp_path: Path) -> tuple[Path, Path, Path]:
+        central_skill = tmp_path / "central" / "demo"
+        central_skill.mkdir(parents=True)
+        (central_skill / "SKILL.md").write_text(
+            "---\nname: demo\ndescription: Central pack skill\n---\n# Pack Demo\n",
+            encoding="utf-8",
+        )
+        output_dir = tmp_path / "proj" / ".pi"
+        skill_dir = output_dir / "skills" / "nspack-rb-demo"
+        skill_dir.parent.mkdir(parents=True)
+        skill_dir.symlink_to(central_skill, target_is_directory=True)
+        return skill_dir, central_skill, output_dir
+
+    def test_failed_copy_preserves_original_link(
+        self, tmp_path: Path, symlink_supported: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+
+        skill_dir, central_skill, output_dir = self._stage_namespaced_link(tmp_path)
+        adapter = PiCodingAgentAdapter(project_root=tmp_path / "proj")
+        skill = SkillSpec(
+            id="nspack-rb/demo",
+            name="Demo",
+            description="Demo skill",
+            trigger_when="testing",
+        )
+
+        def _boom(*args, **kwargs):
+            raise OSError("simulated copy failure")
+
+        monkeypatch.setattr("vibesop.adapters.pi_coding_agent.shutil.copytree", _boom)
+        with pytest.raises(OSError, match="simulated copy failure"):
+            adapter._namespace_skill_name(skill, skill_dir, base_dir=output_dir)
+
+        assert skill_dir.is_symlink(), "failed copy must leave the original link intact"
+        assert skill_dir.resolve() == central_skill.resolve()
+        leftovers = [
+            p for p in skill_dir.parent.iterdir() if p.name.startswith(".nspack-rb-demo.copy-")
+        ]
+        assert leftovers == [], f"staging dir must be cleaned on failure: {leftovers}"
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission semantics")
+    def test_successful_swap_leaves_0755_dir(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
+        import stat as stat_mod
+
+        skill_dir, _central_skill, output_dir = self._stage_namespaced_link(tmp_path)
+        adapter = PiCodingAgentAdapter(project_root=tmp_path / "proj")
+        skill = SkillSpec(
+            id="nspack-rb/demo",
+            name="Demo",
+            description="Demo skill",
+            trigger_when="testing",
+        )
+
+        adapter._namespace_skill_name(skill, skill_dir, base_dir=output_dir)
+
+        assert skill_dir.is_dir() and not skill_dir.is_symlink()
+        mode = stat_mod.S_IMODE(skill_dir.stat().st_mode)
+        assert mode == 0o755, f"mkdtemp's 0700 must not leak into the render tree: {oct(mode)}"

@@ -203,10 +203,13 @@ class PathSafety:
         return cand_str.startswith(base_str + os.sep)
 
     def _no_symlinks_in_chain(self, base: Path, target: Path) -> bool:
-        """Walk from ``base`` to ``target`` and refuse any symlink in the chain.
+        """Walk from ``base`` to ``target`` and refuse any symlink or junction.
 
         Defends against:
             - Pre-existing symlinks inside ``base`` pointing outside.
+            - Windows directory junctions (no symlink privilege required,
+              ``is_symlink()`` is False for them — junctions must be checked
+              explicitly).
             - TOCTOU: a symlink created between this check and the actual
               write (the write code path is expected to re-validate or use
               ``O_NOFOLLOW`` semantics for the leaf).
@@ -219,7 +222,7 @@ class PathSafety:
 
         Returns:
             True if no component between base and target (exclusive of
-            base, inclusive of target if it exists) is a symlink.
+            base, inclusive of target if it exists) is a symlink or junction.
         """
         rel = os.path.relpath(str(target), str(base))
         if rel.startswith(".."):
@@ -232,19 +235,24 @@ class PathSafety:
         for part in Path(rel).parts:
             current = current / part
             try:
-                if current.is_symlink():
-                    logger.warning(
-                        "Symlink detected in path chain at %s (base=%s, target=%s)",
-                        current,
-                        base,
-                        target,
-                    )
-                    return False
+                # is_junction (3.12+): Windows directory junctions are not
+                # symlinks (is_symlink() is False) yet redirect the chain —
+                # and unlike symlinks they need no privilege to create, so
+                # they must be refused the same way.
+                linked = current.is_symlink() or current.is_junction()
             except OSError:
                 # Path doesn't exist yet (typical for output paths).
                 # Parent symlinks have already been checked by the time we
                 # reach a non-existent component.
                 continue
+            if linked:
+                logger.warning(
+                    "Symlink/junction detected in path chain at %s (base=%s, target=%s)",
+                    current,
+                    base,
+                    target,
+                )
+                return False
         return True
 
     def check_overlap(

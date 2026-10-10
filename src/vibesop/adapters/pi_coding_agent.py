@@ -14,6 +14,9 @@ Pi differs from Claude Code in several key ways:
 
 import json
 import logging
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -146,7 +149,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
                 dir_name = skill.id.replace("/", "-")
                 skill_dir = skills_root / dir_name
                 self._assert_safe_render_path(skill_dir, output_dir, allow_leaf_symlink=True)
-                skill_dir.mkdir(parents=True, exist_ok=True)
+                self._prepare_skill_dir(skill_dir)
                 self._render_skill_content(
                     skill, skill_dir, result, manifest=manifest, base_dir=output_dir
                 )
@@ -358,10 +361,36 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         # check misses this case because SKILL.md inside a linked dir is a
         # regular file, and a plain write_text through it would overwrite the
         # central install. The link target stays untouched; the platform gets
-        # a private namespaced copy.
+        # a private namespaced copy of the ENTIRE skill dir — copying only
+        # SKILL.md would silently drop the pack's auxiliary files
+        # (references/, scripts/) from the platform tree.
+        #
+        # The copy is staged next to the target and swapped in by rename. On
+        # POSIX, rename atomically replaces the leaf link itself — no unlink
+        # window (a link re-planted by a racer is replaced, never followed).
+        # Windows rename refuses an existing target, so the link is dropped
+        # first and a re-planted target then fails closed (FileExistsError)
+        # instead of being written through. A failed copy leaves the original
+        # link intact (on Windows a post-unlink replace failure fails closed
+        # without it — the link is re-created on the next render). mkdtemp's
+        # 0700 is reset to the rendered-dir norm
+        # (0755), the directory-level twin of the write_file_atomic umask fix.
         if skill_dir.is_symlink():
-            skill_dir.unlink()
-            skill_dir.mkdir(parents=True, exist_ok=True)
+            source_tree = skill_dir.resolve()
+            staged = Path(tempfile.mkdtemp(prefix=f".{skill_dir.name}.copy-", dir=skill_dir.parent))
+            succeeded = False
+            try:
+                shutil.copytree(source_tree, staged, symlinks=True, dirs_exist_ok=True)
+                staged.chmod(0o755)
+                if os.name == "posix":
+                    staged.replace(skill_dir)
+                else:
+                    skill_dir.unlink()
+                    staged.replace(skill_dir)
+                succeeded = True
+            finally:
+                if not succeeded:
+                    shutil.rmtree(staged, ignore_errors=True)
         elif skill_file.is_symlink():
             # File-level link inside a real dir: replace with a real file.
             skill_file.unlink()

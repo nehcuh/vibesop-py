@@ -697,6 +697,55 @@ class TestInstinctLearnerCrossProcessLock:
         assert reloaded.has_instinct(a_id)
         assert reloaded.has_instinct(b_id)
 
+    def test_merge_unloaded_overlap_same_action_keeps_disk_counters(
+        self, storage_path: Path
+    ) -> None:
+        """L7 (B6 `_merge_unloaded_overlap`): same-id create/create race with
+        zero local evidence.
+
+        B loaded its (empty) disk view before A wrote, then creates the same
+        id locally — the merge sees a memory row with NO baseline against a
+        disk row that already carries A's counters. Same action → B's zero
+        row must adopt the disk counters, not wipe them."""
+        learner_a = InstinctLearner(storage_path=storage_path)
+        learner_b = InstinctLearner(storage_path=storage_path)
+
+        i_a = learner_a.learn(pattern="race pattern", action="act")
+        learner_a.record_outcome(i_a.id, success=True)
+
+        i_b = learner_b.learn(pattern="race pattern", action="act")
+        assert i_b.id == i_a.id
+
+        reloaded = InstinctLearner(storage_path=storage_path)
+        row = reloaded._instincts[i_a.id]
+        assert row.action == "act"
+        assert row.success_count == 1, (
+            "zero-evidence overlap must not wipe the other process's counters"
+        )
+
+    def test_merge_unloaded_overlap_different_action_resets_counters(
+        self, storage_path: Path
+    ) -> None:
+        """L7 (B6 `_merge_unloaded_overlap`): same-id create/create race where
+        the local row changed the action — the local action wins the row but
+        must NOT inherit the disk action's counters (evidence is bound to
+        pattern+action, D13)."""
+        learner_a = InstinctLearner(storage_path=storage_path)
+        learner_b = InstinctLearner(storage_path=storage_path)
+
+        i_a = learner_a.learn(pattern="race pattern 2", action="action A")
+        learner_a.record_outcome(i_a.id, success=True)
+
+        i_b = learner_b.learn(pattern="race pattern 2", action="action B")
+        assert i_b.id == i_a.id
+
+        reloaded = InstinctLearner(storage_path=storage_path)
+        row = reloaded._instincts[i_a.id]
+        assert row.action == "action B"
+        assert row.success_count == 0
+        assert row.failure_count == 0
+        assert row.confidence == 0.5
+
     def test_clear_epoch_guard_prevents_resurrection(self, storage_path: Path) -> None:
         """FLAW #1 regression test: a concurrent in-memory learner must NOT
         resurrect purged data on its next save after another process cleared.
