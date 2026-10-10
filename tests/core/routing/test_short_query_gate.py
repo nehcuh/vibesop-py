@@ -34,8 +34,9 @@ class _CountingLLM:
         self.calls: list[str] = []
 
     def configured(self) -> bool:
-        # TriageService 在发起调用前会先查 configured()（triage_service.py:275），
-        # 缺了它会直接 AttributeError——与 base.LLMProvider 的接口保持一致。
+        # TriageService 在发起调用前会先查 configured()（见 try_ai_triage 的
+        # availability gate），缺了它会直接 AttributeError——与 base.LLMProvider
+        # 的接口保持一致。
         return True
 
     def call(self, prompt: str = "", max_tokens: int = 100, temperature: float = 0.1) -> Any:

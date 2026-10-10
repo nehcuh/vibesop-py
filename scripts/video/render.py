@@ -359,18 +359,23 @@ def t_flywheel(_sents: list[str]) -> tuple[str, str]:
 def t_route(_sents: list[str]) -> tuple[str, str]:
     term = terminal(
         "route",
-        'vibe route "帮我调试这个报错，测试一直失败"',
+        'vibe route "帮我调试这个报错，测试一直失败，找不到原因"',
         last=23,
         groups=[(9, 0), (23, 1)],
         font=17,
         highlight=(2, "2"),
     )
+    # Cascade order must match the real router (unified.py docstring and
+    # docs/architecture/routing-system.md): explicit → scenario + semantic
+    # index → AI triage → matcher aggregation (keyword lives inside the
+    # matchers). Demo query is deliberately > 15 chars so it is NOT caught
+    # by the short-query bypass and actually traverses the AI triage layer.
     layers = [
         ("EXPLICIT", "显式调用 @skill"),
-        ("KEYWORD", "关键词信号"),
         ("SCENARIO", "场景识别"),
         ("SEMANTIC", "语义索引"),
         ("AI TRIAGE", "AI 分诊"),
+        ("MATCHERS", "匹配器聚合 · 关键词/TF-IDF/嵌入"),
     ]
     lay = "".join(
         f'<div class="ly" data-s="1" data-d="{0.3 + i * 0.35:.2f}"><b>{a}</b><span>{b}</span></div>'
@@ -378,7 +383,7 @@ def t_route(_sents: list[str]) -> tuple[str, str]:
         for i, (a, b) in enumerate(layers)
     )
     body = f"""{step_header(0, "一句话，找到对的技能")}
-<div class="ask" data-s="0">💬 帮我调试这个报错，测试一直失败</div>
+<div class="ask" data-s="0">💬 帮我调试这个报错，测试一直失败，找不到原因</div>
 <div style="position:absolute;left:80px;top:250px">{term.replace('class="term ', 'class="term t1 ')}</div>
 <div class="casc">{lay}
   <div class="res on-glow" data-s="2" data-on="2" data-stay>✅ systematic-debugging<br><small>置信度 88%</small></div>
@@ -637,12 +642,14 @@ async def render_scene(browser, scene: dict, timing: dict, cfg: dict, still: boo
     if still:
         STILLS.mkdir(parents=True, exist_ok=True)
         # one still at the end of each sentence
-        for i, e in enumerate(timing["ends"]):
-            await pg.evaluate(f"setTime({e - 0.1})")
-            await pg.screenshot(
-                path=str(STILLS / f"{scene['id']}_{i}.jpg"), type="jpeg", quality=85
-            )
-        await ctx.close()
+        try:
+            for i, e in enumerate(timing["ends"]):
+                await pg.evaluate(f"setTime({e - 0.1})")
+                await pg.screenshot(
+                    path=str(STILLS / f"{scene['id']}_{i}.jpg"), type="jpeg", quality=85
+                )
+        finally:
+            await ctx.close()
         return
 
     fps, dur = cfg["fps"], timing["dur"]
@@ -690,12 +697,27 @@ async def render_scene(browser, scene: dict, timing: dict, cfg: dict, still: boo
         stdin=subprocess.PIPE,
     )
     assert ff.stdin
-    for i in range(n):
-        await pg.evaluate(f"setTime({i / fps})")
-        ff.stdin.write(await pg.screenshot(type="jpeg", quality=92))
-    ff.stdin.close()
-    ff.wait()
-    await ctx.close()
+    try:
+        for i in range(n):
+            await pg.evaluate(f"setTime({i / fps})")
+            # A full pipe blocks the writer; keep the event loop (and the
+            # other scenes under the semaphore) moving (review 2026-10-07, K1).
+            await asyncio.to_thread(ff.stdin.write, await pg.screenshot(type="jpeg", quality=92))
+        ff.stdin.close()
+        rc = await asyncio.to_thread(ff.wait)
+    except BaseException:
+        # Kill ffmpeg and drop the partial mp4 so concat never silently
+        # picks up a truncated scene (review 2026-10-07, K3).
+        ff.kill()
+        await asyncio.to_thread(ff.wait)
+        out.unlink(missing_ok=True)
+        raise
+    finally:
+        await ctx.close()
+    if rc != 0:
+        # A late encoder/muxer failure must not print ✓ (review 2026-10-07, C4).
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg exited {rc} for scene {scene['id']}")
     print(f"  ✓ {scene['id']} ({n} frames)")
 
 
@@ -713,8 +735,11 @@ async def main(ids: list[str], still: bool) -> None:
             async with sem:
                 await render_scene(browser, s, timings[s["id"]], cfg, still)
 
-        await asyncio.gather(*(one(s) for s in scenes))
-        await browser.close()
+        try:
+            await asyncio.gather(*(one(s) for s in scenes))
+        finally:
+            # gather propagates the first scene failure; never leak the browser.
+            await browser.close()
 
 
 if __name__ == "__main__":

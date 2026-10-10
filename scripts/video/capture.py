@@ -16,15 +16,13 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "dist" / "video" / "raw"
 VIBE = REPO / ".venv" / "bin" / "vibe"
 PY = REPO / ".venv" / "bin" / "python"
-DEMO = Path("/tmp/vibesop-video-demo")
-DEMO_HOME = DEMO / "home"
-DEMO_PROJ = DEMO / "home" / "Projects" / "shop-api"
 
 REAL_HOME = str(Path.home())
 
@@ -43,9 +41,9 @@ def _env(home: str, columns: int = 100) -> dict[str, str]:
     return env
 
 
-def _redact(text: str) -> str:
+def _redact(text: str, demo_home: Path) -> str:
     """Replace home paths with '~', padding so Rich box borders stay aligned."""
-    for raw in ("/private" + str(DEMO_HOME), str(DEMO_HOME), REAL_HOME):
+    for raw in ("/private" + str(demo_home), str(demo_home), REAL_HOME):
         lines = []
         for orig in text.split("\n"):
             line = orig
@@ -66,6 +64,7 @@ def run(
     args: list[str],
     cwd: Path,
     home: str,
+    demo_home: Path,
     columns: int = 100,
     max_lines: int | None = None,
 ) -> str:
@@ -79,7 +78,7 @@ def run(
         timeout=180,
         check=False,
     )
-    out = _redact(proc.stdout + proc.stderr)
+    out = _redact(proc.stdout + proc.stderr, demo_home)
     if max_lines:
         out = "\n".join(out.splitlines()[:max_lines])
     (OUT / f"{name}.ansi").write_text(out, encoding="utf-8")
@@ -88,12 +87,11 @@ def run(
     return out
 
 
-def setup_demo() -> None:
-    if DEMO.exists():
-        shutil.rmtree(DEMO)
-    DEMO_PROJ.mkdir(parents=True)
-    (DEMO_PROJ / "pyproject.toml").write_text('[project]\nname = "shop-api"\nversion = "0.1.0"\n')
-    subprocess.run(["git", "init", "-q"], cwd=DEMO_PROJ, check=True)
+def setup_demo(demo_home: Path, demo_proj: Path) -> None:
+    # demo comes from a fresh per-run mkdtemp (see main); nothing to clear.
+    demo_proj.mkdir(parents=True)
+    (demo_proj / "pyproject.toml").write_text('[project]\nname = "shop-api"\nversion = "0.1.0"\n')
+    subprocess.run(["git", "init", "-q"], cwd=demo_proj, check=True)
 
     # Seed candidate pool with representative clusters via the real model.
     seed = f"""
@@ -102,8 +100,8 @@ from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from vibesop.core.observability.skill_promote import ClusterCandidate, ClusterCandidateStore
 now = datetime.now(UTC)
-proj = {str(DEMO_PROJ)!r}
-other = {str(DEMO_HOME / "Projects" / "admin-web")!r}
+proj = {str(demo_proj)!r}
+other = {str(demo_home / "Projects" / "admin-web")!r}
 store = ClusterCandidateStore(Path(proj) / ".vibe" / "observability")
 rows = [
     ("a3f9c21e7b", ["修复 pytest 夹具导致的间歇性失败", "flaky test 反复失败怎么定位"], 9, 0.89,
@@ -130,44 +128,78 @@ for cid, queries, n, rate, steps, dist in rows:
     store.upsert(c)
 print("seeded", len(rows))
 """
-    subprocess.run([str(PY), "-c", seed], env=_env(str(DEMO_HOME)), check=True)
+    subprocess.run([str(PY), "-c", seed], env=_env(str(demo_home)), check=True)
 
 
 def main() -> int:
-    OUT.mkdir(parents=True, exist_ok=True)
+    # Per-run sandbox (review 2026-10-07, S1): a fixed predictable /tmp path
+    # collides across users on shared machines, and the seeded demo project
+    # used to be left behind after the run.
+    demo = Path(tempfile.mkdtemp(prefix="vibesop-video-demo-"))
+    demo_home = demo / "home"
+    demo_proj = demo / "home" / "Projects" / "shop-api"
+    try:
+        OUT.mkdir(parents=True, exist_ok=True)
 
-    # 1. Real routing against this repo.
-    run(
-        "route",
-        ["route", "帮我调试这个报错，测试一直失败", "-y", "--no-replay", "--no-session"],
-        cwd=REPO,
-        home=REAL_HOME,
-        columns=96,
-        max_lines=25,
-    )
+        # 1. Real routing against this repo. The demo query is deliberately
+        # > 15 chars so it is not caught by the short-query bypass and the
+        # captured output really traverses the AI triage layer (matches the
+        # cascade depicted in the route scene; review 2026-10-07, L1).
+        run(
+            "route",
+            [
+                "route",
+                "帮我调试这个报错，测试一直失败，找不到原因",
+                "-y",
+                "--no-replay",
+                "--no-session",
+            ],
+            cwd=REPO,
+            home=REAL_HOME,
+            demo_home=demo_home,
+            columns=96,
+            max_lines=25,
+        )
 
-    # 2. Demo sandbox for loop + skill generation.
-    setup_demo()
-    home = str(DEMO_HOME)
-    for preset in ("instinct-assemble", "instinct-promote", "instinct-feedback"):
-        run(f"loop_create_{preset}", ["loop", "create", preset, "--preset"], DEMO_PROJ, home)
-    run("loop_list", ["loop", "list"], DEMO_PROJ, home, columns=104)
-    run(
-        "loop_launchd",
-        ["loop", "install-launchd", "instinct-promote", "--dry-run"],
-        DEMO_PROJ,
-        home,
-        columns=100,
-        max_lines=12,
-    )
-    run("candidates", ["skill", "candidates"], DEMO_PROJ, home, columns=118)
-    run("promote", ["skill", "promote", "a3f9c21e7b"], DEMO_PROJ, home, columns=100, max_lines=7)
+        # 2. Demo sandbox for loop + skill generation.
+        setup_demo(demo_home, demo_proj)
+        home = str(demo_home)
+        for preset in ("instinct-assemble", "instinct-promote", "instinct-feedback"):
+            run(
+                f"loop_create_{preset}",
+                ["loop", "create", preset, "--preset"],
+                demo_proj,
+                home,
+                demo_home,
+            )
+        run("loop_list", ["loop", "list"], demo_proj, home, demo_home, columns=104)
+        run(
+            "loop_launchd",
+            ["loop", "install-launchd", "instinct-promote", "--dry-run"],
+            demo_proj,
+            home,
+            demo_home,
+            columns=100,
+            max_lines=12,
+        )
+        run("candidates", ["skill", "candidates"], demo_proj, home, demo_home, columns=118)
+        run(
+            "promote",
+            ["skill", "promote", "a3f9c21e7b"],
+            demo_proj,
+            home,
+            demo_home,
+            columns=100,
+            max_lines=7,
+        )
 
-    drafts = list((DEMO_PROJ / ".vibe" / "observability" / "skill_drafts").rglob("SKILL.md"))
-    if drafts:
-        (OUT / "draft_skill.md").write_text(drafts[0].read_text(encoding="utf-8"))
-        print(f"--- draft: {drafts[0].relative_to(DEMO)}")
-    return 0
+        drafts = list((demo_proj / ".vibe" / "observability" / "skill_drafts").rglob("SKILL.md"))
+        if drafts:
+            (OUT / "draft_skill.md").write_text(drafts[0].read_text(encoding="utf-8"))
+            print(f"--- draft: {drafts[0].relative_to(demo)}")
+        return 0
+    finally:
+        shutil.rmtree(demo, ignore_errors=True)
 
 
 if __name__ == "__main__":

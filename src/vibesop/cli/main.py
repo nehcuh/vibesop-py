@@ -661,9 +661,11 @@ def route(
         # record-tool does (flag n/a → host env → payload workspaceRoot/cwd
         # → spawn cwd), so route state (spans / missed-query inbox /
         # session seed) lands in the PROJECT's .vibe/, not wherever the
-        # hook spawned. NIT-3: any runtime failure degrades to the empty
-        # envelope — the hook contract (never block the host) wins over
-        # surfacing the error.
+        # hook spawned. NIT-3: a catastrophic runtime failure still degrades
+        # to the empty envelope — the hook contract (never block the host)
+        # wins. Result-level routing errors (result.errors, e.g. invalid
+        # RoutingConfig) are NOT silent: to_hook_response emits a
+        # user-visible error envelope for them (review 2026-10-07, C1).
         root = _resolve_hook_project_root(None, payload if isinstance(payload, dict) else {})
         # gate46 dual-review: platform is parameterizable (CLI flag > JSON
         # envelope field > grok-build default) so the dual-platform probe
@@ -768,11 +770,19 @@ def route(
     # injector) while retaining direct UnifiedRouter access for detailed
     # OrchestrationResult handling (routing paths, layer details, execution plans).
 
+    from pydantic import ValidationError
+
     from vibesop.agent.runtime import AgentRuntime
 
-    runtime = AgentRuntime(project_root=Path.cwd())
-    # Inject LLM factory for AI triage (same as before)
-    runtime.router.set_llm_factory(_build_llm_factory())
+    try:
+        runtime = AgentRuntime(project_root=Path.cwd())
+        # Inject LLM factory for AI triage (same as before)
+        runtime.router.set_llm_factory(_build_llm_factory())
+    except ValidationError as e:
+        # Invalid routing config (e.g. bypass < keyword threshold): print the
+        # actionable message instead of a raw traceback (review 2026-10-07, C1).
+        console.print(f"[bold red]✗[/bold red] Invalid routing configuration:\n{e}")
+        raise typer.Exit(2) from e
 
     # Apply CLI overrides to the underlying router config
     router = runtime.router._router

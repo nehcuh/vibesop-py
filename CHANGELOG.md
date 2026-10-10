@@ -34,10 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (model validator). Both thresholds gate the same pre-enrichment character
   count with `<=` semantics; a bypass below the keyword threshold reopened the
   "keyword mode selected but AI triage not bypassed" double-routed state.
-  Configs that set only `keyword_match_max_chars` above the bypass now fail at
-  load with an actionable message. The `keyword_match_max_chars` field doc no
-  longer promises "200 = always keyword matching" (a triage hit can still win
-  within the bypass window).
+  Configs that set only `keyword_match_max_chars` above the bypass are
+  rejected with an actionable message when the routing config is
+  materialized (first router construction): the plain CLI prints a clean
+  error, and hook responses surface it user-visibly instead of degrading to
+  a silent no-match (see Fixed). The `keyword_match_max_chars` field doc no
+  longer promises "200 = always keyword matching" (a triage hit can still
+  win within the bypass window).
 
 ### Fixed
 
@@ -121,18 +124,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   displaying unknown. Malformed or non-object metadata is ignored safely.
 
 - **Triage cost log validates `selected_confidence` like the match path**:
-  the log previously admitted JSON booleans (`true` → 1.0, since `bool` is an
-  `int` subclass) and out-of-range values (42, -3), while the match path
-  rejected both. Both paths now share one `_bounded_confidence` predicate
-  (numeric, non-bool, within [0.0, 1.0]); unbounded values log as `None`.
-  Metrics-only fix — routing decisions were never affected.
+  the field's first revision earlier in this cycle admitted JSON booleans
+  (`true` → 1.0, since `bool` is an `int` subclass) and out-of-range values
+  (42, -3), while the match path rejected both. Both paths now share one
+  `_bounded_confidence` predicate (numeric, non-bool, within [0.0, 1.0]);
+  unbounded values log as `None`. Metrics-only fix — routing decisions were
+  never affected.
+- **Hook responses surface routing errors instead of degrading to a silent
+  no-match** (adversarial review 2026-10-07, C1): an invalid `RoutingConfig`
+  (e.g. rejected by the validator above) previously produced the plain
+  no-match fingerprint — `{}` on grok-build — on every turn with zero
+  signal. `to_hook_response` now emits a user-visible `⚠️ VibeSOP Routing
+  error: …` envelope when `errors` is non-empty (still exit 0; hooks never
+  block the host), and the plain `vibe route` CLI prints a clean error
+  instead of a raw pydantic traceback.
+- **`effective_query` span metadata follows the `/vibe-route` strip** (C2):
+  the hook-path span opened with the raw prefixed input; it now records the
+  stripped text the matchers actually saw.
+- **`scripts/video/` correctness pass** (C3/C4/K1/K3/S1/L1): the route scene
+  depicts the real layer cascade (explicit → scenario + semantic index → AI
+  triage → matcher aggregation) and uses a >15-char demo query that actually
+  traverses AI triage; `render.py` checks the ffmpeg exit code, writes
+  frames off the event loop, and kills ffmpeg / closes the browser context /
+  drops the partial mp4 on failure; `capture.py` sandboxes in a per-run
+  `tempfile.mkdtemp()` instead of a fixed `/tmp` path; `tts.py` speaks "Pi"
+  as "派".
 - **Stale `keyword_match_max_chars: 5` values aligned with the actual default (15)**:
   the `5` had propagated from a dead `getattr` fallback in
   `unified.py:_should_use_keyword_routing` into `docs/architecture/routing-system.md`,
   `.vibe/PROJECT_CONTEXT.md`, both adapter `task-routing.md.j2` templates, and
   the generated `.pi` copy (all now 15; the fallback is 15 too). The previously
   undocumented `ai_triage_short_query_bypass_chars` field is now documented in
-  the same places, including the `>= keyword_match_max_chars` invariant.
+  `docs/architecture/routing-system.md`, both adapter `task-routing.md.j2`
+  templates, and the generated `.pi` copy, including the
+  `>= keyword_match_max_chars` invariant.
 - **Stale architecture docstring in `unified.py`** (`route()` layer cascade did
   not match the `_layers`-based implementation) and a drifted line-number
   comment.
@@ -141,6 +166,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (mojibake string literal, tautologically true) now asserts the real query;
   a type-annotation-only `pytest` import moved behind `TYPE_CHECKING`;
   two stale `default (5)` comments corrected in `test_scenario_demotion.py`.
+- **Wording alignment** (review 2026-10-07, L3/T1): the bypass field
+  description says "at or below" to match the code's `<=` semantics, and the
+  flattened-slash-id matcher documents its deliberate priority after the
+  namespace-suffix match (pinned by test).
 
 - **No-match hook banner no longer shown to the user**: unmatched turns
   used to inject `systemMessage: "🤖 VibeSOP: No matching skill found.

@@ -427,6 +427,87 @@ class TestAgentRuntimeEffectiveQuery:
         assert metadata.get("query") == "review my code"
         assert metadata.get("effective_query") == "review my code"
 
+    def test_slash_route_like_records_stripped_effective(self, fresh_tracer, tmp_path) -> None:
+        """``/vibe-route <query>`` rebinds the query after the span opens;
+        effective_query must follow the stripped text the matchers actually
+        saw, not the raw prefixed input (review 2026-10-07, C2)."""
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime.handle_query("/vibe-route review my code")
+
+        spans = self._route_spans(fresh_tracer)
+        assert len(spans) == 1
+        metadata = spans[0].get("metadata") or {}
+        assert metadata.get("query") == "/vibe-route review my code"
+        assert metadata.get("effective_query") == "review my code"
+
+
+class TestRoutingErrorHookEnvelope:
+    """Review 2026-10-07 C1 — routing failures must not look like misses.
+
+    An invalid RoutingConfig kills routing on EVERY turn; degrading that to
+    the silent no-match fingerprint (or ``{}``) hides the breakage forever.
+    Errors surface user-visibly on every platform — exit code stays 0, so
+    the hook contract (never block the host) still holds.
+    """
+
+    def test_errors_surface_in_envelope_claude(self) -> None:
+        result = AgentRuntimeResult()
+        result.intercepted = True
+        result.errors.append("Routing failed: 1 validation error for RoutingConfig ...")
+        out = result.to_hook_response(platform="claude-code", hook_event_name="UserPromptSubmit")
+        assert "Routing error" in out
+        assert "Routing failed" in out
+
+    def test_errors_surface_on_grok_too(self) -> None:
+        # grok misses stay silent by design (banner noise); errors are not misses.
+        result = AgentRuntimeResult()
+        result.intercepted = True
+        result.errors.append("Routing failed: boom")
+        out = result.to_hook_response(platform="grok-build", hook_event_name="UserPromptSubmit")
+        assert out != "{}"
+        assert "Routing failed" in out
+
+    def test_clean_miss_stays_silent(self) -> None:
+        result = AgentRuntimeResult()
+        result.intercepted = True
+        assert (
+            result.to_hook_response(platform="grok-build", hook_event_name="UserPromptSubmit")
+            == "{}"
+        )
+        out = result.to_hook_response(platform="claude-code", hook_event_name="UserPromptSubmit")
+        assert "systemMessage" not in out  # agent-only fingerprint, no banner
+
+    def test_invalid_project_config_surfaces_via_handle_query(self, tmp_path, monkeypatch) -> None:
+        """End-to-end: bypass < keyword in .vibe/config.toml must reach the
+        hook envelope, not die silently (the C1 production scenario)."""
+        from vibesop.core.config.manager import ConfigSource
+
+        vibe_dir = tmp_path / ".vibe"
+        vibe_dir.mkdir()
+        (vibe_dir / "config.toml").write_text(
+            "[routing]\nkeyword_match_max_chars = 30\n",
+            encoding="utf-8",
+        )
+        real_resolve = ConfigSource._resolve_config_path  # pyright: ignore[reportPrivateUsage]
+
+        def _no_global(base_dir: Path, name: str) -> Path | None:
+            # Keep the real home ~/.vibe config out of this test.
+            if base_dir == Path.home() / ".vibe":
+                return None
+            return real_resolve(base_dir, name)
+
+        monkeypatch.setattr(
+            ConfigSource,
+            "_resolve_config_path",
+            staticmethod(_no_global),  # type: ignore[arg-type]
+        )
+
+        runtime = AgentRuntime(project_root=tmp_path)
+        result = runtime.handle_query("review my code")
+        assert result.errors
+        out = result.to_hook_response(platform="claude-code", hook_event_name="UserPromptSubmit")
+        assert "Routing error" in out
+
 
 class TestRouterMatchedSpanVerdict:
     """M12 hook-path miss blind-spot fix — spans carry the router's real

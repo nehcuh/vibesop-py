@@ -284,6 +284,22 @@ class AgentRuntimeResult:
                 notice_resp["hookSpecificOutput"] = notice_ho
             return json.dumps(notice_resp, ensure_ascii=False)
 
+        # Routing errors (e.g. an invalid RoutingConfig) are persistent
+        # breakage, not per-turn miss noise: surface them user-visibly on
+        # every platform instead of the silent fingerprint / empty envelope
+        # (review 2026-10-07, C1). Still a normal exit-0 envelope — the
+        # hook contract (never block the host) holds.
+        if self.errors and (not self.skill_id or self.skill_id == "fallback-llm"):
+            err_text = " ".join(self.errors[0].split())[:500]
+            msg = f"⚠️ VibeSOP Routing error: {err_text}"
+            err_resp: dict[str, Any] = {"systemMessage": msg}
+            if include_additional_context:
+                err_ho: dict[str, Any] = {"additionalContext": msg}
+                if hook_event_name:
+                    err_ho["hookEventName"] = hook_event_name
+                err_resp["hookSpecificOutput"] = err_ho
+            return json.dumps(err_resp, ensure_ascii=False)
+
         # No match — fallback. Agent fingerprint only: never systemMessage.
         # Consumer projects (e.g. llm-safety) miss on most turns; a banner
         # on every miss is noise. Grok UserPromptSubmit discards allow-hook
@@ -641,6 +657,10 @@ class AgentRuntime:
                         route_match = self._ROUTE_LIKE_RE.match(query.strip())
                         if route_match:
                             query = route_match.group(1).strip()
+                            # C2 (review 2026-10-07): the span opened with the
+                            # raw prefixed input; keep effective_query equal
+                            # to the text the matchers actually see.
+                            _task_span.metadata["effective_query"] = _unwrap(query)[:200]
                         else:
                             slash_result = self.slash_executor.execute_query(query)
                             result.intercepted = True

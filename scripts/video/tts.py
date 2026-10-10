@@ -32,7 +32,7 @@ SPOKEN = {
     "scan-candidates": "scan candidates",
     "launchd": "launch D",
     "uv ": "U V ",
-    "Pi、": "Pi、",
+    "Pi、": "派、",
 }
 
 

@@ -104,3 +104,14 @@ class TestCheckExplicitOverride:
         skill_id, cleaned = check_explicit_override("/builtin-no-such-skill", candidates)
         assert skill_id is None
         assert cleaned is None
+
+    def test_slash_endswith_wins_over_flattened(self) -> None:
+        """Pin the priority between the two loose slash matchers (review
+        2026-10-07, T1): the namespace-suffix (endswith) loop runs before the
+        flattened-id loop, so /vibe-help resolves to a skill literally named
+        vibe-help (acme/vibe-help) even when vibe/help flattens to the same
+        string. Reordering the loops must break this test."""
+        candidates = [{"id": "acme/vibe-help"}, {"id": "vibe/help"}]
+        skill_id, cleaned = check_explicit_override("/vibe-help", candidates)
+        assert skill_id == "acme/vibe-help"
+        assert cleaned == ""

@@ -503,6 +503,37 @@ def test_short_query_bypass_must_cover_keyword_threshold() -> None:
         RoutingConfig(ai_triage_short_query_bypass_chars=15, keyword_match_max_chars=30)
 
 
+def test_short_query_bypass_invariant_enforced_via_project_toml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The bypass >= keyword invariant also fires through the real load
+    funnel (ConfigManager.get_routing_config), not just the constructor —
+    the CHANGELOG's "fail" claim covers configs loaded from disk (review
+    2026-10-07, T2)."""
+    vibe_dir = tmp_path / ".vibe"
+    vibe_dir.mkdir()
+    (vibe_dir / "config.toml").write_text(
+        "[routing]\nkeyword_match_max_chars = 30\n",
+        encoding="utf-8",
+    )
+    real_resolve = ConfigSource._resolve_config_path  # pyright: ignore[reportPrivateUsage]
+
+    def _no_global(base_dir: Path, name: str) -> Path | None:
+        # Keep the real home ~/.vibe config out of this test.
+        if base_dir == Path.home() / ".vibe":
+            return None
+        return real_resolve(base_dir, name)
+
+    monkeypatch.setattr(
+        ConfigSource,
+        "_resolve_config_path",
+        staticmethod(_no_global),  # type: ignore[arg-type]
+    )
+    manager = ConfigManager(project_root=str(tmp_path))
+    with pytest.raises(ValidationError, match="ai_triage_short_query_bypass_chars"):
+        manager.get_routing_config()
+
+
 def test_index_match_threshold_from_project_toml(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

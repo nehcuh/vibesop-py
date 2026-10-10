@@ -56,6 +56,9 @@ def check_explicit_override(
             # Flattened ID match (e.g., /builtin-session-end → builtin/session-end).
             # Registry listings render "ns/id" as "ns-id"; routing-audit
             # 2026-10: every /builtin-<name> query fell through to fallback.
+            # Runs after the suffix match on purpose (pinned by
+            # test_slash_endswith_wins_over_flattened): a skill literally
+            # named <name> beats a flattened-namespace collision.
             for c in candidates:
                 cid = c.get("id", "")
                 if cid.replace("/", "-") == slash_name:

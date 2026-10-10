@@ -187,7 +187,8 @@ class RoutingConfig(TolerantConfig):
         default=15,
         ge=0,
         le=200,
-        description="Skip AI Triage when query character length is below this threshold. "
+        description="Skip AI Triage when query character length is at or below "
+        "this threshold (<=N chars). "
         "Uses character count (not word count) to correctly handle CJK and "
         "other languages without whitespace word boundaries. Must be >= "
         "keyword_match_max_chars so every query keyword routing selects is "
