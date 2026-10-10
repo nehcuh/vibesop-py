@@ -52,10 +52,14 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 # (+3, all from session notes), 723 ok unchanged, 465 stale occurrences /
 # 457 keys (+3/+3, .omx artifact citations from the session notes);
 # baseline re-frozen accordingly.
-FROZEN_REF_TOTAL = 1188
+# Re-observed 2026-10-10 on clean e08ccef8 after the S96 session-note commit:
+# 1191 refs (+3, .omx citations in session.md S96 entry and PROJECT_CONTEXT.md
+# handoff), 723 ok unchanged, 468 stale occurrences / 460 keys (+3/+3);
+# baseline re-frozen accordingly.
+FROZEN_REF_TOTAL = 1191
 FROZEN_OK = 723
-FROZEN_STALE_OCCURRENCES = 465
-FROZEN_STALE_KEYS = 457
+FROZEN_STALE_OCCURRENCES = 468
+FROZEN_STALE_KEYS = 460
 
 
 def _git(root: Path, *args: str) -> None:
