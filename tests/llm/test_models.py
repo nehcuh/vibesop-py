@@ -66,3 +66,40 @@ def test_validate_provider_model_skips_without_key() -> None:
         ok, msg = validate_provider_model("deepseek", "deepseek-v4-flash")
     assert ok is True
     assert "no api key" in msg
+
+
+def _catalog_response(ids: list[str]):
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {"data": [{"id": i} for i in ids]}
+    return resp
+
+
+def test_validate_provider_model_accepts_vendor_alias() -> None:
+    """deepseek-v4-flash is redirected by the vendor to catalog id deepseek-flash."""
+    from vibesop.llm.models import validate_provider_model
+
+    catalog = _catalog_response(["deepseek-flash", "deepseek-v4-pro"])
+    with (
+        patch("vibesop.llm.models.os.getenv", return_value="fake-key"),
+        patch("httpx.get", return_value=catalog),
+    ):
+        ok, msg = validate_provider_model("deepseek", "deepseek-v4-flash")
+    assert ok is True
+    assert "alias" in msg
+    assert "deepseek-flash" in msg
+
+
+def test_validate_provider_model_rejects_unknown_model_even_with_aliases() -> None:
+    from vibesop.llm.models import validate_provider_model
+
+    catalog = _catalog_response(["deepseek-flash", "deepseek-v4-pro"])
+    with (
+        patch("vibesop.llm.models.os.getenv", return_value="fake-key"),
+        patch("httpx.get", return_value=catalog),
+    ):
+        ok, msg = validate_provider_model("deepseek", "deepseek-v9-ultimate")
+    assert ok is False
+    assert "not in provider catalog" in msg

@@ -9,8 +9,9 @@ codebase previously hard-coded stale snapshots — ``claude-3-5-sonnet-20241022`
 ``/models`` endpoint when an API key is available. It is best-effort and
 fail-safe: a missing key or a network error never blocks configuration (returns
 ``ok=True, "skipped …"``); only a confirmed "model not in catalog" returns
-``ok=False``. (DeepSeek ``deepseek-v4-flash`` / ``deepseek-v4-pro`` were
-confirmed valid via this path.)
+``ok=False``. Vendor aliases redirect at request time (DeepSeek
+``deepseek-v4-flash`` is served as V4.1-Flash and reported as ``deepseek-flash``),
+so catalog membership is judged through ``PROVIDER_MODEL_ALIASES``.
 """
 
 from __future__ import annotations
@@ -29,6 +30,15 @@ PROVIDER_BASE_URLS: dict[str, str] = {
     "deepseek": "https://api.deepseek.com/v1",
     "kimi": "https://api.moonshot.cn/v1",
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+}
+
+# Request-side alias -> catalog id. The DeepSeek /models catalog lists
+# ``deepseek-flash`` (V4.1-Flash) and ``deepseek-v4-pro``; a request for
+# ``deepseek-v4-flash`` is redirected by the vendor to the former (confirmed
+# against the live catalog 2026-10-10), so it is valid even though the literal
+# id is absent from the catalog.
+PROVIDER_MODEL_ALIASES: dict[str, dict[str, str]] = {
+    "deepseek": {"deepseek-v4-flash": "deepseek-flash"},
 }
 
 # Canonical CURRENT Anthropic / OpenAI model IDs. The codebase had stale
@@ -81,6 +91,9 @@ def validate_provider_model(
         ids = {m.get("id", "") for m in resp.json().get("data", [])}
         if model in ids:
             return True, "ok"
+        alias_target = PROVIDER_MODEL_ALIASES.get(provider, {}).get(model)
+        if alias_target and alias_target in ids:
+            return True, f"ok (vendor alias; catalog id {alias_target!r})"
         return False, f"model {model!r} not in provider catalog ({len(ids)} models)"
     except Exception as e:  # fail-safe — never block on validation
         return True, f"skipped (check error: {e})"

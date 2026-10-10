@@ -79,9 +79,13 @@ _PRICING: dict[str, dict[str, tuple[float, float]]] = {
     },
     "deepseek": {
         # https://api-docs.deepseek.com/quick_start/pricing
-        # deepseek-v4-flash confirmed in catalog (see models.py). Price estimated
-        # from deepseek-chat band; update when official v4 pricing published.
+        # deepseek-v4-flash is the request-side alias; the vendor serves it as
+        # DeepSeek-V4.1-Flash and reports the response model as deepseek-flash
+        # (see PROVIDER_MODEL_ALIASES in models.py) — both ids must price.
+        # Price estimated from the deepseek-chat band; update when official v4
+        # pricing is published.
         "deepseek-v4-flash": (0.14, 0.28),
+        "deepseek-flash": (0.14, 0.28),
         "deepseek-v4-pro": (0.55, 2.19),
         "deepseek-v4": (0.27, 1.10),
         "deepseek-chat": (0.27, 1.10),

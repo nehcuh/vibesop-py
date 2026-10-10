@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Accept vendor-redirected model aliases in `validate_provider_model` (DeepSeek serves requests for `deepseek-v4-flash` as V4.1-Flash and reports `deepseek-flash` in the live catalog, so the strict catalog check falsely failed a valid default in `vibe doctor`), and price the response-side id `deepseek-flash` alongside the request alias.
 - Harden the OMX CLI companion against review findings: executable resolution never trusts the current directory (Windows `shutil.which` prepends the cwd, CreateProcess-style, so a hostile checkout carrying `npm.cmd`/`node.exe`/`node_modules/npm/bin/npm-cli.js` could otherwise shadow the real toolchain); npm diagnostics are stripped of ANSI/OSC control sequences before being echoed; a successful npm install whose `omx` shim is not yet on PATH reports the new `installed_off_path` status instead of `failed`; and native `npm.exe` shims without an adjacent `node_modules` (e.g. Volta) run directly without a shell instead of failing closed.
 - Rephrase the occupied-target refusal to lead with manual content preservation and to state plainly that `--upgrade` irreversibly replaces the whole directory, and pin the upgrade replacement contract with a dedicated test.
 - Correct the `attest-build-provenance` SHA comment to v4.2.2 and align the pre-commit Ruff hook with the locked toolchain (v0.16.4).
