@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-10-08 (S95 — 拉取评审 COMMENT，14 修复落盘待提交)
+**Last Updated**: 2026-10-10 (S96 — 二轮评审修复全推送，本地部署验证，doctor 修红)
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### Current Week (October 5-11, 2026)
 
-1. **Pull 86b69f43→58692f70 对抗评审 + 修复**（待提交）— 五路终裁 COMMENT（15 候选 → 14 确认 / 1 驳回，0H/2M/12L）；用户点名后 14 条确认全修（C1 hook 错误信封可见 / L1 视频级联顺序 / 12 LOW），2042 passed + ruff/type/hermetic 全绿。工作树未 commit，等用户点名。
+1. **Pull 评审 + 修复两轮均收口** ✅ — 第一轮 86b69f43→58692f70(14 修复）与第二轮 41b7699b→251043f7(7 路评审 9 确认，F1–F8 修复）全部提交推送并 CI 全绿；关键修复：Windows CWD 劫持过滤（`_which_trusted`)、occupied-target 保护、attest/pre-commit 元数据对齐。另修 doctor 误红（DeepSeek 厂商别名感知校验，`f5f98d88`)。本地部署验证通过（claude-code 真实部署 182 skills + DeepSeek route 三层实证）。等用户在别处评审 4 个提交。
 2. **路由 short-query gate 修复轮收口** — 双 APPROVE，4 commits 上 main（bff4699e 批A validator+文档对齐 / 96d2a75a 批B cost-log 校验 / 24395b27+58692f70 CI 修红），CI 全绿。遗留：B5 截断决策、eval triage-on 覆盖缺口（新登记）。
 3. **JEV 复测** — 维持 S94 不接入：构造集 57/61 仍赢生产路由 52/61，但 p50 1270ms vs 15ms、conf=0.99 过注入、noul 不一致全部复现；真实会话集已失不可重验。
 

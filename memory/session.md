@@ -1,6 +1,16 @@
 
 ## Current Session
 
+### S96 END (2026-10-10 ~23:50) [vibesop-py] 拉取评审二轮 + 修复推送 + 本地部署验证 + doctor 修红
+
+- **评审**：拉取 origin/main 3 提交（`41b7699b..251043f7`,--with-cli OMX 伴装 / occupied-target 保护 / 依赖+CI 更新）→ 内部五路 swarm + claude + grok 七路评审 → 汇总 9 确认（0H/1M/8L)。grok 唯一 HIGH（ANSI 致 CI 红）被四组环境对照 + 实际 CI 绿证伪驳回；attest 注释三方 ls-remote 实证为 v4.2.2。综合 COMMENT。汇总 `.omx/artifacts/pull-20261010b-review-synthesis.md`。
+- **修复**（用户点名标准流程）:F1–F8 全修，3 提交推送——`9d886c7d`(`_which_trusted` 堵 Windows CWD 劫持 / ANSI 剥离 / `installed_off_path` / Volta `.exe` 直跑 / 原生测试 skip)+ `b4f9d412`(occupied 文案 + upgrade 契约测试）+ `497d3bb6`(attest 注释 + pre-commit ruff 0.16.4)。kimi 门禁两轮：round1 REQUEST_CHANGES(N1 阻塞）→ round2 用 autouse fixture 证据驳回 N1、吸收其 dict side_effect 硬化建议 → **GATE: APPROVE**。全量 7842 passed(5 个宿主预存在失败与改动无关）,CI 全绿。
+- **本地部署验证**(`.omx/artifacts/e2e-evidence-20261010-deploy.md`):6/6 --with-cli 门控真实拒绝；fake-node 沙盒实证 npm.cmd 零执行 + argv 逐字正确；敌意 cwd 真实 which 对抗（`.\npm.CMD` 被过滤、载荷零执行）;`vibe build claude-code --output ~/.claude` 真实部署 174→182 skills。**意外副作用已披露**：首轮沙盒 PATH 混入 POSIX 路径致 `which` 落到真实 npm，真实执行了 `npm install -g oh-my-codex`(omx.CMD 22:48,oh-my-codex@0.21.8)，用户可选择卸载。
+- **route DeepSeek 链路**:`~/.vibe/config.toml` 硬编码 key 与 $DEEPSEEK_API_KEY 同值（md5 比对）；实测 catalog 仅 `deepseek-flash`/`deepseek-v4-pro`。provider 直连 ROUTE_LLM_OK;AI_TRIAGE 真实调用 1235.9ms 选中 builtin/experience-evolution(88%)。
+- **doctor 修红** `f5f98d88`：发现项目 SOP 明确要求写 `deepseek-v4-flash`（厂商别名→V4.1-Flash)，故不改默认值而加 `PROVIDER_MODEL_ALIASES` 别名感知校验 + pricing 补响应侧 id;doctor 实测转绿，CI 全绿。
+- **Next**：用户在别处评审 4 个提交（9d886c7d/b4f9d412/497d3bb6/f5f98d88)，有意见走 fix-from-review；遗留老事项同 S95(B5 截断决策、eval triage-on 覆盖缺口等）。
+- Recorded: yes — 4 pitfalls(which CWD 前置/沙盒 PATH POSIX 静默失效/厂商别名 vs 严格 catalog/packet-only 门禁盲区+GBK 第三变体）+ 2 patterns(fake-node 沙盒/七路评审三段式）→ project-knowledge.md
+
 ### S95 (2026-10-07) [vibesop-py] 拉取 origin/main + 多路独立对抗复审
 
 - 路由 `builtin/adversarial-panel` 88%。本地曾 ahead 2（S90 session），origin 新 10 提交；ff-only 不可用，rebase 到 `origin/main`，S90 笔记保留。backup: `backup/s90-session-before-2026-10-07`。S67 stash 未 pop。

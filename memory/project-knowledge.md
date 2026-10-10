@@ -34,6 +34,30 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### Windows `shutil.which` 把当前目录置于搜索序最前 —  spawn 前必须后置过滤 (2026-10-10 S96)
+
+**Issue**: Windows 上 `shutil.which("npm")` 模拟 CreateProcess 搜索序，会把 **cwd 直接子项**排在 PATH 之前（本机 CPython 3.12 实测返回 `.\npm.CMD`）。任何「which 解析 → subprocess 执行」链路在敌意 cwd（含 `npm.cmd` + `node_modules/npm/bin/npm-cli.js` 的仓库，外观完全正常）下就是本地 RCE；`--ignore-scripts` 不防护——被执行的「npm」本身就是载荷。
+
+**Solution**: 统一收口 `_which_trusted()`：拒绝非绝对路径（注意 Windows 宿主机上 mock 的 POSIX 路径会被 `Path.is_absolute()` 误杀，须 PureWindowsPath/PurePosixPath 双 flavor）+ 拒绝 `realpath(parent) == realpath(cwd)` 的直接子项。对抗验证用真实 `which`（非 mock）：cwd 放敌意文件、PATH 只留 System32，断言 `skipped_no_npm` 且载荷 marker 不存在。修复 `src/vibesop/installer/omx_cli.py`（评审 F1）。
+
+### Windows 子进程 PATH 里的 POSIX 路径项被静默跳过 — 沙盒隔离可能静默失效 (2026-10-10 S96)
+
+**Issue**: Git Bash 里往 Python `subprocess` env PATH 塞 `/tmp/...` 这类 POSIX 路径，Windows 解析时整项无效被跳过且不报错。本次沙盒验证 omx_cli 时因此 `which("npm")` 落到真实 npm，**真实执行了 `npm install -g oh-my-codex`**（意外副作用，事后按时间戳 `omx.CMD` 22:48 查实并披露）。
+
+**Solution**: 给 Windows 子进程构造 PATH 前一律 `cygpath -w` 翻译；验证沙盒生效的方法是先跑一步断言 `which` 解析结果落在沙盒内，再进正题。另外：`uv run` 按**自身 cwd** 解析项目——外层 `uv run` 在非项目目录启动会拉到无依赖的解释器，子进程 `import vibesop` 即 ModuleNotFoundError；外层先 cd 回仓库或 `uv --project <path> run`。
+
+### 厂商模型别名 ≠ catalog id — 严格 catalog 校验必须别名感知 (2026-10-10 S96)
+
+**Issue**: DeepSeek 请求别名 `deepseek-v4-flash` 被厂商重定向到 DeepSeek-V4.1-Flash，响应报 `deepseek-flash`；`/models` catalog 只有响应侧 id。`validate_provider_model` 严格成员判定把有效默认模型判「not in catalog」，`vibe doctor` 误红。计价同理：span 记响应模型名时查不到请求侧条目。
+
+**Solution**: `PROVIDER_MODEL_ALIASES`（请求别名 → catalog id）收口在 `src/vibesop/llm/models.py`，校验先严格后别名；pricing 表两侧 id 都收。修这类问题前先查仓库自身约定——本项目 SOP 明确要求「显式写 `deepseek-v4-flash`」，直接改名就违背文档。
+
+### packet-only 门禁评审的上下文盲区 — 给门禁包带「测试基础设施」上下文 (2026-10-10 S96)
+
+**Issue**: kimi 门禁（无工具、只看 diff 包）报了一个阻塞项「stderr 测试在 Windows 上 side_effect 耗尽 StopIteration」——前提错在 autouse fixture `default_posix`（强制 `_WINDOWS=False`）在基线提交里、不在 diff 里，评审员看不见。反驳证据（fixture 原文 + Windows 宿主机实测 104 passed）一轮就推翻。
+
+**Solution**: 给 packet-only 评审员的 diff 包应附「该测试文件的 fixture/conftest 摘要」；收到阻塞项先本地实证再决定返工或反驳——本次反驳成立但仍吸收了对方的硬化建议（list side_effect → dict.get，免疫 fixture 失效），反驳与吸收不互斥。另外：捕获 kimi/CLI 子进程输出用 `write_bytes` 落盘，不要 `sys.stdout.write`（GBK 控制台遇 `\u2022` 即炸，S90 GBK 条目的第三变体）。
+
 ### Hook 信封纪律成对：miss 静默、配置错误必须用户可见 (2026-10-08 S95)
 
 **Issue**: `to_hook_response` 在 config validator errors 非空且无技能匹配时返回空信封（exit 0）——路由被配置错误静默杀死，用户只看到「没匹配」。CHANGELOG 的「fail at load」半真：裸 CLI 会炸，hook 路径不会。五路对抗评审才抓到（C1 MEDIUM）。
@@ -470,6 +494,14 @@ with self._path.open("a") as f:
 **Known limitation**（defer Phase B+1）: AtomicWriter rename 换 inode — flock 锁的是旧 inode，rename 后新 inode 不受保护。Fix 是 sibling lock file（`reflections.jsonl.lock`），更大重构。
 
 ## Reusable Patterns
+
+### fake-node 沙盒：实证「Windows 批处理 shim 零执行」的通用方法 (2026-10-10 S96)
+
+要验证「shell=False 下 npm.cmd 不被执行、经 node+npm-cli.js 间接调用」这类子进程布线主张，mock 不够，搭最小 fake Node 布局跑真 node：`npm.cmd`（被执行就落 marker 的批处理）+ `node_modules/npm/bin/npm-cli.js`（记录 argv、按子命令落产物/exit code）+ 真 `node.exe` 副本；子进程 env 只给沙盒目录 + System32（隐真 npm/omx），cwd 用中性目录。判定三件套：argv 记录逐字等值、batch marker 不存在、装后 which 命中沙盒产物。同一布局把 PATH 抽空 + cwd 放敌意文件即是 CWD 劫持的反向对抗用例。坑：PATH 项必须 `cygpath -w`（见 Pitfalls）。
+
+### 多路评审轮次：内部对抗 swarm + 外部 claude/grok + kimi 门禁三段式 (2026-10-10 S96)
+
+一轮跑顺的形状：① 指令包（范围/diff 路径/分工/宁缺毋滥规则）落 `.omx/artifacts/`，内部五路 explore swarm（安全/正确性/跨平台/测试/CI依赖）并行，报告由主 agent 存档；② claude（`--bare --allowedTools Read,Grep,Glob,Bash`）与 grok（`-p --output-format plain --max-turns 60`）后台并行独立评审同一 diff；③ 汇总去重后**争议项必须实证裁决**——本次 grok 的 HIGH「ANSI 致 CI 红」被四组环境对照 + 该 commit 实际 CI 绿证伪，lane-ci-deps 与 claude 的 `git ls-remote` 双实证压过 grok 的「一致」误判；④ 修复后 kimi 门禁（packet-only，~20KB argv 上限）收敛到 GATE: APPROVE 再提交。全程铁律：评审 lane 只读、发现只报本 diff 引入、无法证实的猜测不得列入。
 
 ### 双门禁拆批：按文件切 commit 可能切穿原子 API 契约 — HEAD 自包含必须隔离复跑 (2026-10-07 S95)
 
