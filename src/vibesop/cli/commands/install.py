@@ -30,7 +30,7 @@ Examples:
 """
 
 from collections.abc import Collection
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import typer
 from rich.console import Console
@@ -41,6 +41,7 @@ from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms
 from vibesop.constants import DEFAULT_AUTO_INSTALL_PACKS, TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
 from vibesop.core.skills.trust import TrustStore
+from vibesop.installer.omx_cli import ensure_omx_cli, is_omx_pack
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
@@ -101,12 +102,28 @@ def install(
         help="Install scope: 'global' (~/.config/skills + platform symlinks) or "
         "'project' (.vibe/skills, current project only)",
     ),
+    with_cli: Annotated[
+        bool,
+        typer.Option(
+            "--with-cli",
+            help="For trusted OMX only: also install oh-my-codex globally via npm, "
+            "with lifecycle scripts disabled. Requires --scope global; "
+            "cannot combine with --auto/--list.",
+        ),
+    ] = False,
 ) -> None:
     """Install skill packs from trusted names or arbitrary Git URLs."""
     if scope not in ("global", "project"):
         console.print("[red]--scope must be 'global' or 'project'[/red]")
         raise typer.Exit(1)
     scope_value: Literal["global", "project"] = "project" if scope == "project" else "global"
+    if with_cli:
+        if auto or list_available:
+            console.print(
+                "[red]--with-cli requires an explicit trusted OMX pack, not --auto/--list[/red]"
+            )
+            raise typer.Exit(2)
+        _validate_cli_companion(name_or_url, scope_value)
 
     # Resolve target platforms (flag > project config > user config > default).
     # Project-scope installs skip platform symlinks entirely.
@@ -161,7 +178,32 @@ def install(
         upgrade=upgrade,
         allow_unsafe_build=allow_unsafe_build,
         scope=scope_value,
+        with_cli=with_cli,
     )
+
+
+def _validate_cli_companion(name_or_url: str | None, scope: str) -> None:
+    if scope != "global":
+        console.print(
+            "[red]--with-cli writes to global npm storage; --scope project is incompatible[/red]"
+        )
+        raise typer.Exit(2)
+    source_url = (
+        name_or_url
+        if name_or_url and name_or_url.startswith(("http://", "https://", "git@"))
+        else None
+    )
+    if name_or_url is None or not is_omx_pack(name_or_url, source_url):
+        console.print(
+            "[red]--with-cli is only supported for omx or its exact trusted Git URL[/red]"
+        )
+        raise typer.Exit(2)
+
+
+def _ensure_cli_companion() -> None:
+    result = ensure_omx_cli()
+    style = "green" if result.status in ("present", "installed") else "yellow"
+    console.print(result.detail, style=style, markup=False)
 
 
 def _list_available() -> None:
@@ -272,12 +314,15 @@ def _install_pack(
     upgrade: bool = False,
     allow_unsafe_build: bool = False,
     scope: Literal["global", "project"] = "global",
+    with_cli: bool = False,
 ) -> str:
     """Install a skill pack by name or URL.
 
     Returns:
         "success", "failed", or "skipped"
     """
+    if with_cli:
+        _validate_cli_companion(name_or_url, scope)
     installer = PackInstaller(allow_unsafe_build=allow_unsafe_build)
 
     # Determine if this is a URL or a pack name
@@ -315,6 +360,8 @@ def _install_pack(
                     f"[yellow]⚠ {pack_name} is already installed[/yellow]\n"
                     "[dim]Use --force to reinstall[/dim]\n"
                 )
+            if with_cli:
+                _ensure_cli_companion()
             return "skipped"
 
     from vibesop.core.exceptions import PackIntegrityError
@@ -351,6 +398,9 @@ def _install_pack(
         return "failed"
 
     if success:
+        if with_cli:
+            # The skill transaction has succeeded; CLI failure cannot roll it back.
+            _ensure_cli_companion()
         if not quiet:
             console.print(f"\n[green]✓ {pack_name} installed successfully![/green]\n")
             for line in msg.split("\n"):

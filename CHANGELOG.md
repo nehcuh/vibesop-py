@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Port reviewed dependency updates onto the current lockfile and SHA-pin upgraded CI actions, retaining Windows evidence uploads, release subject globs, and coverage gates. Codecov uses the supported `files` input and explicit OIDC authentication. Ruff keeps the existing Python/TOML check scope when 0.16 adds Markdown discovery.
+- Make the OMX CLI companion explicitly opt-in with `vibe install omx --with-cli`: only global trusted-pack installs can run it, npm lifecycle scripts are disabled, and Windows runs npm through Node without a command shell. CLI failure remains nonfatal to a successful skill installation.
+
 - **W1 diagnosis optimization**: Retain Windows CI gates while collecting per-case JUnit/skip evidence and deployed Git Bash hook byte diagnostics; qualify platform copy fallback without claiming symlink or Windows ACL proof.
 
 - **B5 diagnosis optimization**: Coroutine function executors are now awaited in parallel batches; single-step batches retain their existing synchronous contract, and async callable objects/custom awaitables remain outside this scope.
