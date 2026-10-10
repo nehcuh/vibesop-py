@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 from vibesop.constants import TRUSTED_PACKS
@@ -15,11 +16,16 @@ OMX_NPM_PACKAGE = "oh-my-codex"
 OMX_CLI_TIMEOUT_S = 180.0
 _MANUAL = "npm install -g oh-my-codex --ignore-scripts"
 _WINDOWS = os.name == "nt"
+# npm error output is attacker-influenceable (registry/proxy error pages), so
+# strip CSI/OSC sequences and remaining C0/DEL controls before echoing it.
+_CONTROL_CHARS = re.compile(
+    r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\x00-\x08\x0b-\x1f\x7f]"
+)
 
 
 @dataclass(frozen=True)
 class OmxCliResult:
-    status: Literal["present", "installed", "skipped_no_npm", "failed"]
+    status: Literal["present", "installed", "installed_off_path", "skipped_no_npm", "failed"]
     detail: str
     omx_path: str | None = None
 
@@ -31,6 +37,33 @@ def is_omx_pack(pack_name: str, pack_url: str | None = None) -> bool:
     return pack_name == "omx"
 
 
+def _which_trusted(name: str) -> str | None:
+    """shutil.which, but never trust an executable sitting in the cwd.
+
+    On Windows, shutil.which prepends the current directory to the search
+    (CreateProcess semantics), so a hostile checkout could shadow npm/node/omx
+    with attacker files (npm.cmd plus node_modules/npm/bin/npm-cli.js looks
+    like an ordinary Node project). Reject non-absolute results and any
+    executable whose parent directory is the cwd itself.
+    """
+    found = shutil.which(name)
+    if not found:
+        return None
+    # Accept either path flavor's absolute form: mocked POSIX paths must stay
+    # valid when tests run on a Windows host (and vice versa).
+    if not (PureWindowsPath(found).is_absolute() or PurePosixPath(found).is_absolute()):
+        return None
+    candidate = Path(found)
+    try:
+        parent = os.path.normcase(os.path.realpath(str(candidate.parent)))
+        cwd = os.path.normcase(os.path.realpath(str(Path.cwd())))
+    except OSError:
+        return None
+    if parent == cwd:
+        return None
+    return found
+
+
 def _npm_argv(npm: str) -> list[str] | None:
     if not _WINDOWS:
         return [npm]
@@ -38,12 +71,16 @@ def _npm_argv(npm: str) -> list[str] | None:
     # Invoke its adjacent npm CLI through Node, without a command shell.
     shim_dir = Path(npm).parent
     npm_cli = shim_dir / "node_modules" / "npm" / "bin" / "npm-cli.js"
-    node = shutil.which("node.exe") or shutil.which("node")
+    node = _which_trusted("node.exe") or _which_trusted("node")
     if node is None:
         adjacent_node = shim_dir / "node.exe"
         if adjacent_node.is_file():
             node = str(adjacent_node)
     if node is None or not npm_cli.is_file():
+        # A native npm.exe shim (e.g. Volta) has no adjacent node_modules but
+        # runs fine with shell=False; only batch shims need the indirection.
+        if npm.lower().endswith(".exe") and Path(npm).is_file():
+            return [npm]
         return None
     return [node, str(npm_cli)]
 
@@ -73,11 +110,11 @@ def _prefix_bin_hint(npm_argv: list[str]) -> str:
 def ensure_omx_cli(*, timeout_s: float = OMX_CLI_TIMEOUT_S) -> OmxCliResult:
     """Ensure CLI presence without lifecycle scripts; ordinary failures never raise."""
     try:
-        existing = shutil.which("omx")
+        existing = _which_trusted("omx")
         if existing:
             return OmxCliResult("present", f"omx CLI already on PATH ({existing})", existing)
 
-        npm = shutil.which("npm")
+        npm = _which_trusted("npm")
         if npm is None:
             return OmxCliResult(
                 "skipped_no_npm",
@@ -102,19 +139,19 @@ def ensure_omx_cli(*, timeout_s: float = OMX_CLI_TIMEOUT_S) -> OmxCliResult:
             shell=False,
         )
         if completed.returncode != 0:
-            tail = "\n".join(completed.stderr.splitlines()[-8:])
+            tail = _CONTROL_CHARS.sub("", "\n".join(completed.stderr.splitlines()[-8:]))
             return OmxCliResult(
                 "failed", f"omx CLI install failed. {tail}\nInstall manually: {_MANUAL}"
             )
 
-        omx_path = shutil.which("omx")
+        omx_path = _which_trusted("omx")
         if omx_path:
             return OmxCliResult("installed", f"omx CLI installed ({omx_path})", omx_path)
         hint = _prefix_bin_hint(npm_argv)
         return OmxCliResult(
-            "failed",
+            "installed_off_path",
             f"npm installed {OMX_NPM_PACKAGE} but `omx` is not on PATH.{hint} "
-            f"Install manually: {_MANUAL}",
+            f"Open a new terminal so PATH updates take effect; manual check: {_MANUAL}",
         )
     except subprocess.TimeoutExpired:
         return OmxCliResult("failed", f"omx CLI install timed out. Install manually: {_MANUAL}")

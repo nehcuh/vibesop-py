@@ -1,6 +1,7 @@
 """CLI companion tests: no real npm installation or lifecycle execution."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -126,7 +127,7 @@ def test_prefix_failure_cannot_escape(prefix_error: bool) -> None:
         ) as run,
     ):
         result = omx_cli.ensure_omx_cli()
-    assert result.status == "failed"
+    assert result.status == "installed_off_path"
     assert "not on PATH" in result.detail
     assert "ignored-prefix" not in result.detail
     assert run.call_args.kwargs["encoding"] == "utf-8"
@@ -146,7 +147,7 @@ def test_posix_prefix_bin_hint() -> None:
         ),
     ):
         result = omx_cli.ensure_omx_cli()
-    assert result.status == "failed"
+    assert result.status == "installed_off_path"
     assert str(Path("/opt/npm-global") / "bin") in result.detail
 
 
@@ -173,7 +174,7 @@ def test_windows_node_executes_actual_adjacent_npm_cli(
         ) as run,
     ):
         result = omx_cli.ensure_omx_cli()
-    assert result.status == "failed"
+    assert result.status == "installed_off_path"
     assert f"`{prefix}`" in result.detail
     assert prefix + "/bin" not in result.detail
     assert run.call_args_list[0].args[0] == [
@@ -232,7 +233,7 @@ def test_windows_adjacent_node_fallback(tmp_path: Path, monkeypatch: pytest.Monk
         ) as run,
     ):
         result = omx_cli.ensure_omx_cli()
-    assert result.status == "failed"
+    assert result.status == "installed_off_path"
     assert run.call_args_list[0].args[0][:2] == [str(node), str(npm_script)]
     assert run.call_args_list[0].kwargs["shell"] is False
 
@@ -241,7 +242,8 @@ def test_windows_adjacent_node_fallback(tmp_path: Path, monkeypatch: pytest.Monk
 def test_native_windows_node_shim_executes_without_network(tmp_path: Path) -> None:
     """Execute real Node through the Windows resolver, with only scratch writes."""
     real_which = shutil.which
-    assert real_which("node.exe") is not None, "native Windows verification requires Node.js"
+    if real_which("node.exe") is None:
+        pytest.skip("native Windows verification requires Node.js")
     shim_dir = tmp_path / "Native Node With Spaces"
     npm_cmd = shim_dir / "npm.cmd"
     npm_script = shim_dir / "node_modules" / "npm" / "bin" / "npm-cli.js"
@@ -276,3 +278,103 @@ def test_native_windows_node_shim_executes_without_network(tmp_path: Path) -> No
         "oh-my-codex",
         "--ignore-scripts",
     ]
+
+
+def test_which_trusted_filters_cwd_and_relative_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows CWD precedence artifacts and relative results are never trusted."""
+    monkeypatch.chdir(tmp_path)
+    subdir = tmp_path / "tools"
+    subdir.mkdir()
+    cases = [
+        (None, False),  # not found
+        ("npm.cmd", False),  # relative
+        (f".{os.sep}npm.cmd", False),  # relative, Windows-style
+        (str(tmp_path / "npm.cmd"), False),  # direct child of cwd: the hijack shape
+        (str(subdir / "npm.cmd"), True),  # subdir is not the CWD-prepend artifact
+        (str(tmp_path.parent / "npm"), True),  # outside cwd
+    ]
+    for resolved, trusted in cases:
+        with patch.object(omx_cli.shutil, "which", return_value=resolved):
+            assert (omx_cli._which_trusted("npm") is not None) is trusted, resolved
+
+
+def test_cwd_hostile_node_project_cannot_hijack_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A hostile checkout (npm.cmd + node_modules/npm/bin/npm-cli.js + node.exe
+    in the cwd) must never be executed, even when Windows CWD precedence would
+    resolve `npm`/`node.exe` to it."""
+    monkeypatch.setattr(omx_cli, "_WINDOWS", True)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "npm.cmd").write_text("@echo off\n", encoding="utf-8")
+    payload = tmp_path / "node_modules" / "npm" / "bin" / "npm-cli.js"
+    payload.parent.mkdir(parents=True)
+    payload.write_text("// attacker payload", encoding="utf-8")
+    (tmp_path / "node.exe").write_bytes(b"attacker payload")
+    cwd_precedence = {
+        "npm": str(tmp_path / "npm.cmd"),
+        "node.exe": str(tmp_path / "node.exe"),
+        "omx": None,
+    }
+    with (
+        patch.object(omx_cli.shutil, "which", side_effect=cwd_precedence.get),
+        patch.object(omx_cli.subprocess, "run") as run,
+    ):
+        result = omx_cli.ensure_omx_cli()
+    assert result.status == "skipped_no_npm"
+    run.assert_not_called()
+
+
+def test_windows_native_exe_shim_runs_directly_without_shell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Volta-style npm.exe has no adjacent node_modules but is a native exe."""
+    monkeypatch.setattr(omx_cli, "_WINDOWS", True)
+    npm_exe = tmp_path / ".volta" / "bin" / "npm.exe"
+    npm_exe.parent.mkdir(parents=True)
+    npm_exe.write_bytes(b"fixture, not executed")
+    paths = {"npm": str(npm_exe)}  # no node.exe, no omx
+    with (
+        patch.object(omx_cli.shutil, "which", side_effect=paths.get),
+        patch.object(
+            omx_cli.subprocess,
+            "run",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, "", ""),
+                subprocess.CompletedProcess([], 1, "", "no prefix"),
+            ],
+        ) as run,
+    ):
+        result = omx_cli.ensure_omx_cli()
+    assert result.status == "installed_off_path"
+    assert run.call_args_list[0].args[0] == [
+        str(npm_exe),
+        "install",
+        "-g",
+        "oh-my-codex",
+        "--ignore-scripts",
+    ]
+    assert run.call_args_list[0].kwargs["shell"] is False
+
+
+def test_stderr_tail_strips_terminal_control_sequences() -> None:
+    """Hostile registry/proxy error text must not reach the terminal raw."""
+    hostile = (
+        "ERR! \x1b[31mred\x1b[0m \x1b]8;;https://evil.example\x07link\x1b]8;;\x07"
+        " \x00\x0cclean text [broken-tag]"
+    )
+    completed = subprocess.CompletedProcess([], 1, "", hostile)
+    with (
+        patch.object(omx_cli.shutil, "which", side_effect={"omx": None, "npm": "/bin/npm"}.get),
+        patch.object(omx_cli.subprocess, "run", return_value=completed),
+    ):
+        result = omx_cli.ensure_omx_cli()
+    assert result.status == "failed"
+    assert "\x1b" not in result.detail
+    assert "\x00" not in result.detail
+    assert "\x0c" not in result.detail
+    assert "red" in result.detail
+    assert "link" in result.detail
+    assert "clean text [broken-tag]" in result.detail

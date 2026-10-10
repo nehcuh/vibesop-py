@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Harden the OMX CLI companion against review findings: executable resolution never trusts the current directory (Windows `shutil.which` prepends the cwd, CreateProcess-style, so a hostile checkout carrying `npm.cmd`/`node.exe`/`node_modules/npm/bin/npm-cli.js` could otherwise shadow the real toolchain); npm diagnostics are stripped of ANSI/OSC control sequences before being echoed; a successful npm install whose `omx` shim is not yet on PATH reports the new `installed_off_path` status instead of `failed`; and native `npm.exe` shims without an adjacent `node_modules` (e.g. Volta) run directly without a shell instead of failing closed.
+- Rephrase the occupied-target refusal to lead with manual content preservation and to state plainly that `--upgrade` irreversibly replaces the whole directory, and pin the upgrade replacement contract with a dedicated test.
+- Correct the `attest-build-provenance` SHA comment to v4.2.2 and align the pre-commit Ruff hook with the locked toolchain (v0.16.4).
 - Refuse nonempty unrecognized pack install targets unless replacement is explicitly requested with `--upgrade`, preserving pre-existing files when installation fails.
 - Print invalid routing configuration values as literal text so Rich markup in user input cannot crash the error handler.
 - Materialize a linked `SKILL.md` after copying an installed Pi skill directory, preserving the central pack and auxiliary files while allowing the private namespace rewrite.
