@@ -386,8 +386,9 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
             finally:
                 if not succeeded:
                     shutil.rmtree(staged, ignore_errors=True)
-        elif skill_file.is_symlink():
-            # File-level link inside a real dir: replace with a real file.
+        if skill_file.is_symlink():
+            # The private directory copy may still contain a linked SKILL.md.
+            # Replace that leaf too, without writing through to its source.
             skill_file.unlink()
 
         # Route through the guarded atomic write so the namespace rewrite

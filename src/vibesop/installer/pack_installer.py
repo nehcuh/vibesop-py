@@ -189,6 +189,11 @@ class PackInstaller:
                         if scope == "global":
                             self._rebuild_global_index(pack_name)
                         return True, msg
+                    return False, (
+                        f"Install target is not empty: {target_path}. "
+                        "Move its contents before installing, or use --upgrade "
+                        "to explicitly replace them."
+                    )
 
             target_path.mkdir(parents=True, exist_ok=True)
 
