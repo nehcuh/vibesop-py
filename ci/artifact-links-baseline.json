@@ -82,6 +82,11 @@
       "count": 1
     },
     {
+      "source": "PROJECT_CONTEXT.md",
+      "target": ".omx/artifacts/adversarial-review-86b69f43-58692f70.md",
+      "count": 1
+    },
+    {
       "source": "docs/archive/chrome-sidepanel-task-plan-panel.md",
       "target": ".omx/artifacts/ask-claude-task-plan-panel-review-*.md",
       "count": 1
@@ -2163,6 +2168,11 @@
     },
     {
       "source": "memory/session.md",
+      "target": ".omx/artifacts/adversarial-review-86b69f43-58692f70.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
       "target": ".omx/artifacts/ask-claude-fail-closed-residual-20260903.md",
       "count": 1
     },
@@ -2259,6 +2269,11 @@
     {
       "source": "memory/session.md",
       "target": ".omx/artifacts/review-diff-7f2de48-967e134.patch",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/review-diff-86b69f43-58692f70.patch",
       "count": 1
     },
     {

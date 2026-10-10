@@ -47,10 +47,15 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 # stale multiset unchanged. The 7dedc2b8 bump (+39 refs / +39 ok from the
 # diagnosis-evidence docs) had landed without a provenance entry; this entry
 # re-measures and confirms those constants.
-FROZEN_REF_TOTAL = 1185
+# Re-observed 2026-10-10 on clean ddad3c65 after the S90/S95 session-note
+# commits and the 2026-10-07/2026-10-10 review fix batches: 1188 refs
+# (+3, all from session notes), 723 ok unchanged, 465 stale occurrences /
+# 457 keys (+3/+3, .omx artifact citations from the session notes);
+# baseline re-frozen accordingly.
+FROZEN_REF_TOTAL = 1188
 FROZEN_OK = 723
-FROZEN_STALE_OCCURRENCES = 462
-FROZEN_STALE_KEYS = 454
+FROZEN_STALE_OCCURRENCES = 465
+FROZEN_STALE_KEYS = 457
 
 
 def _git(root: Path, *args: str) -> None:
