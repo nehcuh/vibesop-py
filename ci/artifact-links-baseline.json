@@ -87,6 +87,11 @@
       "count": 1
     },
     {
+      "source": "PROJECT_CONTEXT.md",
+      "target": ".omx/artifacts/pull-20261010b-*.md",
+      "count": 1
+    },
+    {
       "source": "docs/archive/chrome-sidepanel-task-plan-panel.md",
       "target": ".omx/artifacts/ask-claude-task-plan-panel-review-*.md",
       "count": 1
@@ -2198,6 +2203,11 @@
     },
     {
       "source": "memory/session.md",
+      "target": ".omx/artifacts/e2e-evidence-20261010-deploy.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
       "target": ".omx/artifacts/next-opt-design-v0.md",
       "count": 1
     },
@@ -2249,6 +2259,11 @@
     {
       "source": "memory/session.md",
       "target": ".omx/artifacts/pull-20260915-review-instructions.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20261010b-review-synthesis.md",
       "count": 1
     },
     {
