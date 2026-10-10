@@ -669,6 +669,19 @@ vibe skills sync claude-code
 vibe skills list
 ```
 
+`vibe install omx` installs the skills only. To also install the `omx` CLI,
+explicitly run `vibe install omx --with-cli` (Node.js >=20 and npm required).
+This opts into **global npm writes** and runs `npm install -g oh-my-codex --ignore-scripts`;
+package lifecycle scripts and `omx setup` are not run. The flag is available only
+for `omx` or its exact trusted Git URL, with global scope; it cannot be combined
+with `--scope project`, `--auto`, or `--list`. It also works when the skills are
+already installed. CLI installation failures warn and leave a successful skills
+installation intact. If the global executable directory is absent from PATH,
+add the directory shown by the warning and open a new terminal. Disabling install
+scripts can leave OMX native runtime features unavailable; enable/setup those
+separately only when needed. Quickstart and other skill-install entry points do
+not install npm packages implicitly.
+
 ### 方法 2: 构建部署
 
 ```bash

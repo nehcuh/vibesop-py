@@ -781,7 +781,9 @@ def route(
     except ValidationError as e:
         # Invalid routing config (e.g. bypass < keyword threshold): print the
         # actionable message instead of a raw traceback (review 2026-10-07, C1).
-        console.print(f"[bold red]✗[/bold red] Invalid routing configuration:\n{rich_escape(str(e))}")
+        console.print(
+            f"[bold red]✗[/bold red] Invalid routing configuration:\n{rich_escape(str(e))}"
+        )
         raise typer.Exit(2) from e
 
     # Apply CLI overrides to the underlying router config
