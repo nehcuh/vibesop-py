@@ -812,6 +812,20 @@ class PlatformAdapter(ABC):
                 result.add_file(skill_output_path)
                 return
 
+        # A pre-existing legal per-skill symlink must survive the fallback
+        # too — keep the link and skip, mirroring the content paths above;
+        # writing through it would trip the write-time leaf-link refusal and
+        # abort the whole render. Enforced HERE at the dispatch site so
+        # subclass overrides of _fallback_skill_content (Jinja2 templates,
+        # pi/claude_code) inherit the contract.
+        if skill_dir.is_symlink():
+            if skill_dir.exists():
+                result.add_file(skill_output_path)
+                return
+            # Dangling link: drop it so the fallback write recreates a real
+            # directory.
+            skill_dir.unlink(missing_ok=True)
+
         self._fallback_skill_content(
             skill,
             skill_output_path,

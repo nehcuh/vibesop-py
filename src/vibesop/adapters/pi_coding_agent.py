@@ -14,7 +14,6 @@ Pi differs from Claude Code in several key ways:
 
 import json
 import logging
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -365,15 +364,14 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         # SKILL.md would silently drop the pack's auxiliary files
         # (references/, scripts/) from the platform tree.
         #
-        # The copy is staged next to the target and swapped in by rename. On
-        # POSIX, rename atomically replaces the leaf link itself — no unlink
-        # window (a link re-planted by a racer is replaced, never followed).
-        # Windows rename refuses an existing target, so the link is dropped
-        # first and a re-planted target then fails closed (FileExistsError)
-        # instead of being written through. A failed copy leaves the original
-        # link intact (on Windows a post-unlink replace failure fails closed
-        # without it — the link is re-created on the next render). mkdtemp's
-        # 0700 is reset to the rendered-dir norm
+        # The copy is staged next to the target and swapped in by rename.
+        # rename(2) cannot replace a symlink with a directory (ENOTDIR on
+        # POSIX, FileExistsError on win32), so the link is dropped first;
+        # a target re-planted in that window then fails closed (ENOTDIR /
+        # ENOTEMPTY / FileExistsError) instead of being written through.
+        # A failed copy leaves the original link intact (a post-unlink
+        # swap failure fails closed without it — the link is re-created on
+        # the next render). mkdtemp's 0700 is reset to the rendered-dir norm
         # (0755), the directory-level twin of the write_file_atomic umask fix.
         if skill_dir.is_symlink():
             source_tree = skill_dir.resolve()
@@ -382,11 +380,8 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
             try:
                 shutil.copytree(source_tree, staged, symlinks=True, dirs_exist_ok=True)
                 staged.chmod(0o755)
-                if os.name == "posix":
-                    staged.replace(skill_dir)
-                else:
-                    skill_dir.unlink()
-                    staged.replace(skill_dir)
+                skill_dir.unlink()
+                staged.replace(skill_dir)
                 succeeded = True
             finally:
                 if not succeeded:

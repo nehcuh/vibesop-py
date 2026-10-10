@@ -74,11 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     materializes a private copy of the ENTIRE central skill dir — writing
     only SKILL.md silently dropped pack auxiliary files (references/,
     scripts/) from the platform tree. The copy is staged next to the target
-    and swapped by rename (POSIX: atomic replace with no unlink window;
-    win32: unlink-then-rename fails closed against re-planted targets), a
-    failed copy leaves the original link intact, and the staged dir is
-    reset to the rendered-dir norm 0755. The branch is test-covered for the
-    first time, including the rollback path.
+    and swapped in by rename after unlinking the leaf link (rename cannot
+    replace a symlink with a directory — ENOTDIR on POSIX, FileExistsError
+    on win32 — and a target re-planted in the unlink window fails closed
+    instead of being written through); a failed copy leaves the original
+    link intact, and the staged dir is reset to the rendered-dir norm 0755.
+    The branch is test-covered for the first time, including the rollback
+    path.
   - (M3) Sandbox-build rollback no longer latches "Already installed":
     `mkdtemp` OSError and tree-indexing MemoryError convert to
     `PackBuildError` (so the cloned target is cleaned), and any other
