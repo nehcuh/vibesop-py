@@ -5,6 +5,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import typer.rich_utils
+from rich.text import Text
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
@@ -147,12 +149,18 @@ class TestExplicitOmxCli:
         assert result.exit_code == 0
         cli.assert_not_called()
 
-    def test_help_discloses_global_writes_and_disabled_scripts(self) -> None:
+    @pytest.mark.parametrize("force_terminal", [False, True])
+    def test_help_discloses_global_writes_and_disabled_scripts(
+        self, monkeypatch: pytest.MonkeyPatch, force_terminal: bool
+    ) -> None:
+        monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", force_terminal)
+        monkeypatch.setattr(typer.rich_utils, "COLOR_SYSTEM", "standard")
         result = runner.invoke(app, ["install", "--help"])
         assert result.exit_code == 0
-        assert "--with-cli" in result.output
-        assert "globally" in result.output
-        assert "lifecycle scripts disabled" in " ".join(result.output.split())
+        output = Text.from_ansi(result.output).plain
+        assert "--with-cli" in output
+        assert "globally" in output
+        assert "lifecycle scripts disabled" in " ".join(output.split())
 
 
 class TestInstallCommand:
