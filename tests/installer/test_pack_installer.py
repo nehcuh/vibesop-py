@@ -1748,3 +1748,39 @@ class TestProjectScopeInstall:
         assert success is True, msg
         assert (central / "glob-pack" / "SKILL.md").is_file()
         assert not (project_root / ".vibe" / "skills" / "glob-pack").exists()
+
+
+@pytest.mark.parametrize("scope", ["project", "global"])
+def test_install_preserves_occupied_unrecognized_target(tmp_path, monkeypatch, scope):
+    """An existing non-pack directory is never owned by a failed install."""
+    from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+
+    project = tmp_path / "project"
+    project.mkdir()
+    central = tmp_path / "central"
+    base = central if scope == "global" else project / ".vibe" / "skills"
+    target = base / "user-notes-pack"
+    target.mkdir(parents=True)
+    notes = target / "NOTES.txt"
+    original = b"USER_NOTES_SENTINEL\n"
+    notes.write_bytes(original)
+    analysis = RepoAnalysis(
+        pack_name="user-notes-pack",
+        source_url="https://example.com/user-notes-pack",
+        skill_files=[Path("helper/SKILL.md")],
+        setup_scripts=[],
+    )
+    monkeypatch.setattr(RepoAnalyzer, "analyze", lambda *a, **kw: analysis)
+    clone = MagicMock(side_effect=AssertionError("occupied target must not be cloned"))
+    monkeypatch.setattr(RepoAnalyzer, "git_clone", clone)
+    installer = PackInstaller(
+        central_storage=central, platform_paths=[tmp_path / "platform"], project_root=project
+    )
+    ok, message = installer.install_pack("user-notes-pack", analysis.source_url, scope=scope)
+    assert not ok
+    assert "not empty" in message
+    assert "--upgrade" in message
+    assert target.is_dir()
+    assert notes.read_bytes() == original
+    assert sorted(p.name for p in target.iterdir()) == ["NOTES.txt"]
+    clone.assert_not_called()

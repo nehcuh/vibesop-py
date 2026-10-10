@@ -406,3 +406,54 @@ class TestNamespaceRewriteRollback:
         assert skill_dir.is_dir() and not skill_dir.is_symlink()
         mode = stat_mod.S_IMODE(skill_dir.stat().st_mode)
         assert mode == 0o755, f"mkdtemp's 0700 must not leak into the render tree: {oct(mode)}"
+
+
+def test_render_installed_skill_with_internal_linked_document(tmp_path, symlink_supported):
+    """A real audited and installed skill gets a private regular SKILL.md."""
+    if not symlink_supported:
+        pytest.skip("directory symlinks not supported on this host")
+    from vibesop.installer.pack_installer import PackInstaller
+    from vibesop.security.skill_auditor import SkillSecurityAuditor
+
+    central = tmp_path / "central" / "demo"
+    central.mkdir(parents=True)
+    content = "---\nname: demo\ndescription: Internal linked skill document\n---\n# Demo\n"
+    document = central / "document.md"
+    document.write_text(content, encoding="utf-8")
+    (central / "SKILL.md").symlink_to("document.md")
+    (central / "references").mkdir()
+    (central / "references" / "ref.md").write_text("REFERENCE", encoding="utf-8")
+    project = tmp_path / "project"
+    project.mkdir()
+    output = project / ".pi"
+    skills = output / "skills"
+    skills.mkdir(parents=True)
+    audit = SkillSecurityAuditor().audit_pack_files(central.parent, pack_name="nspack")
+    assert not audit.has_high and not audit.has_critical
+    installer = PackInstaller(
+        central_storage=central.parent, platform_paths=[skills], project_root=project
+    )
+    assert installer.create_skill_symlinks(central.parent, skills, "nspack") == 1
+    leaf = skills / "nspack-demo"
+    assert leaf.is_symlink()
+    manifest = Manifest(
+        metadata=ManifestMetadata(platform="pi"),
+        skills=[
+            SkillSpec(
+                id="nspack/demo",
+                name="Demo",
+                description="Demo skill",
+                trigger_when="testing",
+                metadata={"source_path": str(central)},
+            )
+        ],
+    )
+    result = PiCodingAgentAdapter(project_root=project).render_config(manifest, output)
+    assert result.success, result.errors
+    assert not leaf.is_symlink()
+    assert not (leaf / "SKILL.md").is_symlink()
+    assert "name: nspack-demo" in (leaf / "SKILL.md").read_text(encoding="utf-8")
+    assert (leaf / "references" / "ref.md").read_text(encoding="utf-8") == "REFERENCE"
+    assert document.read_text(encoding="utf-8") == content
+    assert (central / "SKILL.md").is_symlink()
+    assert (central / "SKILL.md").readlink() == Path("document.md")
