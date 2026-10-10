@@ -1784,3 +1784,42 @@ def test_install_preserves_occupied_unrecognized_target(tmp_path, monkeypatch, s
     assert notes.read_bytes() == original
     assert sorted(p.name for p in target.iterdir()) == ["NOTES.txt"]
     clone.assert_not_called()
+
+
+@pytest.mark.parametrize("scope", ["project", "global"])
+def test_upgrade_explicitly_replaces_occupied_unrecognized_target(tmp_path, monkeypatch, scope):
+    """--upgrade is the documented destructive escape hatch for occupied targets.
+
+    The refusal message points at --upgrade; this pins the contract that the
+    upgrade branch really proceeds (clone attempted) and destroys pre-existing
+    content BEFORE the clone, so a failed replacement cannot resurrect it.
+    """
+    from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+
+    project = tmp_path / "project"
+    project.mkdir()
+    central = tmp_path / "central"
+    base = central if scope == "global" else project / ".vibe" / "skills"
+    target = base / "user-notes-pack"
+    target.mkdir(parents=True)
+    notes = target / "NOTES.txt"
+    notes.write_bytes(b"USER_NOTES_SENTINEL\n")
+    analysis = RepoAnalysis(
+        pack_name="user-notes-pack",
+        source_url="https://example.com/user-notes-pack",
+        skill_files=[Path("helper/SKILL.md")],
+        setup_scripts=[],
+    )
+    monkeypatch.setattr(RepoAnalyzer, "analyze", lambda *a, **kw: analysis)
+    clone = MagicMock(return_value=False)  # stop right after the replacement step
+    monkeypatch.setattr(RepoAnalyzer, "git_clone", clone)
+    installer = PackInstaller(
+        central_storage=central, platform_paths=[tmp_path / "platform"], project_root=project
+    )
+    ok, message = installer.install_pack(
+        "user-notes-pack", analysis.source_url, scope=scope, upgrade=True
+    )
+    assert not ok  # mocked clone failure; the replacement contract is what matters
+    assert "Failed to clone" in message
+    clone.assert_called_once()
+    assert not notes.exists()

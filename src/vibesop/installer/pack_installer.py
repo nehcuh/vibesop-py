@@ -191,8 +191,9 @@ class PackInstaller:
                         return True, msg
                     return False, (
                         f"Install target is not empty: {target_path}. "
-                        "Move its contents before installing, or use --upgrade "
-                        "to explicitly replace them."
+                        "Move its contents aside (or rename the directory) before "
+                        "installing. --upgrade irreversibly replaces the whole "
+                        "directory, including files that are not part of any pack."
                     )
 
             target_path.mkdir(parents=True, exist_ok=True)
