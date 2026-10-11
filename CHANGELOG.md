@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Adopt reviewed October dependency updates, including sentence-transformers 6.1.0, and align pre-commit Ruff with the locked 0.16.10 toolchain. Preserve the NumPy >=1.26.0 floor and the Anthropic <1.0.0 bound pending SDK migration.
+
 - Port reviewed dependency updates onto the current lockfile and SHA-pin upgraded CI actions, retaining Windows evidence uploads, release subject globs, and coverage gates. Codecov uses the supported `files` input and explicit OIDC authentication. Ruff keeps the existing Python/TOML check scope when 0.16 adds Markdown discovery.
 - Make the OMX CLI companion explicitly opt-in with `vibe install omx --with-cli`: only global trusted-pack installs can run it, npm lifecycle scripts are disabled, and Windows runs npm through Node without a command shell. CLI failure remains nonfatal to a successful skill installation.
 

@@ -62,7 +62,7 @@ test = [
 ]
 
 semantic = [
-    "sentence-transformers>=5.5.0,<6.0.0",
+    "sentence-transformers>=5.5.0,<7.0.0",
     "numpy>=1.24.0,<3.0.0",
     # FastEmbed: ONNX-based lightweight embeddings (used by W0.C benchmark
     # and W1 embedding cache). Optional because (a) it pulls onnxruntime
