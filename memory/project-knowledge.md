@@ -34,6 +34,12 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### artifact-links 复冻必须 JSON + 测试常量成对 — 只冻一半照样红 (2026-10-11 S96 补)
+
+**Issue**: session 笔记引入新的 `.omx` 引用后，只重跑 `scripts/check_artifact_links.py --write-baseline` 更新 JSON 是不够的——`tests/unit/test_check_artifact_links_baseline.py` 里的 `FROZEN_REF_TOTAL/FROZEN_OK/FROZEN_STALE_*` 聚合常量同样是硬门禁（`assert len(refs) == FROZEN_REF_TOTAL`)。本次只推 JSON 导致 CI 四腿全红（1191 vs 1188)，二次推送才绿。
+
+**Solution**: 复冻三步成对：① 洁净 worktree 里 `--write-baseline` 写 JSON;② 同步改测试文件的 4 个 FROZEN 常量 + provenance 注释；③ worktree 里跑整个 baseline 测试文件（63 passed）再推。另外复用旧 worktree 前先 `git log` 确认它的 HEAD——直接 `cd` 进陈旧 worktree 会拿旧树冻出旧数值。
+
 ### Windows `shutil.which` 把当前目录置于搜索序最前 —  spawn 前必须后置过滤 (2026-10-10 S96)
 
 **Issue**: Windows 上 `shutil.which("npm")` 模拟 CreateProcess 搜索序，会把 **cwd 直接子项**排在 PATH 之前（本机 CPython 3.12 实测返回 `.\npm.CMD`）。任何「which 解析 → subprocess 执行」链路在敌意 cwd（含 `npm.cmd` + `node_modules/npm/bin/npm-cli.js` 的仓库，外观完全正常）下就是本地 RCE；`--ignore-scripts` 不防护——被执行的「npm」本身就是载荷。

@@ -16,7 +16,7 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 <!-- handoff:start -->
 ### 2026-10-10 S96 END · 二轮评审修复全推送 + 本地部署验证 + doctor 修红
 
-**Workspace**：VibeSOP main @ `f5f98d88`（全部推送，CI/E2E/CodeQL 全绿）。工作树 tracked 干净；`.omx/` 产物不入库。意外副作用：本机全局 npm 装了 `oh-my-codex@0.21.8`（沙盒 PATH 串扰所致，已披露，可 `npm uninstall -g oh-my-codex`）。
+**Workspace**：VibeSOP main @ `59992ca7`（全部推送，CI/E2E/CodeQL 全绿）。工作树 tracked 干净；`.omx/` 产物不入库。意外副作用：本机全局 npm 装了 `oh-my-codex@0.21.8`（沙盒 PATH 串扰所致，已披露，可 `npm uninstall -g oh-my-codex`）。
 
 **完成**：拉取 `41b7699b..251043f7`（3 提交：--with-cli OMX 伴装 / occupied-target 保护 / 依赖+CI 更新）→ 七路评审（内部五路 swarm + claude + grok）9 确认（0H/1M/8L），grok 唯一 HIGH 经实证驳回。用户点名后 F1–F8 全修：`9d886c7d`（`_which_trusted` 堵 Windows CWD 劫持 / ANSI 剥离 / `installed_off_path` / Volta .exe 直跑）+ `b4f9d412`（occupied 文案 + upgrade 契约测试）+ `497d3bb6`（attest v4.2.2 注释 + pre-commit ruff 0.16.4）;kimi 门禁两轮收敛 APPROVE（N1 阻塞项被 autouse fixture 证据驳回，吸收其硬化建议）。本地部署验证：`vibe build claude-code --output ~/.claude` 174→182 skills;fake-node 沙盒实证 npm.cmd 零执行；敌意 cwd 载荷零执行。DeepSeek route 三层实证（直连 ROUTE_LLM_OK / keyword 命中 / AI_TRIAGE 1235.9ms 选中 experience-evolution）。doctor 修红 `f5f98d88`:`PROVIDER_MODEL_ALIASES` 别名感知（项目 SOP 要求显式写 `deepseek-v4-flash`，厂商重定向到 `deepseek-flash`)。
 
