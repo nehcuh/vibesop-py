@@ -16,7 +16,7 @@ split read/write would lose entries written concurrently), writes are
 atomic temp+rename, corruption self-heals on the next write, and
 semantics are fail-open — any failure (missing optional dependency,
 model load error, lock contention, IO) returns ``None`` so the caller
-falls back to the KeywordMatcher path. Entries whose skill is no longer
+uses the independent BM25 recall lane. Entries whose skill is no longer
 a candidate (e.g. uninstalled) are pruned on write so the cache cannot
 grow without bound. Each cache entry also carries the embedding model
 name; entries written by a different model are treated as stale and
@@ -78,8 +78,7 @@ class EmbeddingRecall:
     ) -> list[str] | None:
         """Return up to ``top_n`` candidate ids ranked by embedding similarity.
 
-        ``None`` on any failure — the caller must fall back to keyword
-        prefiltering. Candidates scoring below ``min_similarity`` are dropped;
+        ``None`` on any failure — the caller retains the independent lexical lane. Candidates scoring below ``min_similarity`` are dropped;
         when nothing clears the floor the result is an empty list, which the
         caller treats as "recall ran, nothing is semantically relevant"
         (distinct from ``None`` = recall unavailable). Note the caller only
@@ -100,8 +99,7 @@ class EmbeddingRecall:
                     for c in candidates
                     if str(c.get("id", "")) in embeddings
                 ),
-                key=lambda kv: kv[1],
-                reverse=True,
+                key=lambda kv: (-kv[1], kv[0]),
             )
             # Drop everything below the similarity floor; may be empty.
             return [skill_id for skill_id, s in scored[:top_n] if s >= self.min_similarity]

@@ -11,11 +11,12 @@ tags: [adversarial panel, multi-lane panel, pull latest, frozen diff,
 triggers:
   - "多路独立对抗"
   - "独立对抗复审"
-  - "拉取最新"
+  - "拉取最新并进行对抗评审"
   - "pull latest and adversarial review"
   - "multi-lane independent adversarial review"
   - "/adversarial-panel"
   - "/adversarial-review"
+routing_requires_any: [review, adversarial, 评审, 复审, 审查, 对抗]
 version: 1.0.0
 allowed-tools:
   - Read

@@ -54,6 +54,7 @@ from vibesop.core.routing._layers import _with_source_file
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
+from vibesop.core.routing.intent_constraints import intent_clauses
 from vibesop.core.routing.matcher_pipeline import (
     MatcherPipeline,
     filter_invocation_disabled_candidates,
@@ -649,7 +650,8 @@ class UnifiedRouter(
         # Layer 0.5: Explicit session-end signal detection.
         # Short session-end signals (e.g. "拜拜", "I'm done") would otherwise be
         # bypassed by the short-query threshold, so we check them up-front.
-        match, detail = self._try_session_end_layer(query, candidates)
+        automatic_candidates = filter_invocation_disabled_candidates(candidates)
+        match, detail = self._try_session_end_layer(query, automatic_candidates)
         routing_path.append(RoutingLayer.KEYWORD)
         layer_details.append(detail)
         self._tracer.record_layer(RoutingLayer.KEYWORD, detail, len(candidates))
@@ -675,7 +677,7 @@ class UnifiedRouter(
         # because its contract strips the generic vocabulary they key on
         # (production miss: the query above fell to fallback-llm while the
         # guard only gates matches, never promotes them).
-        match, detail = self._try_guarded_explicit_layer(query, candidates)
+        match, detail = self._try_guarded_explicit_layer(query, automatic_candidates)
         routing_path.append(RoutingLayer.KEYWORD)
         layer_details.append(detail)
         self._tracer.record_layer(RoutingLayer.KEYWORD, detail, len(candidates))
@@ -803,8 +805,15 @@ class UnifiedRouter(
 
         # Step 3: Matcher pipeline (shared fallback). Levenshtein runs as
         # last resort only — see _run_matcher_pipeline_levenshtein_last.
+        matching_candidates = [
+            c
+            for c in candidates
+            if self._triage_service.has_explicit_guard_signal(
+                query, candidates, str(c.get("id", ""))
+            )
+        ]
         primary, alternatives, detail = self._run_matcher_pipeline_levenshtein_last(
-            query, candidates, context
+            " ".join(intent_clauses(query, include_references=True)), matching_candidates, context
         )
         routing_path.append(detail.layer)
         layer_details.append(detail)

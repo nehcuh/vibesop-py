@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Fuse independent BM25 and dense recall with reciprocal ranks before AI triage. Filter inactive mentions and declared `routing_requires_any` prerequisites before ranking; preserve explicit invocation and configured bindings. Candidate/triage cache schemas now fingerprint routing metadata and validate stale selected skills.
+
 - Adopt reviewed October dependency updates, including sentence-transformers 6.1.0, and align pre-commit Ruff with the locked 0.16.10 toolchain. Preserve the NumPy >=1.26.0 floor and the Anthropic <1.0.0 bound pending SDK migration.
 
 - Port reviewed dependency updates onto the current lockfile and SHA-pin upgraded CI actions, retaining Windows evidence uploads, release subject globs, and coverage gates. Codecov uses the supported `files` input and explicit OIDC authentication. Ruff keeps the existing Python/TOML check scope when 0.16 adds Markdown discovery.

@@ -440,7 +440,7 @@ class TestServiceIntegration:
         assert stale is not None
 
     def test_last_good_validates_against_full_candidate_set(self, tmp_path) -> None:
-        """Last-good aliveness is checked against the full candidate set: a
+        """Last-good aliveness is checked against the governed candidate pool: a
         stale skill that fell outside the prefiltered top-N window is still
         usable, because it is still installed."""
         cache = TriageCache(tmp_path)
@@ -462,7 +462,7 @@ class TestServiceIntegration:
         assert result.match.skill_id == "skill-a"
         assert result.match.metadata["last_good"] is True
         # The prefilter really did run and really did exclude skill-a.
-        assert service._last_recall_method == "embedding"
+        assert service._last_recall_method == "hybrid"
 
     def test_last_good_decay_constant(self) -> None:
         """The last-good decay factor is a named module constant, value 0.7."""

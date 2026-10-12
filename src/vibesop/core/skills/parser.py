@@ -196,6 +196,7 @@ def build_spec(
         intent=intent,
         trigger_when=trigger_when,
         triggers=triggers,
+        routing_requires_any=_parse_list_field(data.get("routing_requires_any")),
         routing_patterns=routing_patterns,
         priority=priority,
         tags=tags,

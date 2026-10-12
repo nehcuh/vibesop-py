@@ -100,6 +100,10 @@ class SkillSpec(BaseModel):
     # ---- Routing fields ----
     trigger_when: str = Field(default="", description="When to trigger this skill")
     triggers: list[str] = Field(default_factory=list, description="Trigger phrases for routing")
+    routing_requires_any: list[str] = Field(
+        default_factory=list,
+        description="Auto-routing requires an affirmative mention of at least one phrase; explicit invocation/bindings are exempt.",
+    )
     routing_patterns: list[str] = Field(
         default_factory=list,
         description="Regex/natural-language patterns for scenario-based routing",

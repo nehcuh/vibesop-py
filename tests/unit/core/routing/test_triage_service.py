@@ -806,6 +806,7 @@ class TestLastGoodRecallMethod:
         "confidence": 0.9,
         "source": "builtin/debug-skill",
         "description": "debug things",
+        "candidates_hash": TriageCache.candidates_hash(_CANDIDATES),
     }
 
     def _make_service_with_llm(self) -> TriageService:
@@ -834,7 +835,7 @@ class TestLastGoodRecallMethod:
         ):
             result = service.try_ai_triage("debug", self._CANDIDATES)
         assert result is not None
-        assert result.match.metadata["recall_method"] == "keyword"
+        assert result.match.metadata["recall_method"] == "bm25"
 
     def test_budget_rejected_last_good_has_no_residual_recall_method(self) -> None:
         """Second request rejected by the budget gate must not carry the
@@ -890,6 +891,10 @@ class TestLastGoodRecallMethod:
         service._cost_tracker.get_monthly_cost.return_value = 5.5
         service._triage_cache.lookup.return_value = (None, self._STALE_ENTRY)
         candidates = [{**c, "source_file": f"/skills/{c['id']}/SKILL.md"} for c in self._CANDIDATES]
+        service._triage_cache.lookup.return_value = (
+            None,
+            {**self._STALE_ENTRY, "candidates_hash": TriageCache.candidates_hash(candidates)},
+        )
 
         result = service.try_ai_triage("debug", candidates)
 
@@ -1052,9 +1057,7 @@ class TestGuardedSkills:
     def test_riper_fallback_triggers_when_candidate_missing(self) -> None:
         """Without a riper candidate, the conservative fallback list applies."""
         service = _make_service()
-        assert service.has_explicit_guard_signal(
-            "tell me about riper", [], "builtin/riper-workflow"
-        )
+        assert service.has_explicit_guard_signal("use riper", [], "builtin/riper-workflow")
         assert not service.has_explicit_guard_signal("make a plan", [], "builtin/riper-workflow")
 
     def test_session_end_real_skill_md_covers_leaving(self) -> None:

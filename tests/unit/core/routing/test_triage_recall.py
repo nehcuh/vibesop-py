@@ -303,7 +303,7 @@ class TestPrefilterIntegration:
         service = self._make_service(embedding_recall=recall)
         result = service.prefilter_ai_triage_candidates("ship it", _candidates(), 2)
         assert [c["id"] for c in result] == ["deploy", "debug"]
-        assert service._last_recall_method == "embedding"
+        assert service._last_recall_method == "hybrid"
 
     def test_fallback_to_keyword_when_recall_none(self, tmp_path: Any) -> None:
         recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0])
@@ -311,15 +311,15 @@ class TestPrefilterIntegration:
         recall._model = None
         service = self._make_service(embedding_recall=recall)
         result = service.prefilter_ai_triage_candidates("debug", _candidates(), 2)
-        assert len(result) == 2
+        assert [c["id"] for c in result] == ["debug"]
         assert "debug" in {c["id"] for c in result}
-        assert service._last_recall_method == "keyword"
+        assert service._last_recall_method == "bm25"
 
     def test_keyword_path_when_no_recall_injected(self) -> None:
         service = self._make_service()
         result = service.prefilter_ai_triage_candidates("debug", _candidates(), 2)
-        assert len(result) == 2
-        assert service._last_recall_method == "keyword"
+        assert [c["id"] for c in result] == ["debug"]
+        assert service._last_recall_method == "bm25"
 
     def test_under_limit_skips_recall(self, tmp_path: Any) -> None:
         recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0])
@@ -352,7 +352,7 @@ class TestPrefilterIntegration:
 
         assert result is not None
         assert result.match is not None
-        assert result.match.metadata["recall_method"] == "embedding"
+        assert result.match.metadata["recall_method"] == "hybrid"
         assert result.match.metadata["candidates_sent"] == 2
 
     def test_empty_recall_result_returns_no_candidates(self, tmp_path: Any) -> None:
@@ -362,18 +362,15 @@ class TestPrefilterIntegration:
         service = self._make_service(embedding_recall=recall)
         result = service.prefilter_ai_triage_candidates("ship it", _candidates(), 2)
         assert result == []
-        assert service._last_recall_method == "embedding"
+        assert service._last_recall_method == "hybrid"
 
-    def test_partial_clear_backfills_with_below_floor_candidates(self, tmp_path: Any) -> None:
-        """When ≥1 but fewer than max_skills candidates clear the floor, the
-        window is padded with below-floor candidates in original order — the
-        floor only abstains when NOTHING clears it."""
+    def test_partial_recall_never_backfills_without_evidence(self, tmp_path: Any) -> None:
+        """A partial dense hit cannot admit unrelated, below-floor skills."""
         recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.5)
         service = self._make_service(embedding_recall=recall)
         result = service.prefilter_ai_triage_candidates("ship it", _candidates(), 2)
-        # Only 'deploy' clears 0.5; 'debug' backfills the window.
-        assert [c["id"] for c in result] == ["deploy", "debug"]
-        assert service._last_recall_method == "embedding"
+        assert [c["id"] for c in result] == ["deploy"]
+        assert service._last_recall_method == "hybrid"
 
     def test_try_ai_triage_skips_llm_when_recall_finds_nothing(self, tmp_path: Any) -> None:
         recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.999)
