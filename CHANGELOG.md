@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Make new hook contract fixtures portable to Windows with canonical emitted paths and explicit UTF-8 source files; include new routing/envelope regressions in the Windows fast-feedback step.
+
 - Recognize affirmative workflow identifiers directly adjacent to Chinese text, retaining Latin identifier boundaries.
 
 - Fuse independent BM25 and dense recall with reciprocal ranks before AI triage. Filter inactive mentions and declared `routing_requires_any` prerequisites before ranking; preserve explicit invocation and configured bindings. Candidate/triage cache schemas now fingerprint routing metadata and validate stale selected skills.

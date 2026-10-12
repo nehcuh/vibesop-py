@@ -23,7 +23,7 @@ def backed_candidates(tmp_path, candidates):
     for candidate in candidates:
         source = tmp_path / "skills" / candidate["id"] / "SKILL.md"
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text("# Real skill source\n")
+        source.write_text("# Real skill source\n", encoding="utf-8")
         result.append(
             {"namespace": "builtin", "priority": "P1", **candidate, "source_file": str(source)}
         )
@@ -224,9 +224,9 @@ def test_expired_unchanged_candidate_can_still_decay(tmp_path):
         skill_id="skill", confidence=0.9, layer=RoutingLayer.AI_TRIAGE, source="builtin"
     )
     cache.store("query", candidates, route.to_dict())
-    payload = json.loads(cache.cache_path.read_text())
+    payload = json.loads(cache.cache_path.read_text(encoding="utf-8"))
     payload[cache.key_for("query")]["ts"] = time.time() - 100 * 3600
-    cache.cache_path.write_text(json.dumps(payload))
+    cache.cache_path.write_text(json.dumps(payload), encoding="utf-8")
     _, stale = cache.lookup("query", candidates, ttl_hours=72)
     result = service(tmp_path)._last_good_route(stale, candidates)
     assert result.confidence == pytest.approx(0.63)
@@ -305,7 +305,8 @@ def test_declared_keywords_and_scope_survive_real_discovery(tmp_path):
     source.parent.mkdir(parents=True)
     source.write_text(
         "---\nid: local/embedding\nname: embedding\ndescription: Choose an embedding model\n"
-        "keywords: [Gemma2, MiniLM]\nrouting_requires_any: [embedding, 模型]\n---\n# Workflow\n"
+        "keywords: [Gemma2, MiniLM]\nrouting_requires_any: [embedding, 模型]\n---\n# Workflow\n",
+        encoding="utf-8",
     )
     manager = CandidateManager(tmp_path)
     manager.pin_search_paths([root], enable_external=False)
