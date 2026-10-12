@@ -16,6 +16,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from vibesop.agent.runtime.skill_envelope import build_skill_envelope
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -91,8 +93,8 @@ def _spec_gap_envelope_note() -> str:
     """
     return (
         "[VibeSOP report-only] spec_gap: low — this task brief already reads "
-        "like a complete requirements document. The skill below is injected "
-        "in full; follow the brief where it is more specific than the skill. "
+        "like a complete requirements document. Read the full skill source; "
+        "follow the brief where it is more specific than the skill. "
         "When unsure, follow the skill as usual."
     )
 
@@ -145,6 +147,7 @@ class InjectionResult:
     refused_unsafe: bool = False
     resolved_path: str = ""
     spec_gap: str = SPEC_GAP_UNKNOWN
+    context_prepared: bool = False
 
     @property
     def has_content(self) -> bool:
@@ -259,29 +262,40 @@ class SkillInjector:
                 spec_gap=spec_gap,
             )
 
-        truncated = False
-
-        if spec_gap == SPEC_GAP_LOW:
-            # Report-only F1 note, prepended so truncation can never cut it.
-            # Notices above return early — this only annotates a real body.
-            skill_content = f"{_spec_gap_envelope_note()}\n\n{skill_content}"
-
-        if skill_content and len(skill_content) > self.MAX_INJECT_LENGTH:
-            skill_content = skill_content[: self.MAX_INJECT_LENGTH]
-            truncated = True
-
-        if platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
-            # Grok Build's UserPromptSubmit hook envelope is Claude-shaped
-            # (hookSpecificOutput.additionalContext) — same payload format.
-            result = self._inject_claude_code(skill_id, skill_content, truncated)
-        elif platform == PlatformType.OPENCODE:
-            result = self._inject_opencode(skill_id, skill_content, truncated)
-        elif platform == PlatformType.KIMI_CLI:
-            result = self._inject_kimi_cli(skill_id, skill_content, truncated)
-        elif platform == PlatformType.PI:
-            result = self._inject_pi(skill_id, skill_content, truncated)
+        if platform == PlatformType.KIMI_CLI:
+            result = self._inject_kimi_cli(skill_id, skill_content, False)
+            context = str(result.payload)
+            result.payload = f"[ACTIVE SKILL: {skill_id}]\n{context}"
         else:
-            result = self._inject_generic(skill_id, skill_content, truncated)
+            prefix, suffix = "", ""
+            method = InjectionMethod.TEXT
+            if platform == PlatformType.OPENCODE:
+                prefix, suffix = f'<vibesop-skill id="{skill_id}">\n', "\n</vibesop-skill>"
+                method = InjectionMethod.SYSTEM_PROMPT
+            elif platform == PlatformType.PI:
+                prefix, suffix = '<vibesop-skill platform="pi">\n', "\n</vibesop-skill>"
+            elif platform == PlatformType.GENERIC:
+                prefix, suffix = f"=== SKILL: {skill_id} ===\n", "\n=== END SKILL ==="
+            elif platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
+                method = InjectionMethod.ADDITIONAL_CONTEXT
+            context, truncated = build_skill_envelope(
+                skill_id,
+                skill_content,
+                resolved,
+                max_length=self.MAX_INJECT_LENGTH,
+                note=_spec_gap_envelope_note() if spec_gap == SPEC_GAP_LOW else "",
+                prefix=prefix,
+                suffix=suffix,
+            )
+            result = InjectionResult(
+                method=method,
+                payload={"additionalContext": context}
+                if method == InjectionMethod.ADDITIONAL_CONTEXT
+                else context,
+                skill_id=skill_id,
+                truncated=truncated,
+            )
+        result.context_prepared = True
         result.resolved_path = resolved
         result.spec_gap = spec_gap
         return result
@@ -573,48 +587,6 @@ class SkillInjector:
         self._scan_cache[key] = safe
         return safe, "scanned"
 
-    def _inject_claude_code(
-        self,
-        skill_id: str,
-        content: str,
-        truncated: bool,
-    ) -> InjectionResult:
-        """Build Claude Code additionalContext payload."""
-        context_text = f"""
-
-[ACTIVE SKILL: {skill_id}]
-You MUST follow this skill's workflow. Do not skip steps.
-
-{content}
-{"\n[Content truncated]" if truncated else ""}
-"""
-        return InjectionResult(
-            method=InjectionMethod.ADDITIONAL_CONTEXT,
-            payload={"additionalContext": context_text},
-            skill_id=skill_id,
-            truncated=truncated,
-        )
-
-    def _inject_opencode(
-        self,
-        skill_id: str,
-        content: str,
-        truncated: bool,
-    ) -> InjectionResult:
-        """Build OpenCode system prompt fragment."""
-        fragment = f"""<vibesop-skill id="{skill_id}">
-You MUST follow this skill's workflow. Do not skip steps.
-
-{content}
-{"\n[Content truncated]" if truncated else ""}
-</vibesop-skill>"""
-        return InjectionResult(
-            method=InjectionMethod.SYSTEM_PROMPT,
-            payload=fragment,
-            skill_id=skill_id,
-            truncated=truncated,
-        )
-
     def _inject_kimi_cli(
         self,
         skill_id: str,
@@ -625,9 +597,9 @@ You MUST follow this skill's workflow. Do not skip steps.
         resolved = self._last_resolved or self._resolve_skill_md(skill_id)
         if resolved is not None:
             instruction = (
-                f"请先读取 {resolved.as_posix()} ，"
-                f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
-                f"不得跳过任何步骤。"
+                f"请先读取完整文件 {resolved.as_posix()} ，"
+                f"然后只执行与用户请求意图和范围相符的步骤「{skill_id}」。"
+                f"用户的范围限制优先；技能选择不授权额外操作。"
             )
         else:
             # Content gates upstream make this near-unreachable; when it does
@@ -635,65 +607,13 @@ You MUST follow this skill's workflow. Do not skip steps.
             # a .kimi-code/skills/ path (the guess-target layout may be empty).
             instruction = (
                 f"请运行 `vibe skills info {skill_id}` 获取真实 skill 文件路径"
-                f"（Source file），读取后严格按照该 skill 的工作流程执行"
-                f"「{skill_id}」。不得跳过任何步骤，不得猜测文件路径。"
+                f"（Source file），读取后只执行与用户请求意图和范围相符的步骤"
+                f"「{skill_id}」。用户约束优先，不得猜测文件路径。"
             )
         return InjectionResult(
             method=InjectionMethod.INSTRUCTION,
             payload=instruction,
             skill_id=skill_id,
-        )
-
-    def _inject_pi(
-        self,
-        skill_id: str,
-        skill_content: str,
-        truncated: bool = False,
-    ) -> InjectionResult:
-        """Generate Pi Coding Agent injection payload.
-
-        Pi uses AGENTS.md context + prompt templates. Inject skill content
-        as a section the agent should read before proceeding.
-        """
-        truncation_note = (
-            f"\n[Content truncated at {self.MAX_INJECT_LENGTH} chars — "
-            "refer to skill file for full content]"
-            if truncated
-            else ""
-        )
-        payload = (
-            f'<vibesop-skill platform="pi">\n'
-            f"## Skill: {skill_id}\n"
-            f"Read the SKILL.md for `{skill_id}` before proceeding.\n"
-            f"```markdown\n{skill_content}{truncation_note}\n```\n"
-            f"</vibesop-skill>"
-        )
-        return InjectionResult(
-            method=InjectionMethod.TEXT,
-            payload=payload,
-            skill_id=skill_id,
-            truncated=truncated,
-        )
-
-    def _inject_generic(
-        self,
-        skill_id: str,
-        content: str,
-        truncated: bool,
-    ) -> InjectionResult:
-        """Build generic text injection."""
-        text = f"""
-
-=== SKILL: {skill_id} ===
-{content}
-{"\n[Content truncated]" if truncated else ""}
-=== END SKILL ===
-"""
-        return InjectionResult(
-            method=InjectionMethod.TEXT,
-            payload=text,
-            skill_id=skill_id,
-            truncated=truncated,
         )
 
     def annotate_plan_skill_files(

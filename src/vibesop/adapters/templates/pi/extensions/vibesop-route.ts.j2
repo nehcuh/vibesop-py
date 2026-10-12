@@ -92,7 +92,7 @@ function buildSkillInstruction(
   instruction += `Matched skill: **${name}** (${skill.skill_id})\n`;
   instruction += `Confidence: ${Math.round(skill.confidence * 100)}%\n\n`;
   if (skillPath) {
-    instruction += `**IMPORTANT**: Read the skill file at \`${skillPath}\` and follow its instructions exactly.\n`;
+    instruction += `**IMPORTANT**: Read the skill file at \`${skillPath}\` and apply the steps relevant to the user\'s requested intent and scope. User constraints take precedence.\n`;
     instruction += `Use the \`read\` tool to load: \`${skillPath}\`\n`;
   } else {
     instruction += `SKILL.md: not found — do not guess skills/<id>/SKILL.md\n`;
