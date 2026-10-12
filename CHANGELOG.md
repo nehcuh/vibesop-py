@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fuse independent BM25 and dense recall with reciprocal ranks before AI triage. Filter inactive mentions and declared `routing_requires_any` prerequisites before ranking; preserve explicit invocation and configured bindings. Candidate/triage cache schemas now fingerprint routing metadata and validate stale selected skills.
 - Preserve source-file handoff and user intent/scope in bounded skill previews across all six platforms and both hook serializers. Truncation now applies only to the preview, after reserving the complete read directive and marker.
+- Add reproducible candidate-recall comparisons and EmbeddingGemma 2 research; keep MiniLM as the default and defer Cross-Encoder adoption pending broader experiments.
 
 - Adopt reviewed October dependency updates, including sentence-transformers 6.1.0, and align pre-commit Ruff with the locked 0.16.10 toolchain. Preserve the NumPy >=1.26.0 floor and the Anthropic <1.0.0 bound pending SDK migration.
 

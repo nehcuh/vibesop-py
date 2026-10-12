@@ -1,0 +1,166 @@
+- query: 帮我接入Gemma2模型，并按SearchQuery编码中文查询
+  expect:
+  - eval/embeddinggemma-2
+  category: stress_positive
+- query: 用google/embeddinggemma-300m跑第一代嵌入对照
+  expect:
+  - eval/embeddinggemma-300m
+  category: stress_positive
+- query: 配置Gemini Embedding 2云端API凭据
+  expect:
+  - eval/gemini-embedding-2
+  category: stress_positive
+- query: 给Qwen3-Embedding-0.6B模型做CPU实验
+  expect:
+  - eval/qwen3-embedding-06b
+  category: stress_positive
+- query: 给Qwen3-Embedding-4B模型建立GPU召回基线
+  expect:
+  - eval/qwen3-embedding-4b
+  category: stress_positive
+- query: 使用BGE-M3进行dense和sparse文档索引
+  expect:
+  - eval/bge-m3
+  category: stress_positive
+- query: 用bge-reranker-v2-m3对候选进行二次精排
+  expect:
+  - eval/bge-reranker-v2-m3
+  category: stress_positive
+- query: 迁移anthropic==1.12.1的调用适配器
+  expect:
+  - eval/anthropic-112
+  category: stress_positive
+- query: 保持anthropic==0.116.0的temperature调用契约
+  expect:
+  - eval/anthropic-0116
+  category: stress_positive
+- query: 升级openai==3.26.1后测试适配器
+  expect:
+  - eval/openai-326
+  category: stress_positive
+- query: 把pytest-rerunfailures16.7升级接入测试配置
+  expect:
+  - eval/rerunfailures-167
+  category: stress_positive
+- query: 复现pytest-rerunfailures16.6的重跑行为
+  expect:
+  - eval/rerunfailures-166
+  category: stress_positive
+- query: 检查pytest-mock3.16.0的spy行为
+  expect:
+  - eval/pytest-mock-316
+  category: stress_positive
+- query: 复现pytest-mock3.15.1的fixture行为
+  expect:
+  - eval/pytest-mock-315
+  category: stress_positive
+- query: 同步Ruff0.16.10和pre-commit钩子版本
+  expect:
+  - eval/ruff-01610
+  category: stress_positive
+- query: 请用Ruff0.16.4重跑历史lint对照
+  expect:
+  - eval/ruff-0164
+  category: stress_positive
+- query: 升级FastEmbed0.9.0并检查ONNX模型
+  expect:
+  - eval/fastembed-09
+  category: stress_positive
+- query: 固定FastEmbed0.8.0的缓存模型
+  expect:
+  - eval/fastembed-08
+  category: stress_positive
+- query: 测试sentence-transformers6.1.0的encode prompt
+  expect:
+  - eval/sentence-transformers-61
+  category: stress_positive
+- query: 复现sentence-transformers5.7.0的向量输出
+  expect:
+  - eval/sentence-transformers-57
+  category: stress_positive
+- query: 验证NumPy2.5.3的数组兼容性
+  expect:
+  - eval/numpy-253
+  category: stress_positive
+- query: 确认NumPy1.26最低兼容版本
+  expect:
+  - eval/numpy-126
+  category: stress_positive
+- query: 用nvm切换Node22来构建前端
+  expect:
+  - eval/node-22
+  category: stress_positive
+- query: 用nvm切换Node24来构建前端
+  expect:
+  - eval/node-24
+  category: stress_positive
+- query: 用uv sync更新uv.lock并保持Python依赖可复现
+  expect:
+  - eval/python-lockfile
+  category: stress_positive
+- query: 实现BM25关键词召回，再评估整体技能路由
+  expect:
+  - eval/bm25-search
+  category: stress_positive
+- query: Implement reciprocal rank fusion with RRF for two candidate rankings
+  expect:
+  - eval/rrf-fusion
+  category: stress_positive
+- query: 检查Qdrant向量数据库的cosine索引
+  expect:
+  - eval/qdrant-index
+  category: stress_positive
+- query: 验证SQLite任务记忆写入事务
+  expect:
+  - eval/sqlite-memory
+  category: stress_positive
+- query: 在linux/arm64 Docker容器里测试CLI
+  expect:
+  - eval/docker-arm64
+  category: stress_positive
+- query: 修复GitHub Actions Windows CI失败
+  expect:
+  - eval/github-actions-ci
+  category: stress_positive
+- query: 给实际CLI JSON payload写contract test
+  expect:
+  - eval/code-contract
+  category: stress_positive
+- query: 介绍红富士苹果品种的果园栽培知识
+  expect:
+  - eval/red-fuji-fruit
+  category: stress_positive
+- query: 解释Apple iPhone17手机型号的术语
+  expect:
+  - eval/iphone-mobile
+  category: stress_positive
+- query: do not use EmbeddingGemma2; explain the model name
+  expect: []
+  reject:
+  - eval/embeddinggemma-2
+  category: intent_negative
+- query: 请解释“Ruff0.16.10”这个词，不要执行lint
+  expect: []
+  reject:
+  - eval/ruff-01610
+  category: intent_negative
+- query: 不用pytest-rerunfailures16.7，只介绍其用途
+  expect: []
+  reject:
+  - eval/rerunfailures-167
+  category: intent_negative
+- query: 文章提到“Qdrant向量数据库”，请翻译这一句
+  expect: []
+  reject:
+  - eval/qdrant-index
+  category: intent_negative
+- query: 不要更新uv.lock，介绍Python依赖锁文件是什么
+  expect: []
+  reject:
+  - eval/python-lockfile
+  category: intent_negative
+- query: 先同步Ruff0.16.10，再迁移anthropic==1.12.1并验证
+  expect:
+  - eval/ruff-01610
+  - eval/anthropic-112
+  category: stress_multi_intent
