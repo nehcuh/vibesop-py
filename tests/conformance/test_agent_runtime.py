@@ -310,7 +310,8 @@ class TestAgentRuntimeHookResponse:
         data = json.loads(result.to_hook_response())
         ctx = data["hookSpecificOutput"]["additionalContext"]
         assert "[ACTIVE SKILL: convention-docs]" in ctx
-        assert "MUST follow" in ctx
+        assert "Read the complete source before acting" in ctx
+        assert "[VibeSOP Convention] Always cite" in ctx
 
 
 class TestAgentRuntimeHandleQuery:

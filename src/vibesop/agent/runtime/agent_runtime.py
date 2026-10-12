@@ -118,6 +118,7 @@ class AgentRuntimeResult:
     # Serialized as hook JSON ``specGap``; old clients treat a missing key
     # as "unknown".
     spec_gap: str = "unknown"
+    skill_context_prepared: bool = False
 
     @property
     def has_match(self) -> bool:
@@ -201,7 +202,7 @@ class AgentRuntimeResult:
                 "alternatives": self.alternatives,
                 "plan": self.plan,
                 "decisionMessage": self.decision_message,
-                "skillContent": self.skill_content[:3000] if self.skill_content else "",
+                "skillContent": self._skill_context() if self.skill_content else "",
                 # F1 report-only annotation; additive key — old clients
                 # ignore it, and its absence must be read as "unknown".
                 "specGap": self.spec_gap,
@@ -210,6 +211,24 @@ class AgentRuntimeResult:
             },
             ensure_ascii=False,
         )
+
+    def _skill_context(self, source_path: str = "") -> str:
+        """Preserve runtime-produced envelopes; prepare legacy raw bodies once."""
+        if self.skill_context_prepared:
+            return self.skill_content
+        if self.notice_only or self.mode in ("orchestrate", "multi_agent_squad"):
+            return self.skill_content[:3000]
+        from vibesop.agent.runtime.skill_envelope import build_skill_envelope
+
+        content = self.skill_content
+        # Compatibility for hand-built results using the old banner. Real
+        # runtime results carry a structured flag, never inspect body substrings.
+        content = re.sub(
+            r"^\s*\[ACTIVE SKILL: [^\n]+\]\n(?:You MUST follow[^\n]*\n)?\s*",
+            "",
+            content,
+        )
+        return build_skill_envelope(self.skill_id, content, source_path or self.skill_path)[0]
 
     def to_hook_response(
         self,
@@ -384,21 +403,9 @@ class AgentRuntimeResult:
         resp: dict[str, Any] = {"systemMessage": system_message}
 
         if include_additional_context and self.skill_content:
-            # The claude-code/grok-build injectors already open with the
-            # [ACTIVE SKILL] banner — wrapping again duplicated it (gate46
-            # dual-review P1: double banner ate the preview's line budget).
-            # VibeSOP notices must never be wrapped as an active skill.
-            # notice_only normally returns earlier (:notice branch); the
-            # flag here is defense-in-depth for hand-built results. Bodies
-            # already carrying their own banner skip the re-wrap.
-            if self.notice_only or "[ACTIVE SKILL:" in self.skill_content:
-                additional_context = self.skill_content[:3000]
-            else:
-                additional_context = (
-                    f"[ACTIVE SKILL: {self.skill_id}]\n"
-                    "You MUST follow this skill's workflow. Do not skip steps.\n\n"
-                    f"{self.skill_content[:3000]}"
-                )
+            additional_context = self._skill_context(
+                self.skill_path or (hint_path if Path(hint_path).is_file() else "")
+            )
             hook_output: dict[str, Any] = {
                 "additionalContext": additional_context,
             }
@@ -878,6 +885,7 @@ class AgentRuntime:
                         # F1 report-only annotation (single-mode injections only;
                         # orchestrate plan envelopes deliberately untouched).
                         result.spec_gap = injection.spec_gap
+                        result.skill_context_prepared = injection.context_prepared
                         if not injection.has_content:
                             demoted_id = result.skill_id
                             logger.warning(

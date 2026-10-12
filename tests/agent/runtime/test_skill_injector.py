@@ -246,16 +246,18 @@ class TestSkillInjector:
 
     def test_truncation(self, tmp_path) -> None:
         injector = SkillInjector(project_root=tmp_path)
-        injector.MAX_INJECT_LENGTH = 50
+        injector.MAX_INJECT_LENGTH = 600
 
-        long_content = "A" * 100
+        long_content = "A" * 1000
         with patch.object(injector, "_load_skill_content", return_value=long_content):
             result = injector.inject_single_skill("test/skill", PlatformType.CLAUDE_CODE)
 
         assert result.truncated
-        # Content should be truncated to MAX_INJECT_LENGTH (50 in test)
+        # Budget includes the directive and truncation marker, not just the body.
         payload_dict = result.payload
-        assert len(payload_dict["additionalContext"]) < 200  # includes wrapper
+        assert len(payload_dict["additionalContext"]) <= 600
+        assert "[Content truncated]" in payload_dict["additionalContext"]
+        assert "NEXT STEP (MANDATORY)" in payload_dict["additionalContext"]
 
     def test_loads_nested_dot_skill_layout_by_bare_id(self, tmp_path: Path) -> None:
         """Router ids are un-namespaced; on-disk layout is ns/name.skill/SKILL.md."""
