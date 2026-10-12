@@ -123,6 +123,8 @@ _GUARDS = [
         ("Alice will use builtin/riper-workflow tomorrow", "builtin/riper-workflow"),
         ("The worker will use RIPER to implement it", "builtin/riper-workflow"),
         ("My colleague plans to use builtin/riper-workflow", "builtin/riper-workflow"),
+        ("不要用RIPER执行这个任务", "builtin/riper-workflow"),
+        ("Use ripers to implement this", "builtin/riper-workflow"),
         ('Explain "use builtin/riper-workflow"', "builtin/riper-workflow"),
         ("do not use builtin/riper-workflow", "builtin/riper-workflow"),
         ("tell me about riper", "builtin/riper-workflow"),
@@ -168,6 +170,8 @@ def test_guard_blocks_inferred_routes_and_explicit_verb_references(tmp_path, que
         ("Explain the alternative then use RIPER to implement this", "builtin/riper-workflow"),
         ("kick off the riper workflow", "builtin/riper-workflow"),
         ("进行 RIPER 流程实现功能", "builtin/riper-workflow"),
+        ("用RIPER执行这个任务", "builtin/riper-workflow"),
+        ("请使用RIPER流程实现功能", "builtin/riper-workflow"),
     ],
 )
 def test_affirmative_intent_remains_routable(tmp_path, query, skill):

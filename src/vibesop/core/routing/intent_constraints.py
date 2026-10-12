@@ -125,8 +125,8 @@ def workflow_requested(query: str, triggers: list[str], tokens: tuple[str, ...])
     for clause in intent_clauses(query):
         normalized = clause.lower().replace("'", "").replace("’", "")
         hits = [t.lower().replace("'", "").replace("’", "") for t in triggers if t]
-        named = any(re.search(rf"\b{re.escape(token)}\b", normalized) for token in tokens)
-        if (any(t in normalized for t in hits) or named) and (
+        named = any(phrase_present(normalized, token) for token in tokens)
+        if (any(phrase_present(normalized, t) for t in hits) or named) and (
             _ACTION.search(clause) or normalized in hits or normalized in tokens
         ):
             return True
