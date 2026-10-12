@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 #: enabled/scope/lifecycle/project_hash projection. v4 hashed SKILL.md only
 #: and omitted owner hash, so an ordinary markdown skill or a public
 #: project_hash update could be served again under a stale fingerprint.
-_CANDIDATES_CACHE_SCHEMA_VERSION = 5
+#: v6 also projects declared routing prerequisites and explicit keyword metadata.
+_CANDIDATES_CACHE_SCHEMA_VERSION = 6
 
 # Semantic-index caches live on the router (``_layers.try_index_layer``),
 # which CandidateManager does not hold. A project-keyed epoch lets reload
@@ -457,7 +458,8 @@ class CandidateManager:
                     "name": metadata.name,
                     "description": metadata.description,
                     "intent": metadata.intent,
-                    "keywords": tags,
+                    "routing_requires_any": list(metadata.routing_requires_any),
+                    "keywords": list(dict.fromkeys(tags + list(metadata.keywords or []))),
                     "triggers": list(metadata.triggers or [])
                     + ([metadata.trigger_when] if metadata.trigger_when else []),
                     "namespace": metadata.namespace,

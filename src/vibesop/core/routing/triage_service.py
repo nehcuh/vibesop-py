@@ -9,12 +9,17 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
 from vibesop.core.routing.candidate_manager import with_source_file
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
+from vibesop.core.routing.intent_constraints import (
+    candidate_scope_allows,
+    session_end_requested,
+    workflow_requested,
+)
 from vibesop.core.routing.layers import LayerResult
+from vibesop.core.routing.lexical_recall import bm25_recall, fuse_rankings
 from vibesop.core.routing.triage_cache import TriageCache
 from vibesop.core.routing.triage_recall import DEFAULT_MIN_SIMILARITY, EmbeddingRecall
 
@@ -191,7 +196,9 @@ class TriageService:
         # membership against the filtered set (8.3.1: P1-2).
         from vibesop.core.routing.matcher_pipeline import filter_invocation_disabled_candidates
 
-        candidates = filter_invocation_disabled_candidates(list(candidates))
+        candidates = self.applicable_candidates(
+            query, filter_invocation_disabled_candidates(list(candidates))
+        )
 
         # Build augmented query with memory context (before the cache lookup
         # so the persisted key matches what would be sent to the LLM).
@@ -217,11 +224,11 @@ class TriageService:
         # budget/circuit gates below — those only guard the LLM call path.
         # Serving a fresh hit with no LLM configured is safe: the entry was
         # itself an LLM routing decision, the candidates hash proves the
-        # decision context is unchanged, and the session-end guard below is
+        # decision context is unchanged, and the intent/scope guard below is
         # re-validated on every hit. (Note: VIBE_AI_TRIAGE_ENABLED=0 only
         # gates the LLM client, so fresh hits are still served under it; the
         # config-level enable_ai_triage switch above remains the full
-        # kill switch.) The hash covers the FULL candidate set (not the
+        # kill switch.) The hash covers the full governed candidate pool (not the
         # prefiltered window), which is what makes lookup possible before
         # prefiltering; a changed set demotes the entry to stale, and
         # _last_good_route then re-validates the skill still exists.
@@ -247,11 +254,11 @@ class TriageService:
                     # triggers may have changed since — re-validate
                     # defensively. A guarded hit is treated as a miss and
                     # triage continues down to the gated LLM path.
-                    if self.is_session_end_skill(
-                        skill_id
-                    ) and not self.is_explicit_session_end_signal(query, candidates):
+                    if not self._skill_in_candidates(
+                        skill_id, candidates
+                    ) or not self.has_explicit_guard_signal(query, candidates, skill_id):
                         logger.debug(
-                            "Persistent triage hit '%s' ignored: query lacks an explicit session-end signal",
+                            "Persistent triage hit '%s' ignored: query lacks required affirmative intent or scope",
                             skill_id,
                         )
                     else:
@@ -328,14 +335,14 @@ class TriageService:
                 return LayerResult(match=last_good, layer=RoutingLayer.AI_TRIAGE)
             return None
 
-        # Cost control: pre-filter candidates (embedding recall, keyword
-        # fallback) before sending to LLM. Only reached on a cache miss with
+        # Cost control: pre-filter candidates (dense and BM25 recall,
+        # fused by rank) before sending to LLM. Only reached on a cache miss with
         # both gates open — a fresh hit or a closed gate never pays the
         # recall cost.
         max_skills = self._config.ai_triage_max_skills
         triage_candidates = self.prefilter_ai_triage_candidates(query, candidates, max_skills)
         if not triage_candidates:
-            # Embedding recall found nothing above the similarity floor
+            # Neither recall lane produced an eligible candidate
             # (junk query) — skip the LLM call entirely. Only reachable when
             # the candidate count exceeds ai_triage_max_skills; smaller sets
             # bypass the floor (see prefilter_ai_triage_candidates).
@@ -343,7 +350,11 @@ class TriageService:
             return None
 
         def _skill_summary(c: dict[str, Any]) -> str:
-            text = c.get("intent", c.get("description", "N/A"))
+            text = str(c.get("description") or "")
+            intent = c.get("intent")
+            if intent and intent != text:
+                text += f" [intent: {intent}]"
+            text += f" [scope: {c.get('scope', 'global')}]"
             triggers = c.get("triggers", [])
             if triggers:
                 return f"- {c['id']}: {text} [triggers: {', '.join(triggers)}]"
@@ -425,14 +436,14 @@ class TriageService:
                     # reports, confusion, or negative statements as session-end
                     # signals. Only allow session-end when the query explicitly
                     # matches one of the skill's declared triggers. Checked
-                    # against the FULL candidate set (same as the fresh-cache
+                    # against the governed candidate pool (same as the fresh-cache
                     # path above), not the prefiltered window, so the criterion
                     # is identical on both paths.
-                    if self.is_session_end_skill(
-                        skill_id
-                    ) and not self.is_explicit_session_end_signal(query, candidates):
+                    if not self._skill_in_candidates(
+                        skill_id, candidates
+                    ) or not self.has_explicit_guard_signal(query, candidates, skill_id):
                         logger.debug(
-                            "AI triage selected '%s' but query lacks an explicit session-end signal; ignoring",
+                            "AI triage selected '%s' but query lacks required affirmative intent or scope; ignoring",
                             skill_id,
                         )
                         # Still a structured reply — reset the drop counter
@@ -465,7 +476,7 @@ class TriageService:
                         ),
                     )
                     if self._triage_cache is not None:
-                        # Hash the full candidate set so a later lookup can
+                        # Hash the governed candidate pool so a later lookup can
                         # run before the prefilter (see lookup above).
                         self._triage_cache.store(augmented_query, candidates, result.to_dict())
                     self._unstructured_drops = 0
@@ -496,65 +507,49 @@ class TriageService:
         candidates: list[dict[str, Any]],
         max_skills: int,
     ) -> list[dict[str, Any]]:
-        """Pre-filter candidates for AI Triage, embedding recall first.
+        """Shortlist using independent BM25 and dense recall, fused with RRF.
 
-        Excludes management-only skills (slash-*) from semantic matching.
-        Instead of sending all candidates to the LLM (wasteful), we rank
-        them by embedding similarity and only send the top N. Any recall
-        failure falls back to KeywordMatcher ranking, identical to the
-        previous behavior. An EMPTY recall result is different from a
-        failure: recall ran and every candidate scored below the similarity
-        floor, so nothing is semantically relevant — return [] (the caller
-        skips the LLM call) rather than backfilling the window with
-        arbitrary candidates.
-
-        Scope note: recall (and therefore the similarity floor + abstain)
-        only runs when the eligible count exceeds ``max_skills`` — at or
-        below the window every candidate is forwarded as-is. That is
-        deliberate: for small candidate sets the floor would mostly reject
-        terse/CJK queries whose embedding similarity to English skill
-        descriptions is systematically low, and the LLM disambiguates
-        cheaply when the window already fits.
+        Both lanes share the same governed pool. Only recalled identities enter
+        a large shortlist; no arbitrary padding. Small pools still go whole to
+        the LLM after intent checks, preserving short/CJK disambiguation.
         """
-        eligible = [c for c in candidates if not c.get("management_only")]
+        eligible = self.applicable_candidates(query, candidates)
+        unique: dict[str, dict[str, Any]] = {}
+        for candidate in eligible:
+            if candidate.get("id"):
+                unique.setdefault(str(candidate["id"]), candidate)
+        eligible = list(unique.values())
         self._last_recall_method = None
+        if max_skills <= 0:
+            return []
         if self._embedding_recall is not None and self._owns_embedding_recall:
-            # Sync the floor per call (not per candidate) so swapping
-            # self.config after construction takes effect; an injected recall
-            # keeps its own configured floor.
             self._embedding_recall.min_similarity = self._recall_min_similarity()
         if len(eligible) <= max_skills:
             return eligible
 
-        recall_ids = (
+        lexical_ids = bm25_recall(query, eligible, max_skills)
+        dense_ids = (
             self._embedding_recall.recall(query, eligible, max_skills)
             if self._embedding_recall is not None
             else None
         )
-        if recall_ids is not None:
-            matched_ids = set(recall_ids)
-            self._last_recall_method = "embedding"
-        else:
-            matcher_config = MatcherConfig(
-                min_confidence=0.0,
-                use_cache=False,
-            )
-            matcher = KeywordMatcher(matcher_config)
-            matches = matcher.match(query, eligible, top_k=max_skills)
-            matched_ids = {m.skill_id for m in matches}
-            self._last_recall_method = "keyword"
+        self._last_recall_method = "hybrid" if dense_ids is not None else "bm25"
+        lookup = {str(c["id"]): c for c in eligible}
+        dense_ids = [sid for sid in (dense_ids or []) if sid in lookup]
+        fused = fuse_rankings(dense_ids, lexical_ids, top_n=max_skills)
+        return [lookup[sid] for sid in fused]
 
-        # Preserve original order for matched candidates, then backfill if needed
-        prefiltered = [c for c in eligible if c["id"] in matched_ids]
-        if not prefiltered and recall_ids is not None:
-            # Embedding recall is healthy but found nothing above the floor:
-            # abstain instead of sending arbitrary candidates to the LLM.
-            return []
-        if len(prefiltered) < max_skills:
-            remaining = [c for c in eligible if c["id"] not in matched_ids]
-            prefiltered.extend(remaining[: max_skills - len(prefiltered)])
-
-        return prefiltered[:max_skills]
+    def applicable_candidates(
+        self, query: str, candidates: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Automatic triage eligibility, including explicit-intent contracts."""
+        return [
+            c
+            for c in candidates
+            if not c.get("management_only")
+            and not c.get("disable_model_invocation")
+            and self.has_explicit_guard_signal(query, candidates, str(c.get("id", "")))
+        ]
 
     def is_session_end_skill(self, skill_id: str) -> bool:
         """Return True if the selected skill is the session-end skill."""
@@ -619,14 +614,17 @@ class TriageService:
         candidates: list[dict[str, Any]],
         skill_id: str,
     ) -> bool:
-        """Check whether the query carries explicit intent for a guarded skill.
+        """Admission gate shared by automatic index, matchers, and triage.
 
-        Returns True for non-guarded skills (no guard to satisfy). For guarded
-        skills, explicit intent means a declared trigger phrase appears in the
-        query (verbatim substring, apostrophe-normalized) or one of the skill's
-        extra always-explicit tokens does. Session-end delegates to the
-        long-standing is_explicit_session_end_signal semantics.
+        All skills honor declared phrase prerequisites and inactive mentions;
+        session-end and RIPER additionally require explicit execution intent.
+        True slash/! invocations and configured scenario bindings are separate.
         """
+        exact = next(
+            (c for c in candidates if str(c.get("id", "")).lower() == skill_id.lower()), None
+        )
+        if exact is not None and not candidate_scope_allows(query, exact):
+            return False
         short = self.guarded_skill_name(skill_id)
         if short is None:
             return True
@@ -646,14 +644,9 @@ class TriageService:
         if not triggers:
             triggers = list(self._GUARDED_SKILL_FALLBACK_TRIGGERS.get(short, []))
 
-        # gate36 修订 B: the containment loop is extracted into
-        # ``query_matches_triggers`` (same semantics, same order) so the
-        # promote shadow verifier can reuse the production rule.
-        if query_matches_triggers(query, triggers) is not None:
-            return True
-
-        normalized_query = query.lower().replace("'", "").replace("’", "")
-        return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
+        return workflow_requested(
+            query, [str(t) for t in triggers], self._GUARDED_SKILL_EXTRA_TOKENS[short]
+        )
 
     def explicit_guarded_skill_match(
         self,
@@ -723,16 +716,7 @@ class TriageService:
                 "/session-end",
             ]
 
-        normalized_query = query.lower()
-        # Normalize common apostrophe variants so "i'm done" and "im done" both match.
-        normalized_query = normalized_query.replace("'", "").replace("’", "")
-
-        for trigger in triggers:
-            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
-            if trigger_norm in normalized_query:
-                return True
-
-        return False
+        return session_end_requested(query, [str(t) for t in triggers])
 
     def build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
         if self._prompt_builder is not None:
@@ -743,6 +727,9 @@ class TriageService:
         # forced-match fallback reintroduces the audit's false-positive
         # channel on routers built without a prompt_builder.
         return (
+            "Select only for the current affirmative intent and requested phase. "
+            "Respect descriptions, intent and scope; quoted, negated, explanatory "
+            "or third-person mentions are not workflow invocation.\n"
             f"Query: {query}\nSkills:\n{skills_summary}\n"
             "Select the single best-matching skill and respond with ONLY a JSON "
             'object {"skill_id": "<selected-skill-id>"}. '
@@ -899,7 +886,7 @@ class TriageService:
 
         Only used when the LLM path is unavailable (call failed, circuit
         open, or budget exhausted); the stale skill must still exist in the
-        full current candidate set — i.e. still installed — not merely in the
+        current governed candidate pool — still installed and eligible — not merely in the
         prefiltered top-N window (a removed skill is never resurrected).
 
         The recorded confidence is decayed (×LAST_GOOD_CONFIDENCE_DECAY) so a
@@ -912,6 +899,17 @@ class TriageService:
         consumers distinguish it from a fresh result.
         """
         if not stale_entry or not stale_entry.get("skill_id"):
+            return None
+        # Added/removed alternatives may use an unchanged selected skill as
+        # last-good. Changed selected intent, scope or source must never replay.
+        selected = [
+            c
+            for c in candidates
+            if str(c.get("id", "")).lower() == str(stale_entry["skill_id"]).lower()
+        ]
+        if stale_entry.get("candidates_hash") != TriageCache.candidates_hash(candidates) and (
+            stale_entry.get("selected_candidate_hash") != TriageCache.candidates_hash(selected)
+        ):
             return None
         try:
             skill_id = str(stale_entry["skill_id"])

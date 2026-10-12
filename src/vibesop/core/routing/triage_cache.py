@@ -39,7 +39,7 @@ class TriageCache:
     # under older semantics — notably pre-2026-08-29 entries may encode the
     # unstructured forced-match false positives — and must not surface as
     # fresh hits or last-good fallbacks.
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     # No-match entries (skill_id None) amortize repeat LLM calls for the
     # chat/QA traffic that dominates hook queries, but stale negatives are
@@ -58,17 +58,32 @@ class TriageCache:
 
     @staticmethod
     def candidates_hash(candidates: list[dict[str, Any]]) -> str:
-        """Hash the candidate skill id set; invalidates entries on skill changes.
+        """Fingerprint routing-relevant metadata, independent of list order.
 
-        Callers pass the FULL candidate list (not the prefiltered top-N
-        window) so the hash is a fingerprint of the installed skill set and
-        the lookup can run before the (expensive) recall prefilter. Entries
-        stored under the old convention (hash over the prefiltered window)
-        simply mismatch once — they degrade to last-good and are overwritten
-        on the next store, i.e. the cache self-heals.
+        Skills retaining an ID may change intent or applicability. Incidental
+        usage stats do not invalidate decisions; source and governance do.
+        Schema version separates pre-hybrid decisions from the current policy.
         """
-        ids = sorted(str(c.get("id", "")) for c in candidates)
-        return hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest()[:_HASH_LENGTH]
+        fields = (
+            "id",
+            "name",
+            "description",
+            "intent",
+            "triggers",
+            "keywords",
+            "scenarios",
+            "scope",
+            "enabled",
+            "lifecycle",
+            "management_only",
+            "disable_model_invocation",
+            "source_file",
+            "routing_requires_any",
+        )
+        rows = [{key: c.get(key) for key in fields} for c in candidates]
+        rows.sort(key=lambda row: json.dumps(row, sort_keys=True, default=str))
+        payload = json.dumps(rows, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:_HASH_LENGTH]
 
     def lookup(
         self,
@@ -140,6 +155,13 @@ class TriageCache:
                     "source": route.get("source", ""),
                     "description": route.get("description", ""),
                     "candidates_hash": self.candidates_hash(candidates),
+                    "selected_candidate_hash": self.candidates_hash(
+                        [
+                            c
+                            for c in candidates
+                            if str(c.get("id", "")).lower() == str(route["skill_id"]).lower()
+                        ]
+                    ),
                     "ts": time.time(),
                 }
                 if len(data) > MAX_ENTRIES:

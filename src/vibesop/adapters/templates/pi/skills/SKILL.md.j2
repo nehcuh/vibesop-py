@@ -3,6 +3,9 @@ id: {{ skill.id }}
 name: {{ skill.name }}
 description: "{{ skill.description | replace('\\', '\\\\') | replace('"', '\\"') }}"
 trigger_when: "{{ skill.trigger_when | replace('\\', '\\\\') | replace('"', '\\"') }}"
+{% if skill.routing_requires_any %}
+routing_requires_any: {{ skill.routing_requires_any | tojson }}
+{% endif %}
 type: prompt
 generated_by: VibeSOP v{{ vibesop_version }}
 ---

@@ -134,4 +134,13 @@ class TriagePromptRegistry:
             Rendered prompt string.
         """
         template = cls.get_prompt(version)
-        return template.format(query=query, skills_summary=skills_summary)
+        constraints = (
+            "Applicability rules (apply to every candidate):\n"
+            "Select for the current affirmative user intent and requested phase. "
+            "A skill name or trigger inside quotation, code, negation, explanation, "
+            "or third-person description is not a request to execute that workflow. "
+            "Respect each description, intent, and scope, especially ONLY/NOT limits. "
+            "A partial task does not authorize a broader workflow or its side effects. "
+            "When no candidate fits those limits, return a null skill_id.\n\n"
+        )
+        return constraints + template.format(query=query, skills_summary=skills_summary)

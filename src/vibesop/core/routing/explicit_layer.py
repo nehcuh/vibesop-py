@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from vibesop.core.routing.intent_constraints import intent_clauses
+
 # Pattern: !skill_id at the start of query
 EXPLICIT_PREFIX_PATTERN = re.compile(r"^!(\S+)\s+(.*)")
 
@@ -73,18 +75,18 @@ def check_explicit_override(
             return skill_id, cleaned_query
 
     # Priority 2: "use/run/execute <skill_id>"
-    match = EXPLICIT_VERB_PATTERN.search(query)
-    if match:
-        skill_id = match.group(1)
-        if _is_valid_skill(skill_id, candidates):
-            return skill_id, query
-        # If the captured text contains a colon, try the part after colon
-        # (e.g., "use skill:systematic-debugging" → "systematic-debugging")
-        if ":" in skill_id:
-            after_colon = skill_id.split(":", 1)[1]
-            if _is_valid_skill(after_colon, candidates):
-                return after_colon, query
-
+    for clause in intent_clauses(query):
+        match = EXPLICIT_VERB_PATTERN.search(clause)
+        if match:
+            skill_id = match.group(1)
+            if _is_valid_skill(skill_id, candidates):
+                return skill_id, query
+            # If the captured text contains a colon, try the part after colon
+            # (e.g., "use skill:systematic-debugging" → "systematic-debugging")
+            if ":" in skill_id:
+                after_colon = skill_id.split(":", 1)[1]
+                if _is_valid_skill(after_colon, candidates):
+                    return after_colon, query
     return None, None
 
 

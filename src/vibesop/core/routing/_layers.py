@@ -19,6 +19,7 @@ from vibesop.core.matching import RoutingContext
 from vibesop.core.models import LayerDetail, RoutingLayer, SkillRoute
 from vibesop.core.routing._protocols import RoutingCore
 from vibesop.core.routing.explicit_layer import check_explicit_override
+from vibesop.core.routing.intent_constraints import intent_clauses
 from vibesop.core.routing.project_config import load_merged_scenario_config
 from vibesop.core.routing.scenario_layer import match_scenario
 from vibesop.core.skills.indexer import SkillIndexer
@@ -621,6 +622,21 @@ def try_index_layer(
 ) -> tuple[SkillRoute | None, LayerDetail]:
     """Try skill semantic index layer."""
     index_start = time.perf_counter()
+    original_count = len(candidates)
+    # Reject inactive/scope-incompatible candidates before ranking so a
+    # prohibited best hit cannot crowd out the affirmative subrequest.
+    candidates = [
+        c
+        for c in candidates
+        if router._triage_service.has_explicit_guard_signal(query, candidates, str(c.get("id", "")))
+    ]
+    if original_count and not candidates:
+        return None, LayerDetail(
+            layer=RoutingLayer.SEMANTIC_INDEX,
+            matched=False,
+            reason="All candidates rejected by guarded intent or scope checks",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
 
     # Cache the loaded index on the router to avoid repeatedly re-parsing
     # ~1MB of JSON + reconstructing 100+ SkillProfile objects per route.
@@ -664,7 +680,8 @@ def try_index_layer(
     profile_tokens_by_id: dict[str, set[str]] = (
         profile_tokens_by_id_raw if isinstance(profile_tokens_by_id_raw, dict) else {}
     )
-    query_tokens = _tokenize_query(query)
+    matching_query = " ".join(intent_clauses(query, include_references=True))
+    query_tokens = _tokenize_query(matching_query)
 
     # Namespace-aware hit threshold. External pack profiles are LLM-generated
     # per installed pack, dozens at a time, with heavily overlapping
@@ -709,7 +726,7 @@ def try_index_layer(
     if not best_skill_id:
         # Token overlap missed — try semantic embedding fallback when available.
         emb_match, emb_detail = _try_embedding_fallback(
-            router, query, index, candidates, index_start
+            router, matching_query, index, candidates, index_start
         )
         if emb_match is not None:
             return emb_match, emb_detail
@@ -734,7 +751,7 @@ def try_index_layer(
     # to the embedding fallback, which applies the same guard.
     if not router._triage_service.has_explicit_guard_signal(query, candidates, best_skill_id):
         emb_match, emb_detail = _try_embedding_fallback(
-            router, query, index, candidates, index_start
+            router, matching_query, index, candidates, index_start
         )
         if emb_match is not None:
             return emb_match, emb_detail

@@ -12,6 +12,7 @@ commands:
   - instinct import
   - instinct evolve
 intent: learning
+routing_requires_any: [coding, learning, patterns, confidence, status, export, import, evolve, 工作流, 学习, 模式, 状态, 置信, 本能]
 namespace: builtin
 type: standard
 user-invocable: true
