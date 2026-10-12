@@ -228,6 +228,8 @@ jobs:
           tests/adapters/test_route_process_boundary.py
           tests/agent/runtime/test_plan_availability_handoff.py
           tests/agent/runtime/test_plan_content_safety.py
+          tests/agent/runtime/test_skill_envelope.py
+          tests/unit/core/routing/test_hybrid_routing.py
           tests/conformance/test_agent_runtime.py
           tests/scripts/test_release_checks.py
           tests/scripts/test_typecheck_gate.py

@@ -20,7 +20,7 @@ def test_runtime_serializers_preserve_real_complete_handoff(tmp_path, platform, 
     source = tmp_path / "discovered" / "example.skill" / "SKILL.md"
     source.parent.mkdir(parents=True)
     body = "# Example\n\n" + ("a safe workflow step\n" * (300 if large else 1))
-    source.write_text(body)
+    source.write_text(body, encoding="utf-8")
     runtime = AgentRuntime(project_root=tmp_path)
     route = SkillRoute(
         skill_id="project/example",
@@ -39,7 +39,7 @@ def test_runtime_serializers_preserve_real_complete_handoff(tmp_path, platform, 
     )
     result = runtime.handle_query("implement example", platform=platform.value)
     assert result.skill_context_prepared
-    assert result.skill_path == str(source)
+    assert result.skill_path == source.resolve().as_posix()
     assert result.has_match
     emitted = json.loads(result.to_hook_json())
     response = json.loads(
@@ -48,7 +48,7 @@ def test_runtime_serializers_preserve_real_complete_handoff(tmp_path, platform, 
     context = response["hookSpecificOutput"]["additionalContext"]
     assert context == emitted["skillContent"] == result.skill_content
     assert context.count("[ACTIVE SKILL: project/example]") == 1
-    assert str(source) in context
+    assert source.resolve().as_posix() in context
     assert len(context) <= 3000
     assert "scope" in context or "范围" in context
     assert "You MUST follow this skill's workflow" not in context
@@ -67,7 +67,7 @@ def test_runtime_serializers_preserve_real_complete_handoff(tmp_path, platform, 
 
 def test_legacy_raw_body_gets_read_handoff_in_both_channels(tmp_path):
     source = tmp_path / "SKILL.md"
-    source.write_text("# source")
+    source.write_text("# source", encoding="utf-8")
     result = AgentRuntimeResult(
         intercepted=True,
         mode="single",
@@ -87,7 +87,7 @@ def test_legacy_raw_body_gets_read_handoff_in_both_channels(tmp_path):
 @pytest.mark.parametrize("missing", [False, True])
 def test_notice_paths_never_get_activation_or_read_directive(tmp_path, monkeypatch, missing):
     source = tmp_path / "SKILL.md"
-    source.write_text("# harmless")
+    source.write_text("# harmless", encoding="utf-8")
     injector = SkillInjector(tmp_path)
     if not missing:
         monkeypatch.setattr(injector, "_is_content_safe", lambda _text: (False, "fixture"))
@@ -107,7 +107,8 @@ def test_notice_paths_never_get_activation_or_read_directive(tmp_path, monkeypat
     response = json.loads(result.to_hook_response())
     assert "[ACTIVE SKILL:" not in str(response)
     assert "NEXT STEP" not in str(response)
-    assert str(source) not in response["hookSpecificOutput"]["additionalContext"]
+    for spelling in {str(source), source.resolve().as_posix()}:
+        assert spelling not in response["hookSpecificOutput"]["additionalContext"]
 
 
 def test_legacy_unknown_source_uses_resolver_instead_of_fabricated_read_path():
