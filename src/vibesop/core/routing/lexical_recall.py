@@ -66,10 +66,10 @@ def bm25_recall(query: str, candidates: list[dict[str, Any]], top_n: int) -> lis
     return [sid for sid, _ in sorted(scores, key=lambda item: (-item[1], item[0]))[:top_n]]
 
 
-def fuse_rankings(*rankings: list[str], top_n: int) -> list[str]:
+def fuse_rankings(*rankings: list[str], top_n: int, k: int = 60) -> list[str]:
     """RRF with k=60, counting each identity at most once per recall lane."""
     scores: Counter[str] = Counter()
     for ranking in rankings:
         for rank, sid in enumerate(dict.fromkeys(ranking), 1):
-            scores[sid] += 1 / (60 + rank)
+            scores[sid] += 1 / (k + rank)
     return sorted(scores, key=lambda sid: (-scores[sid], sid))[: max(0, top_n)]

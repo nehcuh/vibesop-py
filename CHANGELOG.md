@@ -209,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frozen hybrid-recall fixture gate + RRF k-semantics pin** (adversarial panel 2026-10-15, batch C; combined kimi gate APPROVE after one P2 round): the shipped `tests/fixtures/hybrid-recall/` catalog/queries now have suite-time coverage replaying the model-free lanes — positive recall@20 with sibling-group ordering (a versioned sibling must never outrank the expected id) and negative guards removing negated/explanatory queries through the real TriageService applicability path — so fixture drift fails CI instead of only the opt-in eval script. `fuse_rankings` gains a `k` parameter (default 60, no caller changes), and the T3 regression uses asymmetric ranks (consensus at 61/62 in the two lanes) so the consensus-vs-single-rank1 crossover flips strictly at k≥60: the default assertion pins consensus-first and k=59 must yield single-rank1, guarding the production constant from both sides with no integer-tie window.
 - **Three builtin review/landing skills** (instinct → `core/skills/`):
   `adversarial-panel` (ff-only pull + frozen five-lens adversarial panel),
   `adversarial-arbitration` (D/T/J on synthesizer REQUEST CHANGES; consult not a

@@ -75,6 +75,17 @@ def test_fusion_counts_id_once_per_lane_and_is_order_stable():
     assert fuse_rankings([], [], top_n=20) == []
 
 
+def test_rrf_k60_rewards_cross_lane_consensus_over_single_rank1():
+    """Pin the k=60 consensus semantics (panel T3, kimi gate). Asymmetric
+    ranks (consensus at 61 in lane_a, 62 in lane_b) remove the integer tie,
+    so the consensus/single crossover lands strictly at k >= 60: any
+    production change of k to 59 or below flips the second assertion red."""
+    lane_a = [f"z-noise-{i}" for i in range(60)] + ["consensus"]
+    lane_b = ["single-rank1"] + [f"y-noise-{i}" for i in range(60)] + ["consensus"]
+    assert fuse_rankings(lane_a, lane_b, top_n=5)[0] == "consensus"
+    assert fuse_rankings(lane_a, lane_b, top_n=5, k=59)[0] == "single-rank1"
+
+
 @pytest.mark.parametrize("dense_ids", [[], None, ["uninstalled"]])
 def test_lexical_hit_rescues_dense_miss_without_padding(tmp_path, dense_ids):
     dense = MagicMock()
