@@ -8,6 +8,7 @@ their own explicit contracts.
 
 from __future__ import annotations
 
+import bisect
 import re
 from typing import Any
 
@@ -15,8 +16,13 @@ _QUOTED = re.compile(
     r'```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|‘[^’\n]*’|(?<!\w)\x27[^\x27\n]*\x27(?!\w)'
 )
 _NEGATED = re.compile(
-    r"\b(?:do not|don['’]?t|never|not|without|no need to|no|avoid)\b|不要|不用|不必|不做|不得|禁止|别用|别执行|别运行",
+    r"\b(?:do not|don['’]?t|can['’]?t|cannot|won['’]?t|unable|never|not|without"
+    r"|no need to|no|avoid)\b"
+    r"|不要|不用|不必|不做|不得|不能|无法|禁止|别用|别执行|别运行|勿|莫",
     re.IGNORECASE,
+)
+_CLAUSE_SEP = re.compile(
+    r"[\n;；。!?！？,，]|\b(?:but|instead|then)\b|而是|然后|接着", re.IGNORECASE
 )
 _REFERENCE = re.compile(
     r"\b(?:explain|describe|translate|meaning|tell me about|what (?:is|does|happens|about)|how (?:does|would)|why|said|says)\b|解释|介绍|翻译|含义|是什么|提到|故事",
@@ -31,30 +37,48 @@ _ACTION = re.compile(
 def intent_clauses(query: str, *, include_references: bool = False) -> list[str]:
     """Unquoted, affirmative clauses; apostrophes in contractions are retained."""
 
+    # Separator/negation/reference positions are computed once so each quoted
+    # atom costs O(log n) lookups plus a bounded tail scan. Re-scanning the
+    # clause head per atom made quote-flooded queries quadratic and pinned
+    # the synchronous route hook for seconds.
+    sep_ends = [m.end() for m in _CLAUSE_SEP.finditer(query)]
+    neg_starts = [m.start() for m in _NEGATED.finditer(query)]
+    ref_starts = [m.start() for m in _REFERENCE.finditer(query)]
+
+    def span_hits(starts: list[int], lo: int, hi: int) -> bool:
+        i = bisect.bisect_left(starts, lo)
+        return i < len(starts) and starts[i] < hi
+
     def unquote_argument(match: re.Match[str]) -> str:
         # Formatting a single skill identifier after an affirmative command
         # differs from quoting a whole command as material for discussion.
         atom = match.group().strip("`\"“”「」‘’'")
-        prefix = re.split(
-            r"[\n;；。!?！？,，]|\b(?:but|instead|then)\b|而是|然后|接着",
-            query[: match.start()],
-            flags=re.IGNORECASE,
-        )[-1]
+        idx = bisect.bisect_right(sep_ends, match.start()) - 1
+        prefix_start = sep_ends[idx] if idx >= 0 else 0
+        prefix = query[prefix_start : match.start()]
+        if len(prefix) > 256:
+            # The verb check is tail-anchored. Truncate only at a whitespace
+            # so a mid-word cut cannot fabricate \buse/用 matches; a window
+            # with no whitespace is treated as pathological and kept quoted.
+            window = prefix[-256:]
+            sp_ws = re.search(r"\s", window)
+            prefix = window[sp_ws.start() :] if sp_ws else " "
         if (
             re.fullmatch(r"[a-zA-Z][\w/:-]*", atom)
             and re.search(
                 r"(?:\b(?:use|using|run|execute|try|apply)|使用|采用|用)\s*$", prefix, re.IGNORECASE
             )
-            and not (_NEGATED.search(prefix) or _REFERENCE.search(prefix))
+            and not (
+                span_hits(neg_starts, prefix_start, match.start())
+                or span_hits(ref_starts, prefix_start, match.start())
+            )
         ):
             return atom
         return " "
 
     text = _QUOTED.sub(unquote_argument, query)
     clauses: list[str] = []
-    for raw in re.split(
-        r"[\n;；。!?！？,，]|\b(?:but|instead|then)\b|而是|然后|接着", text, flags=re.IGNORECASE
-    ):
+    for raw in _CLAUSE_SEP.split(text):
         # A report about another actor's future actions is not an invocation.
         if re.search(
             r"^(?!(?:i|we|you|please|lets)\b)[\w]+(?:\s+[\w]+){0,3}\s+(?:will|would|is going to|is|are|(?:plans?|intends?|wants?|decided) to)\s+(?:use|using|run|execute)\b|^(?:他|她|他们|工人|对方|.+的工人).{0,12}(?:使用|运行|执行)",
@@ -105,7 +129,7 @@ def candidate_scope_allows(query: str, candidate: dict[str, Any]) -> bool:
         str(candidate.get("id", "")).rsplit("/", maxsplit=1)[-1],
         str(candidate.get("name", "")),
     ]
-    names = [p for p in identities if len(p) >= 3 and phrase_present(query, p)]
+    names = [p for p in identities if phrase_present(query, p)]
     if names and not any(phrase_present(clause, p) for clause in clauses for p in names):
         return False
     # Diagnostic/explanatory requests may legitimately match ordinary skills'
@@ -136,7 +160,7 @@ def workflow_requested(query: str, triggers: list[str], tokens: tuple[str, ...])
 def session_end_requested(query: str, triggers: list[str]) -> bool:
     """Require a user exit signal, rather than a trigger in third-person prose."""
     prefix = re.compile(
-        r"^(?:(?:我(?:们)?|那|好了|好|嗯|今天|现在|先|就|可以|请|麻烦|准备|打算|要|已经|本次|这次)|\s|(?:ok(?:ay)?|well|please|then|all right|im|i|we)\b)*$",
+        r"^(?:(?:我(?:们)?|咱们|那|好了|好|嗯|今天|现在|先|就|可以|请|麻烦|准备|打算|要|想|让|已经|本次|这次)|\s|(?:ok(?:ay)?|well|please|then|all right|im|i|we)\b)*$",
         re.IGNORECASE,
     )
     for clause in intent_clauses(query):

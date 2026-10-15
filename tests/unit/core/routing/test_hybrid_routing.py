@@ -12,6 +12,7 @@ import pytest
 from vibesop.core.config import RoutingConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.explicit_layer import check_explicit_override
+from vibesop.core.routing.intent_constraints import candidate_scope_allows, intent_clauses
 from vibesop.core.routing.lexical_recall import bm25_recall, fuse_rankings, lexical_tokens
 from vibesop.core.routing.triage_cache import TriageCache
 from vibesop.core.routing.triage_service import TriageService
@@ -132,6 +133,14 @@ _GUARDS = [
         ("收工日志丢失了，帮我修复", "builtin/session-end"),
         ("我收工的时间请写到这个表中", "builtin/session-end"),
         ("我收工后继续调试这个接口", "builtin/session-end"),
+        ("cannot use builtin/riper-workflow", "builtin/riper-workflow"),
+        ("I can't use builtin/riper-workflow here", "builtin/riper-workflow"),
+        ("unable to use builtin/riper-workflow for this", "builtin/riper-workflow"),
+        ("I wont use builtin/riper-workflow again", "builtin/riper-workflow"),
+        ("不能使用 RIPER 流程做这个", "builtin/riper-workflow"),
+        ("无法使用 riper workflow，换个方案", "builtin/riper-workflow"),
+        ("请勿用RIPER流程执行此任务", "builtin/riper-workflow"),
+        ("莫用RIPER流程", "builtin/riper-workflow"),
     ],
 )
 def test_guard_blocks_inferred_routes_and_explicit_verb_references(tmp_path, query, rejected):
@@ -172,10 +181,45 @@ def test_guard_blocks_inferred_routes_and_explicit_verb_references(tmp_path, que
         ("进行 RIPER 流程实现功能", "builtin/riper-workflow"),
         ("用RIPER执行这个任务", "builtin/riper-workflow"),
         ("请使用RIPER流程实现功能", "builtin/riper-workflow"),
+        ("让我们收工", "builtin/session-end"),
+        ("我想收工了", "builtin/session-end"),
+        ("咱们收工了", "builtin/session-end"),
     ],
 )
 def test_affirmative_intent_remains_routable(tmp_path, query, skill):
     assert service(tmp_path).has_explicit_guard_signal(query, _GUARDS, skill)
+
+
+@pytest.mark.parametrize(
+    "query, candidate, allowed",
+    [
+        ("please use go now", {"id": "builtin/go", "name": "go"}, True),
+        ("don't use go for this task", {"id": "builtin/go", "name": "go"}, False),
+        ("cannot use go here", {"id": "builtin/go", "name": "go"}, False),
+        ("请测试这个功能", {"id": "builtin/qa", "name": "测试"}, True),
+        ("不要测试，直接上线", {"id": "builtin/qa", "name": "测试"}, False),
+    ],
+)
+def test_short_identities_honor_inactive_mention_gate(query, candidate, allowed):
+    assert candidate_scope_allows(query, candidate) is allowed
+
+
+def test_unquote_prefix_stops_at_clause_separator():
+    assert intent_clauses("use `a:b` now") == ["use a:b now"]
+    assert intent_clauses("use `a:b`; but `c:d`") == ["use a:b"]
+    assert intent_clauses("use `a:b`。use `c:d`") == ["use a:b", "use c:d"]
+
+
+def test_quote_flood_intent_clauses_stays_bounded():
+    # 8000 atoms took 6.5-8s per call with per-atom head re-splitting; the
+    # linear path stays under a generous bound even on slow CI runners.
+    query = " ".join(f"`atom{i}`" for i in range(8000))
+    start = time.monotonic()
+    clauses = intent_clauses(query)
+    assert time.monotonic() - start < 3.0
+    # Shape guard: a future "speedup" must not come from skipping the work —
+    # 8000 bare atoms (no affirmative verb prefix) stay fully quoted out.
+    assert clauses == []
 
 
 @pytest.mark.parametrize(
