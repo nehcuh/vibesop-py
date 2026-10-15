@@ -115,6 +115,55 @@ def digest(value: bytes) -> str:
     return hashlib.sha256(value.replace(b"\r\n", b"\n")).hexdigest()
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    """tmp+rename so readers never see a torn file. The tmp name carries the
+    pid: two processes writing the SAME target still last-writer-wins
+    (rename is atomic) instead of racing on one shared tmp path."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def verify_repo_anchor(repo: Path, snapshot: dict[str, Any], *, ignore_mismatch: bool) -> None:
+    """Replay trust anchor: the snapshot's self-fingerprint proves internal
+    consistency only. Before exec'ing frozen source out of the snapshot dir,
+    require the snapshot to still describe THIS repo's corpus (dataset +
+    skills hashes). A snapshot edited together with its recorded hashes would
+    otherwise pass the self-check (panel S2)."""
+    mismatches: list[str] = []
+    dataset = repo / "tests/benchmark/routing_eval.yaml"
+    if "dataset_sha256" not in snapshot:
+        raise ValueError("Snapshot predates the dataset anchor entry; refreeze a fresh snapshot")
+    if not dataset.is_file() or digest(dataset.read_bytes()) != snapshot["dataset_sha256"]:
+        mismatches.append("tests/benchmark/routing_eval.yaml")
+    if "skills_content_hashes" not in snapshot:
+        raise ValueError("Snapshot predates the skills anchor entry; refreeze a fresh snapshot")
+    for relative, expected in snapshot["skills_content_hashes"].items():
+        target = repo / relative
+        if not target.is_file() or digest(target.read_bytes()) != expected:
+            mismatches.append(relative)
+    if mismatches and not ignore_mismatch:
+        raise SystemExit(
+            "Snapshot does not match this repo (dataset/skills drifted: "
+            f"{', '.join(sorted(set(mismatches)))}). Refreeze a fresh snapshot, or pass "
+            "--ignore-anchor-mismatch to replay the old one deliberately."
+        )
+    drifted = [
+        relative
+        for relative, expected in snapshot.get("source_hashes", {}).items()
+        if (target := repo / relative).is_file() and digest(target.read_bytes()) != expected
+    ]
+    if drifted:
+        print(
+            "WARNING: replaying frozen production source while the repo has moved on "
+            f"({', '.join(sorted(drifted))}); results describe the code at freeze time.",
+            file=sys.stderr,
+        )
+
+
 def freeze(
     repo: Path, out: Path, extra_candidates: Path | None = None, extra_queries: Path | None = None
 ) -> dict[str, Any]:
@@ -226,9 +275,7 @@ def freeze(
         "source_hashes": {p: digest((repo / p).read_bytes()) for p in SOURCE_FILES},
     }
     snapshot["fingerprint"] = digest(canonical(snapshot))
-    (out / "snapshot.json").write_text(
-        json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    atomic_write_text(out / "snapshot.json", json.dumps(snapshot, ensure_ascii=False, indent=2))
     for relative in SOURCE_FILES:
         target = out / "production-source" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -339,11 +386,21 @@ def main() -> int:
         help="Allow first model download; otherwise use cached fixed revision offline.",
     )
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument(
+        "--ignore-anchor-mismatch",
+        action="store_true",
+        help="Skip the repo-anchor check when replaying an old snapshot against a moved-on repo.",
+    )
     args = parser.parse_args()
     repo = args.repo.resolve()
     out = args.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0, str(repo / "src"))
+    # Idempotent: repeated runs must not stack duplicate shadow entries ahead
+    # of the interpreter's own path. A hostile --repo still shadows imports —
+    # this is a dev tool run by the repo owner, not a sandbox boundary.
+    src_path = str(repo / "src")
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
     if args.snapshot and (args.extra_candidates or args.extra_queries):
         parser.error("Extra corpora are frozen once; do not combine --snapshot with extra inputs")
     snapshot = (
@@ -357,6 +414,8 @@ def main() -> int:
         != stored_fingerprint
     ):
         raise ValueError("Snapshot content changed after freezing")
+    if args.snapshot:
+        verify_repo_anchor(repo, snapshot, ignore_mismatch=args.ignore_anchor_mismatch)
     if args.freeze_only:
         print(
             json.dumps(
@@ -379,9 +438,18 @@ def main() -> int:
     # work cannot silently change one model arm. The candidate text projection
     # is frozen in each entry; the copied helper invokes that exact projection.
     source_root = args.snapshot.parent if args.snapshot else out
+    for relative in SOURCE_FILES:
+        frozen_file = source_root / "production-source" / relative
+        expected = snapshot.get("source_hashes", {}).get(relative)
+        if expected is None:
+            raise ValueError(
+                f"Snapshot predates the SOURCE_FILES entry {relative}; refreeze a fresh snapshot"
+            )
+        if not frozen_file.is_file():
+            raise ValueError(f"Frozen production source missing: {relative}")
+        if digest(frozen_file.read_bytes()) != expected:
+            raise ValueError(f"Frozen production source hash mismatch: {relative}")
     frozen_helper = source_root / "production-source" / SOURCE_FILES[0]
-    if digest(frozen_helper.read_bytes()) != snapshot["source_hashes"][SOURCE_FILES[0]]:
-        raise ValueError("Frozen production BM25/RRF source hash mismatch")
     module_spec = importlib.util.spec_from_file_location(
         "vibesop_frozen_lexical_recall", frozen_helper
     )
@@ -581,8 +649,8 @@ def main() -> int:
                 bool(set(r["expect"]) & set(r[stage]["union"])) for r in positives
             )
     payload = {"metadata": metadata, "results": reports}
-    (out / (args.model + ".json")).write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    atomic_write_text(
+        out / (args.model + ".json"), json.dumps(payload, ensure_ascii=False, indent=2)
     )
     print(
         json.dumps(
