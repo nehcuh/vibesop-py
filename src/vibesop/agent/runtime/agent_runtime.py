@@ -22,6 +22,7 @@ from typing import Any
 
 from vibesop.agent.runtime.intent_interceptor import InterceptionMode
 from vibesop.core.observability import ObservabilityTracer, get_tracer
+from vibesop.utils.skill_labels import sanitize_skill_label
 
 logger = logging.getLogger(__name__)
 
@@ -212,8 +213,54 @@ class AgentRuntimeResult:
             ensure_ascii=False,
         )
 
-    def _skill_context(self, source_path: str = "") -> str:
-        """Preserve runtime-produced envelopes; prepare legacy raw bodies once."""
+    def _hint_source_path(self) -> str:
+        """On-disk source hint for the single-skill NEXT STEP directive.
+
+        Prefer the path inject actually loaded (discovered source_file).
+        If nothing exists on disk, say so — do not guess skills/<id>/SKILL.md.
+        """
+        user_root = self.project_root or Path.cwd()
+        if self.skill_path:
+            return self.skill_path.replace("\\", "/")
+        label = sanitize_skill_label(self.skill_id)
+        not_found = f"{label} SKILL.md not found — do not guess skills/<id>/SKILL.md"
+        if "/" in self.skill_id:
+            namespace, bare_name = self.skill_id.split("/", 1)
+            if namespace == "builtin":
+                from vibesop.utils.bundled import resolve_builtin_skills_dir
+
+                hint_file = resolve_builtin_skills_dir(user_root) / bare_name / "SKILL.md"
+                if hint_file.exists():
+                    return hint_file.as_posix()
+                return f"core/skills/{bare_name}/SKILL.md"
+            # W4/W5 promote materializes custom skills under
+            # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
+            # skill_id) — never the platform skills dir. Point the agent
+            # at the real file so the "read SKILL.md" step succeeds.
+            for p in (
+                user_root / ".vibe" / "skills" / self.skill_id / "SKILL.md",
+                Path.home() / ".vibe" / "skills" / self.skill_id / "SKILL.md",
+            ):
+                if p.exists():
+                    return p.resolve().as_posix()
+            return not_found
+        vibe_skills = user_root / ".vibe" / "skills"
+        if vibe_skills.is_dir():
+            dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
+            if dotted:
+                return dotted[0].resolve().as_posix()
+            direct = vibe_skills / self.skill_id / "SKILL.md"
+            if direct.exists():
+                return direct.resolve().as_posix()
+        return not_found
+
+    def _skill_context(self, source_path: str | None = None) -> str:
+        """Preserve runtime-produced envelopes; prepare legacy raw bodies once.
+
+        ``source_path=None`` resolves lazily so both serialization channels
+        converge on the same NEXT STEP directive for legacy hand-built
+        results (skill_path empty, file discoverable via hint layout).
+        """
         if self.skill_context_prepared:
             return self.skill_content
         if self.notice_only or self.mode in ("orchestrate", "multi_agent_squad"):
@@ -228,6 +275,9 @@ class AgentRuntimeResult:
             "",
             content,
         )
+        if source_path is None:
+            hint = self._hint_source_path()
+            source_path = hint if Path(hint).is_file() else ""
         return build_skill_envelope(self.skill_id, content, source_path or self.skill_path)[0]
 
     def to_hook_response(
@@ -293,7 +343,8 @@ class AgentRuntimeResult:
         if self.notice_only:
             notice = (
                 self.skill_content
-                or f"[VibeSOP] Skill '{self.demoted_skill_id or self.skill_id}' was not injected."
+                or f"[VibeSOP] Skill '"
+                f"{sanitize_skill_label(self.demoted_skill_id or self.skill_id)}' was not injected."
             )[:3000]
             notice_resp: dict[str, Any] = {"systemMessage": notice}
             if include_additional_context:
@@ -334,66 +385,28 @@ class AgentRuntimeResult:
         # Single skill match — build full response
         conf_pct = int(self.confidence * 100)
 
-        # Hint path must match real on-disk layout. Prefer the path inject
-        # actually loaded (discovered source_file). If nothing exists on
-        # disk, say so — do not guess skills/<id>/SKILL.md.
-        user_root = self.project_root or Path.cwd()
-        if self.skill_path:
-            hint_path = self.skill_path.replace("\\", "/")
-        elif "/" in self.skill_id:
-            namespace, bare_name = self.skill_id.split("/", 1)
-            if namespace == "builtin":
-                from vibesop.utils.bundled import resolve_builtin_skills_dir
-
-                hint_file = resolve_builtin_skills_dir(user_root) / bare_name / "SKILL.md"
-                hint_path = (
-                    hint_file.as_posix()
-                    if hint_file.exists()
-                    else f"core/skills/{bare_name}/SKILL.md"
-                )
-            else:
-                hint_path = (
-                    f"{self.skill_id} SKILL.md not found — do not guess skills/<id>/SKILL.md"
-                )
-                # W4/W5 promote materializes custom skills under
-                # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
-                # skill_id) — never the platform skills dir. Point the agent
-                # at the real file so the "read SKILL.md" step succeeds.
-                for p in (
-                    user_root / ".vibe" / "skills" / self.skill_id / "SKILL.md",
-                    Path.home() / ".vibe" / "skills" / self.skill_id / "SKILL.md",
-                ):
-                    if p.exists():
-                        hint_path = p.resolve().as_posix()
-                        break
-        else:
-            hint_path = f"{self.skill_id} SKILL.md not found — do not guess skills/<id>/SKILL.md"
-            vibe_skills = user_root / ".vibe" / "skills"
-            if vibe_skills.is_dir():
-                dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
-                if dotted:
-                    hint_path = dotted[0].resolve().as_posix()
-                else:
-                    direct = vibe_skills / self.skill_id / "SKILL.md"
-                    if direct.exists():
-                        hint_path = direct.resolve().as_posix()
+        # Hint path must match real on-disk layout; the label must survive
+        # hostile frontmatter ids reaching user-visible system messages.
+        hint_path = self._hint_source_path()
+        label = sanitize_skill_label(self.skill_id)
 
         # Build alternatives message
         alt_msg = ""
         if self.alternatives:
             alt_lines = [
-                f"  {i + 1}. {a['skill_id']} ({int(a.get('confidence', 0) * 100)}%)"
+                f"  {i + 1}. {sanitize_skill_label(a['skill_id'])}"
+                f" ({int(a.get('confidence', 0) * 100)}%)"
                 for i, a in enumerate(self.alternatives[:5])
             ]
             alt_msg = (
                 "\nALTERNATIVE SKILLS "
-                f"(if '{self.skill_id}' doesn't fit, load one of these):\n"
+                f"(if '{label}' doesn't fit, load one of these):\n"
                 + "\n".join(alt_lines)
                 + "\n"
             )
 
         system_message = (
-            f"🎯 VibeSOP routed: {self.skill_id} ({conf_pct}% confidence)"
+            f"🎯 VibeSOP routed: {label} ({conf_pct}% confidence)"
             f"{alt_msg}"
             f"\n\nNEXT STEP (MANDATORY): read {hint_path}\n"
             "Do NOT proceed without reading this file.\n"
@@ -403,9 +416,7 @@ class AgentRuntimeResult:
         resp: dict[str, Any] = {"systemMessage": system_message}
 
         if include_additional_context and self.skill_content:
-            additional_context = self._skill_context(
-                self.skill_path or (hint_path if Path(hint_path).is_file() else "")
-            )
+            additional_context = self._skill_context()
             hook_output: dict[str, Any] = {
                 "additionalContext": additional_context,
             }
@@ -894,7 +905,7 @@ class AgentRuntime:
                                 demoted_id,
                             )
                             result.errors.append(
-                                f"Skill '{demoted_id}' matched but has no "
+                                f"Skill '{sanitize_skill_label(demoted_id)}' matched but has no "
                                 f"injectable content; demoted to no-match"
                             )
                             result.skill_id = ""
@@ -946,7 +957,7 @@ class AgentRuntime:
                         # environment-specific paths; the errors list above
                         # keeps the full text for local diagnosis.
                         result.skill_content = (
-                            f"[VibeSOP] Skill '{demoted_id}' could not be "
+                            f"[VibeSOP] Skill '{sanitize_skill_label(demoted_id)}' could not be "
                             f"loaded (injection failed: {type(e).__name__}); "
                             f"routed as no-match."
                         )

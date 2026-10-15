@@ -16,6 +16,8 @@ here so the two paths can't drift apart.
 
 from __future__ import annotations
 
+from vibesop.utils.skill_labels import sanitize_skill_label
+
 
 def is_skill_content_safe(content: str) -> bool:
     """True if ``content`` passes the runtime ``SecurityScanner``.
@@ -38,7 +40,7 @@ def unsafe_replacement_notice(skill_id: str) -> str:
     orchestration (PlanExecutor.build_manifest) paths can't drift apart.
     """
     return (
-        f"[VibeSOP SECURITY] Skill '{skill_id}' was flagged unsafe by the "
+        f"[VibeSOP SECURITY] Skill '{sanitize_skill_label(skill_id)}' was flagged unsafe by the "
         f"runtime security scan; its content was NOT injected/embedded. It may "
         f"have been modified after install or contains a threat. Re-install or "
         f"audit it before use."
@@ -54,7 +56,7 @@ def empty_content_notice(skill_id: str) -> str:
     the real security notice above.
     """
     return (
-        f"[VibeSOP] Skill '{skill_id}' has no injectable content (generated "
+        f"[VibeSOP] Skill '{sanitize_skill_label(skill_id)}' has no injectable content (generated "
         f"registry stub or missing SKILL.md body); nothing was injected. "
         f"Re-install the skill or check its source."
     )

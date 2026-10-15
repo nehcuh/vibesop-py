@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from vibesop.agent.runtime.skill_envelope import build_skill_envelope
+from vibesop.utils.skill_labels import sanitize_skill_label
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -263,19 +264,30 @@ class SkillInjector:
             )
 
         if platform == PlatformType.KIMI_CLI:
-            result = self._inject_kimi_cli(skill_id, skill_content, False)
+            result = self._inject_kimi_cli(
+                skill_id,
+                skill_content,
+                False,
+                note=_spec_gap_envelope_note() if spec_gap == SPEC_GAP_LOW else "",
+            )
             context = str(result.payload)
-            result.payload = f"[ACTIVE SKILL: {skill_id}]\n{context}"
+            result.payload = f"[ACTIVE SKILL: {sanitize_skill_label(skill_id)}]\n{context}"
         else:
             prefix, suffix = "", ""
             method = InjectionMethod.TEXT
             if platform == PlatformType.OPENCODE:
-                prefix, suffix = f'<vibesop-skill id="{skill_id}">\n', "\n</vibesop-skill>"
+                prefix, suffix = (
+                    f'<vibesop-skill id="{sanitize_skill_label(skill_id)}">\n',
+                    "\n</vibesop-skill>",
+                )
                 method = InjectionMethod.SYSTEM_PROMPT
             elif platform == PlatformType.PI:
                 prefix, suffix = '<vibesop-skill platform="pi">\n', "\n</vibesop-skill>"
             elif platform == PlatformType.GENERIC:
-                prefix, suffix = f"=== SKILL: {skill_id} ===\n", "\n=== END SKILL ==="
+                prefix, suffix = (
+                    f"=== SKILL: {sanitize_skill_label(skill_id)} ===\n",
+                    "\n=== END SKILL ===",
+                )
             elif platform in (PlatformType.CLAUDE_CODE, PlatformType.GROK_BUILD):
                 method = InjectionMethod.ADDITIONAL_CONTEXT
             context, truncated = build_skill_envelope(
@@ -592,13 +604,15 @@ class SkillInjector:
         skill_id: str,
         _content: str,
         _truncated: bool,
+        note: str = "",
     ) -> InjectionResult:
         """Build Kimi CLI instruction (AI must read skill file itself)."""
+        label = sanitize_skill_label(skill_id)
         resolved = self._last_resolved or self._resolve_skill_md(skill_id)
         if resolved is not None:
             instruction = (
                 f"请先读取完整文件 {resolved.as_posix()} ，"
-                f"然后只执行与用户请求意图和范围相符的步骤「{skill_id}」。"
+                f"然后只执行与用户请求意图和范围相符的步骤「{label}」。"
                 f"用户的范围限制优先；技能选择不授权额外操作。"
             )
         else:
@@ -606,10 +620,12 @@ class SkillInjector:
             # happen, point at the authoritative resolver instead of guessing
             # a .kimi-code/skills/ path (the guess-target layout may be empty).
             instruction = (
-                f"请运行 `vibe skills info {skill_id}` 获取真实 skill 文件路径"
+                f"请运行 `vibe skills info {label}` 获取真实 skill 文件路径"
                 f"（Source file），读取后只执行与用户请求意图和范围相符的步骤"
-                f"「{skill_id}」。用户约束优先，不得猜测文件路径。"
+                f"「{label}」。用户约束优先，不得猜测文件路径。"
             )
+        if note:
+            instruction = f"{instruction}\n{note}"
         return InjectionResult(
             method=InjectionMethod.INSTRUCTION,
             payload=instruction,

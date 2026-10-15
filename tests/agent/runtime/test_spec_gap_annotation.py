@@ -183,9 +183,10 @@ class TestInjectorSpecGapAnnotation:
         assert result.spec_gap == SPEC_GAP_LOW
         assert "report-only" not in str(result.payload)
 
-    def test_kimi_instruction_reports_field_without_note(self, tmp_path: Path) -> None:
-        """Kimi's payload is a read-file instruction (body unused) — the
-        annotation lives on the field for programmatic consumers only."""
+    def test_kimi_instruction_carries_note_when_low(self, tmp_path: Path) -> None:
+        """Kimi's payload is a read-file instruction — the note is appended so
+        Kimi agents see the same advisory every other platform gets (was the
+        only platform missing it)."""
         skill_dir = tmp_path / "skills" / "kimi-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(self.BODY, encoding="utf-8")
@@ -195,6 +196,15 @@ class TestInjectorSpecGapAnnotation:
         )
         assert result.method == InjectionMethod.INSTRUCTION
         assert result.spec_gap == SPEC_GAP_LOW
+        assert "report-only" in str(result.payload)
+
+    def test_kimi_instruction_stays_clean_when_unknown(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "skills" / "kimi-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(self.BODY, encoding="utf-8")
+        injector = self._injector(tmp_path)
+        result = injector.inject_single_skill("kimi-skill", PlatformType.KIMI_CLI)
+        assert result.spec_gap == SPEC_GAP_UNKNOWN
         assert "report-only" not in str(result.payload)
 
 
