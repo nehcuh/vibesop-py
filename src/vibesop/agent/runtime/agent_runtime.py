@@ -106,8 +106,10 @@ class AgentRuntimeResult:
     # instead of guessing core/skills/<id>/SKILL.md.
     skill_path: str = ""
     # Memoized _hint_source_path() so serializing to JSON and to the hook
-    # response shares one directory scan.
-    _hint_source_cache: str | None = None
+    # response shares one directory scan. Not a constructor/equality field:
+    # a poisoned constructor arg could otherwise flow raw into systemMessage
+    # (grok B-2 re-review NIT).
+    _hint_source_cache: str | None = field(default=None, init=False, compare=False, repr=False)
     # The skill id that ROUTED but was demoted to no-match because its body
     # could not be loaded (missing/empty content, or inject raised). NOT set
     # by the refused_unsafe branch — that path keeps skill_id (the span
