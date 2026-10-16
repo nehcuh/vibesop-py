@@ -159,6 +159,8 @@ _GUARDS = [
         ("无法使用 riper workflow，换个方案", "builtin/riper-workflow"),
         ("请勿用RIPER流程执行此任务", "builtin/riper-workflow"),
         ("莫用RIPER流程", "builtin/riper-workflow"),
+        ("他想收工", "builtin/session-end"),
+        ("让他收工", "builtin/session-end"),
     ],
 )
 def test_guard_blocks_inferred_routes_and_explicit_verb_references(tmp_path, query, rejected):
@@ -216,6 +218,13 @@ def test_affirmative_intent_remains_routable(tmp_path, query, skill):
         ("cannot use go here", {"id": "builtin/go", "name": "go"}, False),
         ("请测试这个功能", {"id": "builtin/qa", "name": "测试"}, True),
         ("不要测试，直接上线", {"id": "builtin/qa", "name": "测试"}, False),
+        # grok A-2 P2: short identities colliding with the negation lexicon
+        # or a file extension must not veto the whole candidate.
+        ("不能部署，请看日志", {"id": "builtin/neng", "name": "能"}, True),
+        ("无法连接数据库，请看日志", {"id": "builtin/fa", "name": "法"}, True),
+        ("I can't compile the parser", {"id": "builtin/can", "name": "can"}, True),
+        ("please fix `parser.go`", {"id": "builtin/go", "name": "go"}, True),
+        ("please fix parser.go", {"id": "builtin/go", "name": "go"}, True),
     ],
 )
 def test_short_identities_honor_inactive_mention_gate(query, candidate, allowed):
@@ -228,6 +237,58 @@ def test_unquote_prefix_stops_at_clause_separator():
     assert intent_clauses("use `a:b`。use `c:d`") == ["use a:b", "use c:d"]
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "请" * 260 + "使用 `riper-workflow`",
+        "请" * 260 + "用 `riper-workflow`",
+        "p" * 260 + " use `riper-workflow`",
+        # kimi round-2 P2-1: Latin run glued directly to the CJK verb — the
+        # window's only whitespace is the trailing one, so a blanket
+        # first-whitespace cut would still drop the verb.
+        "x" * 260 + "使用 `riper-workflow`",
+    ],
+)
+def test_long_prefix_truncation_keeps_tail_verb(query):
+    """grok A-2 P2: the first-whitespace cut ate a CJK tail verb (使用 lost
+    to the single space before the atom) and with it the whole route."""
+    clauses = intent_clauses(query)
+    assert clauses and "riper-workflow" in clauses[-1]
+
+
+def test_long_prefix_truncation_still_blocks_fabricated_verb():
+    """The Latin mid-word cut keeps fabricating \buse impossible: an
+    "abuse" tail must not unquote the atom (grok A-2 regression guard)."""
+    clauses = intent_clauses("x" * 260 + "abuse `riper-workflow`")
+    assert all("riper-workflow" not in clause for clause in clauses)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # kimi round-2 P2-2: "use" starts exactly at the window edge with a
+        # CJK word char glued before it — \b is Unicode, so keeping the
+        # window verbatim would fabricate a \buse tail match.
+        "a" * 10 + "用use" + " " * 253 + "`riper-workflow`",
+        "a" * 10 + "用using" + " " * 250 + "`riper-workflow`",
+        # Short-prefix control: without truncation there is no word boundary
+        # between 用 and u, so the atom stays quoted either way.
+        "a" * 10 + "用use `riper-workflow`",
+    ],
+)
+def test_long_prefix_truncation_blocks_cjk_edge_fabrication(query):
+    clauses = intent_clauses(query)
+    assert all("riper-workflow" not in clause for clause in clauses)
+
+
+def test_long_prefix_truncation_keeps_genuine_edge_verb():
+    """A window-edge Latin verb whose preceding char is NOT a word char sits
+    on a real boundary in the full text — it must survive (the fabrication
+    block is edge-specific, not a blanket cut)."""
+    clauses = intent_clauses("a" * 10 + "，use" + " " * 253 + "`riper-workflow`")
+    assert clauses and "riper-workflow" in clauses[-1]
+
+
 def test_quote_flood_intent_clauses_stays_bounded():
     # 8000 atoms took 6.5-8s per call with per-atom head re-splitting; the
     # linear path stays under a generous bound even on slow CI runners.
@@ -238,6 +299,10 @@ def test_quote_flood_intent_clauses_stays_bounded():
     # Shape guard: a future "speedup" must not come from skipping the work —
     # 8000 bare atoms (no affirmative verb prefix) stay fully quoted out.
     assert clauses == []
+    # And skipping cannot hide behind the empty result: one affirmative tail
+    # atom in the same flood must still come through unquoted.
+    flooded = intent_clauses(query + " use `final-atom`")
+    assert any("use final-atom" in clause for clause in flooded)
 
 
 @pytest.mark.parametrize(

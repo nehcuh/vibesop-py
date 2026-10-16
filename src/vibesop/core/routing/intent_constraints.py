@@ -32,6 +32,13 @@ _ACTION = re.compile(
     r"\b(?:use|using|run|execute|start|apply|switch|try|do|build|implement|kick off|launch|begin|initiate|invoke|employ|go with)\b|使用|采用|执行|运行|启动|切换|用|进行|走|跑",
     re.IGNORECASE,
 )
+_TAIL_VERB = re.compile(
+    r"(?:\b(?:use|using|run|execute|try|apply)|使用|采用|用)\s*$", re.IGNORECASE
+)
+
+
+def _ascii_word_char(ch: str) -> bool:
+    return ch.isascii() and (ch.isalnum() or ch == "_")
 
 
 def intent_clauses(query: str, *, include_references: bool = False) -> list[str]:
@@ -57,17 +64,27 @@ def intent_clauses(query: str, *, include_references: bool = False) -> list[str]
         prefix_start = sep_ends[idx] if idx >= 0 else 0
         prefix = query[prefix_start : match.start()]
         if len(prefix) > 256:
-            # The verb check is tail-anchored. Truncate only at a whitespace
-            # so a mid-word cut cannot fabricate \buse/用 matches; a window
-            # with no whitespace is treated as pathological and kept quoted.
+            # Truncation can only fabricate evidence at the window's left
+            # edge, and only when a Latin verb's tail-anchored match STARTS
+            # at that edge (CJK verbs need no \b; a match deeper in the
+            # window sits on real separators). prefix[-257] is adjacent to
+            # window[0], so a word char there means the edge \b is fake —
+            # \b is Unicode, so a CJK char counts too (用use glued).
             window = prefix[-256:]
-            sp_ws = re.search(r"\s", window)
-            prefix = window[sp_ws.start() :] if sp_ws else " "
+            edge = _TAIL_VERB.search(window)
+            if (
+                edge is not None
+                and edge.start() == 0
+                and edge.group()[0].isascii()
+                and (prefix[-257].isalnum() or prefix[-257] == "_")
+            ):
+                sp_ws = re.search(r"\s", window)
+                prefix = window[sp_ws.start() :] if sp_ws else " "
+            else:
+                prefix = window
         if (
             re.fullmatch(r"[a-zA-Z][\w/:-]*", atom)
-            and re.search(
-                r"(?:\b(?:use|using|run|execute|try|apply)|使用|采用|用)\s*$", prefix, re.IGNORECASE
-            )
+            and _TAIL_VERB.search(prefix)
             and not (
                 span_hits(neg_starts, prefix_start, match.start())
                 or span_hits(ref_starts, prefix_start, match.start())
@@ -113,6 +130,28 @@ def phrase_present(text: str, phrase: str) -> bool:
     return re.search(pattern, text.lower()) is not None
 
 
+def _mention_spans(text: str, phrase: str) -> list[tuple[int, int]]:
+    """All occurrences of phrase, with phrase_present's boundary semantics."""
+    lowered = phrase.lower().strip()
+    if not lowered:
+        return []
+    pattern = re.escape(lowered)
+    if lowered[0].isascii() and lowered[-1].isascii():
+        pattern = rf"(?<![a-z0-9_]){pattern}(?![a-z0-9_])"
+    return [(m.start(), m.end()) for m in re.finditer(pattern, text.lower())]
+
+
+def _counts_as_mention(query: str, span: tuple[int, int], neg_spans: list[tuple[int, int]]) -> bool:
+    start, end = span
+    # Inside a negated token the fragment is not invocation evidence:
+    # "can" in can't, 能 in 不能, 法 in 无法 (grok A-2 P2 — short CJK
+    # identities collide with the negation lexicon).
+    if any(ns <= start and end <= ne for ns, ne in neg_spans):
+        return False
+    # A file extension is not a skill id mention: "go" in parser.go.
+    return not (start >= 2 and query[start - 1] == "." and _ascii_word_char(query[start - 2]))
+
+
 def candidate_scope_allows(query: str, candidate: dict[str, Any]) -> bool:
     """Enforce declared prerequisites and reject exclusively inactive mentions.
 
@@ -129,7 +168,12 @@ def candidate_scope_allows(query: str, candidate: dict[str, Any]) -> bool:
         str(candidate.get("id", "")).rsplit("/", maxsplit=1)[-1],
         str(candidate.get("name", "")),
     ]
-    names = [p for p in identities if phrase_present(query, p)]
+    neg_spans = [m.span() for m in _NEGATED.finditer(query.lower())]
+    names = [
+        p
+        for p in identities
+        if any(_counts_as_mention(query, sp, neg_spans) for sp in _mention_spans(query, p))
+    ]
     if names and not any(phrase_present(clause, p) for clause in clauses for p in names):
         return False
     # Diagnostic/explanatory requests may legitimately match ordinary skills'
