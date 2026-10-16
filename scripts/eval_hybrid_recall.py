@@ -151,11 +151,13 @@ def verify_repo_anchor(repo: Path, snapshot: dict[str, Any], *, ignore_mismatch:
             f"{', '.join(sorted(set(mismatches)))}). Refreeze a fresh snapshot, or pass "
             "--ignore-anchor-mismatch to replay the old one deliberately."
         )
-    drifted = [
-        relative
-        for relative, expected in snapshot.get("source_hashes", {}).items()
-        if (target := repo / relative).is_file() and digest(target.read_bytes()) != expected
-    ]
+    drifted = []
+    for relative, expected in snapshot.get("source_hashes", {}).items():
+        target = repo / relative
+        # Missing counts as drift too: a deleted production file silently
+        # skips the hash compare otherwise (grok CD re-review).
+        if not target.is_file() or digest(target.read_bytes()) != expected:
+            drifted.append(relative)
     if drifted:
         print(
             "WARNING: replaying frozen production source while the repo has moved on "
@@ -250,7 +252,7 @@ def freeze(
         finally:
             os.chdir(old_cwd)
     skills = {
-        str(p.relative_to(repo)): digest(p.read_bytes())
+        p.relative_to(repo).as_posix(): digest(p.read_bytes())
         for root in roots
         for p in sorted(root.rglob("*"))
         if p.is_file() and not p.is_symlink() and p.suffix.lower() in {".md", ".yaml", ".yml"}

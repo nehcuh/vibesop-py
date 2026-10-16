@@ -18,6 +18,7 @@ import pytest
 import yaml
 
 from vibesop.core.config import RoutingConfig
+from vibesop.core.routing.intent_constraints import candidate_scope_allows
 from vibesop.core.routing.lexical_recall import bm25_recall
 from vibesop.core.routing.triage_cache import TriageCache
 from vibesop.core.routing.triage_service import TriageService
@@ -118,3 +119,19 @@ def test_negative_query_guard_removes_reject_target(guard, candidates, row):
     kept = {str(c["id"]) for c in guard.applicable_candidates(row["query"], candidates)}
     leaked = [sid for sid in row["reject"] if sid in kept]
     assert not leaked, f"guard admitted negated/referenced target {leaked} for {row['query']!r}"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [r for r in _load_queries() if r.get("expect")],
+    ids=lambda r: r["query"][:30],
+)
+def test_positive_query_scope_still_allows_expected_target(candidates, row):
+    """The removal gate above must stay surgical: a guard flipped to reject
+    EVERYTHING would pass it. Every affirmative query keeps its expected
+    targets allowed through the same scope predicate (grok CD re-review)."""
+    by_id = {str(c["id"]): c for c in candidates}
+    for expected in row["expect"]:
+        assert candidate_scope_allows(row["query"], by_id[expected]), (
+            f"guard over-rejects: {expected} barred for affirmative {row['query']!r}"
+        )

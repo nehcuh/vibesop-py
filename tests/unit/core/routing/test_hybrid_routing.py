@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import time
 from pathlib import Path
@@ -76,10 +77,16 @@ def test_fusion_counts_id_once_per_lane_and_is_order_stable():
 
 
 def test_rrf_k60_rewards_cross_lane_consensus_over_single_rank1():
-    """Pin the k=60 consensus semantics (panel T3, kimi gate). Asymmetric
-    ranks (consensus at 61 in lane_a, 62 in lane_b) remove the integer tie,
-    so the consensus/single crossover lands strictly at k >= 60: any
-    production change of k to 59 or below flips the second assertion red."""
+    """Pin the k=60 consensus semantics (panel T3, kimi/grok gates). The
+    signature default is pinned first, so RAISING k (61, 100) fails here.
+    Asymmetric ranks (consensus at 61 in lane_a, 62 in lane_b) put the
+    consensus/single crossover strictly at k >= 60: the default-k
+    assertion below goes red when the production default drops to 59 or
+    below, and the explicit k=59 assertion guards the same crossover from
+    the other side. The z- noise prefix must keep sorting AFTER
+    "single-rank1": at k=59 the noise rank-1 ties with it and must not
+    steal first place through the alphabetical tie-break."""
+    assert inspect.signature(fuse_rankings).parameters["k"].default == 60
     lane_a = [f"z-noise-{i}" for i in range(60)] + ["consensus"]
     lane_b = ["single-rank1"] + [f"y-noise-{i}" for i in range(60)] + ["consensus"]
     assert fuse_rankings(lane_a, lane_b, top_n=5)[0] == "consensus"
