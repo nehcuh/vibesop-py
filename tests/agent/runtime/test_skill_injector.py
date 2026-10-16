@@ -793,3 +793,39 @@ class TestSkillInjector:
         )
         assert "orphan.skill/SKILL.md" in str(kimi.payload).replace("\\", "/")
         assert "~/.kimi-code/skills/orphan/SKILL.md" not in str(kimi.payload)
+
+
+class TestGlobMetacharIds:
+    """``*?[-bearing ids must never enter walk globs.
+
+    Pre-fix behavior split by Python version: 3.12's pathlib raised
+    ValueError for non-component ``**`` (accidentally demoting via the
+    exception path), while 3.13+ treats the fragment as a cross-separator
+    wildcard — id ``**`` matched ``*-**`` against any hyphenated sibling
+    and ``**.skill`` against any dotted layout, injecting an UNRELATED
+    skill's content. A single ``*``/``?`` wildcard-matches on every
+    version. Both must degrade to the no-content notice.
+    """
+
+    @pytest.fixture
+    def decoy_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        dotted = tmp_path / ".vibe" / "skills" / "decoy" / "x.skill"
+        dotted.mkdir(parents=True)
+        (dotted / "SKILL.md").write_text("# wrong skill\n", encoding="utf-8")
+        hyphen = tmp_path / ".vibe" / "skills" / "foo-bar"
+        hyphen.mkdir(parents=True)
+        (hyphen / "SKILL.md").write_text("# right skill\n", encoding="utf-8")
+        return tmp_path
+
+    @pytest.mark.parametrize("skill_id", ["**", "*", "x*y", "a?b", "c[d]", "*-bar"])
+    def test_metachar_id_never_resolves_via_walk(self, decoy_root: Path, skill_id: str) -> None:
+        injector = SkillInjector(project_root=decoy_root)
+        assert injector._find_skill_md_path(skill_id) is None
+        result = injector.inject_single_skill(skill_id, PlatformType.GENERIC)
+        assert result.content_missing is True
+        assert result.has_content is False
+
+    def test_legit_id_still_resolves(self, decoy_root: Path) -> None:
+        injector = SkillInjector(project_root=decoy_root)
+        assert "right skill" in injector._load_skill_content("foo-bar")

@@ -22,7 +22,7 @@ from typing import Any
 
 from vibesop.agent.runtime.intent_interceptor import InterceptionMode
 from vibesop.core.observability import ObservabilityTracer, get_tracer
-from vibesop.utils.skill_labels import sanitize_skill_label
+from vibesop.utils.skill_labels import contains_glob_metachar, sanitize_skill_label
 
 logger = logging.getLogger(__name__)
 
@@ -251,14 +251,18 @@ class AgentRuntimeResult:
             return not_found
         vibe_skills = user_root / ".vibe" / "skills"
         if vibe_skills.is_dir():
-            try:
-                dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
-            except ValueError:
-                # Hostile id (`**` segment) — pathlib rejects the pattern;
-                # never let a forged id crash legacy serialization.
-                dotted = []
-            if dotted:
-                return dotted[0].resolve().as_posix()
+            # A glob-metachar id must never enter the walk pattern: on 3.13+
+            # it acts as a cross-separator wildcard and matches an unrelated
+            # ``*.skill`` layout (executed repro); pre-3.13 pathlib raised
+            # ValueError for non-component ``**`` (caught below). Both degrades
+            # land on the sanitized not-found line.
+            if not contains_glob_metachar(self.skill_id):
+                try:
+                    dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
+                except ValueError:
+                    dotted = []
+                if dotted:
+                    return dotted[0].resolve().as_posix()
             direct = vibe_skills / self.skill_id / "SKILL.md"
             if direct.exists():
                 return direct.resolve().as_posix()

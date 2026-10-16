@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from vibesop.agent.runtime.skill_envelope import build_skill_envelope
-from vibesop.utils.skill_labels import sanitize_skill_label
+from vibesop.utils.skill_labels import contains_glob_metachar, sanitize_skill_label
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -519,6 +519,8 @@ class SkillInjector:
         """Walk install layouts; return the first existing SKILL.md."""
         parts = Path(skill_id.replace("\\", "/")).parts
         if not skill_id or ".." in parts:
+            return None
+        if contains_glob_metachar(skill_id):
             return None
         flat_id = skill_id.replace("/", "-")
         home = Path.home()
