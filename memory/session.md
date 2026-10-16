@@ -1,6 +1,15 @@
 
 ## Current Session
 
+### S97 (2026-10-12 ~16:30) [vibesop-py] 三平台配置部署闭环（claude-code/grok-build/kimi-cli）
+
+- **起因**：用户要求当前项目兼容三平台。预检发现 `~/.claude/settings.json` 路由钩子注册丢失（疑被 mirror 安装覆盖）——本会话开头因此无自动路由注入。
+- **部署**：三平台全局目录先 tar 备份（/tmp/vibesop-deploy-backup-20261012/），然后 `uv run vibe build <target> --output <dir>`：claude→`~/.claude`、grok→`~/.grok`、kimi→`~/.kimi-code`（后两个路径必须显式指定，deploy 默认表过时）。`vibe verify` 三平台全绿；grok hook `vibe route --hook --platform grok-build` 端到端 exit 0（gate33 的 exit-2 已不复现）；claude hook 同样 exit 0。
+- **修复+回归**：claude 重渲染后 route hook 回到 UserPromptSubmit 首位、mirror hooks/env 完整保留、100 个中心技能符号链接无损伤（清理的只是 omx-plugins-* 旧重复副本）；但 `enabledPlugins`/`extraKnownMarketplaces`（warp 插件）被静默丢弃，从备份手工合并恢复。
+- **发现两个产品缺陷**（未修，候选立项）：① `_render_settings_json` 键级合并缺失；② SecurityScanner 短语误伤 QA 类技能（omx/ultraqa L44 描述注入测试 → 运行时拒注入）。
+- **Next**：两个缺陷是否立 issue/直接修待用户决定；重启三个 agent 后新 hooks 生效。
+- Recorded: yes — 3 pitfalls(settings 顶层键丢失/PLATFORM_DIRS 过时/扫描器误伤防御内容）→ project-knowledge.md；部署闭环+缺陷 → auto-memory project-deploy-3platform-20261012.md
+
 ### S96 END (2026-10-10 ~23:50) [vibesop-py] 拉取评审二轮 + 修复推送 + 本地部署验证 + doctor 修红
 
 - **评审**：拉取 origin/main 3 提交（`41b7699b..251043f7`,--with-cli OMX 伴装 / occupied-target 保护 / 依赖+CI 更新）→ 内部五路 swarm + claude + grok 七路评审 → 汇总 9 确认（0H/1M/8L)。grok 唯一 HIGH（ANSI 致 CI 红）被四组环境对照 + 实际 CI 绿证伪驳回；attest 注释三方 ls-remote 实证为 v4.2.2。综合 COMMENT。汇总 `.omx/artifacts/pull-20261010b-review-synthesis.md`。
@@ -872,3 +881,44 @@
 - 过程披露：实验污染生产 triage 缓存 3 正例，已按 `TriageCache.key_for` 清洗（备份 /tmp/triage_cache.backup-20261007.json）。
 - **Next**：B5 `[:200]` 截断决策；批 C（vibe-route.ts 下沉模板，被未提交 .pi/extensions 阻塞）；.pi/settings.json 混合 hunk、pptx 归属；grok CLI `grok update` ≥1.0.13 恢复第二道闸；eval triage-on 覆盖缺口单开一批。
 - Recorded: yes — JEV 复测 / eval triage 零覆盖 / 生产缓存污染 3 pitfalls + 拆批切穿契约 pattern → project-knowledge.md
+
+### S97 (2026-10-15) [vibesop-py] 拉取+多路独立对抗评审（空拉取改定向 10-12 routing 集群）
+- **拉取**：空操作（HEAD==origin/main==9dcc3a53）；裁决改定向评审面 = 上次评审边界后最后落地的 2026-10-12 集群（base=7efb9d47→head=9dcc3a53，5 commits）。
+- **面板**：5 finder（correctness/security/concurrency/tests/claims）+ 按 lane 分组 refute-first skeptic。23 raw → 22 unique → **CONFIRMED 15 / REFUTED 7 / UNVERIFIED 0**；P0×0，P1×6，P2×6，P3×3。
+- **P1 确认**：①`_NEGATED` 漏 cannot/can't/unable/wont（"cannot use X" 直接路由到 X，执行验证，BASE 同漏非回归）；②`intent_clauses` 二次方 CPU（300 原子 quote flood → 20.7s route，无 cap 无 memo）；③skill_id 未消毒入免截断必读指令头（validate_filename 放行换行，.vibe/skills 绕过 installer，PRE-EXISTING 放大）；④⑤⑥hybrid-recall fixtures(708 行)+eval 脚本(598 行)零自动消费者、版本后缀消歧零套件覆盖、fuse_rankings 断言全 k-不变。
+- **P2 要点**：K6 session-end 语法回归（'让我们收工'→False，本 diff 引入的真实回归，未披露）；Kimi 丢 spec_gap 注记；双序列化器 legacy 发散；<3 字符名绕过 identity 闸；envelope 边界无直接单测。
+- **综合器亲裁冲突**：F2/K4（fingerprint 漏 priority）判 REFUTED——`unified.py:507` P0 boost 在 TaskDecomposer 目录路径，非 triage 缓存消费。
+- **产物**：`.omx/artifacts/pull-20261015/`（frozen.patch 3314 行 + panel-report.md）。未启动 fix-from-review；仲裁按需走 adversarial-arbitration。
+
+#### S97 续 (2026-10-15 晚) — kimi+grok 双路复审面板裁决
+- **双 APPROVE**：kimi（2.1.1，独立重跑探针）与 grok（1.0.50 无头只读）对 22 项裁决全部 AGREE，零分歧；面板 15 CONFIRMED / 7 REFUTED 仲裁成立。
+- **N1（P1）采纳**（kimi 独有发现，综合器亲验）：`_NEGATED` 缺 不能/无法/勿/莫 → `has_explicit_guard_signal("不能使用 riper workflow")` → True 错误放行（"不要"正确拦截）；与 F1 同修复点，穿透 guard 准入闸，中文用户面爆炸半径更大。
+- grok 修正两条：F2/K4 括注（namespace-only 变更 hash 不变，但 REFUTED 不受影响）；K6 扩至 我想收工/咱们收工了。
+- **复审后总账：P1×7 / P2×6 / P3×3**；修复分批建议已写入 panel-report.md 附录。
+- 工程坑：grok 1.0.50 allow 语法改 `Bash(git *)`（带右括号），旧 `Bash(git *` 报 malformed；管道/链式按段匹配，rg/head/echo 段未授权→`permission_cancelled` 静默死（rc=0），诊断入口 `~/.grok/sessions/<cwd>/<sid>/events.jsonl`；枚举式只读前缀白名单可解，`--allow Bash` 全量会被 auto-mode 分类器驳回（合理）。
+- 产物：`.omx/artifacts/pull-20261015/{arbitrate-brief.md,kimi-arbitrate-out.md,grok-arbitrate-out.md}` + panel-report.md 附录。
+
+#### S97 修复轮 (2026-10-16) — dual-gate-review-fix 四批
+- **批A 已 commit 8bed408e**：intent_constraints 否定词表(F1+N1)+session-end 前缀(K6)+<3字符闸(F5)+bisect 线性化(S1，8000原子 8s→2.4s 全绿)。kimi 门禁 APPROVE（16 探针实测等价边界全过）+ P2 accepted-risk（莫/勿 barrier 截断普通 CJK 子句如"莫斯科"，保守方向已记 CHANGELOG）+ 4 NIT 采纳 3（tab 空白/注释措辞/perf 形状断言）。grok 复审后台运行中。
+- **批B 已 commit a8586fd1**：skill_labels.sanitize_skill_label 8+3 面（kimi 门禁第一轮抓到真 P1：异常降级 notice/notice-only 兜底/errors.append 三处漏消毒，`**` glob ValueError 可达性实跑复现——修复后二轮 APPROVE）+ Kimi spec_gap note(F3) + 双序列化器收敛(F4)。grok 复审后台运行中。
+- **批C 已 commit 3ce58aed**（fixtures 门禁 41 tests + `fuse_rankings` k 参数 + T3 不对称 rank 钉扎）**、批D 已 commit 13aed580**（eval 脚本锚点双侧 fail-closed：缺文件=drift、缺键=ValueError refreeze + `--ignore-anchor-mismatch` + pid 后缀原子写 + SOURCE_FILES 全量校验）。合并 kimi 门禁：一轮 REQUEST CHANGES（2P2：T3 k-不敏感→k 参数+翻转构造；锚点缺文件 fail-open→missing=mismatch）→ 采纳后二轮 **APPROVE** + 2 NIT 亦采纳（不对称 rank 61/62 消 k=59 整序平局，翻转严格 k≥60 实测；快照缺锚点键 raise 对齐 source_hashes 先例，三态探针 match/missing-file/missing-key 实测）。targeted 606+70 全绿；轮末全量套件 + basedpyright（0 errors/137 warnings 基线持平）已提交态复跑。
+- **三路 grok 复审并行**：批A（bzb1wxh51）/批B（bywpxv3v4）/批C+D（brslkoaik，覆盖 3ce58aed+13aed580），allow-list 含 `sed -n`（前两轮静默截断根因）。
+- **grok 复审结果**：批B **REQUEST CHANGES**（1 P1 + 1 NIT，全采纳）：P1 = `_hint_source_path` builtin 回退串 `core/skills/{bare_name}/SKILL.md` 未消毒，legacy `skill_path=""` 序列化路径实跑伪造 NEXT STEP 指令行；NIT = legacy 两序列化器共 3 次 glob 重扫。批A 跑 42 分钟/72 事件后死于 `turn.terminal_failure`（http，同批C+D 首跑的 reqwest stream error——网络不稳），均已补禁令重启。
+- **批B-2 修复已 commit d9f4d84a**：回退串 `sanitize_skill_label(bare_name)` + `_resolved_hint_path()` 记忆化（`_hint_source_cache` 字段，两序列化器全程 1 次解析）+ 相邻加固 glob ValueError 降级（`**` id 在 py3.13+ 打穿 legacy 序列化器）；4 个回归测试。kimi 门禁一轮 **APPROVE**（三项真闭合、CJK 合法 id 原样保留、无位置参数错位、except 精确、305 测试全绿）。**连带发现**：批A/B/C 提交的 4 文件带 ruff format 漂移（会挂 CI Lint），已全树 format 修正并入批B-2 commit（纯机械）。
+- **grok 复审第二轮**：批B-2 **APPROVE**+1 NIT（`_hint_source_cache` 进 eq/init 可投毒）；批C+D **REQUEST CHANGES**（P2 T3 只锁下侧+docstring 指错断言；NIT×4：k=59 字典序依赖/负例门禁全拒绝盲区/源文件删除无警告/锚点键 str(relative_to) 平台相关）→ 六项全采纳，kimi 三轮门禁 **APPROVE**（910 测试），commit `36824db5`（批C+D-2）+ `22827b54`（批B-2 NIT，field init=False/compare=False/repr=False）。注：两条 CHANGELOG 均随 36824db5 进入，B-2 NIT commit 仅代码，内容完整不重写历史。
+- **grok 复审批A：REQUEST CHANGES**（2 P2 + 1 NIT，真回归）：①长前缀截断取窗口第一处空白=纯 CJK 前缀的动词后尾空格 → 使用/用整段丢失不路由（executed 对照旧算法保留）；②短 identity 撞新否定词/扩展名（能⊂不能、法⊂无法、can⊂can't、go⊂\`parser.go\`）整候选误拦。**批A-2 修复（待 kimi 门禁）**：截断只在切点劈开 Latin 词时做空白切（CJK 起窗原样保留，尾部动词不牺牲；abuse→use 伪造路径仍拦）；`_mention_spans`+`_counts_as_mention` 过滤否定 span 内包含与点号扩展名；测试钉扎（长前缀 3 构造+伪造对照+短 identity 5 例+第三人称 他想收工/让他收工+perf 尾部 affirmative atom 防"永远返回空"）。652 routing 全绿；边界探针：真词界的窗口外否定/指代拦截新旧一致，`explain` 粘连无词界不拦为共同既有行为非回归。
+- **批C+D-2 grok 复审 APPROVE / NONE**（第三跑 stdout 捕获 0 字节但会话 ok:true，结论自 transcript 01a14261 提取存 fixCD2-grok-out3.md）：五项全闭合（签名默认 int 60 / k=59 翻转 / 35 正例一致 / 缺失文件即 drift）。**批C、批D 正式关闭**。
+- **kimi 批A-2 round-2 APPROVE / NONE**（`isalnum or "_"` ≡ `\w` 2.7 万字符采样零失配 + 自跑 11 探针全中）→ commit `163f4e0b`（批A-2：截断伪造谓词 + mention 过滤，657 routing tests）。
+- **批A 链全闭合**：批A `8bed408e` → 批A-2 `163f4e0b` → 批A-3 `4ad1cf94`，每环 kimi 门禁 APPROVE + grok 只读复审 APPROVE（A-3 复审 APPROVE/NONE，executed 复核 İ 否定/豁免/无越界/ASCII 对照全对，确认全 Unicode 仅 U+0130 变长）。grok A-3 复审第一跑死于 `python -c` 嵌套转义双引号（第四种静默死模式，见下），加引号形态约束后重跑即过。
+- **S97 修复轮收官（轮末终态验证全过）**：11 commits（8bed408e..b346966f：批A/A-2/A-3、批B/B-2+NIT、批C、批C+D-2、批D、批E/E-2），总账 P1×7/P2×6/P3×3 = 16 项全部双门禁闭合（kimi 改动前闸 APPROVE + grok 只读复审 APPROVE，个别项多轮往返）；CHANGELOG 净增 7 Fixed + 1 Added；轮末终态：全量 8163 passed/20 skipped/3 deselected/1 known pre-existing 本地失败（artifact-links，轮初即同款，CI 不受影响）、basedpyright 0 errors/137 warnings（=基线）、ruff 干净。fix commits 全程排除 memory/、.pi/、Makefile、PROJECT_CONTEXT.md、docs/*.pptx、.grok/hooks/ 预存无关改动。11 commits 已 push（9dcc3a53..b346966f，2026-10-16 用户授权"标准流程合并"），CI 监控中。
+- **批E（S5 收尾，总账最后一项）**：P3-15 intent/description/triggers/scope/id 进 triage prompt 前压平+截断（512/256/64/128/64，真实采样 p99 全覆盖，builtin 换行率 0/23）。kimi round-1 REQUEST CHANGES（P2=U+2028/U+2029/U+0085 行分隔符逃逸；NIT 纯头截断不采纳、缺 id KeyError→静默已披露）→ round-2 **APPROVE**（splitlines 全部 10 行边界码位全覆盖、无第二条候选数据入口、candidate_manager 恒写 id）→ commit `4fe123d4`；669 routing tests；CHANGELOG +1 Fixed（总 8 Fixed + 1 Added）。grok 复审 **REQUEST CHANGES**（P2：上限采样源错——SKILL.md frontmatter 低估，须按 as-routed 池 `.vibe/cache/candidates_v2.json` 采：description max 965>512、合并 trigger 69>64 截掉「独立复审」，已亲验复现全部数字）。
+- **批E-2（上限修正）已闭合**：description 512→1024、trigger 64→128（grok 建议的"至少"值；id 128/intent 256/scope 64 池内 44/229/6 有余量不变）；采样教训进源码注释（frontmatter 采样低估 description，须以 as-routed 池为准）；新增 `test_longest_observed_pool_fields_round_trip`（965-char description+69-char trigger 逐字往返，观察值常量钉扎——池文件是本地运行时产物不能进 repo 测试）；CHANGELOG 口径同步。670 routing tests 绿。kimi round-3 **APPROVE**（NIT 非阻塞：1024 对 965 仅 6% 余量；skill_lint 加上限 warn 规则属新功能不联动）→ commit `b346966f` → grok round-2 复审 **APPROVE/NONE**（复测 262 池数字全对、无新切片点、常量化改造可接受）。**批E 正式关闭：4fe123d4 → b346966f。至此总账 P1×7/P2×6/P3×3 全部处置：P1/P2 修复、C3+S2 批D 修、S4 缓解、S5 批E 修。**
+- **push 后 CI 红灯 → 根因升级为产品缺陷（2026-10-16）**：`b346966f` push 后两个 Py3.13 lane 红（同一测试 `test_injection_exception_notice_sanitizes_hostile_id`，批B新增）。诊断链 [executed]：①测试前提"pathlib glob 对 `**` 抛 ValueError"仅 3.12 成立（实测 3.13 静默返回 []）；②**3.13 上 `**` 片段当跨分隔符通配符——`_find_skill_md_path("**")` 实测解析到 `core/skills/autonomous-experiment/SKILL.md`**（`*-**` 匹配任意带连字符目录、`**.skill` 匹配任意 dotted 布局）→ hostile id 注入无关技能内容；③单 `*`/`?`/`[` id 通配劫持 3.12 也成立（合法 glob，既有缺陷）；④批B-2 的 ValueError 降级只挡 3.12 崩溃挡不住 3.13 通配匹配，其测试 docstring 版本口径还写反了。本地全量绿是因本地 .venv 3.12——CI 3.13 lane 是独有暴露面。
+- **修复（fixCI-glob-meta）已闭合并 push `031c7992`**：`utils/skill_labels.py` 新增 `contains_glob_metachar`（无正则写法——正则字面量 `r"[*?\[]"` 曾被 Edit 丢收尾引号产生 SyntaxError，`od -c` 定位后改 `"*?["` 字符串成员判断根除）；注入器 `_find_skill_md_path` 顶部守卫 + 序列化侧 `_hint_source_path` 同守卫（source_file 精确路径分支不受影响）；版本脆测试拆两半（确定性降级测试 + monkeypatch 强制异常保 except 分支覆盖）；批B-2 测试 docstring 纠正+活体 decoy。验证：3.13 全量 8171 passed 仅剩 artifact-links（回归清除）；3.12 全量 8170 passed+span benchmark flake（双全量并行负载，单跑绿）；ruff/basedpyright 净新增 0。kimi 门禁 **APPROVE**（4 项核对全过 + 2 NIT：措辞面/trace_cmd trace_id 既有行为另案）→ commit `031c7992` → push → grok 复审 **APPROVE/NONE**（注入器三处 walk glob+hint dotted glob 守卫确认、无第三条 routed-id→glob 入口）。CI run 38861086844：**12/12 job 全绿**（含两个原失败 lane：Linux 3.13 ✓/Windows 3.13 ✓），Quickstart E2E + CodeQL 也 success——push 后红灯完全修复，fixCI-glob-meta 闭环。
+- **工程坑新知**：`uv run --python 3.13`（不带 UV_PROJECT_ENVIRONMENT）会把主 .venv 重建到 3.13 再被后续命令同步回 3.12 且**丢 dev extras**（pytest 消失）——跑异版本必须 `UV_PROJECT_ENVIRONMENT=<隔离路径>`，事后 `uv sync --extra dev` 恢复。
+- 工程坑新知：grok 无头后台跑必须用 harness 后台任务机制（nohup& 会被回收，输出停在第一段叙述）；`timeout 300` 会杀在推理中段，rc 被 `| tail` 管道吃掉；grok 日志 `~/.grok/logs/unified.jsonl` 时间戳是 UTC（本地 CST+8），排查时区要对齐；allow-list 之外第三种静默死根因 = **shell 变量展开**（`echo X:$?` 无法静态解析 → permission_cancelled → 会话终止，git show 等正常段全部成功也会死），prompt 必须显式禁 `$?`/`$VAR`/`$(...)` 并要求拆条跑；第四种 = **`python -c "…\"嵌套转义双引号\"…"`**（外双引号+内部 `\"` 同样静态解析失败死会话；唯一安全形态 = 外层单引号 + 内部双引号 + 撇号写成反斜杠u0027 转义，成功/失败形态均已在会话 transcript 验证）；另 stdout 捕获可能整体丢失但会话实际 ok:true——结论要从 `~/.grok/sessions/<sid>/chat_history.jsonl` 提取。
+
+#### S97 修复轮 session 2 收官 (2026-10-16 下午) — 批E 闭合 + push + CI 红根因升级修复
+- 本 session（context 压缩续接）：批E-2 上限修正走完 kimi round-3 APPROVE → `b346966f` → grok APPROVE/NONE；S97 总账 16 项全闭合；用户授权"标准流程合并"push 11 commits；CI 3.13 双 lane 红 → 诊断升级为 glob-metachar id 通配解析劫持（产品缺陷）→ fixCI-glob-meta 双门禁闭合 → push `031c7992` → CI 12/12 job 全绿。
+- Next：①两个 NIT 另案（`_find_skill_md_path` docstring 措辞收紧；`trace_cmd.py:114` trace_id→glob 既有行为）；②kimi NIT 提议的 skill_lint >1024 description warn 规则（新功能）；③12 commits 全在 origin/main，无待 push。
+- Recorded: yes — project-knowledge +2 pitfalls（pathlib `**` 3.12/3.13 语义分裂 + uv 异版本 venv 隔离）。

@@ -34,6 +34,36 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### pathlib.glob `**` 语义在 3.12/3.13 分裂 — id 插值进 glob 前必须拒元字符 (2026-10-16 S97)
+
+**Issue**: `Path.glob("**/x**y.skill/SKILL.md")` 3.12 抛 `ValueError: Invalid pattern: '**' can only be an entire path component`；3.13 静默把 `**` 片段当**跨分隔符通配符**。skill_id 插值进 walk glob（`*-{id}`、`**/{id}.skill/...`）时：3.13 上 id `"**"` 实测经 `*-**` 匹配到无关的连字符名技能（autonomous-experiment）→ 错误技能内容注入；单 `*`/`?`/`[` id 的通配劫持在 3.12 也成立。本地 .venv 3.12 全量绿完全掩盖——CI 3.13 lane 是独有暴露面。
+
+**Solution**: `utils/skill_labels.py::contains_glob_metachar`（`*?[` 成员判断，无正则）守卫在 `_find_skill_md_path` 顶部与 `_hint_source_path` dotted glob 前；metachar id 走确定性 no-content 降级。任何把外部字符串插进 glob pattern 的代码（routed id / trace_id / 用户输入）都要过同一关或转义；CI 版本矩阵 lane 红灯优先怀疑版本语义差异而非 flake。
+
+### `uv run --python 3.13` 会重建主 .venv 且丢 dev extras (2026-10-16 S97)
+
+**Issue**: 不带 `UV_PROJECT_ENVIRONMENT` 直接 `uv run --python 3.13 ...` 跑异版本探针，uv 会把项目 .venv 重建到 3.13，后续普通 `uv run` 再同步回 3.12 时**只装基础依赖**——pytest 等dev extras 消失，表现为 `error: Failed to spawn: pytest`。
+
+**Solution**: 异版本一律 `UV_PROJECT_ENVIRONMENT=/tmp/<隔离名> uv run --python 3.13 --extra dev ...`；中招后 `uv sync --extra dev` 恢复。
+
+### claude-code 重渲染静默丢 settings.json 顶层键 (2026-10-12 S97)
+
+**Issue**: `_render_settings_json`（`src/vibesop/adapters/claude_code.py`）合并旧 settings 时只保留 `env`/`model`/UserPromptSubmit hooks，顶层 `enabledPlugins`/`extraKnownMarketplaces`/`permissions` 之外的自定义键全部静默丢弃；`permissions` 也是整段替换非合并。本次重部署把用户 warp 插件配置洗掉，靠 /tmp tar 备份手工合并恢复。
+
+**Solution**: 重部署 `vibe build claude-code --output ~/.claude` 前先 tar 备份 settings.json，部署后 diff 顶层键。根治方向：adapter 按 key 级 merge（保留未知顶层键）。
+
+### deploy.py PLATFORM_DIRS 路径表过时 — kimi/grok 必须显式 --output (2026-10-12 S97)
+
+**Issue**: `vibe switch`/`execute_deploy` 的默认表把 kimi-cli 映射到 `~/.kimi`（实际 Kimi Code home 是 `~/.kimi-code`，`ls ~/.kimi` 不存在），grok-build 干脆不在表里（走默认会报 unknown target）。build.py 的提示文案倒是写对了两个路径——两处清单已经漂移。
+
+**Solution**: 一律 `vibe build <target> --output <dir>` 显式指定（claude→`~/.claude`、grok→`~/.grok`、kimi→`~/.kimi-code`）。根治方向：PLATFORM_DIRS 改为读各 adapter 的 `config_dir`，单一事实源。
+
+### SecurityScanner 短语误伤防御性内容 — QA 类技能被运行时拒注入 (2026-10-12 S97)
+
+**Issue**: omx/ultraqa SKILL.md L44 在**描述**提示注入测试类别（"user text that tries to override instructions..."），`SecurityScanner.scan` 短语匹配命中 `instruction_injection` HIGH → hook 运行时拒注入并广播安全告警。安全测试类技能天然包含此类词汇（防御性内容悖论）。
+
+**Solution**: 短期用户侧无解（重新安装也没用，内容本身合法）；根治方向：扫描器对引号内/提及上下文（"tries to override"、"attempts to" 等描述性框架）加豁免，或对 central store 已信任 pack 降级为 warning。
+
 ### artifact-links 复冻必须 JSON + 测试常量成对 — 只冻一半照样红 (2026-10-11 S96 补)
 
 **Issue**: session 笔记引入新的 `.omx` 引用后，只重跑 `scripts/check_artifact_links.py --write-baseline` 更新 JSON 是不够的——`tests/unit/test_check_artifact_links_baseline.py` 里的 `FROZEN_REF_TOTAL/FROZEN_OK/FROZEN_STALE_*` 聚合常量同样是硬门禁（`assert len(refs) == FROZEN_REF_TOTAL`)。本次只推 JSON 导致 CI 四腿全红（1191 vs 1188)，二次推送才绿。

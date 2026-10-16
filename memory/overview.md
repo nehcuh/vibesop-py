@@ -155,8 +155,9 @@
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
 
-**Recent Changes** (2026-09-24):
-- JEV `jev-1.13.0` 对照完成，不替换路由。构造集优于关键词层；真实会话过注入。记录在 `memory/project-knowledge.md`，原始 jsonl 留在 `/tmp`。
+**Recent Changes** (2026-10-16):
+- S97 对抗面板修复轮全闭环：16 项（P1×7/P2×6/P3×3）双门禁修复，12 commits pushed（`9dcc3a53..031c7992`），CI 12/12 job 全绿。附带修出产品级 glob-metachar id 通配解析劫持（3.13 pathlib `**` 跨分隔符通配 → 无关技能注入）。
+- (2026-09-24) JEV `jev-1.13.0` 对照完成，不替换路由。构造集优于关键词层；真实会话过注入。记录在 `memory/project-knowledge.md`，原始 jsonl 留在 `/tmp`。
 
 **Recent Changes** (2026-09-07):
 - ✅ 喷气机 R5/R6 预览可再起：`.vibe/experiments/ab-jet-preview/` 缓存 + `scripts/ab-jet-preview.sh`；R5 从 grok `after_snapshots` 还原（/tmp 已失）

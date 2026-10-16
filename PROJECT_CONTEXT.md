@@ -14,21 +14,21 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
-### 2026-10-10 S96 END · 二轮评审修复全推送 + 本地部署验证 + doctor 修红
+### 2026-10-16 S97 END · 对抗面板修复轮全闭环（12 commits pushed，CI 12/12 绿）
 
-**Workspace**：VibeSOP main @ `59992ca7`（全部推送，CI/E2E/CodeQL 全绿）。工作树 tracked 干净；`.omx/` 产物不入库。意外副作用：本机全局 npm 装了 `oh-my-codex@0.21.8`（沙盒 PATH 串扰所致，已披露，可 `npm uninstall -g oh-my-codex`）。
+**Workspace**：VibeSOP main @ `031c7992`（全部推送，`9dcc3a53..031c7992` 共 12 commits；CI/E2E/CodeQL 三 run 全绿，CI 12/12 job 含双 3.13 lane）。工作树遗留 .pi/*、Makefile、memory/*、docs/*.pptx、.grok/hooks/（S95/S96/S97 会话层改动，memory/ 与 PROJECT_CONTEXT 由 session-end 提交）。产物链 `.omx/artifacts/pull-20261015/`（panel-report.md + 各批 fix diff + kimi/grok 双门禁 prompt/out）。
 
-**完成**：拉取 `41b7699b..251043f7`（3 提交：--with-cli OMX 伴装 / occupied-target 保护 / 依赖+CI 更新）→ 七路评审（内部五路 swarm + claude + grok）9 确认（0H/1M/8L），grok 唯一 HIGH 经实证驳回。用户点名后 F1–F8 全修：`9d886c7d`（`_which_trusted` 堵 Windows CWD 劫持 / ANSI 剥离 / `installed_off_path` / Volta .exe 直跑）+ `b4f9d412`（occupied 文案 + upgrade 契约测试）+ `497d3bb6`（attest v4.2.2 注释 + pre-commit ruff 0.16.4）;kimi 门禁两轮收敛 APPROVE（N1 阻塞项被 autouse fixture 证据驳回，吸收其硬化建议）。本地部署验证：`vibe build claude-code --output ~/.claude` 174→182 skills;fake-node 沙盒实证 npm.cmd 零执行；敌意 cwd 载荷零执行。DeepSeek route 三层实证（直连 ROUTE_LLM_OK / keyword 命中 / AI_TRIAGE 1235.9ms 选中 experience-evolution）。doctor 修红 `f5f98d88`:`PROVIDER_MODEL_ALIASES` 别名感知（项目 SOP 要求显式写 `deepseek-v4-flash`，厂商重定向到 `deepseek-flash`)。
+**完成**：S97 对抗面板总账 16 项（P1×7/P2×6/P3×3）经 dual-gate-review-fix 全部双门禁闭合（kimi 改动前闸 + grok 只读复审，批A→A-2→A-3、批B→B-2+NIT、批C、批C+D-2、批D、批E→E-2）。批E-2 修 cap 采样源（frontmatter→as-routed 池，1024/128）。push 后 CI 双 3.13 lane 红 → 根因升级为**产品缺陷**：glob 元字符 id 在 3.13 pathlib 下当跨分隔符通配符（`**` id 实测解析到无关技能 autonomous-experiment 并注入其内容；单 `*` 两版本均通配劫持）→ fixCI-glob-meta `031c7992`（`contains_glob_metachar` 守卫注入器 walk + 序列化 hint 两路径）双门禁闭合，CI 全绿。
 
-**Next**：用户在别处评审 4 个提交（`9d886c7d`/`b4f9d412`/`497d3bb6`/`f5f98d88`)，意见回来走 fix-from-review。遗留同 S95(B5 截断决策、eval triage-on 覆盖缺口、vibe-route.ts 下沉）。证据：`.omx/artifacts/pull-20261010b-*.md`、`panel-20261010b/`、`e2e-evidence-20261010-deploy.md`。
+**Next**：① 两个 NIT 另案——`_find_skill_md_path` docstring 措辞收紧（守卫拒绝范围比"glob lookups"字面更宽，实际无回归）+ `trace_cmd.py:114` trace_id→glob 既有行为；② kimi 提议的 skill_lint >1024 description warn 规则（新功能，防 cap 口径再漂移）；③ 轮初已知本地 artifact-links 基线失败未处置（`.omx` 悬挂引用，CI 不受影响）。
 
-### 2026-10-08 S95 END · 拉取评审 COMMENT + 14 修复落盘待提交
+### 2026-10-12 S97 · 三平台配置部署闭环（claude-code / grok-build / kimi-cli）
 
-**Workspace**：VibeSOP main（本地 ahead 2，均为 S90 记忆提交，未 push）。工作树有 14 个修复文件未 commit；`.omx/` 产物、`.grok/workflows/`、`examples/datasets/` 不入库。
+**Workspace**：VibeSOP main @ `9dcc3a53`，仓库 tracked 无本会话改动（工作树里 .pi/*、Makefile、.grok/hooks/、pptx 均为 S95/S96 遗留，归属待定）。改动全在用户全局目录：`~/.claude`、`~/.grok`、`~/.kimi-code`。三目录 tar 备份在 `/tmp/vibesop-deploy-backup-20261012/`（重启即失，需要尽快转移）。
 
-**完成**：origin/main 10 提交（`86b69f43→58692f70`）E2E 全绿后补跑五路对抗评审，终裁 **COMMENT**（15 候选 → 14 确认 / 1 驳回，0H/2M/12L），报告 `.omx/artifacts/adversarial-review-86b69f43-58692f70.md`。用户点名「标准流程进行优化」后 14 条确认全修：C1 hook 配置错误信封用户可见（全平台 exit 0）+ 裸 CLI exit 2；L1 视频级联对齐真实顺序 explicit→scenario+semantic→AI triage→matcher；12 LOW（TTS 读音、ffmpeg 退出码、asyncio.to_thread、tempfile.mkdtemp 重构、钉测试等）。验证 [executed]：定向 241 + 波及 2042 passed / 4 skipped、ruff 全仓干净、basedpyright 0 err、hermetic exit 0。
+**完成**：应用户要求把当前项目配置部署到三平台。预检发现 `~/.claude/settings.json` 路由钩子注册丢失（疑被 mirror 安装覆盖，本会话开头因此无自动路由注入）→ `uv run vibe build <target> --output <dir>` 三平台重部署（kimi 必须 `--output ~/.kimi-code`，deploy 默认表过时）→ `vibe verify` 三平台全绿，grok/claude route hook 端到端 exit 0（gate33 exit-2 不复现）。回归一处：重渲染把 `enabledPlugins`/`extraKnownMarketplaces`（warp 插件）静默洗掉，已从备份手工合并恢复；100 个中心技能符号链接无损伤。
 
-**关键决定**：修复未 commit——项目惯例（S80/S55）等用户点名再提交。grok 真 miss 仍静默（NIT-3 契约保留），仅 errors 发信封。
+**Next**：① 两个产品缺陷待用户定夺立 issue 或直接修——`_render_settings_json` 键级合并缺失（claude_code.py）+ SecurityScanner 短语误伤 QA 类技能（omx/ultraqa L44 运行时拒注入）；② 重启三个 agent 使新 hooks 生效；③ 如需保留备份，把 /tmp 的三个 tar 挪到持久位置。
 
-**Next**：用户点名「提交」→ 分组 git add（排除上述目录）→ conventional commit → push → 盯 **job 级** CI。`render.py` 高亮行号绑采集输出，下次渲染视频前需人工复核。
 <!-- handoff:end -->
+
