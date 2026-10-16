@@ -130,26 +130,36 @@ def phrase_present(text: str, phrase: str) -> bool:
     return re.search(pattern, text.lower()) is not None
 
 
-def _mention_spans(text: str, phrase: str) -> list[tuple[int, int]]:
-    """All occurrences of phrase, with phrase_present's boundary semantics."""
+def _mention_spans(lowered_text: str, phrase: str) -> list[tuple[int, int]]:
+    """All occurrences of phrase in ALREADY-LOWERED text, with phrase_present's
+    boundary semantics. Spans index lowered_text: lowering can change length
+    (U+0130 İ -> i + combining dot), so callers must not reuse these indices
+    against the original string."""
     lowered = phrase.lower().strip()
     if not lowered:
         return []
     pattern = re.escape(lowered)
     if lowered[0].isascii() and lowered[-1].isascii():
         pattern = rf"(?<![a-z0-9_]){pattern}(?![a-z0-9_])"
-    return [(m.start(), m.end()) for m in re.finditer(pattern, text.lower())]
+    return [(m.start(), m.end()) for m in re.finditer(pattern, lowered_text)]
 
 
-def _counts_as_mention(query: str, span: tuple[int, int], neg_spans: list[tuple[int, int]]) -> bool:
+def _counts_as_mention(
+    lowered_text: str, span: tuple[int, int], neg_spans: list[tuple[int, int]]
+) -> bool:
     start, end = span
     # Inside a negated token the fragment is not invocation evidence:
     # "can" in can't, 能 in 不能, 法 in 无法 (grok A-2 P2 — short CJK
     # identities collide with the negation lexicon).
     if any(ns <= start and end <= ne for ns, ne in neg_spans):
         return False
-    # A file extension is not a skill id mention: "go" in parser.go.
-    return not (start >= 2 and query[start - 1] == "." and _ascii_word_char(query[start - 2]))
+    # A file extension is not a skill id mention: "go" in parser.go. All
+    # indices share the lowered coordinate system (grok A-3 P2: indexing the
+    # original string with lowered indices misfires or raises once an İ
+    # shifts them apart).
+    return not (
+        start >= 2 and lowered_text[start - 1] == "." and _ascii_word_char(lowered_text[start - 2])
+    )
 
 
 def candidate_scope_allows(query: str, candidate: dict[str, Any]) -> bool:
@@ -168,11 +178,15 @@ def candidate_scope_allows(query: str, candidate: dict[str, Any]) -> bool:
         str(candidate.get("id", "")).rsplit("/", maxsplit=1)[-1],
         str(candidate.get("name", "")),
     ]
-    neg_spans = [m.span() for m in _NEGATED.finditer(query.lower())]
+    lowered_query = query.lower()
+    neg_spans = [m.span() for m in _NEGATED.finditer(lowered_query)]
     names = [
         p
         for p in identities
-        if any(_counts_as_mention(query, sp, neg_spans) for sp in _mention_spans(query, p))
+        if any(
+            _counts_as_mention(lowered_query, sp, neg_spans)
+            for sp in _mention_spans(lowered_query, p)
+        )
     ]
     if names and not any(phrase_present(clause, p) for clause in clauses for p in names):
         return False

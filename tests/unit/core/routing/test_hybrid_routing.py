@@ -231,6 +231,28 @@ def test_short_identities_honor_inactive_mention_gate(query, candidate, allowed)
     assert candidate_scope_allows(query, candidate) is allowed
 
 
+@pytest.mark.parametrize(
+    "query, candidate, allowed",
+    [
+        # grok A-3 P2: U+0130 İ lowercases 1 char -> 2 code points, so spans
+        # computed on query.lower() must not index the original string — the
+        # extension lookbehind misaligned and let a negated mention through.
+        (
+            "İstanbul'da İş İçin don't use go.",
+            {"id": "builtin/go", "name": "go"},
+            False,
+        ),
+        ("İyi, please fix `parser.go`", {"id": "builtin/go", "name": "go"}, True),
+        ("İş için `parser.go` dosyasına bak", {"id": "builtin/go", "name": "go"}, True),
+        # Mention at the very end of an İ-shifted string must not raise.
+        ("İstanbul'da İş İçin parser.go", {"id": "builtin/go", "name": "go"}, True),
+        ("In Istanbul don't use go.", {"id": "builtin/go", "name": "go"}, False),
+    ],
+)
+def test_mention_spans_share_lowered_coordinates(query, candidate, allowed):
+    assert candidate_scope_allows(query, candidate) is allowed
+
+
 def test_unquote_prefix_stops_at_clause_separator():
     assert intent_clauses("use `a:b` now") == ["use a:b now"]
     assert intent_clauses("use `a:b`; but `c:d`") == ["use a:b"]
