@@ -358,19 +358,22 @@ class TriageService:
         def _skill_summary(c: dict[str, Any]) -> str:
             # Pack-controlled fields enter the LLM prompt flattened and
             # capped: a newline could fabricate a candidate line and an
-            # unbounded field could flood the prompt (panel S5). Caps cover
-            # the p99 of shipped packs, so legitimate content is untouched.
+            # unbounded field could flood the prompt (panel S5). Caps are set
+            # against the AS-ROUTED candidate pool (candidates_v2.json — the
+            # SKILL.md frontmatter alone understates description length once
+            # trigger_when merges into triggers), so installed packs render
+            # verbatim (grok E re-review P2).
             def _safe(value: object, limit: int) -> str:
                 flattened = _CONTROL_CHARS.sub(" ", str(value or "")).strip()
                 return flattened[:limit]
 
             skill_id = _safe(c.get("id"), 128)
-            text = _safe(c.get("description"), 512)
+            text = _safe(c.get("description"), 1024)
             intent = _safe(c.get("intent"), 256)
             if intent and intent != text:
                 text += f" [intent: {intent}]"
             text += f" [scope: {_safe(c.get('scope', 'global'), 64)}]"
-            triggers = [t for t in (_safe(v, 64) for v in c.get("triggers", [])) if t]
+            triggers = [t for t in (_safe(v, 128) for v in c.get("triggers", [])) if t]
             if triggers:
                 return f"- {skill_id}: {text} [triggers: {', '.join(triggers)}]"
             return f"- {skill_id}: {text}"

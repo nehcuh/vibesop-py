@@ -511,7 +511,7 @@ class TestSkillSummaryHygiene:
             [
                 {
                     "id": "i" * 300,
-                    "description": "d" * 1000,
+                    "description": "d" * 2000,
                     "intent": "n" * 600,
                     "triggers": ["t" * 200, "ok"],
                 }
@@ -519,10 +519,30 @@ class TestSkillSummaryHygiene:
         )
         line = next(line for line in prompt.splitlines() if line.startswith("- "))
         assert line.startswith("- " + "i" * 128)
-        assert "d" * 513 not in line
+        assert "d" * 1025 not in line
         assert "n" * 257 not in line
-        assert "t" * 65 not in line
+        assert "t" * 129 not in line
         assert " ok]" in line
+
+    def test_longest_observed_pool_fields_round_trip(self) -> None:
+        """The longest fields observed in the real as-routed candidate pool
+        (description 965 — oneshot-web-spec; trigger 69 — kimi-gated-fix's
+        merged trigger_when) must render verbatim under the caps."""
+        service = _make_service()
+        description = "x" * 965
+        trigger = "独立复审" + "y" * 65  # 69 chars, like the merged trigger_when
+        prompt = self._prompt_for(
+            service,
+            [
+                {
+                    "id": "oneshot-web-spec",
+                    "description": description,
+                    "triggers": [trigger],
+                }
+            ],
+        )
+        assert description in prompt  # full 965-char body intact
+        assert trigger in prompt
 
     def test_legitimate_fields_render_unchanged(self) -> None:
         service = _make_service()
