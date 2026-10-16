@@ -105,6 +105,9 @@ class AgentRuntimeResult:
     # Absolute/posix SKILL.md path actually loaded. Hook NEXT STEP uses this
     # instead of guessing core/skills/<id>/SKILL.md.
     skill_path: str = ""
+    # Memoized _hint_source_path() so serializing to JSON and to the hook
+    # response shares one directory scan.
+    _hint_source_cache: str | None = None
     # The skill id that ROUTED but was demoted to no-match because its body
     # could not be loaded (missing/empty content, or inject raised). NOT set
     # by the refused_unsafe branch — that path keeps skill_id (the span
@@ -232,7 +235,7 @@ class AgentRuntimeResult:
                 hint_file = resolve_builtin_skills_dir(user_root) / bare_name / "SKILL.md"
                 if hint_file.exists():
                     return hint_file.as_posix()
-                return f"core/skills/{bare_name}/SKILL.md"
+                return f"core/skills/{sanitize_skill_label(bare_name)}/SKILL.md"
             # W4/W5 promote materializes custom skills under
             # <project>/.vibe/skills/ or ~/.vibe/skills/ (nested by
             # skill_id) — never the platform skills dir. Point the agent
@@ -246,13 +249,25 @@ class AgentRuntimeResult:
             return not_found
         vibe_skills = user_root / ".vibe" / "skills"
         if vibe_skills.is_dir():
-            dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
+            try:
+                dotted = list(vibe_skills.glob(f"**/{self.skill_id}.skill/SKILL.md"))
+            except ValueError:
+                # Hostile id (`**` segment) — pathlib rejects the pattern;
+                # never let a forged id crash legacy serialization.
+                dotted = []
             if dotted:
                 return dotted[0].resolve().as_posix()
             direct = vibe_skills / self.skill_id / "SKILL.md"
             if direct.exists():
                 return direct.resolve().as_posix()
         return not_found
+
+    def _resolved_hint_path(self) -> str:
+        """Memoized ``_hint_source_path``: both serializers converge on one
+        directory scan instead of re-globbing per serialization (grok NIT)."""
+        if self._hint_source_cache is None:
+            self._hint_source_cache = self._hint_source_path()
+        return self._hint_source_cache
 
     def _skill_context(self, source_path: str | None = None) -> str:
         """Preserve runtime-produced envelopes; prepare legacy raw bodies once.
@@ -276,7 +291,7 @@ class AgentRuntimeResult:
             content,
         )
         if source_path is None:
-            hint = self._hint_source_path()
+            hint = self._resolved_hint_path()
             source_path = hint if Path(hint).is_file() else ""
         return build_skill_envelope(self.skill_id, content, source_path or self.skill_path)[0]
 
@@ -387,7 +402,7 @@ class AgentRuntimeResult:
 
         # Hint path must match real on-disk layout; the label must survive
         # hostile frontmatter ids reaching user-visible system messages.
-        hint_path = self._hint_source_path()
+        hint_path = self._resolved_hint_path()
         label = sanitize_skill_label(self.skill_id)
 
         # Build alternatives message
@@ -400,9 +415,7 @@ class AgentRuntimeResult:
             ]
             alt_msg = (
                 "\nALTERNATIVE SKILLS "
-                f"(if '{label}' doesn't fit, load one of these):\n"
-                + "\n".join(alt_lines)
-                + "\n"
+                f"(if '{label}' doesn't fit, load one of these):\n" + "\n".join(alt_lines) + "\n"
             )
 
         system_message = (

@@ -52,9 +52,7 @@ def _sibling_map(ids: list[str]) -> dict[str, list[str]]:
     groups: dict[str, list[str]] = {}
     for sid in ids:
         groups.setdefault(stem(sid), []).append(sid)
-    return {
-        sid: [other for other in groups[stem(sid)] if other != sid] for sid in ids
-    }
+    return {sid: [other for other in groups[stem(sid)] if other != sid] for sid in ids}
 
 
 @pytest.fixture(scope="module")
@@ -107,8 +105,7 @@ def test_positive_query_recall_and_sibling_ranking(candidates, row):
         for sibling in siblings[expected]:
             if sibling in ranked:
                 assert ranked.index(expected) < ranked.index(sibling), (
-                    f"sibling inversion: {sibling} outranks {expected} "
-                    f"for {row['query']!r}"
+                    f"sibling inversion: {sibling} outranks {expected} for {row['query']!r}"
                 )
 
 
