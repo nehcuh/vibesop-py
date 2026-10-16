@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -32,6 +33,11 @@ if TYPE_CHECKING:
     from vibesop.core.routing.cost_tracker import TriageCostTracker
 
 logger = logging.getLogger(__name__)
+
+# Control characters (including newlines and the Unicode line separators
+# U+0085/U+2028/U+2029, which tokenizers treat as line breaks) flattened out
+# of pack-controlled fields before they enter the triage prompt.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029]+")
 
 # Decay applied to a stale (last-good) cached confidence so it never competes
 # with a fresh LLM result at full weight.
@@ -350,15 +356,24 @@ class TriageService:
             return None
 
         def _skill_summary(c: dict[str, Any]) -> str:
-            text = str(c.get("description") or "")
-            intent = c.get("intent")
+            # Pack-controlled fields enter the LLM prompt flattened and
+            # capped: a newline could fabricate a candidate line and an
+            # unbounded field could flood the prompt (panel S5). Caps cover
+            # the p99 of shipped packs, so legitimate content is untouched.
+            def _safe(value: object, limit: int) -> str:
+                flattened = _CONTROL_CHARS.sub(" ", str(value or "")).strip()
+                return flattened[:limit]
+
+            skill_id = _safe(c.get("id"), 128)
+            text = _safe(c.get("description"), 512)
+            intent = _safe(c.get("intent"), 256)
             if intent and intent != text:
                 text += f" [intent: {intent}]"
-            text += f" [scope: {c.get('scope', 'global')}]"
-            triggers = c.get("triggers", [])
+            text += f" [scope: {_safe(c.get('scope', 'global'), 64)}]"
+            triggers = [t for t in (_safe(v, 64) for v in c.get("triggers", [])) if t]
             if triggers:
-                return f"- {c['id']}: {text} [triggers: {', '.join(triggers)}]"
-            return f"- {c['id']}: {text}"
+                return f"- {skill_id}: {text} [triggers: {', '.join(triggers)}]"
+            return f"- {skill_id}: {text}"
 
         skills_summary = "\n".join(_skill_summary(c) for c in triage_candidates)
 
