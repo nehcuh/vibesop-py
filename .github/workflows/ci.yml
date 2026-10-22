@@ -289,12 +289,14 @@ jobs:
       # Also audit the FULL locked dependency set (incl. the semantic extra —
       # torch/transformers are the project's largest supply-chain surface and
       # are never installed in this job's venv). Export resolves from uv.lock
-      # without installing anything.
+      # without installing anything. --no-deps --disable-pip audits those pins
+      # directly: pip's resolver rejects the pillow>=13 override against
+      # fastembed 0.9.0's published pillow<13 requirement.
       - name: Run pip-audit (full lockfile, all extras)
         run: |
           uv export --all-extras --no-hashes --format requirements-txt --output-file /tmp/vibesop-all-deps.txt
           grep -v '^-e ' /tmp/vibesop-all-deps.txt > /tmp/vibesop-all-deps-clean.txt
-          uv run pip-audit -r /tmp/vibesop-all-deps-clean.txt
+          uv run pip-audit --no-deps --disable-pip -r /tmp/vibesop-all-deps-clean.txt
 
       # Bandit catches first-order RCE / injection primitives in the
       # project's own code that pip-audit (which only scans dependency
