@@ -12,6 +12,11 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
+    ignore:
+      # 1.x changes the SDK surface (httpx2, opentelemetry). The project
+      # bound stays <1.0.0 until that migration is explicit.
+      - dependency-name: "anthropic"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
