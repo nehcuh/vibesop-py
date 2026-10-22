@@ -83,12 +83,7 @@
     },
     {
       "source": "PROJECT_CONTEXT.md",
-      "target": ".omx/artifacts/adversarial-review-86b69f43-58692f70.md",
-      "count": 1
-    },
-    {
-      "source": "PROJECT_CONTEXT.md",
-      "target": ".omx/artifacts/pull-20261010b-*.md",
+      "target": ".omx/artifacts/pull-20261015/",
       "count": 1
     },
     {
@@ -2264,6 +2259,16 @@
     {
       "source": "memory/session.md",
       "target": ".omx/artifacts/pull-20261010b-review-synthesis.md",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20261015/",
+      "count": 1
+    },
+    {
+      "source": "memory/session.md",
+      "target": ".omx/artifacts/pull-20261015/{arbitrate-brief.md,kimi-arbitrate-out.md,grok-arbitrate-out.md",
       "count": 1
     },
     {

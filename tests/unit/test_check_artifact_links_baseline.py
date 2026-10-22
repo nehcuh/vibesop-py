@@ -56,10 +56,14 @@ LIVE_REGISTRY = ROOT / "ci" / "decision-source.yaml"
 # 1191 refs (+3, .omx citations in session.md S96 entry and PROJECT_CONTEXT.md
 # handoff), 723 ok unchanged, 468 stale occurrences / 460 keys (+3/+3);
 # baseline re-frozen accordingly.
-FROZEN_REF_TOTAL = 1191
+# Re-observed 2026-10-22 on clean 9e072a76 after the S97 session-note commit:
+# 1192 refs, 723 ok unchanged, 469 stale occurrences / 461 keys. Two
+# PROJECT_CONTEXT citations dropped out of the multiset and three
+# pull-20261015 citations were added.
+FROZEN_REF_TOTAL = 1192
 FROZEN_OK = 723
-FROZEN_STALE_OCCURRENCES = 468
-FROZEN_STALE_KEYS = 460
+FROZEN_STALE_OCCURRENCES = 469
+FROZEN_STALE_KEYS = 461
 
 
 def _git(root: Path, *args: str) -> None:
