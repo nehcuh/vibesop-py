@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.6.0] — 2026-10-22
+
+Minor: routing winner changes (BM25 and dense reciprocal-rank fusion, negation
+and mention gates), the routing-config threshold invariant, squad executor
+abort semantics, and removal of the user-visible no-match banner. This release
+also adds the public `task-briefing` skill, report-only `vibe observe
+consumption`, and three builtin review skills. v8.5.0 remains the previous
+public release.
+
 ### Changed
 
 - Make new hook contract fixtures portable to Windows with canonical emitted paths and explicit UTF-8 source files; include new routing/envelope regressions in the Windows fast-feedback step.

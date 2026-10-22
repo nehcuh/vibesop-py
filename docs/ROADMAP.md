@@ -1,8 +1,8 @@
 # VibeSOP Roadmap
 
-> **当前源码 / 包元数据 Current source**: 8.5.0（online routing evidence）
-> **公开发行 Public release**: 8.5.0（PyPI / GitHub Release，2026-09-15）
-> **最后更新 Last Updated**: 2026-09-15
+> **当前源码 / 包元数据 Current source**: 8.6.0（routing fusion, review skills, observe consumption）
+> **公开发行 Public release**: 8.6.0（PyPI / GitHub Release，由 tag `v8.6.0` 的 Release workflow 发布，2026-10-22）
+> **最后更新 Last Updated**: 2026-10-22
 > **历史稿**: [roadmap-through-8.3.md](archive/roadmap-through-8.3.md)（冻结至 8.3.0 的 804 行原稿）
 
 ---
@@ -17,8 +17,9 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 对象 | 状态 | 说明 |
 |---|---|---|
-| 当前源码 / 包元数据 | **8.5.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
-| 当前 PyPI / GitHub Release | **8.5.0** | 2026-09-15 发布；tag `v8.5.0` |
+| 当前源码 / 包元数据 | **8.6.0** | 见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[pyproject.toml](../pyproject.toml) |
+| 当前 PyPI / GitHub Release | **8.6.0** | 2026-10-22；tag `v8.6.0` 的 Release workflow |
+| 8.6.0 routing and review skills | **本次发行** | RRF 融合、否定/mention 闸、配置不变量、executor 异常向外抛、无匹配 banner 不再展示；`task-briefing`、`vibe observe consumption`、三个内置评审技能 |
 | 8.5.0 online routing evidence | **已公开发行** | 只读观测器 `vibe observe routing`、`vibesop.observe.routing` v1、eval provenance fail-closed |
 
 8.5.0 作为 minor 的理由是新增公开的 operator CLI / 机器契约 / library 面（并在 `scripts/aggregate_nomatch.py` 保持 8.4.0 兼容），不是补丁级修复。源码版本上升不等于 PyPI 已发布，也不等于可靠性已被证明。
@@ -29,7 +30,7 @@ VibeSOP 是**可靠 AI 辅助开发的工程工具与实证研究**。SkillOS �
 
 | 分层 | 含义 | 本文件中的位置 |
 |---|---|---|
-| **已实现并发行（8.4.0–8.5.0）** | 源码、包元数据、PyPI 与 GitHub Release 已对齐 8.5.0 | 8.4.0 / 8.5.0 切片 |
+| **已实现并发行（8.4.0–8.6.0）** | 源码与包元数据为 8.6.0；PyPI 与 GitHub Release 由 tag `v8.6.0` 发布 | 8.4.0 / 8.5.0 / 8.6.0 切片 |
 | **计划中** | 下一轮优化，尚未当作交付 | 优先级 A–E |
 | **研究阻塞** | 预注册实验未跑完或未结算；不得改判据迁就结果 | B、C |
 

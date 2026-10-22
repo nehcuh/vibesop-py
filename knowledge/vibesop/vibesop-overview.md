@@ -18,10 +18,10 @@ tags:
 
 定位来源：[docs/POSITIONING.md](../../docs/POSITIONING.md)。不能将模块存在解释成通用自动开发流水线已经完成或已证明有效。
 
-## 版本与状态（2026-09-15 核对）
+## 版本与状态（2026-10-22 核对）
 
 - PyPI 包名 `vibesop`，CLI `vibe`，Python 3.12+，MIT。
-- 当前源码、包元数据、PyPI 与 GitHub Release 均为 **8.5.0**（2026-09-15 发布）。
+- 当前源码与包元数据为 **8.6.0**（2026-10-22）。PyPI 与 GitHub Release 由 tag `v8.6.0` 的 Release workflow 发布。上一公开版本是 **8.5.0**（2026-09-15）。
 - 8.5.0 新增只读观测器 `vibe observe routing` 与 `vibesop.observe.routing` v1，文档见[运维手册](../../docs/observe-routing.md)。
 - 提交中的 8.3.1 是内部修复批次名称，不代表实际发行。
 - SKILL.md v3.0 是技能格式版本；固定角色委员会 v2 是研究协议版本，均不等于软件包版本。

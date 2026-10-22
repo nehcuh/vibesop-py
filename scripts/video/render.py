@@ -298,7 +298,7 @@ def t_intro(_sents: list[str]) -> tuple[str, str]:
 <div class="logo grad" data-s="0">VibeSOP</div>
 <div class="tag" data-s="1">让 AI 代理<span class="grad">记住你做过的事</span></div>
 <div class="sub2" data-s="1" data-d="0.4">多代理 AI 工程工作流 · 路由 · 验证 · 交接 · 记忆 · 技能进化</div>
-<div class="pills" data-s="0" data-d="0.5"><span>v8.5.0</span><span>Python 3.12+</span><span>MIT</span><span>uv tool install vibesop</span></div>
+<div class="pills" data-s="0" data-d="0.5"><span>v8.6.0</span><span>Python 3.12+</span><span>MIT</span><span>uv tool install vibesop</span></div>
 <div class="plats" data-s="1" data-d="0.8">{plats}</div>"""
     css = """
 .logo{position:absolute;top:200px;width:100%;text-align:center;font-size:200px;font-weight:900;letter-spacing:4px}
