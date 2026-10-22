@@ -1,12 +1,17 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-10-10 (S96 — 二轮评审修复全推送，本地部署验证，doctor 修红)
+**Last Updated**: 2026-10-22 (S100 — 8.6.0 已发布；Dependabot 队列收口；34ad78a0 的 Windows 3.12 收工时仍在跑)
 
 ---
 
 ## Goals
 
-### Current Week (October 5-11, 2026)
+### Current Week (October 19-25, 2026)
+
+1. **VibeSOP 8.6.0 正式发布** ✅ — tag `v8.6.0` = `c88caada`，PyPI 与 GitHub Release 均为 8.6.0。其后 `65fa9c8c` 只补哈希，不移动标签。
+2. **Dependabot 开放 PR 收口** ✅ — `44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic 维持 `<1.0.0`，NumPy 下限维持 `>=1.26.0`。收工时开放 PR 为 0。`34ad78a0` 的 Windows Python 3.12 当时仍在跑。
+
+### Week of October 5-11, 2026
 
 1. **Pull 评审 + 修复两轮均收口** ✅ — 第一轮 86b69f43→58692f70(14 修复）与第二轮 41b7699b→251043f7(7 路评审 9 确认，F1–F8 修复）全部提交推送并 CI 全绿；关键修复：Windows CWD 劫持过滤（`_which_trusted`)、occupied-target 保护、attest/pre-commit 元数据对齐。另修 doctor 误红（DeepSeek 厂商别名感知校验，`f5f98d88`)。本地部署验证通过（claude-code 真实部署 182 skills + DeepSeek route 三层实证）。等用户在别处评审 4 个提交。
 2. **路由 short-query gate 修复轮收口** — 双 APPROVE，4 commits 上 main（bff4699e 批A validator+文档对齐 / 96d2a75a 批B cost-log 校验 / 24395b27+58692f70 CI 修红），CI 全绿。遗留：B5 截断决策、eval triage-on 覆盖缺口（新登记）。
@@ -144,7 +149,7 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.2.0+ (CI Windows 为 required gate；CLI 三入口 help/man 已 ship)
+**Status**: v8.6.0 已于 2026-10-22 发布（tag `c88caada`）。标签之后的依赖提交在 Unreleased，尚未另发一版。
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
 **Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
@@ -154,6 +159,9 @@
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
+
+**Recent Changes** (2026-10-22):
+- 8.6.0 发布完成。Dependabot 当时的开放 PR 收成 `44722385` 与 `34ad78a0`，不移动 `v8.6.0`。
 
 **Recent Changes** (2026-10-16):
 - S97 对抗面板修复轮全闭环：16 项（P1×7/P2×6/P3×3）双门禁修复，12 commits pushed（`9dcc3a53..031c7992`），CI 12/12 job 全绿。附带修出产品级 glob-metachar id 通配解析劫持（3.13 pathlib `**` 跨分隔符通配 → 无关技能注入）。

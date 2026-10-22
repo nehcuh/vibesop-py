@@ -34,6 +34,18 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### Rich 把 `FORCE_COLOR=0` 当成真终端，dumb TERM 再锁死宽度 80 (2026-10-22 S100)
+
+**Issue**: 代理环境常带 `FORCE_COLOR=0` 和 `TERM=dumb`。Rich 的 `is_terminal` 只要看见 `FORCE_COLOR` 这个键就强制为真，不看值是不是 `0`。`is_dumb_terminal` 在此之后直接返回 80×25，忽略测试里 `CliRunner(env={"COLUMNS": "200"})`。CLI 金串因此被折行或省略号拆开。把 `TERM` 改成 `xterm-256color` 会换成另一类失败：高亮把数字和括号包进 ANSI，子串同样对不上。
+
+**Solution**: 跑这组 CLI 测试前 `env -u FORCE_COLOR -u PY_COLORS NO_COLOR=1 TERM=dumb`。CI 不设 `FORCE_COLOR`，同一失败不能当成依赖升级回归。
+
+### `uv lock --upgrade-package` 不写 `==` 会浮到界内最新 (2026-10-22 S100)
+
+**Issue**: `uv lock --upgrade-package fastapi` 升到当前上界内的最新版，不是 Dependabot PR 上的那个 pin。一次合并曾把 fastapi 从 0.141.1 浮到 0.159.1、openai 从 3.26.1 浮到 3.36.1。
+
+**Solution**: 要落地某个 PR 的版本时写 `uv lock --upgrade-package 'fastapi==0.143.1'`。收完再对 `git show HEAD:uv.lock` 做 pin diff，确认没有旁路包被抬高。
+
 ### fastembed 的 pillow 上限让全量 pip-audit 拒绝修复版 (2026-10-22 S98)
 
 fastembed 0.9.0 声明 `pillow<13`。`uv lock --upgrade-package pillow` 停在 12.3.0，而 24 个 CVE 的声明修复版是 13.0.0。`[tool.uv] override-dependencies = ["pillow>=13"]` 能把 lock 升到 13.0.0，但 `pip-audit -r` 仍调用 pip 解析，会因 `ResolutionImpossible` 失败。全量扫描必须对已经 export 的精确 pin 使用 `pip-audit --no-deps --disable-pip`。本仓库只调用 `TextEmbedding`，不走 fastembed 的图像路径。

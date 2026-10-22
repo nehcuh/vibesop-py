@@ -1,6 +1,38 @@
 
 ## Current Session
 
+### S100 END (2026-10-22) [vibesop-py] 8.6.0 已发布 + Dependabot 收口
+
+- 本会话发布 8.6.0（tag `c88caada`，PyPI 8.6.0），并在标签之后收掉当时全部开放的 Dependabot PR：`44722385`、`34ad78a0`。这两笔在 Unreleased，不移动 `v8.6.0`，也不是新的发布。
+- Anthropic 维持 `<1.0.0`，Dependabot 忽略 semver-major。NumPy 下限维持 `>=1.26.0`，#149 的降到 1.24.0 没有收。
+- [executed] `44722385` 的 CI 39732327655 与 E2E 39732327586 全绿。`34ad78a0` 的 E2E 39736146034 ubuntu/windows 均 success。CI 39736145997 收工时只剩 Windows Python 3.12 仍在跑，其余 job 已 success。开放 PR 为 0。
+- 本机 CLI 金串失败是 `FORCE_COLOR=0` 加 `TERM=dumb`：Rich 把任意 FORCE_COLOR 都当成真终端，dumb 终端再把宽度锁在 80。卸掉后 135 passed。
+- 未入库：`.pi/`、`Makefile`、`.grok/hooks/`、pptx。S99 的三路设计产物不在本提交。
+- Next：Windows 3.12 若红，修完再推，不要 force-move `v8.6.0`。
+- Recorded: yes — FORCE_COLOR/TERM=dumb 锁宽；`uv lock --upgrade-package` 不带 `==` 会浮到界内最新。
+
+### S99 (2026-10-22) [vibesop-py] 三路 tmux 整体优化设计
+
+- 用户：在其他 tmux 窗口分别调度 claude、kimi、pi，对项目做整体优化设计。
+- 范围：只设计，不改 `src/` `tests/` `core/` `docs/`。产物分别写 `.omx/artifacts/opt-design-20261022-{claude,kimi,pi}.md`。
+- 会话：`vibesop-opt-20261022`（不占用当前 grok 窗口）。镜头：claude 架构与正确性，kimi 产品与部署，pi 路由与技能生命周期。
+- 工作区原有未入库改动保持不动：`.pi/`、`Makefile`、`memory/session.md`、`.grok/hooks/`、pptx。
+- [executed] 三份产物均以 `STATUS: DONE` 收尾。三路都把 Claude settings 重渲染丢键放在第一刀；扫描误伤和目录表分裂也都被点名。消费账本有分歧：claude/kimi 要接 `accepted`，pi 主张先让 hook 路径的 `selected` 有行，再谈 `accepted`。
+- 设计期间工作区出现并被提交的 `34ad78a0`（openai 3.35.1 / fastapi 0.146.0 / pytest-mock 3.17.0）不在三路会话记录里。该提交随后已推到 origin。
+
+### S98 (2026-10-22) [vibesop-py] 正式发布 8.6.0
+
+- 远端无新提交（behind 0）。本地原超前 1 笔 `docs(memory)` `8e183479`，未混入发版提交。
+- 发版提交 `9e072a76` `chore(release): bump version to 8.6.0`。minor：路由胜者、triage bypass 不变量、squad executor 异常向外抛、无匹配 banner，外加 task-briefing / observe consumption / 三个内置评审技能。
+- 第一版标签的 Release CI Gate 红了：artifact-links（S97 笔记引用）和 pip-audit（certifi / virtualenv）。补丁 `b48444a9` 复冻基线 1192/723/469/461，并把 certifi 升到 2026.10.19、virtualenv 升到 21.14.12。标签 `v8.6.0` 改指 `b48444a9`（发布前失败的标签，未产出 PyPI / GitHub Release）。
+- 第二版标签的全量 lockfile pip-audit 红在 pillow 12.3.0（24 个 CVE，修复版 13.0.0）。fastembed 0.9.0 把 pillow 卡在 `<13`。补丁 `c88caada` 用 uv override 锁到 pillow 13.0.0，并把全量扫描改为 `pip-audit --no-deps --disable-pip`。标签改指 `c88caada`。
+- [executed] Release https://github.com/nehcuh/vibesop-py/actions/runs/39727715512 成功：CI Gate（Lint、Type Check、Security Scan、Windows 3.12/3.13、测试）与 Publish to PyPI 均为 success。Quickstart E2E https://github.com/nehcuh/vibesop-py/actions/runs/39727710603 ubuntu 与 windows 均为 success。同 SHA 的 push CI https://github.com/nehcuh/vibesop-py/actions/runs/39727710616 也成功。
+- [executed] PyPI 最新版 8.6.0。wheel SHA-256 `f7a502d07738ec87090412f1338b036e4ebdde9641f9cf38e10ceab839a4a6b3`，sdist SHA-256 `41116b8f2d1ec8b71be7557a9931b004e5d5eca250747af9463f6c5f317714ce`，与 GitHub Release 一致。provenance 来自 tag `v8.6.0`、提交 `c88caada`。隔离安装 `vibe --version` 为 `VibeSOP v8.6.0`。GitHub Release：https://github.com/nehcuh/vibesop-py/releases/tag/v8.6.0
+- 核对后的哈希记在 `65fa9c8c`（`docs/PROJECT_STATUS.md` 与 pillow 审计坑）。该提交在 tag 之后，不移动 `v8.6.0`。本笔记不推送。
+- 工作区 `.pi/`、`Makefile`、pptx、`.grok/hooks/` 未入库。
+- [executed] Dependabot 收敛提交 `44722385` 已快进推到 main，不移动 `v8.6.0`。界内锁钉：fastapi 0.143.1（带上 opentelemetry-api 1.45.1）、openai 3.31.0、pydantic 2.14.1、pydantic-settings 2.16.1、typer 0.27.3、ruff 0.17.1、numpy 2.5.4、idna 3.20、pre-commit 4.7.0、setup-uv v10.3.0。Anthropic 维持 `<1.0.0` 并 ignore semver-major。NumPy 下限维持 `>=1.26.0`，拒绝 #149 的降到 1.24.0。本机 CLI 金串失败是 `FORCE_COLOR=0` + `TERM=dumb`（Rich 锁宽 80），卸掉后 135 passed。pip-audit 两步均无已知漏洞，pillow 仍是 13.0.0。[executed] CI 39732327655 全绿（含 Lint、Type Check、Security Scan、Artifact Links、Windows 3.12/3.13）。E2E 39732327586 ubuntu 与 windows 均 success。
+- [executed] 第二轮 `34ad78a0`：openai 3.35.1、fastapi 0.146.0、pytest-mock 3.17.0。只动 uv.lock 和 Unreleased。本地测试 8154 passed，唯一失败是脏工作区 artifact-links。pip-audit 两步无已知漏洞。已快进推 main。CI 39736145997，E2E 39736146034，待绿。v8.6.0 仍是 c88caada。本笔记不推送。
+
 ### S97 (2026-10-12 ~16:30) [vibesop-py] 三平台配置部署闭环（claude-code/grok-build/kimi-cli）
 
 - **起因**：用户要求当前项目兼容三平台。预检发现 `~/.claude/settings.json` 路由钩子注册丢失（疑被 mirror 安装覆盖）——本会话开头因此无自动路由注入。
@@ -641,6 +673,8 @@
 
 ## In-Flight Tasks (Cross-Session)
 
+- **34ad78a0 CI**（active）— Windows Python 3.12 在收工时仍在跑（run 39736145997）。同提交 E2E 39736146034 已绿。next_action: 作业若失败再修，不要移动 tag `v8.6.0`。updated: 2026-10-22
+- **Dependabot 当前队列**（done）— 开放 PR 收工时为 0。`44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic major 继续忽略，NumPy 下限维持 `>=1.26.0`。updated: 2026-10-22
 - **S95 对抗评审修复待提交**（active）— 10-07 拉取 `86b69f43→58692f70` 五路对抗评审终裁 COMMENT（0H/2M/12L），14 条确认修复已落盘并验证（定向 241 + 波及 2042 passed、ruff/basedpyright/hermetic 全绿）。未 commit。next_action: 用户点名「提交」→ 分组 git add（排除 `.omx/`、`.grok/workflows/`、`examples/datasets/`）→ conventional commit → push → 盯 job 级 CI；`render.py` 高亮行号绑采集输出，下次渲染视频前人工复核。updated: 2026-10-08
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28
