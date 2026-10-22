@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Absorb the open Dependabot updates that stay inside the current bounds: pydantic 2.14.1, pydantic-settings 2.16.1, fastapi 0.143.1 (this release depends on opentelemetry-api), typer 0.27.3, pre-commit 4.7.0, numpy 2.5.4, idna 3.20, openai 3.31.0, and Ruff 0.17.1 with the pre-commit hook aligned to that toolchain. The NumPy `>=1.26.0` floor and the Anthropic `<1.0.0` bound stay. Dependabot ignores Anthropic major updates until that SDK migration is explicit.
 - Pin `astral-sh/setup-uv` to the v10.3.0 commit.
 - Move certifi to 2026.10.19 and pillow to 13.0.0 in the EmbeddingGemma research requirements snapshot, matching the main lock. The rest of that snapshot stays frozen.
+- Absorb the next in-bound lock updates: openai 3.35.1, fastapi 0.146.0, and pytest-mock 3.17.0. Bounds are unchanged.
 
 ## [8.6.0] — 2026-10-22
 
