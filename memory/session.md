@@ -1,6 +1,15 @@
 
 ## Current Session
 
+### S101 END (2026-10-22) [vibesop-py] 标准发版调查后收工，8.6.1 未切
+
+- 用户要求按标准流程发版，随即 `/session-end`。调查完成，版本文件、tag、push 都没做。
+- 版本决策：下一版是 **8.6.1 patch**。`v8.6.0..origin/main` 只有文档哈希记录和两笔界内依赖（`44722385`、`34ad78a0`）。无路由胜者、默认值、统计口径或优先级变化。`v8.6.0` 仍是 `c88caada`，不要移动。
+- [executed] CI 39736145997 job 级全绿：Lint、Type Check、Security Scan、Artifact Links、Test 3.12/3.13、Test Windows 3.12/3.13，以及 Decision Source、Routing Benchmark、Performance Benchmark、Routing Eval。E2E 39736146034 此前已绿。
+- 本地 `06f2a45b`（S100 session）仍超前 origin 1，未推。未入库仍是 `.pi/`、`Makefile`、`.grok/hooks/`、pptx。
+- Next：按 standard-release 切 8.6.1。CHANGELOG 用半开区间；历史 8.6.0 证据留下；session/memory 不混进 release commit。
+- Recorded: no — 判据已在 standard-release；CI 绿灯是本次状态，不是新坑。
+
 ### S100 END (2026-10-22) [vibesop-py] 8.6.0 已发布 + Dependabot 收口
 
 - 本会话发布 8.6.0（tag `c88caada`，PyPI 8.6.0），并在标签之后收掉当时全部开放的 Dependabot PR：`44722385`、`34ad78a0`。这两笔在 Unreleased，不移动 `v8.6.0`，也不是新的发布。
@@ -673,7 +682,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **34ad78a0 CI**（active）— Windows Python 3.12 在收工时仍在跑（run 39736145997）。同提交 E2E 39736146034 已绿。next_action: 作业若失败再修，不要移动 tag `v8.6.0`。updated: 2026-10-22
+- **8.6.1 标准发版**（active）— 用户已要求发版。判据是 patch：Unreleased 只有界内依赖。CI 39736145997 job 级全绿。next_action: CHANGELOG 半开切片 → pyproject + `uv lock` → 当前版本串扫荡（留下 8.6.0 历史证据）→ 验证 → `chore(release): bump version to 8.6.1` + tag `v8.6.1`。不要 force-move `v8.6.0`。session/memory 不混进 release commit。updated: 2026-10-22
 - **Dependabot 当前队列**（done）— 开放 PR 收工时为 0。`44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic major 继续忽略，NumPy 下限维持 `>=1.26.0`。updated: 2026-10-22
 - **S95 对抗评审修复待提交**（active）— 10-07 拉取 `86b69f43→58692f70` 五路对抗评审终裁 COMMENT（0H/2M/12L），14 条确认修复已落盘并验证（定向 241 + 波及 2042 passed、ruff/basedpyright/hermetic 全绿）。未 commit。next_action: 用户点名「提交」→ 分组 git add（排除 `.omx/`、`.grok/workflows/`、`examples/datasets/`）→ conventional commit → push → 盯 job 级 CI；`render.py` 高亮行号绑采集输出，下次渲染视频前人工复核。updated: 2026-10-08
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03

@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-10-22 (S100 — 8.6.0 已发布；Dependabot 队列收口；34ad78a0 的 Windows 3.12 收工时仍在跑)
+**Last Updated**: 2026-10-22 (S101 — 8.6.1 发版已调查未切；34ad78a0 CI job 级全绿)
 
 ---
 
@@ -9,7 +9,8 @@
 ### Current Week (October 19-25, 2026)
 
 1. **VibeSOP 8.6.0 正式发布** ✅ — tag `v8.6.0` = `c88caada`，PyPI 与 GitHub Release 均为 8.6.0。其后 `65fa9c8c` 只补哈希，不移动标签。
-2. **Dependabot 开放 PR 收口** ✅ — `44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic 维持 `<1.0.0`，NumPy 下限维持 `>=1.26.0`。收工时开放 PR 为 0。`34ad78a0` 的 Windows Python 3.12 当时仍在跑。
+2. **Dependabot 开放 PR 收口** ✅ — `44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic 维持 `<1.0.0`，NumPy 下限维持 `>=1.26.0`。开放 PR 为 0。CI 39736145997 job 级全绿（含 Windows 3.12/3.13）。
+3. **8.6.1 patch 发版** — 用户已要求标准发版。Unreleased 只有界内依赖，判据是 patch。文件、tag、push 都还没做。
 
 ### Week of October 5-11, 2026
 
@@ -149,7 +150,7 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.6.0 已于 2026-10-22 发布（tag `c88caada`）。标签之后的依赖提交在 Unreleased，尚未另发一版。
+**Status**: v8.6.0 已于 2026-10-22 发布（tag `c88caada`）。下一版定为 8.6.1 patch，标准发版尚未开工。
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
 **Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
@@ -162,6 +163,7 @@
 
 **Recent Changes** (2026-10-22):
 - 8.6.0 发布完成。Dependabot 当时的开放 PR 收成 `44722385` 与 `34ad78a0`，不移动 `v8.6.0`。
+- S101：用户要求把 Unreleased 依赖按标准流程发出。判据是 8.6.1 patch。CI 39736145997 job 级全绿。发版提交未做。
 
 **Recent Changes** (2026-10-16):
 - S97 对抗面板修复轮全闭环：16 项（P1×7/P2×6/P3×3）双门禁修复，12 commits pushed（`9dcc3a53..031c7992`），CI 12/12 job 全绿。附带修出产品级 glob-metachar id 通配解析劫持（3.13 pathlib `**` 跨分隔符通配 → 无关技能注入）。
