@@ -89,9 +89,10 @@ SKIP_DIRS = {
     # for 2971 of 2985 mismatches (2026-10-26 audit).
     ".experiment",
     # Benchmark fixture packs are FOREIGN skills: the frontmatter
-    # ``version: 1.0.0`` in benchpack/*/SKILL.md is the fixture's own
-    # config version, not an app-version claim. Test data, not project
-    # docs — same family as ``examples/`` and ``core/skills``.
+    # ``version: 1.0.0`` in tests/fixtures/benchmark-pack/*/SKILL.md
+    # (skill ids ``benchpack/...`` — a namespace, not a directory) is the
+    # fixture's own config version, not an app-version claim. Test data,
+    # not project docs — same family as ``examples/`` and ``core/skills``.
     "tests/fixtures",
 }
 
