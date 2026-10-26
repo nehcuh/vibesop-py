@@ -25,9 +25,9 @@ uv run ruff check .
    ```bash
    uv run ruff check .        # Lint
    uv run ruff format .       # Format
-   uv run pyright             # Type check
+   uv run basedpyright --level error  # Type check
    make test-fast             # Test (fast, parallel, ~30s)
-   uv run pytest              # Test (full suite with coverage)
+   uv run pytest              # Test (full suite; no coverage unless asked)
    ```
 4. **Commit**: Follow conventional commits (see below)
 5. **Push and PR**: Create pull request with description
@@ -69,11 +69,13 @@ Before contributing, read [docs/PHILOSOPHY.md](../PHILOSOPHY.md). Key points:
 # Fast parallel test (~30s, recommended for development)
 make test-fast
 
-# Full test suite with coverage (~4 min, CI use)
+# Full test suite (~4 min, CI use) — bare pytest does NOT collect coverage;
+# pyproject addopts only carry --strict-markers/--strict-config
 uv run pytest
 
-# With coverage report
-uv run pytest --cov
+# With the same coverage gate CI enforces (branch coverage, floor 73%)
+make test-cov
+uv run pytest --cov=src/vibesop --cov-branch --cov-report=term
 
 # Specific file
 uv run pytest tests/core/test_routing.py
@@ -83,7 +85,10 @@ uv run pytest tests/benchmark/ -v
 ```
 
 **Requirements**:
-- Minimum coverage: 75% (current: ~74%)
+- Coverage floor: **73% with branch coverage** — enforced by the CI `test`
+  job and `make test-cov` (`--cov-branch --cov-fail-under=73`), matching
+  `[tool.coverage.report] fail_under = 73` in `pyproject.toml`. This is a
+  floor, not a target.
 - All tests must pass
 - New features need tests
 - Platform lists: assert **set membership / equality**, never `len >= 2`.

@@ -14,7 +14,7 @@ uv sync --extra dev
 
 # Verify
 make test-fast             # Fast test suite (~30s)
-uv run pytest              # Full test suite with coverage
+uv run pytest              # Full test suite (no coverage unless asked)
 ```
 
 ## Development Workflow
@@ -32,7 +32,7 @@ uv run pytest              # Full test suite with coverage
 
 ## Guidelines
 
-- **Tests**: Add tests for new features; maintain coverage above 75%
+- **Tests**: Add tests for new features; keep coverage at or above the 73% gate (branch coverage enabled, same as CI)
 - **Code style**: Follow PEP 8; run `ruff format` before committing
 - **Type hints**: Use type annotations for public APIs
 - **Documentation**: Update docs for user-facing changes

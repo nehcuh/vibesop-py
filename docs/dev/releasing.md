@@ -34,7 +34,7 @@ git push origin v2.2.0
 ## Release Checklist
 
 - [ ] All tests passing
-- [ ] Coverage above 80%
+- [ ] Coverage gate green (≥ 73% with branch coverage, same as the CI `test` job)
 - [ ] CHANGELOG.md updated
 - [ ] Latest CI run on main is fully green (check before creating the tag)
 - [ ] Version tag created

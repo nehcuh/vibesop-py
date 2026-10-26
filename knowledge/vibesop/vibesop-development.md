@@ -54,19 +54,19 @@ uv run bandit -c pyproject.toml -r src/   # 安全审计
 
 - 工作流 `.github/workflows/ci.yml`：**Ubuntu + Windows 双平台** × Python 3.12/3.13 矩阵
 - Windows job 是 **required gate**——红灯直接阻塞发布链（ci.yml 被 release.yml 以 workflow_call 复用为 ci-gate）
-- 两个文档检查器也在门禁内：`check_doc_versions.py`（版本号一致性）与 `check_docs.py`（链接与锚点有效性）
+- 文档一致性门禁：`doc-versions` job 跑 `check_doc_versions.py`（版本号一致），`doc-links` job 跑 `check_docs.py`（链接与锚点有效）
 - 经验教训：`continue-on-error` 下 run 级 success 会吞 job 级红灯，数"连续绿"必须查 job 级（`gh run view --json jobs`）
 
 ## 版本与发布
 
-- 版本 SoT：`pyproject.toml`；README 徽章、docs 全部由 `check_doc_versions.py` 校验一致（23 个文件）
+- 版本 SoT：`pyproject.toml`；README 徽章、docs 由 `check_doc_versions.py` 校验一致（历史快照目录豁免，见脚本 HISTORICAL_FILES）
 - CHANGELOG 遵循 Keep a Changelog；发布 = PyPI + GitHub Release 双落地
 - 版本号缓升有坑：`uv tool install --force` 不加 `--no-cache` 会复用缓存旧 wheel
 
 ## 架构决策与文档
 
 - ADR：`docs/adr/`（架构决策记录）
-- 路线图：`ROADMAP.md` 与 `docs/ROADMAP.md`
+- 路线图：`docs/ROADMAP.md`（仓库根目录没有 ROADMAP.md）
 - 项目记忆：`memory/`（session.md 热层 / project-knowledge.md 暖层 / overview.md 冷层）+ `PROJECT_CONTEXT.md`（会话交接）
 - 提交风格：小步、可逆、单一目的（atomic changes）
 

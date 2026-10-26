@@ -66,9 +66,16 @@ def test_with_mock(mocker):
     mock_router.route.return_value = expected_result
 ```
 
-## Coverage Targets
+## Coverage Gate
 
-- Overall: 80%+
-- Core modules: 85%+
-- CLI commands: 60%+
-- Branch coverage: 50%+
+The enforced gate — CI `test` job and `make test-cov` — is total coverage
+≥ 73% with branch coverage enabled, matching `[tool.coverage.report]
+fail_under = 73` in `pyproject.toml`:
+
+```bash
+pytest -m "not benchmark and not slow" --cov=src/vibesop --cov-branch --cov-fail-under=73
+```
+
+The 73% floor is measured on the non-benchmark/non-slow suite (the full
+suite lands ~3% higher). No per-module thresholds are enforced — treat
+73% as a floor, not a target.

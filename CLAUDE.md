@@ -93,7 +93,7 @@ Coverage gate: ≥ 73% (branch coverage).
 - **Never use `pip`** — always `uv`
 - **Verify before claiming completion** — run tests, check output
 - **Atomic changes** — small, reversible, single-purpose commits
-- **Roadmap**: See `ROADMAP.md` and `docs/ROADMAP.md` for planned features
+- **Roadmap**: See `docs/ROADMAP.md` for planned features
 - **ADRs**: Architecture decisions in `docs/adr/`
 
 ---
