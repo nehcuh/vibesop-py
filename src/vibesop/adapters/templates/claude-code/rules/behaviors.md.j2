@@ -81,6 +81,17 @@ When a user's diagnosis, constraint, or premise conflicts with first principles:
 
 Match solution complexity to problem complexity. A bug fix doesn't need a helper class. Three similar lines is better than a premature abstraction. Guard against both over-engineering and under-engineering.
 
+### 2.6 Code Is Ground Truth
+
+When a repository's documentation (README, docs/, code comments, or stale
+CLAUDE.md/AGENTS.md prose) and its existing code disagree, follow the conventions
+used in the existing code, and in your final reply point out each inconsistency
+you found between the documentation and the code.
+
+Scope: repository docs and comments only — NOT the spec/plan/requirement the user
+supplied this turn. If the disagreement lies inside freshly supplied intent, ask
+instead of silently picking a side.
+
 ---
 
 ## 3. Safety

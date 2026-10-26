@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test test-fast test-cov clean clean-cov type-check security
+.PHONY: help install dev video lint format test test-fast test-cov doc-checks clean clean-cov type-check security
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -26,8 +26,8 @@ test: clean-cov ## Run tests (skip slow/benchmark for reasonable speed)
 test-fast: clean-cov ## Run tests fast (skip slow/benchmark)
 	uv run pytest -q -m "not benchmark and not slow"
 
-test-cov: clean-cov ## Run tests with coverage
-	uv run pytest --cov=src/vibesop --cov-report=html
+test-cov: clean-cov ## Run tests with coverage (same gate as CI: branch coverage, >= 73%)
+	uv run pytest --cov=src/vibesop --cov-branch --cov-fail-under=73 --cov-report=html
 
 test-parallel: ## Run tests with pytest-xdist (may fail on stateful tests)
 	uv run pytest -n auto -m "not benchmark and not slow"
@@ -53,10 +53,17 @@ docs: ## Generate API documentation
 docs-serve: ## Serve API documentation locally
 	uv run pdoc src/vibesop --docformat google
 
-check: lint type-check test-fast ## Run all checks (lint, type-check, test-fast)
+doc-checks: ## Check doc version consistency and links (same as CI doc-versions/doc-links jobs)
+	uv run python scripts/check_doc_versions.py
+	uv run python scripts/check_docs.py
+
+check: lint type-check test-fast doc-checks ## Run all checks (lint, type-check, test-fast, doc-checks)
 
 benchmark: ## Run performance benchmarks
 	uv run pytest tests/benchmark/ -v -m benchmark --no-cov
+
+video: ## Build the intro video (dist/video/vibesop-intro.mp4; needs ffmpeg + Chrome)
+	bash scripts/video/build.sh
 
 bootstrap: dev ## Bootstrap development environment
 	@echo "✨ Development environment ready!"
