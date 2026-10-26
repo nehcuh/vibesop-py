@@ -4,7 +4,7 @@
 主比较在冻结的流程与资源包络下进行。失败样本全部保留。
 
 生成时间（UTC）：2026-09-13T03:07:54.653810+00:00
-正式 run：[`runs/20260913T023645Z`](runs/20260913T023645Z)
+正式 run：`runs/20260913T023645Z` (`runs/20260913T023645Z`)
 
 ## 1. 要回答什么
 
@@ -135,7 +135,7 @@ failed_without_hidden_eval：流程在验收前结束，**不是**代码契约�
 单体在完整 spec 上通过隐藏验收。能证明：A 在该任务上可以走完工具回路并满足 CLI 契约。不能证明：委员会做不到（本条没有配对的 D）。
 
 - 状态 `passed`；error `None`
-- 记录目录 [`runs/20260913T023645Z/route-priority-table-v1-full-A-r0`](runs/20260913T023645Z/route-priority-table-v1-full-A-r0/result.json)
+- 记录目录 `runs/20260913T023645Z/route-priority-table-v1-full-A-r0` (`runs/20260913T023645Z/route-priority-table-v1-full-A-r0/result.json`)
 - T/I/K = 2291/18075/19
 - hidden eval: yes
 
@@ -144,7 +144,7 @@ failed_without_hidden_eval：流程在验收前结束，**不是**代码契约�
 无角色委员会在 independent-0 用尽 2400 输出 token，未进入 hidden eval。能证明：硬阶段上限可以在整合之前结束一次运行。不能证明：分析质量差或任务不可做。
 
 - 状态 `failed`；error `stage_budget_exhausted:independent-0`
-- 记录目录 [`runs/20260913T023645Z/route-plan-dag-v1-full-C-r0`](runs/20260913T023645Z/route-plan-dag-v1-full-C-r0/result.json)
+- 记录目录 `runs/20260913T023645Z/route-plan-dag-v1-full-C-r0` (`runs/20260913T023645Z/route-plan-dag-v1-full-C-r0/result.json`)
 - T/I/K = 2400/21714/19
 - hidden eval: no
 
@@ -153,7 +153,7 @@ failed_without_hidden_eval：流程在验收前结束，**不是**代码契约�
 明确分工组通过隐藏验收。能证明：E 协议在本任务上可以完成拆解、落盘与验收。不能证明：分工普遍优于单体。
 
 - 状态 `passed`；error `None`
-- 记录目录 [`runs/20260913T023645Z/match-lot-calendar-v1-full-E-r1`](runs/20260913T023645Z/match-lot-calendar-v1-full-E-r1/result.json)
+- 记录目录 `runs/20260913T023645Z/match-lot-calendar-v1-full-E-r1` (`runs/20260913T023645Z/match-lot-calendar-v1-full-E-r1/result.json`)
 - T/I/K = 9154/178190/52
 - hidden eval: yes
 
@@ -162,7 +162,7 @@ failed_without_hidden_eval：流程在验收前结束，**不是**代码契约�
 E 在输入预检处失败（I_precheck），无 hidden eval。能证明：整合上下文变长时，字节预检会先于 tokenizer 耗尽触发。不能证明：HOME 隔离实现写错。
 
 - 状态 `failed`；error `budget_exhausted:I_precheck`
-- 记录目录 [`runs/20260913T023645Z/config-home-isolation-v1-full-E-r1`](runs/20260913T023645Z/config-home-isolation-v1-full-E-r1/result.json)
+- 记录目录 `runs/20260913T023645Z/config-home-isolation-v1-full-E-r1` (`runs/20260913T023645Z/config-home-isolation-v1-full-E-r1/result.json`)
 - T/I/K = 8042/264649/54
 - hidden eval: no
 
@@ -171,7 +171,7 @@ E 在输入预检处失败（I_precheck），无 hidden eval。能证明：整�
 E 在完整 spec 上通过 17 项隐藏检查。与上一条对照：同组不同任务，结果由任务与包络共同决定。
 
 - 状态 `passed`；error `None`
-- 记录目录 [`runs/20260913T023645Z/route-lifecycle-v1-full-E-r2`](runs/20260913T023645Z/route-lifecycle-v1-full-E-r2/result.json)
+- 记录目录 `runs/20260913T023645Z/route-lifecycle-v1-full-E-r2` (`runs/20260913T023645Z/route-lifecycle-v1-full-E-r2/result.json`)
 - T/I/K = 5212/133806/54
 - hidden eval: yes
 
@@ -180,7 +180,7 @@ E 在完整 spec 上通过 17 项隐藏检查。与上一条对照：同组不�
 E 因工人写了所有权之外的 `_check.py`，runner 记 `ownership_or_conflict` 失败。能证明：成功定义包含路径/所有权，不只看隐藏测试。不能证明：隐藏测试本身会失败（本条未进入或未作为放行依据）。
 
 - 状态 `failed`；error `ownership_or_conflict`
-- 记录目录 [`runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2`](runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2/result.json)
+- 记录目录 `runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2` (`runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2/result.json`)
 - T/I/K = 7359/217240/32
 - hidden eval: yes
 
@@ -189,7 +189,7 @@ E 因工人写了所有权之外的 `_check.py`，runner 记 `ownership_or_confl
 单体最终阶段截断（`incomplete_final_response`），无 hidden eval。能证明：A 也会在包络内失败。不能证明：该任务的隐藏契约被实现写错。
 
 - 状态 `failed`；error `incomplete_final_response`
-- 记录目录 [`runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0`](runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0/result.json)
+- 记录目录 `runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0` (`runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0/result.json`)
 - T/I/K = 24000/11736/17
 - hidden eval: no
 

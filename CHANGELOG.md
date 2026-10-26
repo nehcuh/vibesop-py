@@ -26,6 +26,9 @@ public release.
 
 - Make `make test-cov` run the same marker-filtered suite as the CI `test` job (`-m "not benchmark and not slow"`); the unfiltered full suite lands ~3% higher, so the local run under-tested the 73% gate.
 - Confine `scripts/check_docs.py` link resolution lexically to the repo root: written `../`-traversal links are reported as broken instead of being resolved against the CI runner's filesystem, while experiment-record symlinks out of the tree keep working.
+- Correct a one-character typo in the `astral-sh/setup-uv` v10.3.0 pin: two jobs referenced an unresolvable commit and failed at the setup step.
+- Upgrade filelock inside existing bounds from 3.29.7 to 4.2.4, clearing CVE-2026-112907, CVE-2026-112913, and CVE-2026-112940 flagged by the lockfile security scan.
+- De-linkify 42 machine-local markdown citations (`.omx/artifacts` and `runs/` paths that exist only on the dev machine) so the now-required doc-links gate passes on a fresh checkout; the paths stay as literal text. Regenerate `ci/artifact-links-baseline.json` from a clean checkout (adds the S101 opt-design citation glob, drops the retired `pull-20261015` entry).
 
 ### Changed
 

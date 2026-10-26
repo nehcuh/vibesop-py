@@ -21,4 +21,4 @@
 
 这是一次有输入、过程、代码与外部验收相互对应的失败。它提醒我们：把 spec 发给所有执行者不等于他们忠实执行，集成仍需逐项核验契约。不能据此推断“分工普遍更差”，也不能断言误读仅由规划摘要造成，因为执行者同时拥有原始 spec。
 
-证据：[该次结果](runs/20260913T010956Z/calibration-intent-v1-E/result.json)、[最终入口](runs/20260913T010956Z/calibration-intent-v1-E/workspace/app.py)、同目录 `call-*-request.json` / `call-*-response.json`。
+证据：该次结果 (`runs/20260913T010956Z/calibration-intent-v1-E/result.json`)、最终入口 (`runs/20260913T010956Z/calibration-intent-v1-E/workspace/app.py`)、同目录 `call-*-request.json` / `call-*-response.json`。

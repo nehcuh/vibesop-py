@@ -4,7 +4,7 @@
 
 主报告（两轮合读）：[`../multi-expert-formal/REPORT.md`](../multi-expert-formal/REPORT.md)。本文件是 144 的独立全文。run 目录里的副本只指向本文，避免相对路径错位。
 
-敏感性 run：[`runs/20260913T033401Z`](runs/20260913T033401Z)
+敏感性 run：`runs/20260913T033401Z` (`runs/20260913T033401Z`)
 
 ## 要回答什么
 
@@ -72,19 +72,19 @@ flowchart TD
 
 ### 成功：`config-render-resolve-v1-full-D_soft-r2`
 
-记录：[result.json](runs/20260913T033401Z/config-render-resolve-v1-full-D_soft-r2/result.json)
+记录：result.json (`runs/20260913T033401Z/config-render-resolve-v1-full-D_soft-r2/result.json`)
 
 配置渲染/解析，完整 spec。三次独立分析因每人 2400 T、exchange-0 因每人 800 T 软结束（均未正式 deliver），整合继续。T/I/K = 11359/126034/58。隐藏验收 9/9。`missing_deliver`：independent-0/1/2、exchange-0。
 
 ### 成功：`route-priority-table-v1-full-D_soft-r1`
 
-记录：[result.json](runs/20260913T033401Z/route-priority-table-v1-full-D_soft-r1/result.json)
+记录：result.json (`runs/20260913T033401Z/route-priority-table-v1-full-D_soft-r1/result.json`)
 
 优先级表。三次独立 + 三次交流全部 soft_close，再整合。T/I/K = 11626/123971/105。隐藏验收 9/9。K 已接近 120。
 
 ### 协调耗尽，不是代码隐验反例：`route-lifecycle-v1-full-D_soft-r2`
 
-记录：[result.json](runs/20260913T033401Z/route-lifecycle-v1-full-D_soft-r2/result.json)
+记录：result.json (`runs/20260913T033401Z/route-lifecycle-v1-full-D_soft-r2/result.json`)
 
 同样 soft_close 后 **K=120**，error `budget_exhausted:K`，未进入隐藏验收。T=10890。同任务 brief r0/r1 同因。这是工具次数把总账用完。
 

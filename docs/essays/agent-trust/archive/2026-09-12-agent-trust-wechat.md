@@ -468,19 +468,19 @@ flowchart TB
 
 本文为项目实践复盘，项目结论回查原始记录，未重新运行历史实验；外部引用在改稿时复核。无跨模型普遍性或自家统计显著性声明。链接用于仓库内回查，发布公众号时可将此节作为文末材料说明。
 
-1. 喷气机：[预注册任务与评分规则](../../../../.omx/artifacts/ab-jet-round1-eval.md)、[强模型报告](../../../../.omx/artifacts/ab-jet-round1-report.md)、[弱模型报告及协议偏离](../../../../.omx/artifacts/ab-jet-weak-report-r6.md)。80 次读取来自弱模型报告对前轮的回查。
-2. 路由：[Linux 容器对照报告](../../../../.omx/artifacts/ab-routing-hygiene-20260911.md)。固定环境基准与容器 CLI 都不等于长期生产分布。
+1. 喷气机：预注册任务与评分规则 (`../../../../.omx/artifacts/ab-jet-round1-eval.md`)、强模型报告 (`../../../../.omx/artifacts/ab-jet-round1-report.md`)、[弱模型报告及协议偏离](../../../../.omx/artifacts/ab-jet-weak-report-r6.md)。80 次读取来自弱模型报告对前轮的回查。
+2. 路由：Linux 容器对照报告 (`../../../../.omx/artifacts/ab-routing-hygiene-20260911.md`)。固定环境基准与容器 CLI 都不等于长期生产分布。
 3. 量化：[R7 两套评分与检查方式](../../../../.omx/artifacts/ab-quant-r7-report.md)。粗任务书的未结算观察见[综述 §3.6](../../../research/research-survey.md)。
-4. 评审：[三路仲裁原始报告](../../../../.omx/artifacts/pull-20260903-review-synthesis.md)，严重度对账见[研究综述](../../../research/research-survey.md) §4.5。
+4. 评审：三路仲裁原始报告 (`../../../../.omx/artifacts/pull-20260903-review-synthesis.md`)，严重度对账见[研究综述](../../../research/research-survey.md) §4.5。
 5. 语义画像：[Lane A 原始交接报告摘存](assets/evidence/evo-lane-A-handback.md)，重点看 §4–6 的运行边界与适配器说明。
 6. 回声：[第一周测量](../../../../.omx/artifacts/gate43-t7-echo-measure.md)、[第二周复检与推断边界](../../../../.omx/artifacts/gate43-t14-echo-measure.md)。本案例观测环境是 cmspark，治理组件来自 VibeSOP。
 
-7. Skill 全景补充：[R1–R3 探针原始报告](../../../../.omx/artifacts/ab-probe-20260828.md)；R8 的过程和局限见研究综述 §3.6，当前没有独立结果报告。
-8. 修复后的再次评审：[批 C 复审原文](../../../../.omx/artifacts/pull-20260903-fixC-grok.md)。10 条的严重度与旧 e2e 失败来自此报告，未声称十条均为新引入缺陷。
+7. Skill 全景补充：R1–R3 探针原始报告 (`../../../../.omx/artifacts/ab-probe-20260828.md`)；R8 的过程和局限见研究综述 §3.6，当前没有独立结果报告。
+8. 修复后的再次评审：批 C 复审原文 (`../../../../.omx/artifacts/pull-20260903-fixC-grok.md`)。10 条的严重度与旧 e2e 失败来自此报告，未声称十条均为新引入缺陷。
 9. 历史发现统计：[C.1 解析器交接原文摘存](assets/evidence/evo-lane-C1-handback.md)。字面去重不是根因去重，扫描到的零条目文件也未全部人工区分“真无问题／解析失败”。
 10. 强制找问题的待验证假设：[空报告率预注册](../../../../.omx/artifacts/optimization-convergence-r3-prereg.md)，状态为未执行。
 
-11. 派工与专家体系：[企业方法论](../../../enterprise-agent-methodology.md)、[锁定设计](../../../../.omx/artifacts/next-opt-design-v1.md)、[路线图](../../../ROADMAP.md)、[路由误触发原始审计](../../../../.omx/artifacts/routing-precision-audit-20260829.md)。前两者含工程推论；路线图明确整机实验待做。
+11. 派工与专家体系：[企业方法论](../../../enterprise-agent-methodology.md)、[锁定设计](../../../../.omx/artifacts/next-opt-design-v1.md)、[路线图](../../../ROADMAP.md)、路由误触发原始审计 (`../../../../.omx/artifacts/routing-precision-audit-20260829.md`)。前两者含工程推论；路线图明确整机实验待做。
 
 外部来源已在对应段落直链：Matt Pocock 技能源文件、WikiSkill、三篇多 agent 原始论文与 Anthropic 工程报告。它们提供方法说明和外部实验结果，不能替代 VibeSOP 的整机验证。
 

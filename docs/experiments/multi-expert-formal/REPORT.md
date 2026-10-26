@@ -170,17 +170,17 @@ flowchart LR
 
 ### 5.1 主实验：硬阶段在整合前结束
 
-[`route-plan-dag-v1-full-C-r0`](runs/20260913T023645Z/route-plan-dag-v1-full-C-r0/result.json) — 无角色委员会在 independent-0 用尽 2400 输出 token，未进入隐藏验收。error `stage_budget_exhausted:independent-0`，T/I/K = 2400/21714/19。能证明硬上限可以在整合前结束一次运行；**不能**证明分析质量差或任务不可做。D 的 72 次失败属于同一类机制。
+`route-plan-dag-v1-full-C-r0` (`runs/20260913T023645Z/route-plan-dag-v1-full-C-r0/result.json`) — 无角色委员会在 independent-0 用尽 2400 输出 token，未进入隐藏验收。error `stage_budget_exhausted:independent-0`，T/I/K = 2400/21714/19。能证明硬上限可以在整合前结束一次运行；**不能**证明分析质量差或任务不可做。D 的 72 次失败属于同一类机制。
 
 ### 5.2 主实验：所有权协议失败，隐藏验收却通过
 
-[`window-dedup-late-v1-brief-E-r2`](runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2/result.json) — 工人被分配的文件是 `app.py`，却写入 `_check.py`。执行器拒绝该越界写入，记 `ownership_or_conflict`。隐藏检查 7/7 通过，但严格成功定义仍失败。能证明：成功不只看隐藏测试。本任务集没有「隐藏测试实现失败」的例子。
+`window-dedup-late-v1-brief-E-r2` (`runs/20260913T023645Z/window-dedup-late-v1-brief-E-r2/result.json`) — 工人被分配的文件是 `app.py`，却写入 `_check.py`。执行器拒绝该越界写入，记 `ownership_or_conflict`。隐藏检查 7/7 通过，但严格成功定义仍失败。能证明：成功不只看隐藏测试。本任务集没有「隐藏测试实现失败」的例子。
 
 ### 5.3 D_soft：soft_close 之后仍交付并通过
 
 任务契约：跨层配置渲染/解析（`config-render-resolve-v1`），完整 spec。
 
-[`config-render-resolve-v1-full-D_soft-r2`](../multi-expert-sensitivity/runs/20260913T033401Z/config-render-resolve-v1-full-D_soft-r2/result.json)
+`config-render-resolve-v1-full-D_soft-r2` (`../multi-expert-sensitivity/runs/20260913T033401Z/config-render-resolve-v1-full-D_soft-r2/result.json`)
 
 | 阶段 | 事件 | 是否正式 deliver |
 |---|---|---|
@@ -192,15 +192,15 @@ T/I/K = 11359/126034/58。隐藏验收 9/9 通过。`missing_deliver` 仍列出 
 
 ### 5.4 D_soft：交流阶段也软结束，仍通过
 
-[`route-priority-table-v1-full-D_soft-r1`](../multi-expert-sensitivity/runs/20260913T033401Z/route-priority-table-v1-full-D_soft-r1/result.json) — 路由优先级表。三次独立分析（各 2400 T）与三次交流（各 800 T）全部 `soft_close`（均 `delivered: false`），随后整合。T/I/K = 11626/123971/105。隐藏验收 9/9。K 已接近天花板（105/120），与下一例对照。
+`route-priority-table-v1-full-D_soft-r1` (`../multi-expert-sensitivity/runs/20260913T033401Z/route-priority-table-v1-full-D_soft-r1/result.json`) — 路由优先级表。三次独立分析（各 2400 T）与三次交流（各 800 T）全部 `soft_close`（均 `delivered: false`），随后整合。T/I/K = 11626/123971/105。隐藏验收 9/9。K 已接近天花板（105/120），与下一例对照。
 
 ### 5.5 D_soft：软结束之后撞上全局工具上限
 
-[`route-lifecycle-v1-full-D_soft-r2`](../multi-expert-sensitivity/runs/20260913T033401Z/route-lifecycle-v1-full-D_soft-r2/result.json) — 路由生命周期。独立分析与交流同样 `soft_close`，但 **K=120 全局耗尽**，error `budget_exhausted:K`，未进入隐藏验收。T=10890。这是**协调/工具次数**把总账用完，不是隐藏 CLI 写错。同任务 brief 的 r0/r1 也是 K=120 失败。软结束只放开内部阶段，不放开全局 K。
+`route-lifecycle-v1-full-D_soft-r2` (`../multi-expert-sensitivity/runs/20260913T033401Z/route-lifecycle-v1-full-D_soft-r2/result.json`) — 路由生命周期。独立分析与交流同样 `soft_close`，但 **K=120 全局耗尽**，error `budget_exhausted:K`，未进入隐藏验收。T=10890。这是**协调/工具次数**把总账用完，不是隐藏 CLI 写错。同任务 brief 的 r0/r1 也是 K=120 失败。软结束只放开内部阶段，不放开全局 K。
 
 ### 5.6 单体也会在包络内失败
 
-[`route-nomatch-contract-v1-full-A-r0`](runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0/result.json) — 主实验 A，最终 `incomplete_final_response`，T=24000，无隐藏验收。说明失败不是委员会独有。
+`route-nomatch-contract-v1-full-A-r0` (`runs/20260913T023645Z/route-nomatch-contract-v1-full-A-r0/result.json`) — 主实验 A，最终 `incomplete_final_response`，T=24000，无隐藏验收。说明失败不是委员会独有。
 
 ---
 
