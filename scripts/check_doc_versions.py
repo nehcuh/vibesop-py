@@ -82,6 +82,17 @@ SKIP_DIRS = {
     # Generated platform deploy output (produced by ``vibe build`` from
     # docs/ sources) — checking it double-counts the source docs.
     ".pi",
+    # Local autonomous-experiment workspace (gitignored: "never commit
+    # experiment artifacts"). Its transcripts carry model/tool version
+    # stamps of their own — none are app-version declarations, and the
+    # tree is invisible to CI anyway. On a dev machine it alone accounted
+    # for 2971 of 2985 mismatches (2026-10-26 audit).
+    ".experiment",
+    # Benchmark fixture packs are FOREIGN skills: the frontmatter
+    # ``version: 1.0.0`` in benchpack/*/SKILL.md is the fixture's own
+    # config version, not an app-version claim. Test data, not project
+    # docs — same family as ``examples/`` and ``core/skills``.
+    "tests/fixtures",
 }
 
 # Files that are allowed to reference historical versions
@@ -100,6 +111,29 @@ HISTORICAL_FILES = {
     # docs/DISCUSSION_SUMMARY.md moved into docs/archive/, which the
     # prefix entry below already covers.)
     "docs/archive/",
+    # Point-in-time record trees (2026-10-26 doc-consistency audit): every
+    # mismatch in these directories names the version of something else or
+    # of the moment the record was written — gate reports cite tool
+    # versions, plan indexes cite the PLANS' own versions ("计划 v1.0.0",
+    # roadmap titles like "v5.4.1 → v5.5.0 → v6.0"), dated maintenance logs
+    # and experiment records cite then-current releases (tag ``v8.2.0`` at
+    # refresh time). Rewriting any of them to the expected version would
+    # falsify the record; --fix must never reach them.
+    "docs/reviews/",
+    "docs/plans/",
+    "docs/research/",
+    "docs/maintenance/",
+    "docs/experiments/",
+    # Release-provenance ledger: like CHANGELOG.md, it cites historical
+    # tags/hashes (the v8.5.0 release row and artifact-verification
+    # paragraphs) next to current claims that already say 8.6.0 — pattern
+    # 5 (``\bvX.Y.Z\b``) hits the historical tag citations, not stale
+    # current-version claims.
+    "docs/PROJECT_STATUS.md",
+    # Living doc whose only historical token is a dated section header
+    # ("## 2026-08-26 follow-up (v8.1.1)") — the version is part of the
+    # date line, not a current-version declaration.
+    "docs/dev/windows-compat/README.md",
 }
 
 # Generator-owned files (emitted by ``vibe build``), exempt from app-version

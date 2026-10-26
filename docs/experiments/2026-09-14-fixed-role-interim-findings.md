@@ -18,7 +18,7 @@
 | 五角色 F5 | 37/48 | 136.8 | 5,034,161 |
 | 七角色 F7 | 40/48 | 210.8 | 8,235,383 |
 
-输入包含缓存命中，不等同于美元费用。原始聚合及完整题名：[数据快照](/Users/huchen/Projects/vibesop-py/.experiment/v2/interim-pre-amendment-balanced.json)。
+输入包含缓存命中，不等同于美元费用。原始聚合及完整题名：数据快照 `/Users/huchen/Projects/vibesop-py/.experiment/v2/interim-pre-amendment-balanced.json`。
 
 ## 发现一：知识与组织不能混为一谈
 
@@ -36,21 +36,21 @@ S+C把七种角色资料交给一个执行者；F7将这套资料分给七个固
 
 另一些失败粒度更细：文档要求连续的exact string，候选换行后字面匹配失败，而另外五项验收通过。这应解释为显式文档格式契约失败，不扩大成整项运行功能未实现。
 
-证据：[hook契约](/Users/huchen/Projects/vibesop-py/.experiment/v2/formal-hook-failures-contract-check.md)、[错误传播裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-RECONNECT-ERROR-ADJUDICATION.json)、[回滚裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-SCHEMA-ROLLBACK-ADJUDICATION.json)、[文档字面裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-DOC-LITERAL-FAILURE-ADJUDICATION.json)。回滚根因没有单独复现，不把推测写成已确定机制。
+证据：hook契约 `/Users/huchen/Projects/vibesop-py/.experiment/v2/formal-hook-failures-contract-check.md`、错误传播裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-RECONNECT-ERROR-ADJUDICATION.json`、回滚裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-SCHEMA-ROLLBACK-ADJUDICATION.json`、文档字面裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/FORMAL2-DOC-LITERAL-FAILURE-ADJUDICATION.json`。回滚根因没有单独复现，不把推测写成已确定机制。
 
 ## 发现三：规格完整度，必须检查到语义边界
 
 认证会话任务写了可选参数`now?`，却没有规定它是时间数值还是时钟函数。隐藏测试传数值，13个候选采用可注入函数，该题原始结果为2/15通过。另五项测试通过，不足以消除这一接口约定歧义。
 
-Grok和Claude CLI中的GLM‑5.3独立预审及补充核查都认为公开规格不唯一。最终保留原评分，另外把13条歧义结果放入[0,1]解释范围，展示其可能影响；上界不代表已经验证通过，也不是置信区间。详见[全部15条记录与裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/auth-now-final-adjudication.md)。
+Grok和Claude CLI中的GLM‑5.3独立预审及补充核查都认为公开规格不唯一。最终保留原评分，另外把13条歧义结果放入[0,1]解释范围，展示其可能影响；上界不代表已经验证通过，也不是置信区间。详见全部15条记录与裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/auth-now-final-adjudication.md`。
 
 因此“写了一份很长的SPEC”与“关键选择已经明确”不能互换。需求访谈类skill可能通过逼迫人类补全这些选择发挥作用；但本轮没有独立测试所有skill，也没有强弱模型×规格完整度的完整对照。
 
 ## 发现四：编排器会塑造模型行为，评测器也会制造假象
 
-旧批次的共同状态提示以“No deliver yet”开头。开发席位明确把它理解成继续等待的指令，反复等待，最后空转停止。固定首次等待前的同一历史，只替换状态措辞的一对响应诊断中，旧版继续等待，新版调用deliver。没有执行这次诊断返回的工具，也没有补跑验收，因此它支持具体的提示歧义机制，不能换算成端到端成功率。[诊断裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/DELIVERY-STATUS-REPLAY-ADJUDICATION.json)。
+旧批次的共同状态提示以“No deliver yet”开头。开发席位明确把它理解成继续等待的指令，反复等待，最后空转停止。固定首次等待前的同一历史，只替换状态措辞的一对响应诊断中，旧版继续等待，新版调用deliver。没有执行这次诊断返回的工具，也没有补跑验收，因此它支持具体的提示歧义机制，不能换算成端到端成功率。诊断裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/DELIVERY-STATUS-REPLAY-ADJUDICATION.json`。
 
-本次又发现隐藏验收的Docker客户端超时后，容器仍在运行，且异常让终态记录没有写出。这与参与者是否实现了正确代码是不同的问题。修复需要保留所有失败、标出旧/新运行来源、只继续未启动分配，不能挑失败项重跑。[基础设施修正裁决](/Users/huchen/Projects/vibesop-py/.experiment/v2/docker-timeout-final-adjudication.md)。
+本次又发现隐藏验收的Docker客户端超时后，容器仍在运行，且异常让终态记录没有写出。这与参与者是否实现了正确代码是不同的问题。修复需要保留所有失败、标出旧/新运行来源、只继续未启动分配，不能挑失败项重跑。基础设施修正裁决 `/Users/huchen/Projects/vibesop-py/.experiment/v2/docker-timeout-final-adjudication.md`。
 
 ## 当前建议与尚未验证的判断
 
