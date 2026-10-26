@@ -57,6 +57,23 @@ jobs:
       increased stale and baseline drift are integrity failures. No model
       output participates.
 
+  doc-versions:
+    name: Doc Versions
+    decision_source: deterministic
+    rationale: >-
+      `scripts/check_doc_versions.py` exit code: current-state doc "Version"
+      declarations must match pyproject.toml. Point-in-time record trees are
+      exempted in the script's HISTORICAL_FILES. No model output
+      participates.
+
+  doc-links:
+    name: Doc Links
+    decision_source: deterministic
+    rationale: >-
+      `scripts/check_docs.py` exit code: markdown links in docs/ and
+      README.md must resolve to existing files and anchors (docs/archive/
+      exempt as point-in-time snapshots). No model output participates.
+
   type-check:
     name: Type Check
     decision_source: deterministic

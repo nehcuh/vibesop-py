@@ -87,6 +87,54 @@ jobs:
         # non-tracked multiset; new/increased stale and baseline drift fail.
         run: uv run python scripts/check_artifact_links.py --check-baseline ci/artifact-links-baseline.json
 
+  doc-versions:
+    name: Doc Versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37f6f313000f5884  # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Check doc version consistency
+        # Hard gate (no continue-on-error, unlike report-only routing-eval):
+        # doc "Version" declarations in current-state docs must match
+        # pyproject.toml. Point-in-time record trees are exempted in the
+        # script's HISTORICAL_FILES and are never rewritten.
+        run: uv run python scripts/check_doc_versions.py
+
+  doc-links:
+    name: Doc Links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37f6f313000f5884  # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Check doc links and anchors
+        # Hard gate (no continue-on-error, unlike report-only routing-eval):
+        # markdown links in docs/ and README.md must resolve to existing
+        # files and anchors (docs/archive/ is exempt as point-in-time
+        # snapshots).
+        run: uv run python scripts/check_docs.py
+
   type-check:
     name: Type Check
     runs-on: ubuntu-latest
