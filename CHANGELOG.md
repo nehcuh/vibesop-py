@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.6.1] — 2026-10-26
+
+Patch: the two doc-consistency checkers become required CI gates with
+truth-table tests, local coverage tooling now matches the CI gate exactly,
+and the generated platform rules gain the §2.6 Code Is Ground Truth rule.
+The rest is in-bound dependency absorption. v8.6.0 remains the previous
+public release.
+
 ### Added
 
 - Truth-table tests for the two CI-gated doc checkers (`scripts/check_doc_versions.py`, `scripts/check_docs.py`), pinning the `--fix`-never-rewrites-historical-records boundary and the repo-root link-confinement rule.

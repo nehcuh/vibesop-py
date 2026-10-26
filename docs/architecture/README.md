@@ -1,6 +1,6 @@
 # VibeSOP Architecture Documentation
 
-> **Version**: 8.6.0
+> **Version**: 8.6.1
 > **Last Updated**: 2026-04-18
 
 This directory contains comprehensive architecture documentation for VibeSOP.

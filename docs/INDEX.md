@@ -192,8 +192,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Source / public package version** | 8.6.0（2026-10-22） |
-| **Public PyPI / GitHub Release** | 8.6.0（tag `v8.6.0` 的 Release workflow，2026-10-22） |
+| **Source / public package version** | 8.6.1（2026-10-26） |
+| **Public PyPI / GitHub Release** | 8.6.1（tag `v8.6.1` 的 Release workflow，2026-10-26） |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 22 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
