@@ -549,6 +549,14 @@ with self._path.open("a") as f:
 
 ## Reusable Patterns
 
+### 本地绿 ≠ CI 绿：doc 门禁必须在干净检出里验证 (2026-10-26 S102)
+
+repo 内的 symlink 与未跟踪目录（`.experiment` 数据、`.omx` 产物）会让链接/引用检查在开发机上全绿、fresh checkout 全红——42 处断链就是这么漏到 CI 的。标准姿势：`git worktree add /tmp/<sim> HEAD` 得到干净检出，把候选修复拷进去，在 worktree 里跑 `scripts/check_docs.py`、`scripts/check_doc_versions.py` 验证；`check_artifact_links.py --write-baseline` 在存在 dangling 时拒绝再生（设计使然），所以 baseline 必须在干净 worktree 里再生成再拷回主树。修复单机路径引用的口径：`[label](target)` → `label (`target`)`——保留引文信息，去掉"这是 repo 内链接"的假承诺。
+
+### 一次 CI 红可能是 N 个独立根因：按 job→根因聚类，别找单一元凶 (2026-10-26 S102)
+
+8/14 job 红拆开是 4 个互不相干的根因：action pin 一字符笔误、新转 required 的门禁暴露存量断链、baseline 漂移、锁内依赖 CVE。分诊纪律：每个红 job 归入根因簇，每簇独立实证再修（gh api 查 action 真 commit SHA；干净 worktree 复现断链；旧 baseline 在干净树复现 drift；pip-audit 复现 CVE）。两个复发性坑：管道接 `tail` 会吞 exit code（每步单独 `echo $?`）；run 级绿灯可能藏 continue-on-error 的红 job，必须 job 级逐个验。
+
 ### fake-node 沙盒：实证「Windows 批处理 shim 零执行」的通用方法 (2026-10-10 S96)
 
 要验证「shell=False 下 npm.cmd 不被执行、经 node+npm-cli.js 间接调用」这类子进程布线主张，mock 不够，搭最小 fake Node 布局跑真 node：`npm.cmd`（被执行就落 marker 的批处理）+ `node_modules/npm/bin/npm-cli.js`（记录 argv、按子命令落产物/exit code）+ 真 `node.exe` 副本；子进程 env 只给沙盒目录 + System32（隐真 npm/omx），cwd 用中性目录。判定三件套：argv 记录逐字等值、batch marker 不存在、装后 which 命中沙盒产物。同一布局把 PATH 抽空 + cwd 放敌意文件即是 CWD 劫持的反向对抗用例。坑：PATH 项必须 `cygpath -w`（见 Pitfalls）。

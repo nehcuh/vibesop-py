@@ -1,6 +1,15 @@
 
 ## Current Session
 
+### S102 END (2026-10-26) [vibesop-py] Kimi 复审修复落盘；8.6.1 切版已 push，CI 红四根因修复待推
+
+- Kimi 多路独立对抗复审 DeepSeek 4 commits：确认 5（S1/S2 P2 + S6/S7/S8 NIT）/ 驳回 5 / 0 未证。修复落 4 commits（Makefile 覆盖口径对齐 CI、S8 链接词法根约束、两 checker 真值表测试 27 个、实验报告去重）。
+- 标准发版推进：8.6.1 版本面（pyproject/uv.lock/CHANGELOG/INDEX/PROJECT_CONTEXT/`check_doc_versions --fix` 扫荡）落 `9a583849`，用户手动 push（agent 推 main 被权限边界拒，用户自推 `34ad78a0..9a583849`）。
+- CI run 40273955136 红（8/14 job）= **4 个独立根因**：① ci.yml 两处 setup-uv pin 一字符笔误（`…d37f6…`→`…d37d6…`）；② 新转 required 的 doc-links gate + 真值表测试暴露 42 处仅存在于本机的 markdown 链接（本地 symlink 兜底、fresh checkout 才断）；③ artifact-links baseline 漂移（S101 的 memory/session.md opt-design glob 新增 + PROJECT_CONTEXT pull-20261015 引用消失）；④ filelock 3.29.7 三个 CVE 触发 Security Scan。
+- 修复 3 提交已落**待推**：`2cd5d80a`（pin 笔误）、`08c898db`（filelock→4.2.4）、`a1069631`（42 链接去链接化，路径保留为反引号文本；baseline 干净 worktree 再生，diff 仅 ±1 条目）。本地验证全绿：干净 worktree 两 checker PASS、27 新测试过、pip-audit exit=0。
+- Next（S103）：用户 push 待推提交 → `gh run watch` 盯 job 级全绿 → `git tag -a v8.6.1`（指向推送后的 HEAD）→ Release workflow → 验 PyPI/GitHub Release/attestation。勿移动 `v8.6.0`=`c88caada`。
+- Recorded: yes — 干净 worktree 复现门禁 + CI 红多根因分诊两条已入 project-knowledge。
+
 ### S101 END (2026-10-22) [vibesop-py] 标准发版调查后收工，8.6.1 未切
 
 - 用户要求按标准流程发版，随即 `/session-end`。调查完成，版本文件、tag、push 都没做。
@@ -682,7 +691,7 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **8.6.1 标准发版**（active）— 用户已要求发版。判据是 patch：Unreleased 只有界内依赖。CI 39736145997 job 级全绿。next_action: CHANGELOG 半开切片 → pyproject + `uv lock` → 当前版本串扫荡（留下 8.6.0 历史证据）→ 验证 → `chore(release): bump version to 8.6.1` + tag `v8.6.1`。不要 force-move `v8.6.0`。session/memory 不混进 release commit。updated: 2026-10-22
+- **8.6.1 标准发版**（active）— 版本面已切（`9a583849` 已 push）；随后 CI 红查出 4 独立根因，修复 3 提交（`2cd5d80a`/`08c898db`/`a1069631`）待用户 push（agent 推 main 受限）。next_action: push 后 `gh run watch` 盯 job 级全绿 → `git tag -a v8.6.1 -m "VibeSOP v8.6.1"` + push tag → Release workflow → 验 PyPI 8.6.1 + GitHub Release。不要 force-move `v8.6.0`（=`c88caada`）。updated: 2026-10-26
 - **Dependabot 当前队列**（done）— 开放 PR 收工时为 0。`44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic major 继续忽略，NumPy 下限维持 `>=1.26.0`。updated: 2026-10-22
 - **S95 对抗评审修复待提交**（active）— 10-07 拉取 `86b69f43→58692f70` 五路对抗评审终裁 COMMENT（0H/2M/12L），14 条确认修复已落盘并验证（定向 241 + 波及 2042 passed、ruff/basedpyright/hermetic 全绿）。未 commit。next_action: 用户点名「提交」→ 分组 git add（排除 `.omx/`、`.grok/workflows/`、`examples/datasets/`）→ conventional commit → push → 盯 job 级 CI；`render.py` 高亮行号绑采集输出，下次渲染视频前人工复核。updated: 2026-10-08
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03

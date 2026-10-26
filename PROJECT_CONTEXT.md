@@ -14,21 +14,21 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-10-26 S102 END · 8.6.1 已切版已 push，CI 红四根因已修，3 提交待推、tag 未打
+
+**Workspace**：main @ `a1069631`，超前 origin 3：`2cd5d80a`（setup-uv pin 笔误修正）、`08c898db`（filelock 3.29.7→4.2.4，清 CVE-2026-112907/112913/112940）、`a1069631`（42 处单机链接去链接化 + artifact-links baseline 干净再生）。版本面 8.6.1 已随 `9a583849` 由用户 push；agent 推 main 受权限边界限制，待推提交由用户执行 `git push origin main`。8.6.0 的发布 tag 仍指 `c88caada`，不要移动。未入库：`.pi/`、`.grok/hooks/`、pptx。
+
+**完成**：Kimi 多路对抗复审 DeepSeek 4 commits（确认 5/驳回 5/0 未证）+ 修复 4 commits；8.6.1 标准切版（CHANGELOG 8.6.1 段含全部修复条目）；push 后 CI run 40273955136 红诊断出 4 独立根因并全部修复。本地验证：干净 worktree（`/tmp/vibesop-ci-sim`，脏、可 `git worktree remove --force` 后重建）两 checker PASS、新 27 测试过、pip-audit exit=0。
+
+**Next**：push 待推提交 → `gh run watch` job 级验证 14 job 全绿 → `git tag -a v8.6.1 -m "VibeSOP v8.6.1"` + push tag → Release workflow → 验 PyPI 8.6.1 + GitHub Release + attestation。备查三项：`docs/dev/releasing.md` 称版本由 hatch-vcs 生成与实际（pyproject 静态版本）不符；`check_doc_versions --fix` 不覆盖 `(current: vX.Y.Z+)` 形态；Dependabot #174-180 未收。
+
 ### 2026-10-22 S101 END · 8.6.1 发版未开工
 
 **Workspace**：main @ `06f2a45b`，超前 origin 1（S100 session，未推）。8.6.0 的发布 tag 指向 `c88caada`，不要移动。PyPI 仍是 8.6.0。未入库：`.pi/`、`Makefile`、`.grok/hooks/`、pptx。
 
 **完成**：用户要求标准发版，收工前只做了调查。下一版定为 **8.6.1 patch**（Unreleased 只有界内依赖，无行为面变化）。[executed] CI 39736145997 job 级全绿，含 Windows 3.12/3.13。未改 `pyproject.toml`，未打 tag，未 push。
 
-**Next**：按 standard-release 切 8.6.1。CHANGELOG 半开区间；历史 8.6.0 证据留下；session/memory 不混进 release commit。
-
-### 2026-10-22 S100 END · 8.6.0 已发布，Dependabot 收口
-
-**Workspace**：当时 main @ `34ad78a0`。8.6.0 的发布 tag 指向 `c88caada`。PyPI 8.6.0。
-
-**完成**：正式发布 8.6.0（Release 39727715512，E2E 39727710603）。Dependabot 收成 `44722385` 与 `34ad78a0`。Anthropic 维持 `<1.0.0`。NumPy 下限维持 `>=1.26.0`。
-
-**Next**：已被 S101 取代。CI 39736145997 现已 job 级全绿。用户随后要求把 Unreleased 依赖发成新版本。
+**Next**：已被 S102 执行：8.6.1 已切版，剩 push 修复 + tag + 发布验证。
 
 <!-- handoff:end -->
 
