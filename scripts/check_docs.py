@@ -15,6 +15,7 @@ Calibration notes (gate-debt cleanup):
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import urllib.parse
@@ -106,11 +107,22 @@ def _check_links_in(md_file: Path, base: Path) -> list[str]:
             continue
 
         if not file_part:
-            ref_path = md_file
+            candidate = md_file
         elif not file_part.startswith("/"):
-            ref_path = (base / file_part).resolve()
+            candidate = base / file_part
         else:
-            ref_path = (ROOT / file_part.lstrip("/")).resolve()
+            candidate = ROOT / file_part.lstrip("/")
+
+        # Lexical confinement BEFORE resolve(): a link whose WRITTEN path
+        # escapes the repo root (``../../etc/passwd``) is a traversal probe,
+        # not a doc reference. Confinement is deliberately lexical, not
+        # resolve()-based: experiment records legitimately link targets that
+        # are inside the tree lexically but symlinked out to local data.
+        normalized = Path(os.path.normpath(candidate))
+        if not normalized.is_relative_to(ROOT):
+            broken.append(f"{md_file.relative_to(ROOT)}: {link_path} (outside repo root)")
+            continue
+        ref_path = normalized.resolve()
 
         if not ref_path.exists():
             broken.append(f"{md_file.relative_to(ROOT)}: {link_path}")
