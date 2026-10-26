@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Truth-table tests for the two CI-gated doc checkers (`scripts/check_doc_versions.py`, `scripts/check_docs.py`), pinning the `--fix`-never-rewrites-historical-records boundary and the repo-root link-confinement rule.
+- Add the "Code Is Ground Truth" rule (§2.6) to the generated platform rules templates.
+
+### Fixed
+
+- Make `make test-cov` run the same marker-filtered suite as the CI `test` job (`-m "not benchmark and not slow"`); the unfiltered full suite lands ~3% higher, so the local run under-tested the 73% gate.
+- Confine `scripts/check_docs.py` link resolution lexically to the repo root: written `../`-traversal links are reported as broken instead of being resolved against the CI runner's filesystem, while experiment-record symlinks out of the tree keep working.
+
 ### Changed
 
 - Absorb the open Dependabot updates that stay inside the current bounds: pydantic 2.14.1, pydantic-settings 2.16.1, fastapi 0.143.1 (this release depends on opentelemetry-api), typer 0.27.3, pre-commit 4.7.0, numpy 2.5.4, idna 3.20, openai 3.31.0, and Ruff 0.17.1 with the pre-commit hook aligned to that toolchain. The NumPy `>=1.26.0` floor and the Anthropic `<1.0.0` bound stay. Dependabot ignores Anthropic major updates until that SDK migration is explicit.
