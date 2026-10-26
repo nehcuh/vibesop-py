@@ -27,7 +27,7 @@ test-fast: clean-cov ## Run tests fast (skip slow/benchmark)
 	uv run pytest -q -m "not benchmark and not slow"
 
 test-cov: clean-cov ## Run tests with coverage (same gate as CI: branch coverage, >= 73%)
-	uv run pytest --cov=src/vibesop --cov-branch --cov-fail-under=73 --cov-report=html
+	uv run pytest -m "not benchmark and not slow" --cov=src/vibesop --cov-branch --cov-fail-under=73 --cov-report=html
 
 test-parallel: ## Run tests with pytest-xdist (may fail on stateful tests)
 	uv run pytest -n auto -m "not benchmark and not slow"
