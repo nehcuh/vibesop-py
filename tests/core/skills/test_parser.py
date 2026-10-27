@@ -107,3 +107,17 @@ class TestParseSkillMd:
         assert meta is not None
         assert "debug" in meta.triggers
         assert "fix" in meta.triggers
+
+    def test_standard_metadata_routing_fields_and_top_level_precedence(self, tmp_path: Path):
+        skill_dir = tmp_path / "release-version"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: release-version\ndescription: Publish a version\n"
+            "keywords: explicit\nmetadata:\n  keywords: release, publish\n"
+            "  triggers: 更新版本并发布, 发布新版本\n---\n# Release\n",
+            encoding="utf-8",
+        )
+        meta = parse_skill_md(skill_dir)
+        assert meta is not None
+        assert meta.keywords == ["explicit"]
+        assert meta.triggers == ["更新版本并发布", "发布新版本"]

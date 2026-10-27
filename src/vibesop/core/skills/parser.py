@@ -112,11 +112,13 @@ def build_spec(
     except ValueError:
         skill_type = SpecSkillType.PROMPT
 
-    # tags and keywords are now separate concepts
-    tags = _parse_list_field(data.get("tags"))
-    keywords = _parse_list_field(data.get("keywords"))
-
-    triggers = _parse_list_field(data.get("triggers"))
+    # Codex-compatible SKILL.md puts optional routing hints under metadata.
+    # Explicit VibeSOP top-level fields retain precedence, including empty lists.
+    nested = data.get("metadata")
+    routing_metadata = nested if isinstance(nested, dict) else {}
+    tags = _parse_list_field(data.get("tags", routing_metadata.get("tags")))
+    keywords = _parse_list_field(data.get("keywords", routing_metadata.get("keywords")))
+    triggers = _parse_list_field(data.get("triggers", routing_metadata.get("triggers")))
 
     trigger_when = data.get("trigger_when", "")
     if not trigger_when and not triggers and description:
