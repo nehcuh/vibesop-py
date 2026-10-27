@@ -774,6 +774,38 @@ skills:
       - Write
     safety_level: trusted_builtin
 
+  - id: worktree-convergence
+    namespace: builtin
+    entrypoint: skills/worktree-convergence/SKILL.md
+    intent: Converge existing Git worktrees and branches while preserving unmerged work; 逐一评审收敛已有 worktree 和分支。
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
+
+  - id: release-version
+    namespace: builtin
+    entrypoint: skills/release-version/SKILL.md
+    intent: Prepare and publish an authorized software release after required gates pass.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      grok-build: native-skill
+      opencode: native-skill
+      pi: native-skill
+    requires_tools:
+      - Read
+      - Bash
+    safety_level: trusted_builtin
+
   - id: code-review
     namespace: builtin
     entrypoint: skills/code-review/SKILL.md

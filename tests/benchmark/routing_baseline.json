@@ -2,9 +2,9 @@
   "version": 1,
   "fingerprint": {
     "version": 1,
-    "sha": "e22d35d24e3e3652621ae1dbc91d2fdcf1a4a49a09ae30a673d4560233242ffc",
+    "sha": "5c34a6cb1d995988875b478634b3ac5023a4ce3bfafbe5a86a5b5a31ff8987c6",
     "inputs": {
-      "registry.yaml": "4aee8ecde75431bcbe9b3c668404f8c10f634c796271dc47e0dc49b360064cc2",
+      "registry.yaml": "13bbe829978d416798c9ce627b64444e29d958cd22b3734399484fe89751282b",
       "dataset": "e5ab313c2f121393733f0c68f243d4e0aedb20931901449765cd509321dd8fa1",
       "posture": {
         "enable_embedding": false,
@@ -27,6 +27,7 @@
         "deep-diagnosis-optimization/SKILL.md": "da943e589e460988fa55e2e35b9ba4a3c406f15bc37180cb73f34c9e2a723ea5",
         "experience-evolution/SKILL.md": "d1ac91aa722f689d71a1b3b28c60e899dfd7f724be64b996ad2e879ea7a0d309",
         "instinct/SKILL.md": "2c74f81d4996c5dc05911b927f134581afaa0119a55bc125b0fbb2ea1eba0df4",
+        "release-version/SKILL.md": "e5c19c33bc25fb764c1dc3adfcc90f5f48c53049a8a0fb69eca9e1c0e2d86607",
         "riper-workflow/SKILL.md": "eaafddbb3fabe7cfadedf165ed84c05c23eae19e14ee3c48dc50e19d771c0ba7",
         "session-end/SKILL.md": "c3fe1f27f47a3798d795e2063edf873c314db05424921269b368c103951978bd",
         "skill-craft/SKILL.md": "2a044b6499e12640a4ce6e55f1c5a65ae6e871476e8bada50712a14381445cd0",
@@ -40,7 +41,8 @@
         "systematic-debugging/SKILL.md": "7babdab9bb71279fa7d2783d56ff2cb45b684a96958f5fbf341416dd10af9f10",
         "task-briefing/SKILL.md": "d6dc89a7c3df27764499a4f0a8f1d86a37c0b17b0cb3197aa90e94d2066bc5a8",
         "test-generation/SKILL.md": "7ed717ea21c6f50a1499c8b4943d43dde228c99a8c784e823b7e65d7390d2279",
-        "verify-result/SKILL.md": "d05ffc4c5864c84be2c5ff74cf4e98a062f1b6ab3afb7c9e8b74346dd8e91b36"
+        "verify-result/SKILL.md": "d05ffc4c5864c84be2c5ff74cf4e98a062f1b6ab3afb7c9e8b74346dd8e91b36",
+        "worktree-convergence/SKILL.md": "d7ab8048786565ae8bf3ae0ed06e5efd1cf8c5ca01ff929d43de6c7df7c619ca"
       },
       "skills:benchmark-pack": {
         "quokka-todo/SKILL.md": "e4626d7cda6ee9f13754e7e2a1acc1a5992dbe5149a0cadfc3ef7c2277486843",

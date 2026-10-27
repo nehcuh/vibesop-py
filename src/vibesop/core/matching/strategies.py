@@ -9,6 +9,7 @@ This module provides production-ready implementations of the IMatcher protocol:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -372,10 +373,26 @@ class KeywordMatcher:
 
     def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
         # Explicit reset semantics: rebuild the pool-level IDF table from
-        # whatever pool is given — an EMPTY pool resets to None, returning
+        # whatever pool is given — an unusable pool resets to None, returning
         # the matcher to the legacy (unwarmed) formula — and always drop
-        # cached results computed against the previous pool.
-        self._idf = IDFTable.build(candidates) if candidates else None
+        # cached results computed against the previous pool. IDFTable
+        # normalizes by the pool's own maximum, so on tiny pools even the
+        # rarest (df=1) token cannot reach keyword_anchor_idf_min (N=1 →
+        # 0.59, N=7 → 0.775, all < 0.78). find_anchors would return [] for
+        # every query and _score_evidence would cap every score at
+        # keyword_anchor_cap below min_confidence, so the keyword layer goes
+        # dead exactly when a pinned/isolated universe (benchmarks, hermetic
+        # routing tests, orchestrate candidate subsets) needs it. Guard on
+        # reachability of the anchor floor — the max df=1 weight
+        # (ln((N+1)/2)+1)/(ln(N+1)+1) ≥ keyword_anchor_idf_min, i.e. N ≥ 8
+        # at the default 0.78 — instead of a raw doc count (2026-10-27
+        # adversarial panel lane A + kimi re-review lane 2: a count-only
+        # `>= 2` guard left N=2..7 pools degenerate).
+        n = len(candidates)
+        floor_reachable = (
+            (math.log((n + 1) / 2) + 1.0) / (math.log(n + 1) + 1.0)
+        ) >= self._config.keyword_anchor_idf_min
+        self._idf = IDFTable.build(candidates) if n >= 2 and floor_reachable else None
         self._cache.clear()
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
