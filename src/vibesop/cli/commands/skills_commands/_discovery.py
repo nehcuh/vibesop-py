@@ -403,7 +403,11 @@ vibe route "your query related to {" → ".join(suggestion.pattern_steps[:3])}"
     try:
         config = understand_skill_from_file(skill_dir, scope="project")
         configurator = SkillAutoConfigurator()
-        configurator.save_config(config, Path.cwd() / ".vibe" / "skills")
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        # Canonical path (redirectable in tests) instead of a CWD literal,
+        # which let test runs rewrite the repository's own auto-config.yaml.
+        configurator.save_config(config, Path(SkillConfigManager.SKILL_CONFIG_FILE).parent)
 
         console.print(
             f"[green]✓[/green] Auto-analyzed: category={config.category}, priority={config.priority}"

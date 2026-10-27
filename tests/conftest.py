@@ -157,6 +157,19 @@ def _redirect_frozen_home_paths(monkeypatch: pytest.MonkeyPatch, home: Path) -> 
         home / ".vibe" / "config.toml",
     )
 
+    # core/skills/config_manager.py — SkillConfigManager.SKILL_CONFIG_FILE.
+    # CWD-relative: without this redirect, routing tests that record usage
+    # (CandidateManager.record_usage → _flush_usage_buffer) RMW the
+    # repository's own .vibe/skills/auto-config.yaml with an unsynchronized
+    # read-merge-truncate-write — a lost-update/corruption hazard under
+    # pytest-xdist and plain state pollution of the checkout (2026-10-27
+    # adversarial panel, lane C).
+    monkeypatch.setattr(
+        config_manager.SkillConfigManager,
+        "SKILL_CONFIG_FILE",
+        home / ".vibe" / "skills" / "auto-config.yaml",
+    )
+
     # core/llm_config.py — VibeSOPConfigManager.CONFIG_PATHS (project-relative
     # entries kept as-is; only the home-based entries are redirected)
     monkeypatch.setattr(
@@ -247,6 +260,26 @@ def _redirect_frozen_home_paths(monkeypatch: pytest.MonkeyPatch, home: Path) -> 
             home / ".claude" / "skills",
             home / ".config" / "claude" / "skills",
         ],
+    )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _session_pin_skill_config_file(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Pin SkillConfigManager.SKILL_CONFIG_FILE for the WHOLE process.
+
+    The usage-buffer flush runs in an atexit handler, i.e. AFTER every
+    function-scoped monkeypatch has been undone — a per-test redirect alone
+    leaves a window in which a still-referenced CandidateManager flushes
+    usage stats to the CWD-relative real path (2026-10-27 kimi re-review,
+    lane 4: reproduced the write). A session-level pin that is never
+    restored closes the window: at interpreter exit the class attribute
+    still points into session tmp. Per-test monkeypatch redirects layered
+    on top capture this value as their restore target, so they compose.
+    """
+    from vibesop.core.skills.config_manager import SkillConfigManager
+
+    SkillConfigManager.SKILL_CONFIG_FILE = (
+        tmp_path_factory.mktemp("skill-config") / "auto-config.yaml"
     )
 
 

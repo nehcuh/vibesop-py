@@ -348,6 +348,78 @@ class TestSkillAddCommand:
 
         # Verify file was created (this would need actual implementation)
 
+
+class TestSaveAutoConfigMergeEdges:
+    """Merge-write edge states must not crash `vibe skill add`.
+
+    An existing-but-empty file is the natural residue of a truncated
+    unsynchronized write; a corrupt file has nothing to merge. Both must
+    recover via overwrite, and a healthy file must keep sibling entries
+    (2026-10-27 kimi re-review, lane 4: KeyError 'skills' on empty file).
+    """
+
+    def _patch_target(self, monkeypatch, tmp_path):
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        target = tmp_path / "auto-config.yaml"
+        monkeypatch.setattr(SkillConfigManager, "SKILL_CONFIG_FILE", target)
+        return target
+
+    def test_existing_empty_file_recovered(self, monkeypatch, tmp_path):
+        from vibesop.cli.commands.skill_commands import _save_auto_config
+
+        target = self._patch_target(monkeypatch, tmp_path)
+        target.write_text("", encoding="utf-8")
+
+        _save_auto_config({"skill_id": "s1", "priority": 70, "enabled": True})
+
+        import yaml
+
+        data = yaml.safe_load(target.read_text(encoding="utf-8"))
+        assert data["skills"]["s1"]["skill_id"] == "s1"
+
+    def test_corrupt_yaml_overwritten(self, monkeypatch, tmp_path):
+        from vibesop.cli.commands.skill_commands import _save_auto_config
+
+        target = self._patch_target(monkeypatch, tmp_path)
+        target.write_text("skills: [broken", encoding="utf-8")
+
+        _save_auto_config({"skill_id": "s1", "priority": 70, "enabled": True})
+
+        import yaml
+
+        data = yaml.safe_load(target.read_text(encoding="utf-8"))
+        assert data["skills"]["s1"]["skill_id"] == "s1"
+
+    def test_merge_preserves_sibling_skill(self, monkeypatch, tmp_path):
+        from vibesop.cli.commands.skill_commands import _save_auto_config
+
+        target = self._patch_target(monkeypatch, tmp_path)
+        target.write_text(
+            "skills:\n  first: {skill_id: first, priority: 10}\n",
+            encoding="utf-8",
+        )
+
+        _save_auto_config({"skill_id": "second", "priority": 70, "enabled": True})
+
+        import yaml
+
+        data = yaml.safe_load(target.read_text(encoding="utf-8"))
+        assert set(data["skills"]) == {"first", "second"}
+
+    def test_non_dict_skills_resets(self, monkeypatch, tmp_path):
+        from vibesop.cli.commands.skill_commands import _save_auto_config
+
+        target = self._patch_target(monkeypatch, tmp_path)
+        target.write_text("skills: not-a-mapping\n", encoding="utf-8")
+
+        _save_auto_config({"skill_id": "s1", "priority": 70, "enabled": True})
+
+        import yaml
+
+        data = yaml.safe_load(target.read_text(encoding="utf-8"))
+        assert data["skills"]["s1"]["skill_id"] == "s1"
+
     @patch("vibesop.cli.commands.skill_commands.questionary")
     @patch("vibesop.cli.commands.skill_commands._detect_and_load_skill")
     @patch("vibesop.security.skill_auditor.SkillSecurityAuditor")

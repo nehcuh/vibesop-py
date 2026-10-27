@@ -767,8 +767,23 @@ class SkillAutoConfigurator:
 
         config_data["skills"][config.skill_id]["metadata"] = metadata
 
-        # 写入文件
+        # 写入文件 — merge, don't replace: a wholesale dump would erase every
+        # previously auto-configured skill, so the second `vibe skill add`
+        # silently destroyed the first one's config (and CLI test runs
+        # clobbered the repository's own file) — 2026-10-27 adversarial
+        # panel, lane C.
         config_file = output_dir / "auto-config.yaml"
+        if config_file.exists():
+            try:
+                with config_file.open(encoding="utf-8") as f:
+                    existing = yaml.safe_load(f) or {}
+                if isinstance(existing, dict) and isinstance(existing.get("skills"), dict):
+                    existing["skills"].update(config_data["skills"])
+                    config_data = existing
+            except (OSError, yaml.YAMLError):
+                # Unreadable OR unparsable (truncated/corrupt) file: nothing
+                # to merge — overwrite is the recovery, not data loss.
+                self.logger.warning("Could not merge existing %s; overwriting", config_file)
         with config_file.open("w", encoding="utf-8") as f:
             yaml.dump(config_data, f, default_flow_style=False)
 

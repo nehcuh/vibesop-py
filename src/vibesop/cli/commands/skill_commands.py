@@ -1095,7 +1095,11 @@ def _display_and_save_config(config: Any) -> None:
     console.print(f"[dim]  Confidence: {config.confidence:.1%}[/dim]")
 
     configurator = SkillAutoConfigurator()
-    output_dir = Path(".vibe") / "skills"
+    from vibesop.core.skills.config_manager import SkillConfigManager
+
+    # Canonical path (redirectable in tests) instead of a CWD literal,
+    # which let test runs rewrite the repository's own auto-config.yaml.
+    output_dir = Path(SkillConfigManager.SKILL_CONFIG_FILE).parent
     config_file = configurator.save_config(config, output_dir)
     console.print(f"[green]✓ Configuration saved:[/green] {config_file}")
 
@@ -1150,13 +1154,30 @@ def _save_auto_config(config: dict[str, Any]) -> None:
     """Save auto-generated skill configuration to disk."""
     import yaml
 
-    config_file = Path(".vibe") / "skills" / "auto-config.yaml"
+    from vibesop.core.skills.config_manager import SkillConfigManager
 
+    # Reuse the canonical config path instead of duplicating the literal:
+    # a hardcoded CWD-relative path bypasses SkillConfigManager redirection,
+    # so CLI tests (skill add flow) rewrote the repository's own
+    # .vibe/skills/auto-config.yaml (2026-10-27 adversarial panel, lane C).
+    config_file = Path(SkillConfigManager.SKILL_CONFIG_FILE)
+
+    # Merge, don't replace (2026-10-27 panel lane C). An existing-but-empty
+    # file is the natural product of a truncated unsynchronized write, so it
+    # must fall back to a fresh skeleton instead of crashing on the missing
+    # "skills" key (kimi re-review lane 4: KeyError); a corrupt file has
+    # nothing worth preserving — overwrite is the recovery.
+    existing: dict[str, Any] = {}
     if config_file.exists():
-        with config_file.open(encoding="utf-8") as f:
-            existing = yaml.safe_load(f) or {}
-    else:
-        existing = {"skills": {}}
+        try:
+            with config_file.open(encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+            if isinstance(loaded, dict):
+                existing = loaded
+        except (OSError, yaml.YAMLError):
+            existing = {}
+    if not isinstance(existing.get("skills"), dict):
+        existing["skills"] = {}
 
     skill_id = config["skill_id"]
     existing["skills"][skill_id] = config
