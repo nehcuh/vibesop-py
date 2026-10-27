@@ -5,6 +5,7 @@ This module provides the main SecurityScanner class that uses
 pattern matching and heuristic analysis to detect security threats.
 """
 
+import re
 from pathlib import Path
 from typing import Protocol
 
@@ -100,6 +101,68 @@ class DefaultHeuristicAnalyzer:
     that may not match exact regex patterns.
     """
 
+    #: Override verbs counted as substring matches (preserves the original
+    #: rule's semantics: "ignored", "please-ignore", "Gitignore-the-guard"'s
+    #: bare form, CJK-adjacent "请ignore" all count as trigger verbs).
+    _OVERRIDE_VERB_RE = re.compile(r"ignore|override|disregard", re.IGNORECASE)
+
+    #: Git mechanics compounds whose embedded "ignore" is a filename /
+    #: subcommand reference, not an override verb. `check-` must start at a
+    #: word boundary so "doublecheck-ignore" is never exempt.
+    _GIT_COMPOUND_RE = re.compile(r"\.gitignore|\bcheck-ignore", re.IGNORECASE)
+
+    #: Object-phrase openers. A compound followed by one of these is being
+    #: used as an imperative verb with a prose object (".gitignore the
+    #: guard", "check-ignore the rules"), so it loses the exemption.
+    #: Closed set — quantifier openers (every/each/some/such/whatever) are
+    #: included because they read as prose and never as pathspec names, but
+    #: the enumeration is inherently incomplete: objects like proper nouns
+    #: or adjectives ("check-ignore old paths" = a plausible pathspec)
+    #: stay exempt. That is part of the accepted residual.
+    _OBJECT_OPENERS = frozenset(
+        {
+            "the",
+            "a",
+            "an",
+            "your",
+            "all",
+            "any",
+            "prior",
+            "previous",
+            "above",
+            "preceding",
+            "existing",
+            "this",
+            "that",
+            "these",
+            "those",
+            "my",
+            "our",
+            "their",
+            "his",
+            "her",
+            "its",
+            "every",
+            "each",
+            "some",
+            "such",
+            "whatever",
+        }
+    )
+
+    #: Leading punctuation tolerated before an object opener ("(the guard)",
+    #: '"the policy"', ",the rules") — brackets/quotes/comma are prose
+    #: delimiters, not filename characters, so the word behind them still
+    #: classifies the compound as imperative. The letters must DIRECTLY
+    #: follow the punctuation: space-free ",the guard" is obfuscation
+    #: shaped and classified imperative, while ", the guard" — ordinary
+    #: apposition in benign prose — never matches and keeps the reference
+    #: reading (2026-10-27 kimi closure round, verified by probe).
+    _OPENER_PREFIX_RE = re.compile(r"[\(\[\"'“‘,;:]*([A-Za-z]+)")
+
+    _SHORT_FLAG_RE = re.compile(r"^-[a-zA-Z]\b")
+    _LONG_FLAG_RE = re.compile(r"^--[a-zA-Z0-9_]+$")
+
     def __init__(self) -> None:
         """Initialize the heuristic analyzer."""
         self._suspicious_keywords = [
@@ -115,11 +178,11 @@ class DefaultHeuristicAnalyzer:
         ]
 
         self._suspicious_structures = [
-            # Repeated attempts to override instructions
-            (
-                r"(ignore|override|disregard).{0,50}(ignore|override|disregard)",
-                ThreatType.INSTRUCTION_INJECTION,
-            ),
+            # NOTE: the repeated-override-instruction rule
+            # ``(ignore|override|disregard).{0,50}(ignore|override|disregard)``
+            # moved to _detect_repeated_override (2026-10-27) so benign Git
+            # references ("git check-ignore -q x", ".gitignore") stop being
+            # counted as override verbs while every attack form stays flagged.
             # Mixed encoding attempts
             (r"[a-zA-Z]{3,}[0-9]{3,}[a-zA-Z]{3,}", ThreatType.INDIRECT_INJECTION),
             # NOTE: no bare "\n{5,}" (excessive line breaks) rule. Blank-line
@@ -130,6 +193,85 @@ class DefaultHeuristicAnalyzer:
             # section rendered 4 blank lines).
         ]
 
+    def _reference_spans(self, text: str) -> list[tuple[int, int]]:
+        """Return spans of Git compounds used as references, not verbs.
+
+        A compound is a reference when it does not head an object phrase:
+        directly-attached hyphens (".gitignore-the-guard") and pseudo-flags
+        ("-the-guard") are opaque identifiers, while real flags ("-q",
+        "--quiet") and non-opener continuations ("and", "entries", end of
+        line) keep the reference reading. After a *real* flag the next word
+        is still classified, so "check-ignore -q the guard" loses the
+        exemption exactly like its flagless twin. Whitespace of any kind
+        (tab, NBSP) separates prose words the same as a space.
+        """
+        spans: list[tuple[int, int]] = []
+        for match in self._GIT_COMPOUND_RE.finditer(text):
+            start, end = match.span()
+            if end < len(text) and text[end] == "-":
+                continue
+            j = end
+            while j < len(text) and text[j].isspace():
+                j += 1
+            nxt = text[j:]
+            if nxt.startswith("-"):
+                token = re.match(r"\S+", nxt)
+                if token and not (
+                    self._SHORT_FLAG_RE.match(token.group(0))
+                    or self._LONG_FLAG_RE.match(token.group(0))
+                ):
+                    continue
+                # Real flag: skip it and classify the word after it.
+                nxt = text[j + (token.end() if token else 0) :].lstrip()
+            word = self._OPENER_PREFIX_RE.match(nxt)
+            if word and word.group(1).lower() in self._OBJECT_OPENERS:
+                continue
+            spans.append((start, end))
+        return spans
+
+    def _detect_repeated_override(self, text: str) -> Threat | None:
+        """Detect repeated imperative override verbs.
+
+        Threat model: the doubled-verb pattern signals *imperative* override
+        language aimed at the agent. "ignore" embedded in a Git compound
+        (".gitignore" filename, "check-ignore" subcommand) is a mechanics
+        reference, not an imperative — but only while it stays in reference
+        position. A pair is suppressed only when BOTH trigger words are
+        reference-position compounds; any real verb on either side keeps the
+        pair flagged (so ".gitignore prior rules and override the guard"
+        still fires). Residual, accepted: exemption is positional (compound
+        not followed by an opener from a closed set — see _OBJECT_OPENERS),
+        so imperative forms whose object is not enumerable as an opener
+        (proper-noun/adjective objects, e.g. "check-ignore old paths") stay
+        exempt; well-formed "git check-ignore <path>" usage carries no
+        imperative semantics and is indistinguishable from them. The mirror
+        image also holds: a bare "ignore" used as a plain noun ("the ignore
+        file") can never be position-classified (only compounds can), so it
+        keeps any nearby pair flagged — conservative by the same design.
+        """
+        verbs = [m.span() for m in self._OVERRIDE_VERB_RE.finditer(text)]
+        spans = self._reference_spans(text)
+        for i in range(len(verbs)):
+            for j in range(i + 1, len(verbs)):
+                gap = text[verbs[i][1] : verbs[j][0]]
+                if len(gap) > 50 or "\n" in gap:
+                    continue
+                both_references = all(
+                    any(s <= v[0] and v[1] <= e for s, e in spans) for v in (verbs[i], verbs[j])
+                )
+                if not both_references:
+                    return Threat(
+                        type=ThreatType.INSTRUCTION_INJECTION,
+                        description=(
+                            "Suspicious structure detected: repeated override "
+                            "directives (ignore/override/disregard)"
+                        ),
+                        matched_text=text[verbs[i][0] : verbs[j][1]][:100],
+                        confidence=0.6,
+                        risk_level=RiskLevel.MEDIUM,
+                    )
+        return None
+
     def analyze(self, text: str) -> list[Threat]:
         """Analyze text for suspicious patterns.
 
@@ -139,8 +281,6 @@ class DefaultHeuristicAnalyzer:
         Returns:
             List of threats detected
         """
-        import re
-
         threats = []
         text_lower = text.lower()
 
@@ -160,6 +300,12 @@ class DefaultHeuristicAnalyzer:
                     risk_level=RiskLevel.MEDIUM,
                 )
             )
+
+        # Repeated override directives (Git-compound aware; see threat model
+        # on _detect_repeated_override)
+        override_threat = self._detect_repeated_override(text)
+        if override_threat is not None:
+            threats.append(override_threat)
 
         # Check for suspicious structures
         for pattern, threat_type in self._suspicious_structures:
