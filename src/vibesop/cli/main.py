@@ -827,6 +827,8 @@ def route(
     # Apply workflow pattern and verification hints
     if pattern:
         context.strategy_hint = f"workflow_pattern:{pattern}"
+    elif strategy == "sequential":
+        context.strategy_hint = "workflow_pattern:sequential"
     if verify:
         context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
 
@@ -1260,6 +1262,8 @@ def orchestrate(
 
     if pattern:
         context.strategy_hint = f"workflow_pattern:{pattern}"
+    elif strategy == "sequential":
+        context.strategy_hint = "workflow_pattern:sequential"
     if verify:
         context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
 

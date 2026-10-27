@@ -228,6 +228,22 @@ class TestOrchestrateCommand:
         result = runner.invoke(app, ["orchestrate", "debug this"])
         assert result.exit_code == 0
 
+    def test_orchestrate_sequential_strategy_reaches_router(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[str] = []
+
+        def capture(self: Any, query: str, context: Any = None) -> OrchestrationResult:
+            seen.append(context.strategy_hint)
+            return OrchestrationResult(mode=OrchestrationMode.SINGLE, original_query=query)
+
+        monkeypatch.setattr(_FakeOrchestrateRouter, "orchestrate", capture)
+        result = runner.invoke(
+            app, ["orchestrate", "review then publish", "--strategy", "sequential"]
+        )
+        assert result.exit_code == 0
+        assert seen == ["workflow_pattern:sequential"]
+
     def test_orchestrate_json_output(self) -> None:
         """JSON output from orchestrate should be valid."""
         result = runner.invoke(app, ["orchestrate", "debug", "--json"])

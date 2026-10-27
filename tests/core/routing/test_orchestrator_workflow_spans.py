@@ -202,6 +202,35 @@ class TestOrchestratorPhaseSpans:
     """orchestrate() must emit one ``workflow_node`` span per phase, providing
     the phase-boundary data the dashboard's Orchestration Map visualises."""
 
+    def test_explicit_sequential_hint_reaches_real_builder(
+        self,
+        fresh_tracer: ObservabilityTracer,
+        stubbed_router: UnifiedRouter,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from vibesop.core.matching import RoutingContext
+        from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+        from vibesop.core.orchestration.plan_builder import PlanBuilder
+        from vibesop.core.orchestration.task_decomposer import SubTask
+
+        class Decomposer:
+            def decompose(self, query: str, skills: Any = None) -> list[SubTask]:
+                return [SubTask(intent=f"task-{i}", query=f"task {i}") for i in range(3)]
+
+        route = RoutingResult(primary=SkillRoute(skill_id="example", layer=RoutingLayer.KEYWORD))
+        monkeypatch.setattr(stubbed_router, "_single_skill_route", lambda *a, **kw: route)
+        monkeypatch.setattr(stubbed_router, "_get_task_decomposer", Decomposer)
+        monkeypatch.setattr(
+            stubbed_router, "_get_plan_builder", lambda: PlanBuilder(stubbed_router)
+        )
+        context = RoutingContext(strategy_hint="workflow_pattern:sequential verify:standard")
+        plan = stubbed_router.orchestrate("review, fix and release", context=context).execution_plan
+        assert plan is not None
+        assert plan.execution_mode == ExecutionMode.SEQUENTIAL
+        assert plan.steps[1].dependencies == [plan.steps[0].step_id]
+        assert plan.steps[2].dependencies == [plan.steps[1].step_id]
+        assert plan.steps[-1].is_verification_step
+
     def test_multi_intent_emits_all_phase_spans(
         self,
         fresh_tracer: ObservabilityTracer,

@@ -277,10 +277,10 @@ class Orchestrator:
             classification = classifier.classify(query, sub_tasks)
 
             # Check for explicit overrides from CLI (e.g. --pattern fan_out --verify)
+            hint_tokens: dict[str, str] = {}
             if context is not None:
                 hint = getattr(context, "strategy_hint", None) or ""
                 # Parse space-separated key:value pairs from strategy_hint
-                hint_tokens = {}
                 for token in hint.split():
                     if ":" in token:
                         k, v = token.split(":", 1)
@@ -328,6 +328,8 @@ class Orchestrator:
             # the interceptor decided MULTI_AGENT_SQUAD. Without this passthrough,
             # the analysis attached to RoutingContext.metadata is silently dropped.
             plan_metadata: dict[str, Any] = dict(getattr(classification, "metadata", None) or {})
+            if hint_tokens.get("workflow_pattern") == "sequential":
+                plan_metadata["_explicit_sequential"] = True
             effective_pattern = classification.pattern
             if context is not None:
                 ctx_metadata = getattr(context, "metadata", None) or {}

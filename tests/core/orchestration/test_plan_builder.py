@@ -122,6 +122,17 @@ class TestPlanBuilder:
         assert plan.detected_intents == ["architectural_analysis", "code_review"]
         assert plan.status.value == "pending"
 
+    def test_explicit_sequential_override_chains_steps(self) -> None:
+        router = FakeRouter(default=self._make_skill_route("generic"))
+        tasks = [SubTask(intent=str(i), query=f"task {i}") for i in range(3)]
+        plan = PlanBuilder(router).build_plan(
+            "review, fix and publish", tasks, metadata={"_explicit_sequential": True}
+        )
+        assert plan.execution_mode == ExecutionMode.SEQUENTIAL
+        assert plan.steps[1].dependencies == [plan.steps[0].step_id]
+        assert plan.steps[2].dependencies == [plan.steps[1].step_id]
+        assert not plan.steps[1].can_parallel and not plan.steps[2].can_parallel
+
     def test_build_parallel_plan_with_keywords(self) -> None:
         default_route = self._make_skill_route("generic")
         router = FakeRouter(default=default_route)
@@ -173,7 +184,7 @@ class TestPlanBuilder:
         assert len(plan.steps) == 1
         assert plan.steps[0].skill_id == "architect"
 
-    def test_no_match_step_skipped(self) -> None:
+    def test_no_match_step_is_retained(self) -> None:
         router = FakeRouter({})  # No matching route
         builder = PlanBuilder(router)
 
@@ -181,8 +192,17 @@ class TestPlanBuilder:
             "something obscure", [SubTask(intent="unknown", query="something obscure")]
         )
 
-        assert len(plan.steps) == 0
-        assert plan.detected_intents == []
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "fallback-llm"
+        assert plan.detected_intents == ["unknown"]
+
+    def test_management_only_match_is_retained_as_unresolved(self) -> None:
+        router = FakeRouter(default=self._make_skill_route("builtin/slash-orchestrate"))
+        plan = PlanBuilder(router).build_plan(
+            "release", [SubTask(intent="release", query="release")]
+        )
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "fallback-llm"
 
     def test_plan_steps_have_unique_ids(self) -> None:
         default_route = self._make_skill_route("generic")
@@ -282,6 +302,32 @@ class TestPlanBuilder:
         assert len(plan.steps) == 1
         # Should use the routed skill, not "null"
         assert plan.steps[0].skill_id == "routed_skill"
+
+    def test_preassigned_fallback_sentinel_is_routed_again(self) -> None:
+        router = FakeRouter(default=self._make_skill_route("real-skill"))
+        plan = PlanBuilder(router).build_plan(
+            "review and release",
+            [SubTask(intent="release", query="prepare release", skill_id="fallback-llm")],
+        )
+        assert plan.steps[0].skill_id == "real-skill"
+        assert router._calls
+
+    def test_preassigned_fallback_is_retained_when_reroute_has_no_match(self) -> None:
+        router = FakeRouter()
+        plan = PlanBuilder(router).build_plan(
+            "review and release",
+            [SubTask(intent="release", query="prepare release", skill_id="fallback-llm")],
+        )
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "fallback-llm"
+
+    def test_preassigned_fallback_is_retained_when_router_has_no_route_method(self) -> None:
+        plan = PlanBuilder(object()).build_plan(
+            "review and release",
+            [SubTask(intent="release", query="prepare release", skill_id="fallback-llm")],
+        )
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "fallback-llm"
 
     def test_capability_match_exact(self) -> None:
         """When task_type='analysis', prefer architect over review."""

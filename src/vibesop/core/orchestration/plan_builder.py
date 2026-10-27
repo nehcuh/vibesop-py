@@ -15,6 +15,8 @@ from vibesop.core.models import (
     ExecutionStep,
     PlanStatus,
     RoutingLayer,
+    RoutingResult,
+    SkillRoute,
     StepStatus,
     TrustLevel,
     WorkflowPattern,
@@ -308,6 +310,8 @@ class PlanBuilder:
         execution_mode = self._detect_execution_mode(original_query, sub_tasks)
         # Override mode based on workflow pattern
         execution_mode = self._pattern_to_execution_mode(workflow_pattern, execution_mode)
+        if metadata and metadata.get("_explicit_sequential") is True:
+            execution_mode = ExecutionMode.SEQUENTIAL
 
         steps: list[ExecutionStep] = []
         detected_intents: list[str] = []
@@ -332,7 +336,7 @@ class PlanBuilder:
             pre_assigned = getattr(sub_task, "skill_id", None)
             if (
                 pre_assigned
-                and pre_assigned != "null"
+                and pre_assigned not in ("null", "fallback-llm")
                 and pre_assigned not in _MANAGEMENT_SKILL_IDS
                 and pre_assigned not in disabled_ids
             ):
@@ -348,17 +352,21 @@ class PlanBuilder:
                 if route_method is None:
                     route_method = getattr(self._router, "route", None)
                 if route_method is None:
-                    logger.warning("Router has no route method, skipping sub-task %d", i)
-                    continue
-                route_result = route_method(contextualized_query, context=sub_context)
+                    logger.warning("Router has no route method for sub-task %d", i)
+                    route_result = RoutingResult(
+                        primary=SkillRoute(skill_id="fallback-llm", layer=RoutingLayer.FALLBACK_LLM)
+                    )
+                else:
+                    route_result = route_method(contextualized_query, context=sub_context)
 
-                if route_result.primary is None:
+                primary = route_result.primary
+                if primary is None:
                     logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
-                    continue
+                    # An unresolved step must remain visible for the handoff gate.
+                    primary = SkillRoute(skill_id="fallback-llm", layer=RoutingLayer.FALLBACK_LLM)
 
                 is_fallback = (
-                    route_result.primary.layer == RoutingLayer.FALLBACK_LLM
-                    or route_result.primary.skill_id == "fallback-llm"
+                    primary.layer == RoutingLayer.FALLBACK_LLM or primary.skill_id == "fallback-llm"
                 )
                 if is_fallback:
                     logger.warning(
@@ -367,15 +375,15 @@ class PlanBuilder:
                         sub_task.query[:50],
                     )
 
-                if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE and not is_fallback:
+                if primary.confidence < self.MIN_STEP_CONFIDENCE and not is_fallback:
                     logger.warning(
                         "Low confidence (%s) for sub-task %d, using anyway",
-                        route_result.primary.confidence,
+                        primary.confidence,
                         i,
                     )
 
-                skill_id = route_result.primary.skill_id
-                confidence = route_result.primary.confidence
+                skill_id = primary.skill_id
+                confidence = primary.confidence
                 alternatives = getattr(route_result, "alternatives", [])
 
                 # Never assign VibeSOP management tools (slash-*) to sub-tasks.
@@ -395,11 +403,12 @@ class PlanBuilder:
                     else:
                         logger.warning(
                             "Sub-task %d: management skill '%s' matched but no "
-                            "alternatives available — skipping step",
+                            "alternatives available — preserving unresolved step",
                             i,
                             skill_id,
                         )
-                        continue
+                        skill_id = "fallback-llm"
+                        confidence = 0.0
 
                 # Apply capability matching boost when sub-task has a task_type
                 task_type = getattr(sub_task, "task_type", None) or ""

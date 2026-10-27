@@ -121,6 +121,8 @@ class TaskDecomposer:
             "Rules:\n"
             "- Max 5 sub-tasks\n"
             "- Each query must be self-contained (understandable without context)\n"
+            "- Preserve operating preferences and constraints in relevant task queries; "
+            "do not turn a preference alone into a separate task\n"
             "- Map each sub-task to the BEST matching skill from the available skills list\n"
             "- If the request is a single task, return only 1 task\n"
             "- Output ONLY the JSON, no markdown, no explanation"

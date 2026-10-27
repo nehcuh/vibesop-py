@@ -12,6 +12,44 @@ from vibesop.core.models import ExecutionPlan, ExecutionStep, OrchestrationMode,
 from vibesop.core.routing.lightweight_api import LightweightRouter
 
 
+def test_rerouted_missing_step_blocks_manifest_without_mutating_shared_result(tmp_path):
+    from vibesop.core.models import RoutingResult
+    from vibesop.core.orchestration.plan_builder import PlanBuilder
+    from vibesop.core.orchestration.task_decomposer import SubTask
+
+    shared = RoutingResult(primary=None)
+
+    class Router:
+        calls = 0
+
+        def _single_skill_route(self, query, context=None):
+            self.calls += 1
+            return shared
+
+    router = Router()
+    plan = PlanBuilder(router).build_plan(
+        "review then release",
+        [SubTask(intent="release", query="publish", skill_id="fallback-llm")],
+    )
+    assert router.calls == 1
+    assert shared.primary is None
+    # The manifest must block even when no injector has run before it.
+    with pytest.raises(ValueError, match="Execution plan blocked"):
+        PlanExecutor(tmp_path).build_manifest(plan)
+    assert plan.metadata["execution_ready"] is False
+    guide = PlanExecutor(tmp_path).build_guide(plan)
+    assert guide.step_markers == []
+    assert "Do not execute" in guide.prompt
+    assert len(plan.metadata["blocked_steps"]) == 1
+    result = SkillInjector(tmp_path).inject_execution_plan(plan, PlatformType.GENERIC)
+    assert result.notice_only is True
+    assert plan.metadata["execution_ready"] is False
+    assert plan.metadata["blocked_steps"][0]["reason"] == "unresolved skill"
+    assert len(plan.metadata["blocked_steps"]) == 1
+    with pytest.raises(ValueError, match="Execution plan blocked"):
+        PlanExecutor(tmp_path).build_manifest(plan)
+
+
 def make_plan(tmp_path):
     steps = []
     for number, sid in enumerate(("handoff-implementation", "handoff-verification"), 1):

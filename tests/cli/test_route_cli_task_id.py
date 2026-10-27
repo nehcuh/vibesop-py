@@ -430,6 +430,30 @@ class TestRouteCliFallbackSentinel:
     @patch("vibesop.agent.runtime.AgentRuntime")
     @patch("vibesop.agent.runtime.IntentInterceptor")
     @patch("vibesop.cli.main.sys.stdin")
+    def test_sequential_strategy_is_passed_to_plan_builder(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        mock_stdin.isatty.return_value = False
+        query = "review then publish"
+        mock_router.orchestrate.return_value = self._orchestrated_result(["real-skill"])
+        mock_runtime_cls.return_value.router._router = mock_router
+        mock_interceptor_cls.return_value = _make_interceptor(
+            query, mode=InterceptionMode.ORCHESTRATE
+        )
+        result = cli_runner.invoke(app, ["route", "--json", "--strategy", "sequential", query])
+        assert result.exit_code == 0, result.output
+        context = mock_router.orchestrate.call_args.kwargs["context"]
+        assert context.strategy_hint == "workflow_pattern:sequential"
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
     def test_all_fallback_orchestrated_writes_miss(
         self,
         mock_stdin: MagicMock,
