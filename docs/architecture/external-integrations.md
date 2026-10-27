@@ -1,6 +1,6 @@
 # External Tool Integration
 
-> **Version**: 8.6.1
+> **Version**: 8.7.0
 > **Last Updated**: 2026-04-18
 
 ## Overview

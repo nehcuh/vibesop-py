@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.7.0] — 2026-10-27
+
+Minor: two new builtin skills ship in the wheel (`worktree-convergence`,
+`release-version`), SKILL.md routing hints may nest under `metadata:`, and
+`--strategy sequential` becomes an explicit orchestration pattern. The
+release also lands the three-round adversarial audit of the 2026-10-27
+security/routing handoff
+(docs/vibesop-security-routing-handoff-20261027.md). 8.6.1 was versioned but
+never released; 8.6.0 remains the previous public release.
+
+### Added
+
+- `worktree-convergence` builtin skill (with registry entry): converge worktrees and branches while preserving unknown ownership, other active tasks, detached HEADs, and uncommitted/untracked data; deletion requires salvage and recoverability verification, never force-deletion.
+- `release-version` builtin skill (with registry entry): prepare and publish a release from the target repository's own instructions — version files, changelog, gates, tag and asset verification.
+- SKILL.md routing hints (tags/keywords/triggers) may nest under `metadata:` (Codex-compatible front matter), with top-level VibeSOP fields keeping precedence including empty lists. Candidates cache schema bumped 6 → 7 so a v6 cache cannot serve stale keyword sets for identical file bytes.
+- `--strategy sequential` on `route`/`orchestrate` propagates an explicit workflow pattern through `strategy_hint` and forces `ExecutionMode.SEQUENTIAL`; plan steps the router cannot resolve stay visible as `fallback-llm` routes for the availability handoff gate instead of being silently dropped.
+
+### Fixed
+
+- Security scanner no longer flags benign Git prose (`git check-ignore`, `.gitignore`) as instruction injection: the repeated-override rule now enumerates trigger pairs and suppresses a pair only when BOTH triggers are reference-position Git compounds (positional classification with an opener closed-set, real-flag skip, whitespace-of-any-kind handling, and leading bracket/quote punctuation tolerance). Every attack counter-example stays flagged — including both verbs costumed as compounds, separator/flag costumes, and space-free punctuation obfuscation; corpus grown to 23 attack / 5 benign cases. Bare nouns ("the ignore file") and spaced apposition behave conservatively by design.
+- `KeywordMatcher.warm_up` builds its IDF table only when the anchor floor is reachable: on N=2..7 pools IDF normalization caps even df=1 tokens below `keyword_anchor_idf_min`, which had killed the keyword layer exactly on the realistic two-candidate pool (fallback-llm or Levenshtein-only routing). N ≥ 8 pool behavior is unchanged.
+- `vibe skill add` no longer rewrites the repository's own `.vibe/skills/auto-config.yaml`: call sites resolve the canonical config path instead of CWD literals, config writes merge key-level instead of replacing the whole file, and empty or corrupt YAML recovers instead of raising `KeyError` or discarding sibling entries. The test suite pins `SKILL_CONFIG_FILE` for the whole session so atexit usage flushes can never resolve back into the repository.
+
+### Changed
+
+- Hermetic routing baseline refreshed (fingerprint-only change; entries unchanged — 55 top-1 ok / 4 pre-existing fails).
+
 ## [8.6.1] — 2026-10-26
 
 Patch: the two doc-consistency checkers become required CI gates with

@@ -1,9 +1,9 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-10-09
-> **Current source / public package**: 8.6.0（2026-10-22；发行依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-> **Latest public release**: 8.6.0
-> **Current release**: 8.6.0 routing fusion, review skills, and report-only `vibe observe consumption`；8.5.0 观测器仍在
+> **Last Updated**: 2026-10-27
+> **Current source / public package**: 8.7.0（2026-10-27；发行依据见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
+> **Latest public release**: 8.7.0
+> **Current release**: 8.7.0 worktree-convergence 与 release-version 内置技能、`metadata:` 嵌套路由提示、显式 sequential 编排；8.6.0 routing fusion 仍在
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -59,7 +59,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[Project Context](../PROJECT_CONTEXT.md)** — Project background, goals, and scope（根目录，持续更新）
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
-- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.6.0；8.5.0 online routing-evidence observer remains, next-optimization order A–E（A 已实现）
+- **[Roadmap](ROADMAP.md)** — Current direction: source/package 8.7.0；8.5.0 online routing-evidence observer remains, next-optimization order A–E（A 已实现）
 - **[Historical roadmap through 8.3](archive/roadmap-through-8.3.md)** — Frozen 804-line v4–v8 / W1–W2 narrative
 - **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
 - **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
@@ -192,8 +192,8 @@ These files remain in the project root for discoverability and tool integration:
 
 | Item | Value |
 |--------|-------|
-| **Source / public package version** | 8.6.1（2026-10-26） |
-| **Public PyPI / GitHub Release** | 8.6.1（tag `v8.6.1` 的 Release workflow，2026-10-26） |
+| **Source / public package version** | 8.7.0（2026-10-27） |
+| **Public PyPI / GitHub Release** | 8.7.0（tag `v8.7.0` 的 Release workflow，2026-10-27） |
 | **CI coverage floor** | `--cov-fail-under=73` (policy, not a freshly counted suite in this index) |
 | **Skills Supported** | 22 builtin + 43 community via packs (mattpocock + superpowers; omx/gstack optional) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
