@@ -437,6 +437,9 @@ class TestSkillInjector:
 
         Without the note, an empty ``skill_file`` is indistinguishable from
         the fallback-llm sentinel in the JSON a hook-injected plan carries.
+        The sentinel itself is NOT an unresolved skill: it means no skill
+        matched and the agent executes the step directly (2026-10-28 codex
+        routing block regression guard).
         """
         injector = SkillInjector(project_root=tmp_path)
         plan = {
@@ -448,8 +451,47 @@ class TestSkillInjector:
         injector.annotate_plan_dict(plan)
         assert plan["steps"][0]["skill_file"] == ""
         assert "do not guess" in plan["steps"][0]["skill_file_note"]
-        assert "unresolved skill" in plan["steps"][1]["skill_file_note"]
+        assert "execute it directly" in plan["steps"][1]["skill_file_note"]
+        assert plan["metadata"]["blocked_steps"] == [
+            {"step_number": 1, "skill_id": "ghost-skill", "reason": "not found or empty"}
+        ]
+
+    def test_annotate_plan_dict_all_fallback_plan_is_execution_ready(self, tmp_path: Path) -> None:
+        """A plan whose every step is the fallback sentinel is executable."""
+        injector = SkillInjector(project_root=tmp_path)
+        plan = {
+            "steps": [
+                {"step_number": 1, "skill_id": "fallback-llm", "skill_file": ""},
+                {"step_number": 2, "skill_id": "fallback-llm", "skill_file": ""},
+            ]
+        }
+        injector.annotate_plan_dict(plan)
+        assert plan["metadata"]["execution_ready"] is True
+        assert plan["metadata"]["blocked_steps"] == []
+
+    def test_annotate_plan_dict_refuses_fallback_verifier_step(self, tmp_path: Path) -> None:
+        """Verification steps may not be fallback: an unskilled self-check is
+        not verification (plan_builder._FORBIDDEN_VERIFIER_SKILL_IDS)."""
+        injector = SkillInjector(project_root=tmp_path)
+        plan = {
+            "steps": [
+                {
+                    "step_number": 1,
+                    "skill_id": "fallback-llm",
+                    "skill_file": "",
+                    "is_verification_step": True,
+                }
+            ]
+        }
+        injector.annotate_plan_dict(plan)
         assert plan["metadata"]["execution_ready"] is False
+        assert plan["metadata"]["blocked_steps"] == [
+            {
+                "step_number": 1,
+                "skill_id": "fallback-llm",
+                "reason": "fallback verifier — verification steps require a real skill",
+            }
+        ]
 
     def test_non_skill_md_source_file_is_not_injected(self, tmp_path: Path) -> None:
         secrets = tmp_path / "secrets.env"

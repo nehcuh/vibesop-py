@@ -812,6 +812,12 @@ class OrchestrationResult(BaseModel):
         handoff, not an executable match. ``execution_ready`` is written by
         ``SkillInjector.annotate_plan_dict`` before any exit serializes or
         persists the plan (orchestrator + CLI post-process).
+
+        An all-fallback plan is execution-ready here (each step executes
+        directly, no skill), so this property says True while the
+        AgentRuntime hook path demotes all-fallback plans to a single-mode
+        miss — an intentional divergence: this contract acknowledges an
+        executable plan, the hook path answers the routing question.
         """
         if self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM:
             return True

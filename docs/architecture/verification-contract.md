@@ -72,8 +72,10 @@ ADVERSARIAL 计划末尾追加的验证步骤必须：
   fail-closed），均视为该步骤不可交付。
 - 任一步骤不可交付 → 整份计划不可执行：`metadata.execution_ready=False`；
   `blocked_steps` 给出阻断原因。原因按实现现状只分两类口径，不夸大细分：
-  - 可用性类——技能缺失与正文为空**共用** `not found or empty`，fallback/无技能为
-    `unresolved skill`；缺技能与空正文不做进一步区分。
+  - 可用性类——技能缺失与正文为空**共用** `not found or empty`；空 `skill_id` 为
+    `unresolved skill`；`fallback-llm` 哨兵步骤**不属**可用性阻断——无匹配技能的
+    普通步骤由 agent 直接执行（步骤级 FALLBACK_LLM 语义，2026-10-28 起），唯
+    验证步骤带哨兵才以 `fallback verifier` 阻断。
   - 安全类——扫描器判不安全与扫描器自身异常（fail-closed）**共用**同一个
     `unsafe content` 原因，只要求能与可用性原因区分，不把扫描器异常单列。
   同时保留全部原步骤、验证标志与来源（供诊断，不当作可执行内容）。

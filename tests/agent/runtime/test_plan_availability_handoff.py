@@ -12,7 +12,15 @@ from vibesop.core.models import ExecutionPlan, ExecutionStep, OrchestrationMode,
 from vibesop.core.routing.lightweight_api import LightweightRouter
 
 
-def test_rerouted_missing_step_blocks_manifest_without_mutating_shared_result(tmp_path):
+def test_unmatched_subtask_step_stays_executable_at_every_handoff(tmp_path):
+    """A sub-task no skill matched routes to the fallback-llm sentinel.
+
+    Step-level FALLBACK_LLM means the agent executes the step directly —
+    the same semantics as the top-level fallback layer. It must not block
+    the plan at any handoff gate (2026-10-28 codex routing block: the
+    sentinel was rendered as "restore the skill and rebuild", deadlocking
+    agents that correctly verified no such skill exists).
+    """
     from vibesop.core.models import RoutingResult
     from vibesop.core.orchestration.plan_builder import PlanBuilder
     from vibesop.core.orchestration.task_decomposer import SubTask
@@ -33,21 +41,53 @@ def test_rerouted_missing_step_blocks_manifest_without_mutating_shared_result(tm
     )
     assert router.calls == 1
     assert shared.primary is None
-    # The manifest must block even when no injector has run before it.
-    with pytest.raises(ValueError, match="Execution plan blocked"):
-        PlanExecutor(tmp_path).build_manifest(plan)
-    assert plan.metadata["execution_ready"] is False
+    assert plan.steps[0].skill_id == "fallback-llm"
+
+    manifest = PlanExecutor(tmp_path).build_manifest(plan)
+    assert plan.metadata["execution_ready"] is True
+    assert plan.metadata["blocked_steps"] == []
+    assert "直接执行" in manifest.steps[0].skill_content
     guide = PlanExecutor(tmp_path).build_guide(plan)
-    assert guide.step_markers == []
-    assert "Do not execute" in guide.prompt
-    assert len(plan.metadata["blocked_steps"]) == 1
+    assert len(guide.step_markers) == 1
+    assert "Do not execute" not in guide.prompt
+
     result = SkillInjector(tmp_path).inject_execution_plan(plan, PlatformType.GENERIC)
-    assert result.notice_only is True
-    assert plan.metadata["execution_ready"] is False
-    assert plan.metadata["blocked_steps"][0]["reason"] == "unresolved skill"
-    assert len(plan.metadata["blocked_steps"]) == 1
-    with pytest.raises(ValueError, match="Execution plan blocked"):
-        PlanExecutor(tmp_path).build_manifest(plan)
+    assert result.notice_only is False
+    assert "无匹配技能" in str(result.payload)
+    assert "Do not execute" not in str(result.payload)
+    # Repeated manifest builds stay executable (annotation is idempotent).
+    assert PlanExecutor(tmp_path).build_manifest(plan).steps[0].skill_id == "fallback-llm"
+
+
+def test_fallback_step_in_hook_payload_does_not_block_plan(tmp_path):
+    """End-to-end codex incident shape: a plan mixing a real skill step and
+    a fallback step hands off as executable through the hook JSON path."""
+    plan = make_plan(tmp_path)
+    plan.steps.append(
+        ExecutionStep(
+            step_id="s3",
+            step_number=3,
+            skill_id="fallback-llm",
+            intent="Publish",
+            input_query="publish the release notes",
+        )
+    )
+    result = AgentRuntimeResult(
+        intercepted=True,
+        mode="orchestrate",
+        plan=plan.to_dict(),
+        project_root=tmp_path,
+        router_matched=True,
+    )
+    hook = json.loads(result.to_hook_response())
+    assert "Execution plan injected" in hook["systemMessage"]
+    assert "Do not execute" not in hook["systemMessage"]
+    context = hook["hookSpecificOutput"]["additionalContext"]
+    # The hook path injects the plan JSON: the sentinel step carries an
+    # execute-directly note instead of an unresolved-skill block.
+    assert "execute it directly" in context
+    assert "restore" not in context
+    assert result.has_match is True
 
 
 def make_plan(tmp_path):
@@ -218,6 +258,26 @@ def test_minimal_cli_ready_plan_keeps_authoritative_paths(tmp_path, monkeypatch)
     assert payload["metadata"]["execution_ready"] is True
     assert "notice_only" not in payload
     assert payload["steps"][1]["skill_file"] == Path(plan.steps[1].skill_file).as_posix()
+
+
+def test_minimal_cli_all_fallback_plan_is_not_demoted(tmp_path):
+    """G-1 shape: an all-fallback plan is execution-ready (every step executes
+    directly), so the minimal formatter returns its steps instead of demoting
+    to no_match. The 8.3.1 demote targets blocked plans, and this plan is not
+    blocked."""
+
+    plan = make_plan(tmp_path)
+    for step in plan.steps:
+        step.skill_id = "fallback-llm"
+        step.skill_file = ""
+    del plan.steps[1:]  # keep one all-fallback step
+    assert plan.steps[0].skill_id == "fallback-llm"
+    SkillInjector(tmp_path).annotate_plan_skill_files(plan)
+    routed = OrchestrationResult(mode=OrchestrationMode.ORCHESTRATED, execution_plan=plan)
+    payload = LightweightRouter._format_result(routed)
+    assert payload["mode"] == "orchestrated"
+    assert "notice_only" not in payload
+    assert payload["steps"][0]["skill_id"] == "fallback-llm"
 
 
 def test_manifest_body_uses_same_source_as_annotated_path(tmp_path):

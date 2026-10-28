@@ -464,9 +464,11 @@ class TestRouteCliFallbackSentinel:
         fresh_tracer: Path,
     ) -> None:
         """All-fallback plan → span has_match=False, skill_id="",
-        top_skills absent — and since 8.3.1 the RESULT property also says
-        False: a blocked/all-fallback plan is a miss at every exit
-        (OrchestrationResult.has_match now requires execution_ready)."""
+        top_skills absent: the SPAN writes the real routing outcome (no
+        real skill matched any step). Since 2026-10-28 the plan itself is
+        executable (fallback steps are execute-directly, not blocked), so
+        the RESULT property says True — gate40's original split: result
+        carries the executable-plan contract, span the routing verdict."""
         mock_stdin.isatty.return_value = False
         orch_result = self._orchestrated_result(["fallback-llm", "fallback-llm"])
         mock_router.orchestrate.return_value = orch_result
@@ -485,9 +487,9 @@ class TestRouteCliFallbackSentinel:
         assert metadata.get("has_match") is False
         assert metadata.get("skill_id") == ""
         assert "top_skills" not in metadata
-        # 8.3.1 contract: an all-fallback (blocked) plan is a miss on the
-        # result object too, not only on the span.
-        assert orch_result.has_match is False
+        # The plan is execution-ready (all steps execute directly), so the
+        # result object hands it off as an executable orchestrated match.
+        assert orch_result.has_match is True
 
     @patch("vibesop.agent.runtime.AgentRuntime")
     @patch("vibesop.agent.runtime.IntentInterceptor")

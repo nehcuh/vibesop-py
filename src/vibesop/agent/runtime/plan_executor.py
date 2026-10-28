@@ -80,10 +80,20 @@ class PlanExecutor:
         SkillInjector(project_root=self._project_root).annotate_plan_skill_files(plan)
 
     @staticmethod
+    def _skill_id_label(skill_id: str) -> str:
+        """Display label; the fallback sentinel reads as an instruction, not
+        a skill id to look up or install."""
+        if skill_id == "fallback-llm":
+            return "无匹配技能（直接执行）"
+        return skill_id
+
+    @staticmethod
     def _skill_md_line(step: Any) -> str:
         sid = getattr(step, "skill_id", "") or ""
         path = getattr(step, "skill_file", "") or getattr(step, "skill_path", "") or ""
-        if sid in ("", "fallback-llm"):
+        if sid == "fallback-llm":
+            return "- **SKILL.md**: 无 — 本步骤无匹配技能，直接执行（不要寻找或安装技能）"
+        if not sid:
             return "- **SKILL.md**: (sentinel — do not read a guessed path)"
         if path:
             return f"- **SKILL.md**: `{path}`"
@@ -93,8 +103,10 @@ class PlanExecutor:
     def _read_skill_instruction(step: Any) -> str:
         sid = getattr(step, "skill_id", "") or ""
         path = getattr(step, "skill_file", "") or getattr(step, "skill_path", "") or ""
-        if sid in ("", "fallback-llm"):
-            return "此步骤是 fallback，不要去猜 SKILL.md 路径。"
+        if sid == "fallback-llm":
+            return "此步骤无匹配技能（fallback），请直接执行，不要去猜 SKILL.md 路径。"
+        if not sid:
+            return "此步骤缺少 skill 指派，不要去猜 SKILL.md 路径。"
         if path:
             return f"请先读取 {path} ，然后执行。不要猜 skills/{sid}/SKILL.md。"
         return f"步骤 {sid} 无可用 SKILL.md，不要猜测路径，报告后询问是否继续。"
@@ -155,6 +167,36 @@ class PlanExecutor:
         steps: list[StepManifest] = []
 
         for step in plan.steps:
+            if step.skill_id == "fallback-llm":
+                # Sentinel step: no skill matched this sub-task, the agent
+                # executes it directly — there is no file to read or scan.
+                # Annotation has already refused verifier sentinels, so a
+                # sentinel reaching this loop is a normal execute-directly
+                # step.
+                input_context = self._resolve_input_context(plan, step)
+                steps.append(
+                    StepManifest(
+                        step_number=step.step_number,
+                        skill_id=step.skill_id,
+                        skill_name="无匹配技能（直接执行）",
+                        skill_path="",
+                        skill_content=(
+                            "# 直接执行\n"
+                            "本步骤无匹配技能：由你直接执行并报告结果。"
+                            "无 SKILL.md，不要寻找、猜测或安装技能。"
+                        ),
+                        input_context=input_context,
+                        output_slot=step.output_as,
+                        completion_marker=StepManifest.completion_marker_for(step.step_number),
+                        instruction=(
+                            f"直接执行（无匹配技能）: {step.intent}\n具体查询: {step.input_query}"
+                        ),
+                        intent=step.intent,
+                        input_query=step.input_query,
+                        dependencies=step.dependencies,
+                    )
+                )
+                continue
             # Content gates (parallel to SkillInjector.inject_single_skill),
             # applied to the body ACTUALLY read here — annotation scanned at
             # handoff time, but the file can be swapped in between. Every
@@ -297,7 +339,7 @@ class PlanExecutor:
             f"\u2705 步骤 {completed_step_number} 已完成 (marker: {marker})。",
             "",
             f"下一步: 步骤 {next_step.step_number}",
-            f"- Skill: {next_step.skill_id}",
+            f"- Skill: {self._skill_id_label(next_step.skill_id)}",
             f"- 任务: {next_step.intent}",
             f"- 输入: {next_step.input_query}",
         ]
@@ -350,7 +392,11 @@ class PlanExecutor:
                 "skipped": "\u23ed\ufe0f",
             }.get(step.status.value, "\u2753")
 
-            lines.append(f"  {icon} 步骤 {step.step_number}: {step.skill_id} \u2014 {step.intent}")
+            lines.append(
+                f"  {icon} 步骤 {step.step_number}: {self._skill_id_label(step.skill_id)} "
+                "\u2014 "
+                f"{step.intent}"
+            )
 
         return "\n".join(lines)
 
@@ -388,7 +434,8 @@ class PlanExecutor:
                 "---",
                 "## 执行规则",
                 "",
-                "1. **每步必须读取 SKILL.md**: 读取该步骤列出的路径，不要猜 skills/<id>/SKILL.md",
+                "1. **每步必须读取 SKILL.md**: 读取该步骤列出的路径，不要猜 skills/<id>/SKILL.md；"
+                "标注「无匹配技能」的步骤没有也不需要 SKILL.md，直接执行即可",
                 "2. **严格按顺序**: 不要跳过步骤，不要改变顺序",
                 "3. **明确报告**: 每步完成后，必须声明"
                 + f"`<!-- {COMPLETION_MARKER_PREFIX}N] -->`"

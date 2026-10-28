@@ -690,6 +690,33 @@ class SkillInjector:
             )
             if source:
                 sources[source_key] = source
+            if sid == "fallback-llm":
+                # Step-level FALLBACK_LLM: no skill matched this sub-task and
+                # the agent performs it directly — the same semantics as the
+                # top-level fallback layer ("proceed in normal mode"). There
+                # is no file by design, so this is not an unresolved-skill
+                # failure and must not block the plan. Verification steps are
+                # the exception (plan_builder._FORBIDDEN_VERIFIER_SKILL_IDS):
+                # a verifier cannot be an unskilled self-check.
+                step["skill_file"] = ""
+                if step.get("is_verification_step"):
+                    reason = "fallback verifier — verification steps require a real skill"
+                    step["skill_file_note"] = (
+                        f"{reason}; assign a verifier skill and rebuild this plan before execution"
+                    )
+                    blocked.append(
+                        {
+                            "step_number": step.get("step_number", index),
+                            "skill_id": sid,
+                            "reason": reason,
+                        }
+                    )
+                else:
+                    step["skill_file_note"] = (
+                        "no skill matched this step — execute it directly; "
+                        "no SKILL.md exists for it and none is needed"
+                    )
+                continue
             step["skill_file"], reason = self._resolve_step_source(sid, None, source)
             if step["skill_file"]:
                 sources[source_key] = step["skill_file"]
@@ -731,7 +758,13 @@ class SkillInjector:
         the scan fails closed) is reported as ``"unsafe content"`` so blocked
         steps stay distinguishable from plain missing/empty files.
         """
-        if skill_id in ("", "fallback-llm"):
+        if skill_id == "fallback-llm":
+            # Defense in depth: annotation short-circuits the sentinel before
+            # calling this. A sentinel that reaches here was routed through a
+            # caller that bypassed the short-circuit — report it by its own
+            # name so it is never conflated with a missing real skill.
+            return "", "fallback step (no file by design)"
+        if not skill_id:
             return "", "unresolved skill"
         hinted = source_lookup(skill_id) if source_lookup is not None else None
         source = hinted or existing
@@ -795,8 +828,21 @@ class SkillInjector:
         )
 
     @staticmethod
+    def _skill_display(skill_id: str) -> str:
+        """Human-facing skill label; the fallback sentinel must read as an
+        instruction, not as a skill id to look up or install."""
+        if skill_id == "fallback-llm":
+            return "无匹配技能（本步骤直接执行）"
+        return skill_id
+
+    @staticmethod
     def _skill_md_bullet(skill_id: str, skill_file: str) -> str:
-        if skill_id in ("", "fallback-llm"):
+        if skill_id == "fallback-llm":
+            return (
+                "- SKILL.md: none — no skill matched this step; execute it "
+                "directly (do not search for or install a skill)"
+            )
+        if not skill_id:
             return "- SKILL.md: (sentinel — do not read a guessed path)"
         if skill_file:
             return f"- SKILL.md: {skill_file}"
@@ -850,7 +896,7 @@ class SkillInjector:
                 lines.extend(
                     [
                         f"## 步骤 {step.step_number}: {step.intent}",
-                        f"- 使用 skill: {step.skill_id}",
+                        f"- 使用 skill: {self._skill_display(step.skill_id)}",
                         self._skill_md_bullet(step.skill_id, step.skill_file),
                         f"- 任务: {step.input_query}",
                         f"- 输出变量: {step.output_as}",
@@ -868,7 +914,7 @@ class SkillInjector:
                         [
                             "",
                             f"### 步骤 {step.step_number}: {step.intent}",
-                            f"- 使用 skill: {step.skill_id}",
+                            f"- 使用 skill: {self._skill_display(step.skill_id)}",
                             self._skill_md_bullet(step.skill_id, step.skill_file),
                             f"- 任务: {step.input_query}",
                         ]
@@ -887,7 +933,8 @@ class SkillInjector:
                 "---",
                 "执行规则:",
                 "1. 严格按照步骤顺序执行",
-                "2. 每步读取该步骤列出的 SKILL.md 路径，不要猜 skills/<id>/SKILL.md",
+                "2. 每步读取该步骤列出的 SKILL.md 路径，不要猜 skills/<id>/SKILL.md；"
+                "标注「无匹配技能」的步骤没有也不需要 SKILL.md，直接执行即可",
                 "3. 每步完成后明确报告",
                 "4. 如果某步失败，报告错误并询问是否继续",
             ]
