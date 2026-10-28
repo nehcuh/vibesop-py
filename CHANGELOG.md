@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.7.1] — 2026-10-28
+
 ### Fixed
 
 - Plan steps routed to the `fallback-llm` sentinel no longer block the whole plan at the handoff gate. Step-level FALLBACK_LLM means "no skill matched this sub-task — the agent executes it directly" (the same semantics as the top-level fallback layer), but the 8.7.0 visibility change made the availability gate render the sentinel as "unresolved skill — restore the skill and rebuild this plan", deadlocking external agents (observed 2026-10-28 on ChatGPT Desktop/codex, which correctly verified no such skill exists and refused to proceed). Fallback steps now carry an execute-directly note, the execution manifest embeds a direct-execution instruction instead of trying to read a nonexistent SKILL.md, and `OrchestrationResult.has_match` recovers its executable-plan verdict for all-fallback plans (routing spans still record the truthful no-real-skill outcome; the AgentRuntime hook path still demotes all-fallback plans to a single-mode miss — an intentional divergence documented on the property). Verification steps with the sentinel remain blocked (a fallback verifier is an unskilled self-check); genuinely missing/unsafe skill files block exactly as before. Known residual (kimi review P1-1): hook-path plan JSON still carries the literal `skill_id: "fallback-llm"` field alongside the note — external agents that key on the field name without reading the note may still investigate the id; normalizing the payload field is deferred as a contract change.

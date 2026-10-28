@@ -1,6 +1,6 @@
 # VibeSOP Trigger System - API Documentation
 
-> **Version**: 8.7.0
+> **Version**: 8.7.1
 > **Last Updated**: 2026-04-04
 
 ---

@@ -1,6 +1,6 @@
 # VibeSOP Documentation
 
-> **Version**: 8.7.0
+> **Version**: 8.7.1
 > **Repository**: https://github.com/nehcuh/vibesop-py
 
 ---
