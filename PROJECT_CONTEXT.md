@@ -14,6 +14,12 @@ VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技�
 以下为当时的交接记录，日期相关的 Next Steps 不自动代表当前待办；涉及保留实验容器和证据的约束继续有效。
 
 <!-- handoff:start -->
+### 2026-10-28 · fallback-llm 死锁修复 + 8.7.1 发版
+
+**Workspace**：codex 路由阻断报告（/tmp/cmspark-pr794-routing-block-20261028/report.md）暴露 8.7.0 回归——未匹配子任务的 `fallback-llm` 哨兵被所有交付入口渲染成「恢复技能、重建计划」阻断，外部 agent 正确核实该技能不存在后死锁。修复 `c7d62d05`：步骤级 FALLBACK_LLM = 本步骤由 agent 直接执行（与顶层 fallback 层同构），唯验证步骤带哨兵仍以 `fallback verifier` 阻断；全量 8257 passed/32 skipped/1 failed（`.omx/` 机器本底）。kimi 对抗复审 **APPROVE**（P0 五面全净；吸收 P1-2/P2-1/P2-3/P2-4；P1-1 hook JSON 仍携带原始 `skill_id: "fallback-llm"` 字段为已知残留，入 CHANGELOG；P1-3 全 fallback 计划 hook 路径仍降级单发、编排/CLI 路径保持可执行，维持现状待用户批准）。发版 `0051ab30`：8.7.1 patch；`check_doc_versions --fix` 会重写历史块中 v 前缀版本号，历史事实一律用无 v 写法规避；Release run 首跑两 Windows job 撞已知 `test_cli_concurrent_write_baseline_does_not_clobber` WinError 5 flake（同提交 main CI 14/14 全绿）rerun 过。验收：Release run 绿，PyPI latest 8.7.1（wheel+sdist），GitHub Release 8.7.1 含双 publish attestation，wheel 实检 METADATA 8.7.1、25 个 builtin SKILL.md、修复代码在包内。
+
+**未入库**：`.pi/`、`.grok/hooks/`、pptx（交接约束，勿一并暂存）。
+
 ### 2026-10-27 · 交接审计三轮闭环 + 8.7.0 发版
 
 **Workspace**：交接审计 6 提交（`7b8a584b` 扫描器配对级位置豁免 / `5fef8ff8` SKILL.md `metadata:` 路由提示+缓存 schema v7 / `f1fda4e1` 编排显式 sequential+未解析步骤可见 / `fb5c2136` worktree-convergence+release-version 内置技能+warm_up 锚可达守卫+基线刷新 / `b70aa259` auto-config 写安全 / `d24c3d5a` 审计台账）。三轮对抗全绿：自组五路 + kimi 五路（2P1+7P2 全处置）+ kimi 终审（P2-1 被 probe 驳回、P2-2 文档更正，增量复核 CONFIRMED）。全量 8234 passed/32 skipped/1 failed——失败为 `.omx/` 未跟踪遗留产物触发 artifact-links dangling，机器本底（HEAD 干净 worktree 同测试过），见审计台账 §6.1。
