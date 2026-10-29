@@ -245,7 +245,9 @@ def _analyze_security(
                             file_path = Path(entry.path)
                             files_to_scan.append(file_path)
                             if len(files_to_scan) > 100:
-                                typer.echo("Scan exceeds the 100-file limit; narrow the target", err=True)
+                                typer.echo(
+                                    "Scan exceeds the 100-file limit; narrow the target", err=True
+                                )
                                 raise typer.Exit(1)
                         else:
                             typer.echo("Non-regular entries cannot be scanned", err=True)

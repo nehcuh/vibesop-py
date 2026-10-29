@@ -112,10 +112,17 @@ class TestAnalyzeCommand:
         py_file.write_text("eval('1')", encoding="utf-8")
 
         mock_scanner = MagicMock()
-        mock_scanner.scan_file.return_value = ScanResult(threats=[
-            Threat(type=ThreatType.INSTRUCTION_INJECTION, description="Dangerous eval",
-                   matched_text="eval", line_number=1, risk_level=RiskLevel.HIGH)
-        ])
+        mock_scanner.scan_file.return_value = ScanResult(
+            threats=[
+                Threat(
+                    type=ThreatType.INSTRUCTION_INJECTION,
+                    description="Dangerous eval",
+                    matched_text="eval",
+                    line_number=1,
+                    risk_level=RiskLevel.HIGH,
+                )
+            ]
+        )
         mock_scanner_cls.return_value = mock_scanner
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path)])

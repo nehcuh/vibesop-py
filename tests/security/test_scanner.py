@@ -18,8 +18,12 @@ class TestSecurityScanner:
 
     @pytest.mark.parametrize(
         ("encoding", "bom"),
-        [("utf-16-le", b"\xff\xfe"), ("utf-16-be", b"\xfe\xff"),
-         ("utf-32-le", b"\xff\xfe\x00\x00"), ("utf-32-be", b"\x00\x00\xfe\xff")],
+        [
+            ("utf-16-le", b"\xff\xfe"),
+            ("utf-16-be", b"\xfe\xff"),
+            ("utf-32-le", b"\xff\xfe\x00\x00"),
+            ("utf-32-be", b"\x00\x00\xfe\xff"),
+        ],
     )
     def test_scan_file_bom_encodings_detect_attack(self, tmp_path, encoding, bom) -> None:
         source = tmp_path / "skill.md"
