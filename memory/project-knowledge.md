@@ -34,6 +34,18 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### `check_doc_versions --fix` 会重写历史记录里的 v 前缀版本号，伪造发版史 (2026-10-28 S103)
+
+**Issue**: `--fix` 的改写面比它的 MISMATCH 报告面宽——不止修「当前版本声明」（`> **Version**: X.Y.Z` 头），还会把所有 pattern-5 命中（`\bv\d+\.\d+\.\d+\b`）一并改写，包括 PROJECT_CONTEXT 交接块里的历史事实（如「GitHub Release v8.7.0 含双 attestation」被改成 v8.7.1）。连续两个版本发版（8.7.0、8.7.1）各踩中一次。
+
+**Fix 姿势**: 历史事实一律写**无 `v` 前缀**的版本号（"GitHub Release 8.7.0"）；pattern-5 只匹配带 v 前缀的形态，无 v 写法对 `--fix` 免疫。发版流程中跑完 `--fix` 必须 `git diff` 逐文件核对历史块，再手动恢复真值。当前指向版本的写法（"tag `v8.7.1`"）保留 v 前缀没问题——它本来就该随版本走。
+
+### Release run 的 Windows 并发测试 flake：先 diff 同提交 CI run，再 rerun (2026-10-27/28 连续两次)
+
+**Issue**: `test_cli_concurrent_write_baseline_does_not_clobber`（tests/unit/test_check_artifact_links_baseline.py）在 Release run 的 `Test Windows (3.12/3.13)` 上以 WinError 5（rename 竞态）失败，导致 `Publish to PyPI` skipped。8.7.0 和 8.7.1 两个 Release run 首跑各中一次，**同提交的 push CI run 两次都 14/14 全绿**（含同款 Windows job）——纯 runner 竞态，不是代码问题。
+
+**处置法**（已验证两次）: ① `gh run view <release-run> --log-failed | grep -E "FAILED|WinError"` 确认是同一已知 flake；② 对照同 sha 的 push CI run 确认全绿；③ `gh run rerun <release-run> --failed` —— Publish 是 skipped 不是 failed，依赖补绿后会自动执行，无需整 run 重跑。不要为它改测试或加 reruns 配置（共享 runner 竞态本地无法复现，改动属于为通过测试调产品）。
+
 ### Rich 把 `FORCE_COLOR=0` 当成真终端，dumb TERM 再锁死宽度 80 (2026-10-22 S100)
 
 **Issue**: 代理环境常带 `FORCE_COLOR=0` 和 `TERM=dumb`。Rich 的 `is_terminal` 只要看见 `FORCE_COLOR` 这个键就强制为真，不看值是不是 `0`。`is_dumb_terminal` 在此之后直接返回 80×25，忽略测试里 `CliRunner(env={"COLUMNS": "200"})`。CLI 金串因此被折行或省略号拆开。把 `TERM` 改成 `xterm-256color` 会换成另一类失败：高亮把数字和括号包进 ANSI，子串同样对不上。

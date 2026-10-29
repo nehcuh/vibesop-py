@@ -1,6 +1,15 @@
 
 ## Current Session
 
+### S103 END (2026-10-27~28) [vibesop-py] 8.7.0 收口；codex fallback-llm 死锁修复；8.7.1 发版
+
+- **8.7.0 收口**（本会话前段，跨上下文续接）：Release run 首跑被全锁 pip-audit 拦（setuptools 83.0.0 GHSA-xmj3-9gf7-h52w）→ `15308489` 升 84.2.1 + tag 重指（未发布过，安全）→ Windows flake rerun 过。验收 executed：PyPI latest 8.7.0（wheel+sdist）、GitHub Release 双 publish attestation、wheel 实检 25 个 builtin SKILL.md。**8.6.1 从未发布**（S102 纪要「8.6.1 已发布」系中断残留失实行，已修正）。
+- **codex fallback-llm 死锁修复**：ChatGPT Desktop codex 报告未匹配子任务的 `fallback-llm` 哨兵被渲染成「恢复技能、重建计划」阻断（8.7.0 `f1fda4e1` 让未解析步骤可见后的回归面），agent 正确核实技能不存在后死锁。修复 `c7d62d05`：步骤级 FALLBACK_LLM = 本步骤 agent 直接执行（与顶层 fallback 层同构）；唯一例外——验证步骤带哨兵仍以 `fallback verifier` 阻断。全量 8257 passed/32 skipped/1 failed（`.omx/` 机器本底）；ruff/basedpyright 绿。
+- **kimi 对抗复审 APPROVE**：P0 五面全净（残留阻断消费方/verifier 绕过/TOCTOU/has_match 下游/字符串消费方）；吸收 P1-2（has_match docstring 分歧说明）、P2-1（`_skill_id_label`）、P2-3（verification-contract §6）、P2-4（LightweightRouter 全 fallback 不降级测试）。**P1-1**（hook JSON 仍带原始 `skill_id: "fallback-llm"` 字段）为已知残留入 CHANGELOG；**P1-3**（全 fallback 计划 hook 路径仍降级单发 miss，编排/CLI 路径可执行）维持现状**待用户批准**。
+- **8.7.1 标准发版**：`0051ab30`（版本面+16 文件文档头）+ tag `v8.7.1` + 交接账 `197c4b9e` 全部已 push。Release run 首跑两 Windows job 又撞已知 flake（同提交 push CI 14/14 全绿）`rerun --failed` 过。验收 executed：PyPI latest 8.7.1（wheel+sdist）、GitHub Release 四资产含双 attestation、wheel 实检 METADATA 8.7.1/25 SKILL.md/修复代码在包内。
+- Next：P1-3 待用户裁决（hook 路径 `agent_runtime.py:784-801` 是否也放行全 fallback 计划）；P1-1 字段归一化属契约变更留后续版本；Dependabot #174-180（2 high/3 low）未收。勿移动历史 tag（`v8.6.0`=`c88caada`）。
+- Recorded: yes — `--fix` 历史重写 v-free 规避 + Release run flake 处置法（连续两次验证）入 project-knowledge。
+
 ### S102 END (2026-10-26) [vibesop-py] Kimi 复审修复落盘；8.6.1 切版已 push，CI 红四根因修复待推
 
 - Kimi 多路独立对抗复审 DeepSeek 4 commits：确认 5（S1/S2 P2 + S6/S7/S8 NIT）/ 驳回 5 / 0 未证。修复落 4 commits（Makefile 覆盖口径对齐 CI、S8 链接词法根约束、两 checker 真值表测试 27 个、实验报告去重）。
@@ -691,8 +700,8 @@
 
 ## In-Flight Tasks (Cross-Session)
 
-- **8.6.1 标准发版**（active）— 版本面已切（`9a583849` 已 push）；随后 CI 红查出 4 独立根因，修复 3 提交（`2cd5d80a`/`08c898db`/`a1069631`）待用户 push（agent 推 main 受限）。next_action: push 后 `gh run watch` 盯 job 级全绿 → `git tag -a v8.6.1 -m "VibeSOP v8.6.1"` + push tag → Release workflow → 验 PyPI 8.6.1 + GitHub Release。不要 force-move `v8.6.0`（=`c88caada`）。updated: 2026-10-26
-- **Dependabot 当前队列**（done）— 开放 PR 收工时为 0。`44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic major 继续忽略，NumPy 下限维持 `>=1.26.0`。updated: 2026-10-22
+- **fallback 后续（P1-3/P1-1）**（active）— P1-3：全 fallback 计划在 hook 注入路径（`agent_runtime.py:784-801`）仍降级单发 miss，编排/CLI 路径保持可执行；有意分歧已写进 `has_match` docstring，**用户未批准前不要统一**。P1-1：hook JSON 仍带原始 `skill_id: "fallback-llm"` 字段，归一化属契约变更（CHANGELOG 有记录），留后续版本。updated: 2026-10-28
+- **Dependabot 当前队列**（active）— #174-180 未收；2026-10-28 push 时 GitHub 报 5 alerts（2 high/3 low）。历史：`44722385` 与 `34ad78a0` 已收；Anthropic major 继续忽略，NumPy 下限维持 `>=1.26.0`。next_action: 逐条评估 #174-180 是否界内，界内的按 standard-release 前置修复收口。updated: 2026-10-28
 - **S95 对抗评审修复待提交**（active）— 10-07 拉取 `86b69f43→58692f70` 五路对抗评审终裁 COMMENT（0H/2M/12L），14 条确认修复已落盘并验证（定向 241 + 波及 2042 passed、ruff/basedpyright/hermetic 全绿）。未 commit。next_action: 用户点名「提交」→ 分组 git add（排除 `.omx/`、`.grok/workflows/`、`examples/datasets/`）→ conventional commit → push → 盯 job 级 CI；`render.py` 高亮行号绑采集输出，下次渲染视频前人工复核。updated: 2026-10-08
 - **S52 深度治理主线**（done）— 已并入 main（S54 确认后删分支）。updated: 2026-09-03
 - **Dependabot 积压 9 PR**（#102-114）— 小版本可批量合;#111 openai 1.x→3.x、#110 anthropic 0.x→1.0 是 major 破坏性升级需单独评估。next_action: 批量合非 major,major 单开评估会。updated: 2026-08-28

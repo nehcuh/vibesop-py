@@ -1,16 +1,16 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-10-26 (S102 — 8.6.1 已切版已 push；CI 红四根因修复 3 提交待推，tag 未打)
+**Last Updated**: 2026-10-28 (S103 — 8.7.0 + 8.7.1 发版收口；fallback-llm 死锁修复闭环)
 
 ---
 
 ## Goals
 
-### Current Week (October 19-25, 2026)
+### Current Week (October 26 - November 1, 2026)
 
-1. **VibeSOP 8.6.0 正式发布** ✅ — tag `v8.6.0` = `c88caada`，PyPI 与 GitHub Release 均为 8.6.0。其后 `65fa9c8c` 只补哈希，不移动标签。
-2. **Dependabot 开放 PR 收口** ✅ — `44722385` 与 `34ad78a0` 收掉当时的界内锁更新。Anthropic 维持 `<1.0.0`，NumPy 下限维持 `>=1.26.0`。开放 PR 为 0。CI 39736145997 job 级全绿（含 Windows 3.12/3.13）。
-3. **8.6.1 patch 发版** — 版本面已切（`9a583849` 已 push）；CI 红查出 4 独立根因（pin 笔误/门禁暴露存量断链/baseline 漂移/filelock CVE），修复 3 提交待用户 push；tag 与 PyPI 未发。
+1. **8.7.0 + 8.7.1 发版** ✅ — 8.6.1 从未发布（中断残留已修正）；8.7.0 tag 重指 `15308489`（setuptools CVE 修复）；8.7.1 tag `v8.7.1` → `0051ab30`。PyPI latest 8.7.1，双版本 GitHub Release 均含 publish attestation。
+2. **codex fallback-llm 死锁修复** ✅ — `c7d62d05`：步骤级 FALLBACK_LLM = 直接执行（验证步骤例外）；kimi 对抗复审 APPROVE。遗留：P1-3 hook 路径降级待用户裁决、P1-1 哨兵字段归一化。
+3. **Dependabot #174-180 收口** — push 时 5 alerts（2 high/3 low）；逐条评估界内项。
 
 ### Week of October 5-11, 2026
 
@@ -150,7 +150,7 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: 8.6.1 已切版（`9a583849` 在 main）；CI 红修复 3 提交待推（`2cd5d80a`/`08c898db`/`a1069631`），tag `v8.6.1` 未打，PyPI 仍是 8.6.0（tag `c88caada`）。
+**Status**: 8.7.1 已发布（PyPI latest，tag `v8.7.1` → `0051ab30`，main HEAD `197c4b9e` 已 push）。开放项：P1-3 hook 路径降级待裁决、P1-1 哨兵字段归一化、Dependabot #174-180。
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Grok Build/Kimi/Pi/Cursor/Zed）优化
 **Coverage**: 覆盖率门禁 73%；Windows job 为 required gate（gate44）
 **Key Metrics**:
@@ -160,6 +160,10 @@
 - Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Grok Build, Kimi CLI, Pi Agent, OpenCode, Cursor (adapter exists; installer/quickstart 未接线)
+
+**Recent Changes** (2026-10-28):
+- 8.7.1 发布：codex fallback-llm 死锁修复（`c7d62d05`，kimi APPROVE）+ 标准发版。步骤级 FALLBACK_LLM 语义 = 本步骤直接执行，唯验证步骤例外。
+- 8.7.0 发布收口（setuptools CVE 修复 + tag 重指）；8.6.1 从未发布的失实行已修正。
 
 **Recent Changes** (2026-10-22):
 - 8.6.0 发布完成。Dependabot 当时的开放 PR 收成 `44722385` 与 `34ad78a0`，不移动 `v8.6.0`。
