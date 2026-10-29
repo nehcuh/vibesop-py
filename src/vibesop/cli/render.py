@@ -13,6 +13,8 @@ from rich.markup import escape as rich_escape
 from rich.panel import Panel
 from rich.table import Table
 
+from vibesop.core.models import RoutingLayer
+
 if TYPE_CHECKING:
     from vibesop.core.models import OrchestrationResult
 
@@ -58,10 +60,50 @@ def candidate_source_lookup(router: Any) -> Any:
     return lookup
 
 
+def single_skill_availability(
+    result: Any,
+    source_lookup: Any = None,
+    expected_binding: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Use the JSON admission contract for a human single-skill handoff."""
+    primary = result.primary
+    if primary is None or primary.layer == RoutingLayer.FALLBACK_LLM:
+        return {"has_match": False, "skill_file": ""}
+    payload: dict[str, Any] = {
+        "mode": "single",
+        "skill_id": primary.skill_id,
+        "has_match": True,
+    }
+    binding: dict[str, str] = {"skill_id": primary.skill_id}
+    attach_skill_file_payload(payload, result, source_lookup=source_lookup, source_binding=binding)
+    if payload.get("has_match") is True:
+        if "content_sha256" not in binding or (
+            expected_binding is not None and binding != expected_binding
+        ):
+            payload.update(
+                mode="no_match",
+                has_match=False,
+                skill_id="",
+                skill_file="",
+                demoted_skill_id=primary.skill_id,
+                notice=(
+                    "The selected skill source changed or became unavailable; "
+                    "route again before using it."
+                ),
+            )
+        else:
+            # Human-only snapshot of the file/body that passed the real scan.
+            # It is never added to the JSON handoff or treated as a later grant.
+            payload["_source_binding"] = binding
+    return payload
+
+
 def attach_skill_file_payload(
     payload: dict[str, Any],
     result: Any,
     source_lookup: Any = None,
+    *,
+    source_binding: dict[str, str] | None = None,
 ) -> None:
     """Add ``skill_file`` so CLI consumers do not guess ``core/skills/<id>``."""
     # Public export: silently ignore non-dict payloads (callers may pass Any).
@@ -111,6 +153,15 @@ def attach_skill_file_payload(
                     "empty, or failed the safety scan. Audit or reinstall the "
                     "skill — do not read or execute it."
                 )
+            elif source_binding is not None:
+                try:
+                    source_binding.update(
+                        skill_file=resolved.as_posix(),
+                        resolved_file=resolved.resolve(strict=True).as_posix(),
+                        content_sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+                    )
+                except (OSError, RuntimeError):
+                    source_binding.clear()
         if (resolved is None or unsafe) and payload.get("mode") in (None, "", "single"):
             # Single-mode demote (mirror handle_query): a matched id whose
             # SKILL.md cannot be resolved is not a match. Orchestrated
@@ -306,6 +357,7 @@ def render_no_match(result: Any, console: Console) -> None:
 def render_compact_orchestration(
     result: OrchestrationResult,
     console: Console | None = None,
+    availability: dict[str, Any] | None = None,
 ) -> None:
     if console is None:
         console = Console()
@@ -331,9 +383,15 @@ def render_compact_orchestration(
                     table.add_row("Description", f"[dim]{desc[:100]}[/dim]")
                 table.add_row("Confidence", f"{result.primary.confidence:.0%}")
                 table.add_row("Layer", result.primary.layer.value)
-                skill_md = resolve_routed_skill_md(result.primary.skill_id)
-                if skill_md is not None:
-                    table.add_row("SKILL.md", skill_md.as_posix())
+                skill_md = (
+                    availability.get("skill_file")
+                    if availability is not None
+                    else resolve_routed_skill_md(result.primary.skill_id)
+                )
+                if skill_md:
+                    table.add_row(
+                        "SKILL.md", skill_md.as_posix() if isinstance(skill_md, Path) else skill_md
+                    )
                 else:
                     table.add_row("SKILL.md", "[yellow]not found[/yellow]")
         else:

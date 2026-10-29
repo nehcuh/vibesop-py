@@ -79,6 +79,7 @@ from vibesop.cli.render import (
     attach_skill_file_payload,
     candidate_source_lookup,
     render_compact_orchestration,
+    single_skill_availability,
 )
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
@@ -1082,6 +1083,16 @@ def route(
         _print_blocked_plan_notice(result.execution_plan, console)
         raise typer.Exit(1)
 
+    # Human output and confirmation must consume the same admission as JSON.
+    # Demote before either full or compact rendering can advertise a selection.
+    single_availability = None
+    if result.mode.value == "single":
+        single_availability = single_skill_availability(
+            result, source_lookup=candidate_source_lookup(router)
+        )
+        if single_availability.get("demoted_skill_id"):
+            result.primary = None
+
     # Full transparency: show routing decision tree (default)
     already_rendered = squad_already_rendered
     if transparency_mode == "full":
@@ -1096,13 +1107,19 @@ def route(
                 query=result.original_query,
                 duration_ms=result.duration_ms,
             )
-            render_routing_report(routing_result, console=console, context=context)
+            render_routing_report(
+                routing_result,
+                console=console,
+                context=context,
+                source_lookup=candidate_source_lookup(router),
+                availability=single_availability,
+            )
         else:
             render_orchestration_result(result, console=console)
         already_rendered = True
     else:
         # Compact mode: show compact summary only
-        render_compact_orchestration(result, console=console)
+        render_compact_orchestration(result, console=console, availability=single_availability)
 
     # Show trace summary if --trace flag was used
     if trace and router.tracer.enabled:
@@ -1176,6 +1193,7 @@ def route(
         validate,
         console,
         already_rendered=already_rendered,
+        availability=single_availability,
     )
 
 
@@ -1879,15 +1897,34 @@ def _handle_single_result(
     validate: bool,
     console: Console,
     already_rendered: bool = False,
+    availability: dict[str, Any] | None = None,
 ) -> None:
+    availability = single_skill_availability(
+        result,
+        source_lookup=candidate_source_lookup(router),
+        expected_binding=availability.get("_source_binding") if availability is not None else None,
+    )
+    if availability.get("demoted_skill_id"):
+        result.primary = None
+        if not json_output:
+            console.print(
+                "[yellow]Selected skill changed or is unavailable — route again.[/yellow]"
+            )
+
     if validate:
         _render_validation(result, router, console)
 
     # Confirmation flow (unified check)
-    if _needs_confirmation(
+    if availability.get("has_match") is True and _needs_confirmation(
         result, router, yes, json_output, validate=validate, is_orchestrated=False
     ):
-        _run_confirmation_flow(result, console, already_rendered=already_rendered)
+        _run_confirmation_flow(
+            result,
+            console,
+            already_rendered=already_rendered,
+            source_lookup=candidate_source_lookup(router),
+            availability=availability,
+        )
 
     # Output rendering
     if json_output:

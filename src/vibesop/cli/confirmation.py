@@ -11,6 +11,7 @@ import questionary
 if TYPE_CHECKING:
     from rich.console import Console
 
+from vibesop.cli.render import single_skill_availability
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.core.models import RoutingResult
 
@@ -109,8 +110,20 @@ def _run_confirmation_flow(  # pyright: ignore[reportUnusedFunction]
     result: Any,
     console: Console,
     already_rendered: bool = False,
+    source_lookup: Any = None,
+    availability: dict[str, Any] | None = None,
 ) -> None:
     """Interactive confirmation: confirm / alternative / skip."""
+    availability = single_skill_availability(
+        result,
+        source_lookup=source_lookup,
+        expected_binding=availability.get("_source_binding") if availability is not None else None,
+    )
+    if availability.get("demoted_skill_id"):
+        result.primary = None
+        console.print("[yellow]Selected skill changed or is unavailable — route again.[/yellow]")
+    if availability.get("has_match") is not True:
+        return
     if not already_rendered:
         routing_result = RoutingResult(
             primary=result.primary,
@@ -120,7 +133,9 @@ def _run_confirmation_flow(  # pyright: ignore[reportUnusedFunction]
             query=result.original_query,
             duration_ms=result.duration_ms,
         )
-        render_routing_report(routing_result, console=console)
+        render_routing_report(
+            routing_result, console=console, source_lookup=source_lookup, availability=availability
+        )
 
     choices = [
         questionary.Choice("✅ Confirm selected skill", value="confirm"),
@@ -135,6 +150,21 @@ def _run_confirmation_flow(  # pyright: ignore[reportUnusedFunction]
         _choose_alternative(result)
     elif choice == "skip":
         result.primary = None
+
+    if result.primary is not None:
+        # Confirm/back retain only the exact file/body the user was shown.
+        # An explicitly chosen different alternative gets its own full scan.
+        shown = availability["_source_binding"]
+        chose_different = choice == "alternative" and result.primary.skill_id != shown["skill_id"]
+        expected = None if chose_different else shown
+        selected = single_skill_availability(
+            result, source_lookup=source_lookup, expected_binding=expected
+        )
+        if selected.get("has_match") is not True:
+            result.primary = None
+            console.print(
+                "[yellow]Selected skill changed or is unavailable — do not read or execute it.[/yellow]"
+            )
 
 
 def _choose_alternative(result: Any) -> None:

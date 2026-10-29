@@ -10,6 +10,7 @@ from typing import Any
 
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
@@ -21,6 +22,8 @@ def render_routing_report(
     result: RoutingResult,
     console: Console | None = None,
     context: Any | None = None,
+    source_lookup: Any = None,
+    availability: dict[str, Any] | None = None,
 ) -> None:
     """Render a full routing decision report to the console."""
     if console is None:
@@ -29,25 +32,45 @@ def render_routing_report(
     # Header panel
     query_text = getattr(result, "query", None) or getattr(result, "original_query", "")
     header_text = f"[bold]Query:[/bold] {query_text}\n"
-    if result.primary:
+    skill_md: str | None = None
+    if availability is not None and availability.get("demoted_skill_id"):
+        notice = (
+            availability.get("notice") or "SKILL.md is unavailable — do not read or execute it."
+        )
+        header_text += (
+            "[yellow]No match found[/yellow]\n"
+            f"[dim]Unavailable candidate:[/dim] {escape(availability['demoted_skill_id'])}\n"
+            f"[yellow]{escape(str(notice))}[/yellow]\n"
+        )
+    elif result.primary:
         if result.primary.layer == RoutingLayer.FALLBACK_LLM:
             header_text += (
                 f"[bold yellow]🤖 Fallback Mode:[/bold yellow] {result.primary.skill_id} "
                 f"(no skill matched)\n"
             )
         else:
-            header_text += (
-                f"[bold green]Selected:[/bold green] {result.primary.skill_id} "
-                f"(confidence: {result.primary.confidence:.0%})\n"
-            )
-            from vibesop.cli.render import resolve_routed_skill_md
+            from vibesop.cli.render import single_skill_availability
 
-            skill_md = resolve_routed_skill_md(result.primary.skill_id)
-            if skill_md is not None:
-                header_text += f"[dim]SKILL.md:[/dim] {skill_md.as_posix()}\n"
-            else:
+            # Use the JSON handoff's source hint, body/safety checks and demotion.
+            # Keep the original result intact as routing diagnostics only.
+            if availability is None:
+                availability = single_skill_availability(result, source_lookup=source_lookup)
+            resolved = availability.get("skill_file")
+            if availability.get("has_match") is True and isinstance(resolved, str) and resolved:
+                skill_md = resolved
                 header_text += (
-                    "[yellow]SKILL.md: not found — do not treat this as a match[/yellow]\n"
+                    f"[bold green]Selected:[/bold green] {result.primary.skill_id} "
+                    f"(confidence: {result.primary.confidence:.0%})\n"
+                    f"[dim]SKILL.md:[/dim] {escape(skill_md)}\n"
+                )
+            else:
+                notice = availability.get("notice") or (
+                    "SKILL.md is missing or unavailable — do not read or execute it."
+                )
+                header_text += (
+                    "[yellow]No match found[/yellow]\n"
+                    f"[dim]Unavailable candidate:[/dim] {escape(result.primary.skill_id)}\n"
+                    f"[yellow]{escape(str(notice))}[/yellow]\n"
                 )
     else:
         header_text += "[yellow]No match found[/yellow]\n"
@@ -139,21 +162,15 @@ def render_routing_report(
         console.print()
         console.print(alt_table)
 
-    # Agent Override Protocol — mandatory footer
-    from vibesop.cli.render import resolve_routed_skill_md
-
-    sid = result.primary.skill_id if result.primary else ""
-    resolved = resolve_routed_skill_md(sid) if sid else None
-    skill_md_hint = (
-        resolved.as_posix()
-        if resolved is not None
-        else "the SKILL.md path from this result (do not guess skills/<id>/SKILL.md)"
-    )
+    # A miss, fallback or unavailable candidate has no skill workflow to execute.
+    # Reuse the admitted path; do not re-resolve and revive a demoted candidate.
+    if skill_md is None:
+        return
     console.print()
     console.print(
         Panel(
             "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
-            f"1. Read the skill file at [bold]{skill_md_hint}[/bold]\n"
+            f"1. Read the skill file at [bold]{escape(skill_md)}[/bold]\n"
             "2. Execute the skill workflow exactly as defined\n\n"
             "If you choose NOT to use the recommended skill, you MUST:\n"
             "  • State your explicit reasoning\n"
