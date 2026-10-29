@@ -111,6 +111,14 @@ class DefaultHeuristicAnalyzer:
     #: word boundary so "doublecheck-ignore" is never exempt.
     _GIT_COMPOUND_RE = re.compile(r"\.gitignore|\bcheck-ignore", re.IGNORECASE)
 
+    # A narrowly scoped Markdown conditional describing a Git ignore-file
+    # setup step. Do not exempt other uses of "ignored" or later verbs.
+    _GIT_IGNORE_CONDITIONAL_RE = re.compile(
+        r"(?:\*\*If NOT ignored:\*\* Add to \.gitignore\b"
+        r"|\| Directory not ignored \| Add to \.gitignore \+ commit \|)",
+        re.IGNORECASE,
+    )
+
     #: Object-phrase openers. A compound followed by one of these is being
     #: used as an imperative verb with a prose object (".gitignore the
     #: guard", "check-ignore the rules"), so it loses the exemption.
@@ -251,6 +259,7 @@ class DefaultHeuristicAnalyzer:
         """
         verbs = [m.span() for m in self._OVERRIDE_VERB_RE.finditer(text)]
         spans = self._reference_spans(text)
+        git_conditionals = [m.span() for m in self._GIT_IGNORE_CONDITIONAL_RE.finditer(text)]
         for i in range(len(verbs)):
             for j in range(i + 1, len(verbs)):
                 gap = text[verbs[i][1] : verbs[j][0]]
@@ -259,6 +268,10 @@ class DefaultHeuristicAnalyzer:
                 both_references = all(
                     any(s <= v[0] and v[1] <= e for s, e in spans) for v in (verbs[i], verbs[j])
                 )
+                if any(s <= verbs[i][0] and verbs[j][1] <= e for s, e in git_conditionals) and any(
+                    s <= verbs[j][0] and verbs[j][1] <= e for s, e in spans
+                ):
+                    continue
                 if not both_references:
                     return Threat(
                         type=ThreatType.INSTRUCTION_INJECTION,
