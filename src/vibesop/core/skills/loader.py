@@ -53,6 +53,22 @@ def is_non_skill_yaml_path(file_path: Path) -> bool:
     ``registry.yaml`` and nested pack junk are excluded from the skill-YAML
     hash in the same way ``_load_yaml_skill`` skips them.
     """
+
+    # A GitHub Actions workflow can have a top-level ``name`` (and even be
+    # called SKILL.yaml); it is not a VibeSOP skill definition. Check both the
+    # discovered name and its real target so aliases cannot reintroduce it.
+    def is_workflow(path: Path) -> bool:
+        parts = tuple(part.lower() for part in path.parent.parts)
+        return any(parts[i : i + 2] == (".github", "workflows") for i in range(len(parts) - 1))
+
+    if is_workflow(file_path):
+        return True
+    try:
+        if is_workflow(file_path.resolve(strict=True)):
+            return True
+    except (OSError, RuntimeError):
+        # Do not advertise an unresolved candidate as an executable skill.
+        return True
     if file_path.name in NON_SKILL_YAML_FILENAMES:
         return True
     if file_path.name.lower() in _SKILL_YAML_FILENAMES:

@@ -689,6 +689,31 @@ def _write_named_markdown(search: Path, skill_id: str, filename: str, descriptio
 class TestDiscoveryFingerprintParity:
     """R1–R3: fingerprint, config reader, and loader discovery stay one source."""
 
+    def test_old_workflow_candidate_cache_is_invalidated(self, tmp_path: Path, monkeypatch) -> None:
+        from vibesop.core.skills import loader
+
+        mgr, search = _isolated_manager(tmp_path)
+        _write_skill(search, "real", "actual skill")
+        workflow = search / "pack" / ".github" / "workflows" / "deploy.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("name: deploy\non: push\njobs: {}\n", encoding="utf-8")
+        current_filter = loader.is_non_skill_yaml_path
+        with monkeypatch.context() as old:
+            old.setattr(
+                loader,
+                "is_non_skill_yaml_path",
+                lambda path: False if path == workflow else current_filter(path),
+            )
+            previous_hash = mgr._compute_paths_hash([search])
+        mgr._save_to_disk_cache(
+            [{"id": "phantom", "source_file": str(workflow), "enabled": True}], previous_hash
+        )
+        assert mgr._compute_paths_hash([search]) != previous_hash
+        assert mgr._load_from_disk_cache([search]) is None
+        ids = {candidate["id"] for candidate in mgr.get_cached_candidates()}
+        assert "phantom" not in ids
+        assert "real" in ids
+
     def test_same_mtime_config_edit_hides_skill_on_hot_and_fresh_disk(
         self, tmp_path: Path, monkeypatch
     ) -> None:

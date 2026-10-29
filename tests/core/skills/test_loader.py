@@ -11,7 +11,12 @@ from vibesop.core.models import SkillLifecycle
 from vibesop.core.skills.base import PromptSkill, WorkflowSkill
 from vibesop.core.skills.config_manager import SkillConfig, SkillConfigManager
 from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
-from vibesop.core.skills.loader import LoadedSkill, SkillLoader, discovery_input_files
+from vibesop.core.skills.loader import (
+    LoadedSkill,
+    SkillLoader,
+    discovery_input_files,
+    is_non_skill_yaml_path,
+)
 from vibesop.spec.models import SkillSpec, SkillType
 
 
@@ -840,6 +845,50 @@ description: A duplicate
         skills = loader.discover_all()
         assert "my-skill" in skills
         assert "agent-config" not in skills
+
+    def test_github_workflow_yaml_is_not_a_skill_or_fingerprint_input(self, tmp_path: Path) -> None:
+        """GitHub Actions names must not become cached, non-injectable skills."""
+        skills_dir = tmp_path / "skills"
+        workflows = skills_dir / "omx" / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        for name in ("dev-merge-issue-close.yml", "SKILL.yaml"):
+            (workflows / name).write_text(
+                "name: Merge issue and close\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n",
+                encoding="utf-8",
+            )
+        nested = workflows / "nested" / "SKILL.yml"
+        nested.parent.mkdir()
+        nested.write_text("id: nested-workflow\nname: Not a skill\n", encoding="utf-8")
+        real = skills_dir / "legitimate" / "SKILL.yaml"
+        real.parent.mkdir(parents=True)
+        real.write_text(
+            "id: real-yaml-skill\nname: Real skill\ndescription: valid\n", encoding="utf-8"
+        )
+        other = skills_dir / "omx" / ".github" / "skills" / "SKILL.yaml"
+        other.parent.mkdir(parents=True)
+        other.write_text("id: other-real-skill\nname: Real skill\n", encoding="utf-8")
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        skills = loader.discover_all()
+        assert "real-yaml-skill" in skills
+        assert "other-real-skill" in skills
+        assert "nested-workflow" not in skills
+        assert not any("dev-merge-issue-close" in skill_id for skill_id in skills)
+        inputs = discovery_input_files([skills_dir])
+        assert real in inputs
+        assert other in inputs
+        assert not any(path.is_relative_to(workflows) for path in inputs)
+
+    def test_workflow_yaml_alias_and_unresolvable_path_are_not_candidates(
+        self, tmp_path: Path
+    ) -> None:
+        alias = tmp_path / "skills" / "alias.yml"
+        target = tmp_path / "skills" / "omx" / ".github" / "workflows" / "run.yml"
+        with patch.object(Path, "resolve", return_value=target):
+            assert is_non_skill_yaml_path(alias)
+        with patch.object(Path, "resolve", side_effect=OSError("unavailable")):
+            assert is_non_skill_yaml_path(alias)
+        with patch.object(Path, "resolve", side_effect=FileNotFoundError("dangling")):
+            assert is_non_skill_yaml_path(alias)
 
 
 class TestMetadataKeys:
