@@ -430,6 +430,7 @@ class SecurityScanner:
         Raises:
             FileNotFoundError: If file doesn't exist
             IOError: If file cannot be read
+            ValueError: If content contains NULs or has an invalid Unicode BOM
         """
         path = Path(path)
 
@@ -441,17 +442,19 @@ class SecurityScanner:
             msg = f"Path is not a file: {path}"
             raise ValueError(msg)
 
-        try:
-            content = path.read_text(encoding="utf-8")
-            return self.scan(content)
-        except UnicodeDecodeError:
-            # Try with different encoding
+        raw = path.read_bytes()
+        if raw.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+            content = raw.decode("utf-32")
+        elif raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+            content = raw.decode("utf-16")
+        else:
             try:
-                content = path.read_text(encoding="latin-1")
-                return self.scan(content)
-            except (OSError, PermissionError, ValueError) as e:
-                msg = f"Failed to read file: {e}"
-                raise OSError(msg) from e
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                content = raw.decode("latin-1")
+        if "\x00" in content:
+            raise ValueError("Unsupported binary or text encoding")
+        return self.scan(content)
 
     def scan_bang(self, text: str) -> ScanResult:
         """Scan text and raise exception if threats detected.

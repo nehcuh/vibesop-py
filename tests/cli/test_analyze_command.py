@@ -7,6 +7,8 @@ from typer.testing import CliRunner
 
 from vibesop.cli.main import app
 from vibesop.integrations import IntegrationStatus
+from vibesop.security.rules import RiskLevel, Threat, ThreatType
+from vibesop.security.scanner import ScanResult
 
 runner = CliRunner()
 
@@ -95,7 +97,7 @@ class TestAnalyzeCommand:
         py_file.write_text("print('hello')", encoding="utf-8")
 
         mock_scanner = MagicMock()
-        mock_scanner.scan_file.return_value = []
+        mock_scanner.scan_file.return_value = ScanResult()
         mock_scanner_cls.return_value = mock_scanner
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path)])
@@ -110,9 +112,10 @@ class TestAnalyzeCommand:
         py_file.write_text("eval('1')", encoding="utf-8")
 
         mock_scanner = MagicMock()
-        mock_scanner.scan_file.return_value = [
-            {"file": str(py_file), "severity": "high", "message": "Dangerous eval", "line": 1}
-        ]
+        mock_scanner.scan_file.return_value = ScanResult(threats=[
+            Threat(type=ThreatType.INSTRUCTION_INJECTION, description="Dangerous eval",
+                   matched_text="eval", line_number=1, risk_level=RiskLevel.HIGH)
+        ])
         mock_scanner_cls.return_value = mock_scanner
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path)])
@@ -128,7 +131,7 @@ class TestAnalyzeCommand:
         py_file.write_text("x = 1", encoding="utf-8")
 
         mock_scanner = MagicMock()
-        mock_scanner.scan_file.return_value = []
+        mock_scanner.scan_file.return_value = ScanResult()
         mock_scanner_cls.return_value = mock_scanner
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path), "--json"])

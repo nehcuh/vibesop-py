@@ -22,6 +22,7 @@ Examples:
     vibe analyze integrations
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -63,7 +64,7 @@ def analyze(
     all_files: bool = typer.Option(
         False,
         "--all",
-        help="Scan all files (security analysis only)",
+        help="Compatibility flag; security analysis scans all regular files by default",
     ),
     verbose: bool = typer.Option(
         False,
@@ -205,51 +206,91 @@ def _analyze_session(
 
 def _analyze_security(
     paths: Path,
-    all_files: bool,
+    _all_files: bool,
     json_output: bool,
 ) -> None:
     """Scan files for security issues.
 
     Args:
         paths: Path or directory to scan
-        all_files: Whether to scan all file types
+        _all_files: Legacy compatibility flag; all regular files are scanned
         json_output: Whether to output JSON
     """
     from vibesop.security.scanner import SecurityScanner
 
-    console.print(f"\n[bold cyan]🔍 Security Scan[/bold cyan]\n{'=' * 40}\n")
+    if not json_output:
+        console.print(f"\n[bold cyan]🔍 Security Scan[/bold cyan]\n{'=' * 40}\n")
 
     scanner = SecurityScanner()
 
     # Collect files to scan
     files_to_scan = []
+    if paths.is_symlink():
+        typer.echo("Symlinks are not scanned; select the target directly", err=True)
+        raise typer.Exit(1)
     if paths.is_file():
         files_to_scan.append(paths)
     elif paths.is_dir():
-        extensions = [".py", ".js", ".ts", ".rb", ".yaml", ".yml", ".json"]
-        if all_files:
-            extensions = []
+        try:
+            pending = [paths]
+            while pending:
+                with os.scandir(pending.pop()) as entries:
+                    for entry in entries:
+                        if entry.is_symlink():
+                            typer.echo("Symlinks are not scanned; narrow the target", err=True)
+                            raise typer.Exit(1)
+                        if entry.is_dir(follow_symlinks=False):
+                            pending.append(Path(entry.path))
+                        elif entry.is_file(follow_symlinks=False):
+                            file_path = Path(entry.path)
+                            files_to_scan.append(file_path)
+                            if len(files_to_scan) > 100:
+                                typer.echo("Scan exceeds the 100-file limit; narrow the target", err=True)
+                                raise typer.Exit(1)
+                        else:
+                            typer.echo("Non-regular entries cannot be scanned", err=True)
+                            raise typer.Exit(1)
+        except OSError as error:
+            typer.echo(f"Error enumerating {paths}: {error}", err=True)
+            raise typer.Exit(1) from error
+    else:
+        typer.echo(f"Scan target does not exist: {paths}", err=True)
+        raise typer.Exit(1)
 
-        for ext in extensions or ["*"]:
-            files_to_scan.extend(paths.rglob(f"*{ext}" if ext else "*"))
+    if len(files_to_scan) > 100:
+        typer.echo("Scan exceeds the 100-file limit; narrow the target", err=True)
+        raise typer.Exit(1)
+    if not files_to_scan:
+        typer.echo("No matching files to scan", err=True)
+        raise typer.Exit(1)
 
-    console.print(f"[dim]Scanning {len(files_to_scan)} files...[/dim]\n")
+    if not json_output:
+        console.print(f"[dim]Scanning {len(files_to_scan)} files...[/dim]\n")
 
     # Run scan
     results = []
-    for file_path in files_to_scan[:100]:  # Limit to 100 files
+    for file_path in files_to_scan:
         try:
-            issues = scanner.scan_file(file_path)
-            if issues:
-                results.extend(issues)
+            scan_result = scanner.scan_file(file_path)
+            results.extend(
+                {
+                    "file": str(file_path),
+                    "severity": threat.risk_level.value.lower(),
+                    "type": threat.type.value,
+                    "message": threat.description,
+                    "line": threat.line_number,
+                }
+                for threat in scan_result.threats
+            )
         except Exception as e:
-            console.print(f"[dim]Error scanning {file_path}: {e}[/dim]")
+            typer.echo(f"Error scanning {file_path}: {e}", err=True)
+            raise typer.Exit(1) from e
 
     # JSON output
     if json_output:
         import json
 
-        console.print(json.dumps(results, indent=2))
+        typer.echo(json.dumps(results, indent=2))
         return
 
     # Display results
