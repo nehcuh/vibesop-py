@@ -1,6 +1,15 @@
 
 ## Current Session
 
+### S104 END (2026-10-30) [vibesop-py] pstack 技能包安装 + trust 首装死锁发现；技能全景梳理
+
+- 安装 pstack（backnotprop/pstack，commit `25abb38`，61 skills）[executed]：预装审计拒 10 HIGH，逐个人工核验**全为误报**（9×TS Child Process Exec = 技能自带测试脚本 spawnSync 本地工具链；1×md Instruction Override 命中 "Laziness Protocol does not override it" 工程语句）；全仓恶意模式扫描（curl|sh/反弹 shell/远程 eval/base64 解码执行）零命中；装后 `vibe status` 无警告。
+- **发现 URL 包 HIGH 首装死锁**（产品缺陷候选①）：预装门禁只认 packs 哈希记录不认 sources 授权；`trust_pack` 要求先装才能算哈希；`--skip-verify` 只跳装后验证。绕法 = 手工克隆算 content sha → `TrustStore().trust_pack()` 预写哈希绑定信任 → 重装通过；F-10 完整保留，upstream 更新会再拒。
+- 技能全景梳理（用户两轮问答）：7 来源、~160 唯一技能、四包哲学对照（superpowers 纪律 / omx 自主 / mattpocock 提问 / pstack 原则）。**发现索引镜像噪音**（产品缺陷候选②）：`vibe skills list` 289 条中 `omx-*`/`omx-skills-*`/`omx-plugins-oh-my-codex-skills-*` 等嵌套目录重复挂载，superpowers/mattpocock 同理。
+- 本会话**零仓库源码改动**；信任库与 ~/.claude/skills 符号链接是仅有的外部状态变化。
+- Next：两个缺陷候选是否立项待用户决定（①修复方向：install 交互确认后自动写 packs 信任，或让预装门禁认 sources；②skill 索引对嵌套目录去重）；pstack 大量无 trigger 技能只能手动调起；trust 撤销口令 `vibe trust pstack --revoke`。
+- Recorded: yes — trust 死锁+误报核验法 → project-knowledge.md Technical Pitfalls；auto-memory `project-pstack-install-trust-deadlock.md`
+
 ### S103 END (2026-10-27~28) [vibesop-py] 8.7.0 收口；codex fallback-llm 死锁修复；8.7.1 发版
 
 - **8.7.0 收口**（本会话前段，跨上下文续接）：Release run 首跑被全锁 pip-audit 拦（setuptools 83.0.0 GHSA-xmj3-9gf7-h52w）→ `15308489` 升 84.2.1 + tag 重指（未发布过，安全）→ Windows flake rerun 过。验收 executed：PyPI latest 8.7.0（wheel+sdist）、GitHub Release 双 publish attestation、wheel 实检 25 个 builtin SKILL.md。**8.6.1 从未发布**（S102 纪要「8.6.1 已发布」系中断残留失实行，已修正）。

@@ -34,6 +34,12 @@ promote 草稿与 skill-craft 模板统一四节：Prerequisites / Counterexampl
 
 ## Technical Pitfalls
 
+### URL 技能包 HIGH 首装死锁：预装门禁不认 sources，trust_pack 又要求先装 (2026-10-30 S104)
+
+**Issue**: `vibe install <git-url>` 的预装审计（`pack_installer.py` 预装门禁）对未信任包 HIGH 即拒且删除克隆；但门禁只认 packs 哈希记录或内置 `TRUSTED_PACKS`，**不认 `vibe trust <url>` 写入的 sources 授权**；`TrustStore.trust_pack` 又强制要求 `content_sha256`（"install the pack first so its content can be hashed"）；`--skip-verify` 只跳装后技能发现验证、不绕预装审计。四者合围 = 带 HIGH 误报的第三方 URL 包无法通过 CLI 安装。pstack 实证：10 HIGH 全误报（9×TS "Child Process Exec" 是技能自带测试脚本 `spawnSync` 本地工具链如 `bun install`/TLA+ 的 `java`；1×md "Instruction Override" 命中工程语句 "Laziness Protocol does not override it"）。
+
+**Fix 姿势**: 手工 `git clone --depth 1` → 删 `.git`（对齐安装器行为）→ `MarkerFileManager().calculate_checksum()` 算内容哈希 → `TrustStore().trust_pack(name, url, sha)` 预写信任 → 重跑 `vibe install <url>` 通过。F-10 哈希绑定完整保留：upstream 更新后哈希失配会按设计重新拒装，届时需人工复核再重写信任。误报核验顺序：先逐文件读命中行分真假，再全仓 grep 恶意模式（curl|sh、反弹 shell、远程 eval、base64 解码执行），别直接 `--skip-verify` 或放 CRITICAL。
+
 ### `check_doc_versions --fix` 会重写历史记录里的 v 前缀版本号，伪造发版史 (2026-10-28 S103)
 
 **Issue**: `--fix` 的改写面比它的 MISMATCH 报告面宽——不止修「当前版本声明」（`> **Version**: X.Y.Z` 头），还会把所有 pattern-5 命中（`\bv\d+\.\d+\.\d+\b`）一并改写，包括 PROJECT_CONTEXT 交接块里的历史事实（如「GitHub Release v8.7.0 含双 attestation」被改成 v8.7.1）。连续两个版本发版（8.7.0、8.7.1）各踩中一次。
