@@ -4,7 +4,7 @@ Provides a coordinated execution API for multi-step ExecutionPlans:
 - Iterator-based pending step discovery (respects DAG dependencies)
 - Step-to-step context accumulation and injection
 - State persistence via PlanTracker for resume support
-- Configurable error recovery (skip / retry / abort)
+- Configurable error recovery (skip / abort)
 
 All execution lanes (static serial/parallel batches, dynamic WorkflowEngine
 plans, and squad-oriented patterns) normalize into one terminal vocabulary:

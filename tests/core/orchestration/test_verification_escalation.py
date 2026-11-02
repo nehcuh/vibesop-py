@@ -92,7 +92,9 @@ def test_distinct_signatures_escalate_at_threshold() -> None:
     """Backstop: different transient errors still escalate once consecutive
     failures reach escalation_threshold (default 2)."""
     loop = VerificationLoop()
-    first = loop.decide_action(_step(), {"status": "failed", "reasoning": "connection reset by peer"})
+    first = loop.decide_action(
+        _step(), {"status": "failed", "reasoning": "connection reset by peer"}
+    )
     second = loop.decide_action(_step(), {"status": "failed", "reasoning": "service unavailable"})
 
     assert first == VerificationLoopAction.RETRY
@@ -101,7 +103,9 @@ def test_distinct_signatures_escalate_at_threshold() -> None:
 
 def test_threshold_three_permits_second_retry() -> None:
     loop = VerificationLoop(VerificationLoopConfig(escalation_threshold=3))
-    first = loop.decide_action(_step(), {"status": "failed", "reasoning": "connection reset by peer"})
+    first = loop.decide_action(
+        _step(), {"status": "failed", "reasoning": "connection reset by peer"}
+    )
     second = loop.decide_action(_step(), {"status": "failed", "reasoning": "rate limit hit"})
     third = loop.decide_action(_step(), {"status": "failed", "reasoning": "temporary dns failure"})
 
@@ -113,7 +117,9 @@ def test_threshold_three_permits_second_retry() -> None:
 
 def test_max_retries_bounds_failed_path() -> None:
     loop = VerificationLoop(VerificationLoopConfig(max_retries=1, escalation_threshold=99))
-    first = loop.decide_action(_step(), {"status": "failed", "reasoning": "connection reset by peer"})
+    first = loop.decide_action(
+        _step(), {"status": "failed", "reasoning": "connection reset by peer"}
+    )
     second = loop.decide_action(_step(), {"status": "failed", "reasoning": "rate limit hit"})
 
     assert first == VerificationLoopAction.RETRY
@@ -126,7 +132,9 @@ def test_issue_descriptions_feed_classification() -> None:
         _step(),
         {
             "status": "failed",
-            "issues": [{"severity": "high", "category": "infra", "description": "rate limit exceeded"}],
+            "issues": [
+                {"severity": "high", "category": "infra", "description": "rate limit exceeded"}
+            ],
         },
     )
 
@@ -170,9 +178,7 @@ def _adversarial_plan() -> ExecutionPlan:
 def _transient_failed_verifier() -> SimpleNamespace:
     # Same transient failure on every verify → first decision RETRY,
     # re-verify, same signature → ESCALATE.
-    verdict = VerificationResult(
-        status=VerificationStatus.FAILED, reasoning="connection timed out"
-    )
+    verdict = VerificationResult(status=VerificationStatus.FAILED, reasoning="connection timed out")
     return SimpleNamespace(verify=Mock(return_value=verdict))
 
 
@@ -222,7 +228,9 @@ def test_terminate_writes_no_escalation() -> None:
             )
         )
     )
-    result = execute_plan_with_verification(_adversarial_plan(), executor, verifier, tracker=tracker)
+    result = execute_plan_with_verification(
+        _adversarial_plan(), executor, verifier, tracker=tracker
+    )
 
     assert result["escalations"] == []
     assert result["results"]["build"]["error"] == "Verification failed, execution terminated"
@@ -233,7 +241,10 @@ def test_tracker_failure_does_not_mask_escalation() -> None:
     tracker = Mock()
     tracker.update_step_status.side_effect = RuntimeError("disk full")
     result = execute_plan_with_verification(
-        _adversarial_plan(), Mock(return_value="artifact"), _transient_failed_verifier(), tracker=tracker
+        _adversarial_plan(),
+        Mock(return_value="artifact"),
+        _transient_failed_verifier(),
+        tracker=tracker,
     )
 
     assert len(result["escalations"]) == 1
