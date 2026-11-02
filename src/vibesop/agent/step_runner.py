@@ -47,12 +47,18 @@ class StepOutcomeStatus(StrEnum):
     ``blocked`` means the step ran but its output is a blocked sentinel
     (``blocked: <缺什么>`` / ``{"status": "blocked"}``) — work needs human
     input or evidence, which is distinct from a real ``failed`` outcome.
+
+    ``unverified`` (Phase 1 default-deny) means the step ran and produced
+    output, but the output carries no positive acceptance evidence — it is
+    neither a failure sentinel nor a verified success. It is recorded as a
+    completed *run*, not an accepted *result*.
     """
 
     SUCCESS = "success"
     FAILED = "failed"
     BLOCKED = "blocked"
     SKIPPED = "skipped"
+    UNVERIFIED = "unverified"
 
 
 @dataclass
@@ -86,6 +92,7 @@ class PlanOutcome:
     failed: int = 0
     skipped: int = 0
     blocked: int = 0
+    unverified: int = 0
     final_status: str = "completed"
     review_status: str = "not_required"
     steps: list[StepOutcome] = field(default_factory=list)
@@ -97,6 +104,7 @@ class PlanOutcome:
             "failed": self.failed,
             "skipped": self.skipped,
             "blocked": self.blocked,
+            "unverified": self.unverified,
             "final_status": self.final_status,
             "review_status": self.review_status,
         }
@@ -118,12 +126,25 @@ def _is_blocked_output(output: Any) -> bool:
 
 
 def _classify_output(output: Any) -> StepOutcomeStatus:
-    """Map a raw executor output to the unified terminal vocabulary."""
-    from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+    """Map a raw executor output to the unified terminal vocabulary.
 
-    if not is_acceptance_failure(output):
+    Phase 1 default-deny: three tiers. Failure sentinels keep their exact
+    8.3.1 semantics; success requires positive evidence
+    (:func:`is_verified_success` — ``passed``/``passed:``/positive dict
+    status); everything else (prose, empty, evidence-free dicts) is
+    UNVERIFIED — recorded as a completed run, never counted as an accepted
+    result.
+    """
+    from vibesop.core.orchestration.verification_loop import (
+        is_acceptance_failure,
+        is_verified_success,
+    )
+
+    if is_acceptance_failure(output):
+        return StepOutcomeStatus.BLOCKED if _is_blocked_output(output) else StepOutcomeStatus.FAILED
+    if is_verified_success(output):
         return StepOutcomeStatus.SUCCESS
-    return StepOutcomeStatus.BLOCKED if _is_blocked_output(output) else StepOutcomeStatus.FAILED
+    return StepOutcomeStatus.UNVERIFIED
 
 
 def _derive_final_status(outcome: PlanOutcome) -> str:
@@ -500,7 +521,9 @@ class StepRunner:
                     output = step_executor(step, ctx)
                     status = _classify_output(output)
 
-                    if status is StepOutcomeStatus.SUCCESS:
+                    if status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED):
+                        # UNVERIFIED (Phase 1 default-deny) records the run but
+                        # is not an accepted result — outcome_status carries it.
                         self.mark_completed(step, output)
                         if on_step_complete:
                             on_step_complete(step, output)
@@ -510,12 +533,12 @@ class StepRunner:
                                 "output": output,
                                 "error": None,
                                 "status": "completed",
-                                "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                                "outcome_status": status.value,
                             }
                         )
                         outcomes.append(
                             StepOutcome(
-                                step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output
+                                step.step_id, step.skill_id, status, output
                             )
                         )
                         continue
@@ -685,7 +708,9 @@ class StepRunner:
                         # only then stringify for storage. Mirror the serial
                         # branch: no on_step_error callback (K-2 symmetry).
                         status = _classify_output(step_result)
-                        if status is not StepOutcomeStatus.SUCCESS:
+                        if status in (StepOutcomeStatus.BLOCKED, StepOutcomeStatus.FAILED):
+                            # UNVERIFIED (Phase 1 default-deny) is not a failure —
+                            # it falls through to the recorded path below.
                             batch_failed = True
                             output = str(step_result)
                             self.mark_failed(step, output)
@@ -734,12 +759,12 @@ class StepRunner:
                                     "output": output,
                                     "error": None,
                                     "status": "completed",
-                                    "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                                    "outcome_status": status.value,
                                 }
                             )
                             outcomes.append(
                                 StepOutcome(
-                                    step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output
+                                    step.step_id, step.skill_id, status, output
                                 )
                             )
 
@@ -779,15 +804,19 @@ class StepRunner:
             if s.completed and not s.failed and s.output.startswith("[SKIPPED]")
         )
         blocked = len(blocked_ids)
+        # Phase 1 default-deny: mark_completed also fires for UNVERIFIED steps
+        # (they ran to completion), so split them out of the completed counter.
+        unverified = sum(1 for o in outcomes if o.status is StepOutcomeStatus.UNVERIFIED)
         # F1: failed counts every unsuccessful terminal step — blocked-sentinel
         # steps are persisted via mark_failed and count in BOTH failed and
         # blocked (restored HEAD contract).
         outcome = PlanOutcome(
             plan_id=self._plan.plan_id,
-            completed=self.completed_count - skipped,
+            completed=self.completed_count - skipped - unverified,
             failed=self.failed_count,
             skipped=skipped,
             blocked=blocked,
+            unverified=unverified,
             review_status="not_required",
             steps=outcomes,
         )
@@ -799,6 +828,7 @@ class StepRunner:
             "failed": outcome.failed,
             "skipped": outcome.skipped,
             "blocked": outcome.blocked,
+            "unverified": outcome.unverified,
             "final_status": outcome.final_status,
             "review_status": outcome.review_status,
             "results": results,
@@ -886,7 +916,10 @@ class StepRunner:
         # (blocked is an additional breakdown, restored HEAD contract).
         blocked = sum(1 for v in values if _is_blocked_output(v))
         failed = sum(1 for v in values if is_acceptance_failure(v))
-        completed = len(values) - failed
+        # Phase 1 default-deny: split the non-failure pool into verified
+        # success vs unverified (ran, but no positive acceptance evidence).
+        unverified = sum(1 for v in values if _classify_output(v) is StepOutcomeStatus.UNVERIFIED)
+        completed = len(values) - failed - unverified
 
         # Bring the runner state and the shared PlanOutcome.steps to the
         # engine's side: one StepOutcome per step the engine actually
@@ -898,7 +931,7 @@ class StepRunner:
                 continue
             value = results_map[step.step_id]
             status = _classify_output(value)
-            if status is StepOutcomeStatus.SUCCESS:
+            if status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED):
                 self.mark_completed(step, str(value) if value is not None else "")
                 step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, value))
             else:
@@ -914,6 +947,7 @@ class StepRunner:
             failed=failed,
             skipped=skipped,
             blocked=blocked,
+            unverified=unverified,
             final_status=dyn_result.final_status,
             review_status="not_required",
             steps=step_outcomes,
@@ -925,6 +959,7 @@ class StepRunner:
             "failed": failed,
             "skipped": skipped,
             "blocked": blocked,
+            "unverified": unverified,
             "final_status": dyn_result.final_status,
             "review_status": outcome.review_status,
             "results": results_map,
@@ -952,7 +987,7 @@ class StepRunner:
 
         results: list[dict[str, Any]] = []
         step_outcomes: list[StepOutcome] = []
-        completed = failed = skipped = blocked = 0
+        completed = failed = skipped = blocked = unverified = 0
 
         for step in self._plan.steps:
             role = step.assigned_role or ""
@@ -977,12 +1012,15 @@ class StepRunner:
 
             output = outputs[step.step_id]
             status = _classify_output(output)
-            if status is StepOutcomeStatus.SUCCESS and role in blocked_roles:
+            if status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED) and role in blocked_roles:
                 # The review gate hard-rejected this role's work — the step
                 # ran, but the plan is blocked on evidence/revision.
                 status = StepOutcomeStatus.BLOCKED
 
-            if status is StepOutcomeStatus.SUCCESS:
+            if status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED):
+                # Phase 1 default-deny: UNVERIFIED records the run (entry
+                # status stays the legacy "completed") but only verified
+                # successes increment the completed counter.
                 text = str(output) if output is not None else ""
                 self.mark_completed(step, text)
                 if on_step_complete:
@@ -993,13 +1031,16 @@ class StepRunner:
                         "output": output,
                         "error": None,
                         "status": "completed",
-                        "outcome_status": StepOutcomeStatus.SUCCESS.value,
+                        "outcome_status": status.value,
                     }
                 )
                 step_outcomes.append(
-                    StepOutcome(step.step_id, step.skill_id, StepOutcomeStatus.SUCCESS, output)
+                    StepOutcome(step.step_id, step.skill_id, status, output)
                 )
-                completed += 1
+                if status is StepOutcomeStatus.SUCCESS:
+                    completed += 1
+                else:
+                    unverified += 1
             else:
                 error = str(output)
                 if status is StepOutcomeStatus.BLOCKED and role in blocked_roles:
@@ -1040,7 +1081,10 @@ class StepRunner:
         if engine_blocked:
             final_status = "blocked"
         elif failed - blocked > 0:
-            final_status = "partial" if completed > 0 else "failed"
+            # Run-terminal semantics: unverified steps ran to completion, so
+            # they keep "partial" eligibility exactly as prose-completions did
+            # before the Phase 1 flip.
+            final_status = "partial" if completed + unverified > 0 else "failed"
         elif any(not v.passed and v.requires_revision for v in verdicts):
             final_status = "partial"
         else:
@@ -1053,6 +1097,7 @@ class StepRunner:
             failed=failed,
             skipped=skipped,
             blocked=blocked,
+            unverified=unverified,
             final_status=final_status,
             review_status=review_status,
             steps=step_outcomes,
@@ -1064,6 +1109,7 @@ class StepRunner:
             "failed": failed,
             "skipped": skipped,
             "blocked": blocked,
+            "unverified": unverified,
             "final_status": final_status,
             "review_status": review_status,
             "results": results,

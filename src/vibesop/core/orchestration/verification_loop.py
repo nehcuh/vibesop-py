@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _ACCEPTANCE_FAILURE_STATUSES = frozenset({"blocked", "failed", "error"})
+_VERIFIED_SUCCESS_STATUSES = frozenset({"passed", "completed", "success"})
 
 
 def is_acceptance_failure(output: Any) -> bool:
@@ -38,6 +39,10 @@ def is_acceptance_failure(output: Any) -> bool:
     8.3.1 (B-8): the previous ``startswith(("blocked", "failed"))`` prefix
     heuristic misfired on prose outputs like "Failed to find X, skipping" or
     "Blocked IPs table migrated" — sentinel-prefix matching only.
+
+    Phase 1 default-deny: this predicate's failure side is FROZEN. The success
+    side lives in :func:`is_verified_success` — "not a failure" no longer
+    implies "verified success".
     """
     if isinstance(output, dict):
         if "error" in output:
@@ -50,6 +55,24 @@ def is_acceptance_failure(output: Any) -> bool:
     if text in ("blocked", "failed"):
         return True
     return text.startswith(("blocked:", "failed:"))
+
+
+def is_verified_success(output: Any) -> bool:
+    """True only with positive acceptance evidence (default-deny success side).
+
+    Mirrors the sentinel vocabulary of :func:`is_acceptance_failure`: dict
+    ``status`` in {passed, completed, success}, or text ``passed`` /
+    ``passed:``-prefixed. Prose, empty output, None, and dicts without a
+    positive status are NOT verified success — the caller must treat them as
+    unverified rather than successful.
+    """
+    if isinstance(output, dict):
+        status = str(output.get("status", "")).strip().lower()
+        return status in _VERIFIED_SUCCESS_STATUSES
+    if output is None:
+        return False
+    text = str(output).strip().lower()
+    return text == "passed" or text.startswith("passed:")
 
 
 class VerificationLoopAction(StrEnum):
@@ -280,12 +303,16 @@ class VerificationLoop:
         )
 
     def _verify_quarantine(self, step: ExecutionStep, output: Any) -> bool:
-        """Default verification for quarantine-mode steps."""
+        """Default verification for quarantine-mode steps.
+
+        Phase 1 default-deny: quarantine steps require positive acceptance
+        evidence (``is_verified_success``), not merely "not a failure
+        sentinel and non-empty" — prose is not verification.
+        """
         _ = step
         if is_acceptance_failure(output):
             return False
-        output_text = str(output) if output is not None else ""
-        return bool(output_text.strip())
+        return is_verified_success(output)
 
     def get_summary(self) -> dict[str, Any]:
         """Get summary of verification loop activity.

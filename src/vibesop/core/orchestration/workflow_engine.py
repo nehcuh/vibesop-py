@@ -211,11 +211,17 @@ class WorkflowEngine:
         'failed' if every recorded result is an error; 'partial' if some errored
         and some succeeded; 'completed' if no errors (or no results recorded).
         """
-        from vibesop.core.orchestration.verification_loop import is_acceptance_failure
+        from vibesop.core.orchestration.verification_loop import (
+            is_acceptance_failure,
+            is_verified_success,
+        )
 
         values = list(results.values())
         has_error = any(is_acceptance_failure(v) for v in values)
-        has_success = any(not is_acceptance_failure(v) for v in values)
+        # Phase 1 default-deny: only positive acceptance evidence counts as a
+        # success — a failed step plus prose-only survivors is "failed", not
+        # "partial".
+        has_success = any(is_verified_success(v) for v in values)
         if has_error and not has_success:
             return "failed"
         if has_error:

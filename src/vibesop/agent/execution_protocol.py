@@ -24,6 +24,10 @@ class StepResultStatus(StrEnum):
     FAILED = "failed"
     BLOCKED = "blocked"
     SKIPPED = "skipped"
+    # Phase 1 default-deny: ran, but the output carries no positive
+    # acceptance evidence. Mirrors StepOutcomeStatus.UNVERIFIED so the 1:1
+    # mapping in this module never crashes on the new value.
+    UNVERIFIED = "unverified"
 
 
 @dataclass
@@ -156,6 +160,12 @@ class PlanExecutionResult:
                     if _is_blocked_output(value)
                     else StepResultStatus.FAILED
                 )
+            # Phase 1 default-deny freeze: this is the LEGACY-payload fallback
+            # (no additive outcome_status key, no step_outcomes). Results
+            # persisted before the flip were produced under the old semantics,
+            # so prose keeps mapping to SUCCESS here — replaying old runs must
+            # not re-judge them. New producers stamp outcome_status and never
+            # reach this branch.
             return StepResultStatus.SUCCESS
 
         steps: list[StepResult] = []
