@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Default-deny verification semantics (Phase 1, quasi-breaking).** Step/verdict judgment no longer treats "not a failure" as success. Three default-allow points flipped:
+  - `VerificationResult.status` is now **required** — constructing a verdict without an explicit status raises `ValidationError` instead of silently defaulting to `PASSED`.
+  - `DebateProtocol` judge fails closed: an unparseable judge response or a JSON verdict without a `passed` key yields `passed=False` (mirroring `ReviewGateProtocol`), and a debate squad with no LLM configured raises `LLMError` instead of returning a perfect-pass verdict.
+  - Step outputs are classified in three tiers: failure sentinels (`blocked:` / `failed:` / failure dict status) keep their exact 8.3.1 semantics; **positive evidence** (`"passed"` / `"passed: …"` / dict `status` in `{passed, completed, success}`) is required for `SUCCESS`; everything else (prose, empty output, evidence-free dicts) records as the new `UNVERIFIED` outcome — a completed *run*, never an accepted *result*.
+- Consequences consumers may see: `PlanOutcome` / runner result dicts gain an additive `unverified` counter (prose steps no longer increment `completed`); `WorkflowEngine._compute_final_status` counts only verified successes, so a failed step plus prose-only survivors now derives `failed` instead of `partial`; quarantine-trust steps require positive evidence in `VerificationLoop.verify_step` (prose no longer passes); `StepOutcomeStatus`/`StepResultStatus` gain an `UNVERIFIED` member (additive — exhaustive mappings must extend). Execution-level views are preserved: `PlanExecutionResult.all_succeeded` treats `UNVERIFIED` as ran-to-completion, and `final_status` keeps its run-completed contract; acceptance truth is carried by `unverified` / `outcome_status` / `review_status`. Legacy persisted results (no `outcome_status` key) replay under their original semantics unchanged.
+- **Migration:** producers that want steps counted as `completed`/`success` should emit positive evidence — `passed: <summary>` text or `{"status": "passed"|"completed"|"success", …}` payloads. Roadmap: `docs/proposals/harness-verification-roadmap.md` Phase 1.
+
 ## [8.7.1] — 2026-10-28
 
 ### Fixed

@@ -541,11 +541,7 @@ class StepRunner:
                                 "outcome_status": status.value,
                             }
                         )
-                        outcomes.append(
-                            StepOutcome(
-                                step.step_id, step.skill_id, status, output
-                            )
-                        )
+                        outcomes.append(StepOutcome(step.step_id, step.skill_id, status, output))
                         continue
 
                     error = str(output)
@@ -768,9 +764,7 @@ class StepRunner:
                                 }
                             )
                             outcomes.append(
-                                StepOutcome(
-                                    step.step_id, step.skill_id, status, output
-                                )
+                                StepOutcome(step.step_id, step.skill_id, status, output)
                             )
 
                 if batch_failed and (not should_continue or fail_fast):
@@ -1017,7 +1011,10 @@ class StepRunner:
 
             output = outputs[step.step_id]
             status = _classify_output(output)
-            if status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED) and role in blocked_roles:
+            if (
+                status in (StepOutcomeStatus.SUCCESS, StepOutcomeStatus.UNVERIFIED)
+                and role in blocked_roles
+            ):
                 # The review gate hard-rejected this role's work — the step
                 # ran, but the plan is blocked on evidence/revision.
                 status = StepOutcomeStatus.BLOCKED
@@ -1039,9 +1036,7 @@ class StepRunner:
                         "outcome_status": status.value,
                     }
                 )
-                step_outcomes.append(
-                    StepOutcome(step.step_id, step.skill_id, status, output)
-                )
+                step_outcomes.append(StepOutcome(step.step_id, step.skill_id, status, output))
                 if status is StepOutcomeStatus.SUCCESS:
                     completed += 1
                 else:

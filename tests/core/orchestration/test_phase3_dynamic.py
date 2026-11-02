@@ -794,7 +794,10 @@ def test_compute_final_status_derives_from_results() -> None:
     assert WorkflowEngine._compute_final_status({"a": "ok", "verify": "blocked"}) == "failed"
     # Positive evidence keeps "partial" reachable.
     assert WorkflowEngine._compute_final_status({"a": "passed", "b": {"error": "x"}}) == "partial"
-    assert WorkflowEngine._compute_final_status({"a": {"status": "completed"}, "b": {"error": "x"}}) == "partial"
+    assert (
+        WorkflowEngine._compute_final_status({"a": {"status": "completed"}, "b": {"error": "x"}})
+        == "partial"
+    )
 
 
 def test_sequential_blocked_output_does_not_complete_plan() -> None:

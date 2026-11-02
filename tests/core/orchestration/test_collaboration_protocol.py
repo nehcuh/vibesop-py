@@ -156,9 +156,7 @@ class TestCollaborationProtocol:
         squad = self._minimal_squad("debate", roles=["debater", "debater", "orchestrator"])
         protocol = DebateProtocol(squad, llm_client=mock_llm)
 
-        verdict = protocol.review(
-            "debater", [{"role": "debater", "content": "argument A"}]
-        )
+        verdict = protocol.review("debater", [{"role": "debater", "content": "argument A"}])
 
         assert verdict.passed is False
         assert verdict.score == 0.0
@@ -171,9 +169,7 @@ class TestCollaborationProtocol:
         squad = self._minimal_squad("debate", roles=["debater", "debater", "orchestrator"])
         protocol = DebateProtocol(squad, llm_client=mock_llm)
 
-        verdict = protocol.review(
-            "debater", [{"role": "debater", "content": "argument A"}]
-        )
+        verdict = protocol.review("debater", [{"role": "debater", "content": "argument A"}])
 
         assert verdict.passed is False
 
