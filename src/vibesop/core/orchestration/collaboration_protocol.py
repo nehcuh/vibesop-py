@@ -280,12 +280,14 @@ class DebateProtocol(CollaborationProtocol):
         """In debate mode, the orchestrator judges all contestant outputs."""
         judge_role = self._squad.lead_role or "orchestrator"
         if self._llm is None:
-            return ReviewVerdict(
-                passed=True,
-                reviewer_role=judge_role,
-                target_role=target_role,
-                issues=[],
-                score=10.0,
+            # Phase 1 default-deny: a judge that never ran must not return a
+            # perfect-pass verdict. Mirror ReviewGateProtocol.review, which
+            # raises here; the squad engine converts the exception into a
+            # degraded (passed=False) verdict without failing the run.
+            raise LLMError(
+                judge_role,
+                "No LLM configured; debate judge cannot operate. "
+                "Configure an LLM provider to enable judged debate.",
             )
 
         combined_output = "\n\n---\n\n".join(
@@ -324,18 +326,20 @@ class DebateProtocol(CollaborationProtocol):
         try:
             data = json.loads(json_str)
         except json.JSONDecodeError:
+            # Phase 1 default-deny: an unparseable judge response is not a
+            # pass. Mirror ReviewGateProtocol._parse_review_response.
             return ReviewVerdict(
-                passed=True,
+                passed=False,
                 reviewer_role=judge_role,
                 target_role=target_role,
                 issues=["Judge response could not be parsed as JSON."],
-                score=5.0,
-                requires_revision=False,
-                revision_feedback="",
+                score=0.0,
+                requires_revision=True,
+                revision_feedback="Judge output unparseable; re-run the debate round.",
             )
 
         return ReviewVerdict(
-            passed=bool(data.get("passed", True)),
+            passed=bool(data.get("passed", False)),
             reviewer_role=judge_role,
             target_role=target_role,
             issues=list(data.get("issues", [])),

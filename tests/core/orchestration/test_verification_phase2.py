@@ -53,6 +53,14 @@ def test_verification_result_model() -> None:
     assert result_dict["confidence"] == 0.9
 
 
+def test_verification_result_status_is_required() -> None:
+    """Phase 1 default-deny: omitting the verdict must not default to PASSED."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        VerificationResult()
+
+
 def test_verification_issue_model() -> None:
     """Test VerificationIssue model."""
     issue = VerificationIssue(

@@ -58,7 +58,10 @@ class VerificationResult(BaseModel):
     """
 
     status: VerificationStatus = Field(
-        default=VerificationStatus.PASSED,
+        # Phase 1 default-deny: required. A construction that omits the
+        # verdict must fail loudly instead of silently passing (the old
+        # default treated "no status" as PASSED, disabling the gate).
+        ...,
         description="Overall verification status",
     )
     confidence: float = Field(

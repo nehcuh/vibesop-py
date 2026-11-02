@@ -148,6 +148,41 @@ class TestCollaborationProtocol:
         assert "argument A" in result.output
         assert "orchestrator" in result.output
 
+    # ── Phase 1 default-deny: parse failures must fail closed ──────────────
+
+    def test_debate_unparseable_judge_output_fails_closed(self) -> None:
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(content="I think argument A wins!")
+        squad = self._minimal_squad("debate", roles=["debater", "debater", "orchestrator"])
+        protocol = DebateProtocol(squad, llm_client=mock_llm)
+
+        verdict = protocol.review(
+            "debater", [{"role": "debater", "content": "argument A"}]
+        )
+
+        assert verdict.passed is False
+        assert verdict.score == 0.0
+        assert verdict.requires_revision is True
+        assert "could not be parsed" in verdict.issues[0]
+
+    def test_debate_missing_passed_key_fails_closed(self) -> None:
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(content=json.dumps({"issues": [], "score": 7.0}))
+        squad = self._minimal_squad("debate", roles=["debater", "debater", "orchestrator"])
+        protocol = DebateProtocol(squad, llm_client=mock_llm)
+
+        verdict = protocol.review(
+            "debater", [{"role": "debater", "content": "argument A"}]
+        )
+
+        assert verdict.passed is False
+
+    def test_debate_without_llm_raises(self) -> None:
+        squad = self._minimal_squad("debate", roles=["debater", "debater", "orchestrator"])
+        protocol = DebateProtocol(squad, llm_client=None)
+        with pytest.raises(LLMError, match="No LLM configured"):
+            protocol.review("debater", [{"role": "debater", "content": "argument A"}])
+
     def test_create_protocol_factory(self) -> None:
         squad = self._minimal_squad("sequential")
         protocol = create_protocol(squad)
