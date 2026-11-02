@@ -12,12 +12,17 @@ Roadmap 2.1/2.2 — the failed path now classifies before deciding:
 
 from __future__ import annotations
 
-from vibesop.core.models import ExecutionStep
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from vibesop.core.models import ExecutionPlan, ExecutionStep, StepStatus, WorkflowPattern
 from vibesop.core.orchestration.verification_loop import (
     VerificationLoop,
     VerificationLoopAction,
     VerificationLoopConfig,
+    execute_plan_with_verification,
 )
+from vibesop.core.orchestration.verifier import VerificationResult, VerificationStatus
 
 
 def _step() -> ExecutionStep:
@@ -144,3 +149,103 @@ def test_passed_resets_consecutive_failures() -> None:
     loop.decide_action(step, {"status": "passed"})
 
     assert loop.get_state("test-1").consecutive_failures == 0
+
+
+# --- Roadmap 2.1: ESCALATE gets a real exit (tracker write + escalations list) ---
+
+
+def _adversarial_plan() -> ExecutionPlan:
+    return ExecutionPlan(
+        plan_id="escalate-plan",
+        workflow_pattern=WorkflowPattern.ADVERSARIAL,
+        steps=[
+            ExecutionStep(step_id="build", step_number=1, skill_id="build"),
+            ExecutionStep(
+                step_id="deliver", step_number=2, skill_id="deliver", dependencies=["build"]
+            ),
+        ],
+    )
+
+
+def _transient_failed_verifier() -> SimpleNamespace:
+    # Same transient failure on every verify → first decision RETRY,
+    # re-verify, same signature → ESCALATE.
+    verdict = VerificationResult(
+        status=VerificationStatus.FAILED, reasoning="connection timed out"
+    )
+    return SimpleNamespace(verify=Mock(return_value=verdict))
+
+
+def test_escalation_writes_tracker_and_records_list() -> None:
+    executor = Mock(return_value="artifact")
+    tracker = Mock()
+    result = execute_plan_with_verification(
+        _adversarial_plan(), executor, _transient_failed_verifier(), tracker=tracker
+    )
+
+    # RETRY re-executed the step once before the same signature escalated.
+    assert [call.args[0].step_id for call in executor.call_args_list] == ["build", "build"]
+    assert "deliver" not in result["results"]
+    assert result["results"]["build"]["error"] == "Verification failed, user intervention required"
+
+    assert len(result["escalations"]) == 1
+    record = result["escalations"][0]
+    assert record["step_id"] == "build"
+    assert record["consecutive_failures"] == 2
+    assert record["failure_category"] == "transient"
+
+    tracker.update_step_status.assert_called_once()
+    assert tracker.update_step_status.call_args.args[:3] == (
+        "escalate-plan",
+        "build",
+        StepStatus.FAILED,
+    )
+    assert tracker.update_step_status.call_args.kwargs["result_summary"].startswith("escalated:")
+
+
+def test_escalation_recorded_without_tracker() -> None:
+    result = execute_plan_with_verification(
+        _adversarial_plan(), Mock(return_value="artifact"), _transient_failed_verifier()
+    )
+
+    assert len(result["escalations"]) == 1
+    assert result["results"]["build"]["error"] == "Verification failed, user intervention required"
+
+
+def test_terminate_writes_no_escalation() -> None:
+    executor = Mock(return_value="artifact")
+    tracker = Mock()
+    verifier = SimpleNamespace(
+        verify=Mock(
+            return_value=VerificationResult(
+                status=VerificationStatus.FAILED, reasoning="invalid api key"
+            )
+        )
+    )
+    result = execute_plan_with_verification(_adversarial_plan(), executor, verifier, tracker=tracker)
+
+    assert result["escalations"] == []
+    assert result["results"]["build"]["error"] == "Verification failed, execution terminated"
+    tracker.update_step_status.assert_not_called()
+
+
+def test_tracker_failure_does_not_mask_escalation() -> None:
+    tracker = Mock()
+    tracker.update_step_status.side_effect = RuntimeError("disk full")
+    result = execute_plan_with_verification(
+        _adversarial_plan(), Mock(return_value="artifact"), _transient_failed_verifier(), tracker=tracker
+    )
+
+    assert len(result["escalations"]) == 1
+    assert "error" in result["results"]["build"]
+
+
+def test_clean_run_has_empty_escalations() -> None:
+    executor = Mock(return_value="artifact")
+    verifier = SimpleNamespace(
+        verify=Mock(return_value=VerificationResult(status=VerificationStatus.PASSED))
+    )
+    result = execute_plan_with_verification(_adversarial_plan(), executor, verifier)
+
+    assert result["escalations"] == []
+    assert result["results"] == {"build": "artifact", "deliver": "artifact"}

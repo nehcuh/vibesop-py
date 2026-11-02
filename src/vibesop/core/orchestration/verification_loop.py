@@ -25,10 +25,11 @@ from pydantic import BaseModel, Field
 # frozen surface.
 from vibesop.core.loop.executor import _classify_failure
 from vibesop.core.loop.models import FailureCategory
-from vibesop.core.models import TrustLevel
+from vibesop.core.models import StepStatus, TrustLevel
 
 if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan, ExecutionStep
+    from vibesop.core.orchestration.plan_tracker import PlanTracker
 
 logger = logging.getLogger(__name__)
 
@@ -409,6 +410,7 @@ def execute_plan_with_verification(
     executor: Callable[[ExecutionStep], Any],
     verifier: Any,
     loop_config: VerificationLoopConfig | None = None,
+    tracker: PlanTracker | None = None,
 ) -> dict[str, Any]:
     """Execute an execution plan with verification loop.
 
@@ -420,6 +422,10 @@ def execute_plan_with_verification(
         executor: Function to execute a single step
         verifier: VerifierAgent instance
         loop_config: Optional loop configuration
+        tracker: Optional PlanTracker — when given, an ESCALATE decision is
+            persisted as a FAILED step status with an ``escalated:`` result
+            summary, so a resumed run sees why the step stopped. Every
+            escalation is also returned in ``escalations`` regardless.
 
     Returns:
         Dictionary with execution results and verification summary
@@ -427,6 +433,7 @@ def execute_plan_with_verification(
     loop = VerificationLoop(loop_config)
     results = {}
     verification_summary = []
+    escalations: list[dict[str, Any]] = []
 
     # Get execution order (topological sort respecting dependencies)
     execution_order = _get_execution_order(plan)
@@ -515,19 +522,53 @@ def execute_plan_with_verification(
 
             if action in (VerificationLoopAction.ESCALATE, VerificationLoopAction.TERMINATE):
                 logger.warning("Step %s verification halted execution: %s", step.step_id, action)
+                verification_dict = verification_result.to_dict()
                 results[step.step_id] = {
                     "error": (
                         "Verification failed, user intervention required"
                         if action == VerificationLoopAction.ESCALATE
                         else "Verification failed, execution terminated"
                     ),
-                    "verification_result": verification_result.to_dict(),
+                    "verification_result": verification_dict,
                 }
+                if action == VerificationLoopAction.ESCALATE:
+                    # Roadmap 2.1: ESCALATE gets a real exit — a persisted
+                    # step status (a resumed run sees why it stopped) and a
+                    # structured escalation record for the caller to present.
+                    state = loop.get_state(step.step_id)
+                    escalations.append(
+                        {
+                            "step_id": step.step_id,
+                            "step_number": step.step_number,
+                            "consecutive_failures": state.consecutive_failures,
+                            "failure_category": state.last_failure_category,
+                            "verification": verification_dict,
+                        }
+                    )
+                    if tracker is not None:
+                        try:
+                            tracker.update_step_status(
+                                plan.plan_id,
+                                step.step_id,
+                                StepStatus.FAILED,
+                                result_summary=(
+                                    f"escalated: verification failed "
+                                    f"({state.consecutive_failures} consecutive); "
+                                    "user intervention required"
+                                ),
+                            )
+                        except Exception:
+                            # A tracker write failure must not mask the
+                            # escalation itself.
+                            logger.exception(
+                                "Escalation tracker write failed for step %s", step.step_id
+                            )
                 break
 
     return {
         "results": results,
         "verification_summary": verification_summary,
+        "escalations": escalations,
         "loop_summary": loop.get_summary(),
     }
 
