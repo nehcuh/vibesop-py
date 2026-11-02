@@ -159,6 +159,28 @@ def test_passed_resets_consecutive_failures() -> None:
     assert loop.get_state("test-1").consecutive_failures == 0
 
 
+def test_needs_revision_and_failed_share_retry_budget() -> None:
+    """The retry budget is one bounded loop: NEEDS_REVISION retries and
+    transient-failure retries draw down the same max_retries account."""
+    loop = VerificationLoop(VerificationLoopConfig(max_retries=3, escalation_threshold=99))
+    step = _step()
+    revisions = [
+        loop.decide_action(step, {"status": "needs_revision", "reasoning": "revise"})
+        for _ in range(2)
+    ]
+    # Budget now has one draw left (retry_count == 2).
+    first_failure = loop.decide_action(
+        step, {"status": "failed", "reasoning": "connection reset by peer"}
+    )
+    second_failure = loop.decide_action(
+        step, {"status": "failed", "reasoning": "rate limit hit"}
+    )
+
+    assert revisions == [VerificationLoopAction.RETRY, VerificationLoopAction.RETRY]
+    assert first_failure == VerificationLoopAction.RETRY  # third and final draw
+    assert second_failure == VerificationLoopAction.ESCALATE  # budget exhausted
+
+
 # --- Roadmap 2.1: ESCALATE gets a real exit (tracker write + escalations list) ---
 
 
