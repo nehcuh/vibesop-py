@@ -63,8 +63,16 @@ class PlanExecutionResult:
         ``review_status`` is "error" (acceptance unknown). Consumers gating on
         acceptance must check ``review_status`` (accepted / rejected / error /
         not_required), never infer it from this property.
+
+        Phase 1 default-deny: UNVERIFIED counts as execution success here —
+        the step ran to completion without failing. Acceptance-level truth is
+        carried by the per-step ``status`` (unverified ≠ success), not by this
+        execution-level property.
         """
-        return all(r.status == StepResultStatus.SUCCESS for r in self.results)
+        return all(
+            r.status in (StepResultStatus.SUCCESS, StepResultStatus.UNVERIFIED)
+            for r in self.results
+        )
 
     @classmethod
     def from_step_runner_dict(

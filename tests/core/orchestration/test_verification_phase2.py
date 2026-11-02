@@ -876,8 +876,9 @@ def test_verify_step_role_aware_reviewer() -> None:
     assert loop.verify_step(red_team_step, "Found XSS vulnerability") is True
 
 
-def test_verify_step_quarantine_fallback() -> None:
-    """Test verify_step falls back to quarantine check for non-reviewer steps."""
+def test_verify_step_quarantine_requires_positive_evidence() -> None:
+    """Phase 1 default-deny: quarantine steps fall back to the acceptance
+    check, which now requires positive evidence — prose is not verification."""
     loop = VerificationLoop()
 
     step = ExecutionStep(
@@ -888,8 +889,10 @@ def test_verify_step_quarantine_fallback() -> None:
         trust_level=TrustLevel.QUARANTINE,
     )
 
-    assert loop.verify_step(step, "some output") is True
+    assert loop.verify_step(step, "some output") is False
     assert loop.verify_step(step, "") is False
+    assert loop.verify_step(step, "passed: output verified against contract") is True
+    assert loop.verify_step(step, {"status": "completed"}) is True
 
 
 def test_verify_step_trusted_defaults_to_true() -> None:

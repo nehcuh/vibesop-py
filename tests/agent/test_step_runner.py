@@ -250,12 +250,16 @@ class TestExecuteAll:
             return f"Executed {step.skill_id} with ctx_len={len(ctx_str)}"
 
         result = runner.execute_all(executor)
-        assert result["completed"] == 3
+        # Phase 1 default-deny: prose outputs are recorded as completed runs
+        # but carry no positive acceptance evidence → unverified, not completed.
+        assert result["completed"] == 0
+        assert result["unverified"] == 3
         assert result["failed"] == 0
         assert runner.is_complete
 
         for r in result["results"]:
             assert r["status"] == "completed"
+            assert r["outcome_status"] == "unverified"
             assert r["output"].startswith("Executed skill-")
 
     def test_execute_all_parallel_acceptance_failure_marks_failed(self):
@@ -278,10 +282,11 @@ class TestExecuteAll:
             return f"OK {step.skill_id}"
 
         result = runner.execute_all(executor)
-        assert result["completed"] == 1
+        assert result["completed"] == 0
+        assert result["unverified"] == 1
         assert result["failed"] == 1
         assert result["blocked"] == 1
-        # One success + one blocked (no real failure) → partial.
+        # One unverified (ran) + one blocked (no real failure) → partial.
         assert result["final_status"] == "partial"
         # F2: the per-step entry keeps the legacy status value domain.
         by_id = {r["step_id"]: r for r in result["results"]}
@@ -315,7 +320,8 @@ class TestExecuteAll:
             return f"OK {step.skill_id}"
 
         result = runner.execute_all(executor)
-        assert result["completed"] == 1
+        assert result["completed"] == 0
+        assert result["unverified"] == 1
         assert result["failed"] == 1
         assert result["blocked"] == 1
         by_id = {r["step_id"]: r for r in result["results"]}
@@ -340,7 +346,8 @@ class TestExecuteAll:
             return f"OK {step.skill_id}"
 
         result = runner.execute_all(executor)
-        assert result["completed"] == 1
+        assert result["completed"] == 0
+        assert result["unverified"] == 1
         assert result["failed"] == 1
         assert not runner._states["step-2"].completed
 
@@ -366,7 +373,8 @@ class TestExecuteAll:
             return True  # continue
 
         result = runner.execute_all(executor, on_step_error=on_error)
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 1
         assert len(errors_called) == 1
         assert errors_called[0] == "skill-b"
@@ -523,7 +531,8 @@ class TestParallelDispatchRealism:
         # barrier actually released (serial dispatch breaks it instead).
         assert peak == 2
         assert [e for _, e in events] == ["enter", "enter", "exit", "exit"]
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert result["final_status"] == "completed"
         by_id = {r["step_id"]: r for r in result["results"]}
@@ -570,7 +579,8 @@ class TestParallelDispatchRealism:
         runner = StepRunner(plan, track_state=False, max_parallel=1)
         result = runner.execute_all(executor)
 
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         # No overlap: properly nested enter/exit pairs, peak exactly 1.
         assert peak == 1
@@ -601,7 +611,8 @@ class TestParallelDispatchRealism:
         finally:
             lane.reset(token)
 
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         for step_id in ("step-1", "step-2"):
             value, ident = seen[step_id]
             assert value == "caller-context-value"
@@ -623,7 +634,8 @@ class TestParallelDispatchRealism:
         result = runner.execute_all(executor)
 
         assert sorted(body_runs) == ["step-1", "step-2"]
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert result["final_status"] == "completed"
         by_id = {r["step_id"]: r for r in result["results"]}
@@ -660,7 +672,8 @@ class TestParallelDispatchRealism:
         result = runner.execute_all(executor)
 
         assert peak == 2, "both async bodies must be resident concurrently"
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
 
     def test_async_executors_never_overlap_at_max_parallel_1(self):
@@ -689,7 +702,8 @@ class TestParallelDispatchRealism:
         runner = StepRunner(plan, track_state=False, max_parallel=1)
         result = runner.execute_all(executor)
 
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert peak == 1
         assert [e for _, e in events] == ["enter", "exit", "enter", "exit"]
@@ -721,7 +735,8 @@ class TestParallelDispatchRealism:
         runner = StepRunner(plan, track_state=False, max_parallel=2)
         result = runner.execute_all(executor, on_step_error=on_error)
 
-        assert result["completed"] == 1
+        assert result["completed"] == 0
+        assert result["unverified"] == 1
         assert result["failed"] == 1
         assert result["blocked"] == 0
         assert result["final_status"] == "partial"
@@ -756,7 +771,8 @@ class TestParallelDispatchRealism:
         runner = StepRunner(plan, track_state=False, max_parallel=2)
         result = runner.execute_all(executor)
 
-        assert result["completed"] == 1
+        assert result["completed"] == 0
+        assert result["unverified"] == 1
         assert result["failed"] == 1
         assert result["blocked"] == 1
         assert result["final_status"] == "partial"
@@ -767,7 +783,7 @@ class TestParallelDispatchRealism:
         adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
         statuses = {r.step_id: r.status for r in adapted.results}
         assert statuses["step-1"] is StepResultStatus.BLOCKED
-        assert statuses["step-2"] is StepResultStatus.SUCCESS
+        assert statuses["step-2"] is StepResultStatus.UNVERIFIED
 
 
 class TestStatePersistence:
@@ -996,7 +1012,8 @@ class TestExecuteAllCounterexamples:
         result = runner.execute_all(executor, fail_fast=True)
 
         assert synthesise.step_id in executed, "downstream synthesise step must run"
-        assert result["completed"] == 3
+        assert result["completed"] == 0
+        assert result["unverified"] == 3
         assert result["failed"] == 0
         assert result["final_status"] == "completed"
 
@@ -1052,7 +1069,8 @@ class TestExecuteAllCounterexamples:
         result = runner.execute_all(lambda step, ctx: "dry")
 
         assert result["failed"] == 0
-        assert result["completed"] >= 1
+        assert result["completed"] == 0
+        assert result["unverified"] >= 1
         assert result["final_status"] in ("completed", "terminated_early")
         assert isinstance(result["results"], dict)
 
@@ -1117,7 +1135,8 @@ class TestStepRunnerSquadMode:
         result = runner.execute_all(executor, context={"base": "value"})
 
         assert call_order == squad.execution_order
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert result["blocked"] == 0
         assert result["final_status"] == "completed"
@@ -1214,8 +1233,10 @@ class TestStepRunnerSquadMode:
 
         result = runner.execute_all(executor)
 
-        # Execution itself succeeded — every member produced work.
-        assert result["completed"] == len(plan.steps)
+        # Execution itself succeeded — every member produced work (unverified:
+        # prose-shaped outputs, no positive acceptance evidence).
+        assert result["completed"] == 0
+        assert result["unverified"] == len(plan.steps)
         assert result["failed"] == 0
         assert result["blocked"] == 0
         assert result["final_status"] == "completed"
@@ -1229,7 +1250,7 @@ class TestStepRunnerSquadMode:
         adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
         assert adapted.review_status == "error"
         assert adapted.all_succeeded, "execution success is truthful..."
-        assert all(r.status is StepResultStatus.SUCCESS for r in adapted.results)
+        assert all(r.status is StepResultStatus.UNVERIFIED for r in adapted.results)
         # ...and must never be read as review acceptance.
         assert adapted.review_status != "accepted"
 
@@ -1404,7 +1425,8 @@ class TestSquadPublicExecutorContract:
         runner = StepRunner(plan, project_root=tmp_path, track_state=False)
         result = runner.execute_all(executor)
 
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert result["final_status"] == "completed"
         assert len(seen) == 2
@@ -1433,7 +1455,8 @@ class TestSquadPublicExecutorContract:
         runner = StepRunner(plan, project_root=tmp_path, track_state=False)
         result = runner.execute_all(executor)
 
-        assert result["completed"] == 2
+        assert result["completed"] == 0
+        assert result["unverified"] == 2
         assert result["failed"] == 0
         assert result["review_status"] == "accepted"
 
@@ -1495,7 +1518,8 @@ class TestStaticLaneOutcomeMatrix:
         result = runner.execute_all(executor)
 
         assert result["failed"] == 1
-        assert result["completed"] == 1  # only skill-c ran successfully
+        assert result["completed"] == 0  # skill-c ran, but its prose is unverified
+        assert result["unverified"] == 1
         assert result["skipped"] == 1  # step-2's dependency failed
         assert result["final_status"] == "partial"
         by_id = {r["step_id"]: r for r in result["results"]}
@@ -1683,8 +1707,8 @@ class TestExecutionProtocolAdapter:
 
         assert adapted.plan_id == plan.plan_id
         assert [r.step_id for r in adapted.results] == ["step-1", "step-2"]
-        assert all(r.status is StepResultStatus.SUCCESS for r in adapted.results)
-        assert adapted.all_succeeded
+        assert all(r.status is StepResultStatus.UNVERIFIED for r in adapted.results)
+        assert adapted.all_succeeded  # execution-level: unverified still ran
         assert {r.skill_id for r in adapted.results} == {"skill-a", "skill-b"}
 
     def test_adapter_dynamic_lane_preserves_dict_shape(self):
@@ -1732,12 +1756,12 @@ class TestExecutionProtocolAdapter:
         by_id = {r.step_id: r.status for r in adapted.results}
 
         assert by_id == {
-            "step-1": StepResultStatus.SUCCESS,
+            "step-1": StepResultStatus.UNVERIFIED,
             "step-2": StepResultStatus.BLOCKED,
             "step-3": StepResultStatus.FAILED,
         }
         assert not adapted.all_succeeded
-        assert adapted.success_count == 1
+        assert adapted.success_count == 0  # prose "all good" is unverified, not success
 
 
 class _PlainFeedbackRejectLLM:
@@ -1815,16 +1839,16 @@ class TestPostCorrectiveBlockedAdapterConsistency:
         # longer the only way to get the producer's blocked granularity).
         reviewer = next(s for s in plan.steps if (s.assigned_role or "") == "reviewer")
         assert by_id[impl.step_id]["outcome_status"] == "blocked"
-        assert by_id[reviewer.step_id]["outcome_status"] == "success"
+        assert by_id[reviewer.step_id]["outcome_status"] == "unverified"
         default_adapted = PlanExecutionResult.from_step_runner_dict(result, plan)
         default_by_id = {r.step_id: r.status for r in default_adapted.results}
         assert default_by_id[impl.step_id] is StepResultStatus.BLOCKED
-        assert default_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
+        assert default_by_id[reviewer.step_id] is StepResultStatus.UNVERIFIED
         transported = json.loads(json.dumps(result))
         transported_adapted = PlanExecutionResult.from_step_runner_dict(transported, plan)
         transported_by_id = {r.step_id: r.status for r in transported_adapted.results}
         assert transported_by_id[impl.step_id] is StepResultStatus.BLOCKED
-        assert transported_by_id[reviewer.step_id] is StepResultStatus.SUCCESS
+        assert transported_by_id[reviewer.step_id] is StepResultStatus.UNVERIFIED
         transported_impl = next(r for r in transported_adapted.results if r.step_id == impl.step_id)
         assert transported_impl.error == "add the missing tests"
 

@@ -776,17 +776,25 @@ def test_tournament_no_llm_empty_outputs_no_crash() -> None:
 
 
 def test_compute_final_status_derives_from_results() -> None:
-    """F-26: _compute_final_status derives completed/partial/failed from results."""
+    """F-26: _compute_final_status derives completed/partial/failed from results.
+
+    Phase 1 default-deny: only positive acceptance evidence counts as a
+    success — prose survivors alongside errors no longer yield "partial".
+    """
     assert WorkflowEngine._compute_final_status({}) == "completed"
     assert WorkflowEngine._compute_final_status({"a": "ok"}) == "completed"
-    assert WorkflowEngine._compute_final_status({"a": "ok", "b": {"error": "x"}}) == "partial"
+    # Prose "ok" is not verified success → error + prose is failed, not partial.
+    assert WorkflowEngine._compute_final_status({"a": "ok", "b": {"error": "x"}}) == "failed"
     assert (
         WorkflowEngine._compute_final_status({"a": {"error": "x"}, "b": {"error": "y"}}) == "failed"
     )
     assert WorkflowEngine._compute_final_status({"verify": "blocked"}) == "failed"
     assert WorkflowEngine._compute_final_status({"verify": "failed"}) == "failed"
     assert WorkflowEngine._compute_final_status({"verify": {"status": "failed"}}) == "failed"
-    assert WorkflowEngine._compute_final_status({"a": "ok", "verify": "blocked"}) == "partial"
+    assert WorkflowEngine._compute_final_status({"a": "ok", "verify": "blocked"}) == "failed"
+    # Positive evidence keeps "partial" reachable.
+    assert WorkflowEngine._compute_final_status({"a": "passed", "b": {"error": "x"}}) == "partial"
+    assert WorkflowEngine._compute_final_status({"a": {"status": "completed"}, "b": {"error": "x"}}) == "partial"
 
 
 def test_sequential_blocked_output_does_not_complete_plan() -> None:

@@ -106,7 +106,10 @@ def test_quarantine_blocked_or_failed_is_not_pass() -> None:
     assert loop.verify_step(step, "blocked") is False
     assert loop.verify_step(step, "failed") is False
     assert loop.verify_step(step, "blocked: missing test evidence") is False
-    assert loop.verify_step(step, "ok evidence") is True
+    # Phase 1 default-deny: quarantine steps need positive acceptance
+    # evidence — prose is not verification.
+    assert loop.verify_step(step, "ok evidence") is False
+    assert loop.verify_step(step, "passed: evidence attached") is True
 
 
 def test_verification_step_is_executed() -> None:

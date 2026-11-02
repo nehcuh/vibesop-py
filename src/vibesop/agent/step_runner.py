@@ -155,13 +155,18 @@ def _derive_final_status(outcome: PlanOutcome) -> str:
     - no unsuccessful terminal step → ``completed``
     - real failures present → ``failed`` (or ``partial`` when some steps completed)
     - only blocked steps (no real failure) → ``blocked`` (or ``partial``)
+
+    Phase 1 default-deny: ``unverified`` steps ran to completion, so they keep
+    run-terminal "partial" eligibility exactly as prose-completions did before
+    the flip — acceptance truth is carried by the ``unverified`` counter, not
+    by final_status.
     """
     real_failed = outcome.failed - outcome.blocked
     if outcome.failed == 0 and outcome.blocked == 0:
         return "completed"
     if real_failed > 0:
-        return "partial" if outcome.completed > 0 else "failed"
-    return "partial" if outcome.completed > 0 else "blocked"
+        return "partial" if outcome.completed + outcome.unverified > 0 else "failed"
+    return "partial" if outcome.completed + outcome.unverified > 0 else "blocked"
 
 
 @dataclass

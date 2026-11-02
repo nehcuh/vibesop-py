@@ -261,9 +261,12 @@ def test_engine_terminal_status_failed_and_partial() -> None:
 
     engine2.run(plan2, fail_second)
     terminal2 = log2.replay("p-partial", since_seq=0).events[-1]
-    assert terminal2.payload["final_status"] == "partial"
+    # Phase 1 default-deny: the surviving "ok" output carries no positive
+    # acceptance evidence, so a failed step + prose survivor is "failed",
+    # not "partial".
+    assert terminal2.payload["final_status"] == "failed"
     assert terminal2.payload["total_steps_executed"] == 1
-    assert plan2.status == PlanStatus.PARTIAL
+    assert plan2.status == PlanStatus.FAILED
 
 
 def test_engine_without_event_log_is_unchanged() -> None:
