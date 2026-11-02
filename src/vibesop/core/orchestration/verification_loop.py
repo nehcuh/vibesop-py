@@ -9,7 +9,9 @@ Phase 2 (v6.1.0): Adversarial Verification
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,6 +19,12 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+# Roadmap 2.2: migrate the cron subsystem's keyword classifier into the
+# orchestration chain (reuse, not rebuild). The underscore import is
+# deliberate — promoting it to public API would widen the cron subsystem's
+# frozen surface.
+from vibesop.core.loop.executor import _classify_failure
+from vibesop.core.loop.models import FailureCategory
 from vibesop.core.models import TrustLevel
 
 if TYPE_CHECKING:
@@ -26,6 +34,33 @@ logger = logging.getLogger(__name__)
 
 _ACCEPTANCE_FAILURE_STATUSES = frozenset({"blocked", "failed", "error"})
 _VERIFIED_SUCCESS_STATUSES = frozenset({"passed", "completed", "success"})
+
+
+def _failure_reason(verification_result: dict[str, Any]) -> str:
+    """Extract the failure message used for classification and signature.
+
+    Both the verifier's ``reasoning`` and issue descriptions carry the
+    failure vocabulary; missing both yields "" (the classifier's conservative
+    unknown→PERMANENT default then preserves pre-Phase-2 behaviour for
+    evidence-free failure dicts).
+    """
+    parts = [str(verification_result.get("reasoning", ""))]
+    for issue in verification_result.get("issues", []) or []:
+        parts.append(str(issue.get("description", "")) if isinstance(issue, dict) else str(issue))
+    return " ".join(p for p in parts if p).strip()
+
+
+def _failure_signature(category: FailureCategory, reason: str) -> str:
+    """Stable signature of one failure occurrence.
+
+    Digits are stripped (counts/IDs vary between occurrences of the same
+    underlying error) and whitespace collapsed, so the same error produces
+    the same signature — that is what makes "same error twice" detectable.
+    """
+    normalized = re.sub(r"\d+", "", reason.lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    digest = hashlib.sha1(f"{category.value}:{normalized}".encode()).hexdigest()
+    return digest[:12]
 
 
 def is_acceptance_failure(output: Any) -> bool:
@@ -104,6 +139,13 @@ class VerificationLoopState(BaseModel):
     consecutive_failures: int = Field(default=0, description="Consecutive failure count")
     last_status: str = Field(default="", description="Last verification status")
     last_action: str = Field(default="", description="Last action taken")
+    last_failure_category: str = Field(
+        default="", description="Category of the last failed verification (transient/permanent)"
+    )
+    failure_signatures: list[str] = Field(
+        default_factory=list,
+        description="Normalized signatures of failed verifications seen for this step",
+    )
     feedback_history: list[dict[str, Any]] = Field(
         default_factory=list, description="History of verification feedback"
     )
@@ -117,7 +159,9 @@ class VerificationLoop:
     2. Verifies the output with an independent verifier
     3. If PASSED → continue to next step
     4. If NEEDS_REVISION → retry with feedback (up to max_retries)
-    5. If FAILED or max retries exceeded → escalate to user
+    5. If FAILED → classify first: transient retries (bounded by
+       escalation_threshold and max_retries), permanent terminates
+       immediately, the same error signature twice escalates
     """
 
     def __init__(self, config: VerificationLoopConfig | None = None):
@@ -162,13 +206,41 @@ class VerificationLoop:
         if status == "failed":
             state.consecutive_failures += 1
 
-            # Check if we should escalate
-            if state.consecutive_failures >= self._config.escalation_threshold:
+            # Phase 2: classify before deciding. Which failures are worth
+            # retrying is exactly the transient/permanent distinction, and
+            # the escalation threshold is only reachable through retry —
+            # the dead-branch fix and failure classification are one change.
+            reason = _failure_reason(verification_result)
+            failure = _classify_failure(reason)
+            signature = _failure_signature(failure.category, reason)
+            repeated = signature in state.failure_signatures
+            state.last_failure_category = failure.category.value
+            state.failure_signatures.append(signature)
+
+            # Same error twice: retrying is not producing new information.
+            if repeated:
                 state.last_action = VerificationLoopAction.ESCALATE
                 return VerificationLoopAction.ESCALATE
 
-            state.last_action = VerificationLoopAction.TERMINATE
-            return VerificationLoopAction.TERMINATE
+            # Permanent failures (config/auth/syntax — and evidence-free
+            # failures via the classifier's conservative default) cannot be
+            # retried into success.
+            if failure.category is FailureCategory.PERMANENT:
+                state.last_action = VerificationLoopAction.TERMINATE
+                return VerificationLoopAction.TERMINATE
+
+            # Consecutive-failure backstop (roadmap 2.1) plus the shared
+            # bounded-retry budget.
+            if (
+                state.consecutive_failures >= self._config.escalation_threshold
+                or state.retry_count >= self._config.max_retries
+            ):
+                state.last_action = VerificationLoopAction.ESCALATE
+                return VerificationLoopAction.ESCALATE
+
+            state.retry_count += 1
+            state.last_action = VerificationLoopAction.RETRY
+            return VerificationLoopAction.RETRY
 
         if status == "needs_revision":
             state.retry_count += 1
