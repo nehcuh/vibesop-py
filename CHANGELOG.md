@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [8.8.0] — 2026-11-03
+
+Minor over 8.7.1: verification judgments flip to default-deny — step outputs
+classify into SUCCESS (positive evidence required) / failure sentinels /
+UNVERIFIED, and a verdict without an explicit status no longer defaults to
+PASSED. Failed verifications classify transient/permanent before deciding, the
+same normalized error signature twice escalates, and ESCALATE gains a real
+exit via plan-tracker persistence. Quasi-breaking for verification-loop
+consumers; see Migration below and the roadmap
+(docs/proposals/harness-verification-roadmap.md) Phase 1/2.
 
 ### Changed
 
