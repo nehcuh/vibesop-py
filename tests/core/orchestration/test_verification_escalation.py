@@ -172,9 +172,7 @@ def test_needs_revision_and_failed_share_retry_budget() -> None:
     first_failure = loop.decide_action(
         step, {"status": "failed", "reasoning": "connection reset by peer"}
     )
-    second_failure = loop.decide_action(
-        step, {"status": "failed", "reasoning": "rate limit hit"}
-    )
+    second_failure = loop.decide_action(step, {"status": "failed", "reasoning": "rate limit hit"})
 
     assert revisions == [VerificationLoopAction.RETRY, VerificationLoopAction.RETRY]
     assert first_failure == VerificationLoopAction.RETRY  # third and final draw
