@@ -161,6 +161,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -172,6 +173,10 @@ if TYPE_CHECKING:
 _os_write = os.write
 _os_fsync = os.fsync
 _os_replace = os.replace
+
+# Bounded replace retry for transient WinError 5 (see _atomic_write_bytes).
+_REPLACE_ATTEMPTS = 5
+_REPLACE_BACKOFF_S = 0.02
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -913,7 +918,19 @@ def _atomic_write_bytes(path: Path, payload: bytes) -> None:
         os.close(fd)
         fd = -1
         # Same-filesystem swap of the destination inode (symlink or file).
-        _os_replace(tmp_name, path)
+        # PermissionError is retried: on Windows, MoveFileEx is denied
+        # (WinError 5) for the microseconds another process holds the
+        # destination open — two concurrent --write-baseline runs collide
+        # exactly there. POSIX rename over an open file never raises this,
+        # so the retry is dead weight off Windows but harmless.
+        for attempt in range(_REPLACE_ATTEMPTS):
+            try:
+                _os_replace(tmp_name, path)
+                break
+            except PermissionError:
+                if attempt == _REPLACE_ATTEMPTS - 1:
+                    raise
+                time.sleep(_REPLACE_BACKOFF_S * 2**attempt)
         tmp_name = None
     except (OSError, ValueError) as extra:
         raise GuardError(f"cannot write baseline at {path}: {extra}") from extra

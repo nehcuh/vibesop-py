@@ -595,6 +595,51 @@ def test_write_baseline_oserror_closes_fd_and_removes_own_temp(
     assert _tmp_leftovers(tmp_path) == []
 
 
+def test_write_baseline_retries_transient_replace_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two concurrent --write-baseline runs race on os.replace: Windows denies
+    MoveFileEx (WinError 5) while the peer holds the destination. The write
+    must retry the transient denial instead of failing the whole run."""
+    dest = tmp_path / "baseline.json"
+    real_replace = chal._os_replace
+    denials_left = 2
+
+    def flaky_replace(src: str, dst: str) -> object:
+        nonlocal denials_left
+        if denials_left:
+            denials_left -= 1
+            raise PermissionError(5, "Access is denied (injected transient)")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(chal, "_os_replace", flaky_replace)
+
+    chal.write_baseline(dest, _STALE_COUNTS)
+
+    assert denials_left == 0
+    assert chal.load_baseline(dest).as_counts() == _STALE_COUNTS
+    assert _tmp_leftovers(tmp_path) == []
+
+
+def test_write_baseline_replace_denial_exhausts_retry_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dest = tmp_path / "baseline.json"
+    original = b"original-bytes\n"
+    dest.write_bytes(original)
+
+    def always_denied(*_args: object, **_kwargs: object) -> object:
+        raise PermissionError(5, "Access is denied (injected permanent)")
+
+    monkeypatch.setattr(chal, "_os_replace", always_denied)
+
+    with pytest.raises(chal.GuardError, match="cannot write baseline"):
+        chal.write_baseline(dest, _STALE_COUNTS)
+
+    assert dest.read_bytes() == original
+    assert _tmp_leftovers(tmp_path) == []
+
+
 # --------------------------------------------------------------------------
 # Fail-closed parsing
 # --------------------------------------------------------------------------
