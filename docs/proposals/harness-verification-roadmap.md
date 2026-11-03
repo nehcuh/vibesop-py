@@ -2,7 +2,7 @@
 
 > **日期**: 2026-11-02
 > **状态**: 🗺️ 路线图（评审完成，未实施；本文档不含代码改动）
-> **版本**: 8.7.1
+> **版本**: 8.8.0
 > **评估基线**: `main`（8.7.1 发版后）
 > **触发链路**: X 文章《Unlock Opus 5.5: The Harness Guide for Agents That Actually Ship》（Trackmind, 2026-10-23）→ 公式映射 → Claude Code 六路独立子代理只读取证（review_readonly）→ 本路线图
 > **作者**: 用户（决策）+ CMspark（映射与汇总）+ Claude Code（file:line 取证）

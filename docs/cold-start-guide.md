@@ -1,6 +1,6 @@
 # Cold Start Strategy
 
-> **Version**: 8.7.1
+> **Version**: 8.8.0
 > **Last Updated**: 2026-06-05
 
 ## Overview

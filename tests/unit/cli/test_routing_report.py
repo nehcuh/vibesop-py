@@ -194,7 +194,9 @@ class TestHumanRouteAdmission:
             else:
                 assert routed.primary is primary
                 assert routed.has_match is payload["has_match"]
-            assert str(skill) in output.output
+            # The product renders skill_file with as_posix() (stable JSON
+            # contract since 9acada00); str(Path) differs on Windows.
+            assert skill.as_posix() in output.output
             source_file_for.assert_called_with("source-pool-only")
             if transparency == "full":
                 assert "AGENT INSTRUCTION" in output.output

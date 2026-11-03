@@ -5,7 +5,7 @@
 VibeSOP 是多代理 AI 工程工作流系统：把请求路由到合适的技能或代理，按明确标准验证交付，并记录可观测的执行证据；围绕主线还提供技能选择、发布放行的治理，以及跨代理的经验/知识积累。SkillOS 是技能管理子系统；任务计划与验证交付、执行观测、经验检索、定时任务和实验研究共同构成当前仓库。
 
 - 定位依据与边界：[docs/POSITIONING.md](docs/POSITIONING.md)。
-- 源码与包元数据为 **8.7.1**（2026-10-28）。PyPI 与 GitHub Release 由 tag `v8.7.1` 的 Release workflow 发布。8.7.0 是上一公开版本，见[项目状态](docs/PROJECT_STATUS.md)。
+- 源码与包元数据为 **8.8.0**（2026-11-03）。PyPI 与 GitHub Release 由 tag `v8.8.0` 的 Release workflow 发布。8.7.1 是上一公开版本，见[项目状态](docs/PROJECT_STATUS.md)。
 - 工程主线继续验证选择和交付的可信性；未合并 evo 分支和未完成固定角色实验不算已发行能力。
 - 旧 worktree 已归档，当前保留主目录与 `.experiment/worktree`。原始数据和未提交成果的恢复见[维护索引](docs/maintenance/README.md)。
 
